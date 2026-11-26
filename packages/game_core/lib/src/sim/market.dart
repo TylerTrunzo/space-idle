@@ -85,7 +85,9 @@ SaleResult sell(
 /// body's own buildings would use of the resource in a step of [dt] at
 /// full supply ([fullRateFlow]), the two together kept no higher than the
 /// body's [storageCap] unless `keepAtLeast` alone is; only while its
-/// faction owns the body. Keeping that step's demand back means
+/// faction owns the body. A rule sees the stock less what earlier rules on
+/// the same body and resource queued, so duplicate rules (which saves
+/// reject) never sell more than is held. Keeping that step's demand back means
 /// auto-selling an input never starves the factories that use it, however
 /// long the step.
 ///
@@ -104,6 +106,9 @@ SaleResult sell(
 void stepMarket(GameState s, Content c, double dt) {
   final sales = <String, List<(FactionState, BodyState, BigNum)>>{};
   final demand = <String, Map<String, BigNum>>{};
+  // Body id to resource id to what earlier rules already queued for sale,
+  // so a second rule on the same stock never sells it twice.
+  final queued = <String, Map<String, BigNum>>{};
   for (final f in s.factions) {
     double? crewEff;
     for (final rule in f.autoSell) {
@@ -115,7 +120,10 @@ void stepMarket(GameState s, Content c, double dt) {
         dt,
         crewEff ??= crewEfficiency(s, c, f.id),
       );
-      final held = body.stock[rule.resourceId] ?? const BigNum.zero();
+      final taken = queued[body.id] ??= {};
+      final held =
+          (body.stock[rule.resourceId] ?? _zero) -
+          (taken[rule.resourceId] ?? _zero);
       // The demand kept never pushes stock past the cap, where the end of
       // the tick would waste it instead.
       final keep = (rule.keepAtLeast + (used[rule.resourceId] ?? _zero)).min(
@@ -124,6 +132,7 @@ void stepMarket(GameState s, Content c, double dt) {
       final excess = held - keep;
       if (excess > _zero) {
         (sales[rule.resourceId] ??= []).add((f, body, excess));
+        taken[rule.resourceId] = (taken[rule.resourceId] ?? _zero) + excess;
       }
     }
   }

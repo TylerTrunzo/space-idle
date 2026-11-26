@@ -172,9 +172,14 @@ final class SaveCodec {
       for (final MapEntry(key: id, value: v) in f.salesRevenue.entries) {
         if (v < zero) return 'faction ${f.id}: negative sales revenue of $id';
       }
+      final rules = <(String, String)>{};
       for (final r in f.autoSell) {
         if (r.keepAtLeast < zero) {
           return 'faction ${f.id}: negative keepAtLeast for ${r.resourceId}';
+        }
+        if (!rules.add((r.bodyId, r.resourceId))) {
+          return 'faction ${f.id}: two auto-sell rules for ${r.resourceId} '
+              'on ${r.bodyId}';
         }
       }
     }

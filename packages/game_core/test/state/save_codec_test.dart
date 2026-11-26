@@ -290,6 +290,11 @@ void main() {
       'negative keepAtLeast': (m) => player(m)['autoSell'] = [
         {'bodyId': 'kora', 'resourceId': 'iron_ore', 'keepAtLeast': '-1e9'},
       ],
+      'two auto-sell rules for one body and resource': (m) =>
+          player(m)['autoSell'] = [
+            {'bodyId': 'kora', 'resourceId': 'iron_ore', 'keepAtLeast': '0'},
+            {'bodyId': 'kora', 'resourceId': 'iron_ore', 'keepAtLeast': '5'},
+          ],
       'negative credits': (m) => player(m)['credits'] = '-1',
       'negative sales revenue': (m) =>
           player(m)['salesRevenue'] = {'iron_ore': '-1'},

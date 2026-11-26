@@ -213,6 +213,16 @@ void main() {
     expect(stock(), n(450));
   });
 
+  test('two rules on one stock never sell more than it holds', () {
+    // Saves reject duplicate rules, but the market must not overdraw if
+    // one slips through: the second rule sees what the first queued.
+    s.faction('p').autoSell
+      ..add(AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(100)))
+      ..add(AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(300)));
+    stepMarket(s, c, 1);
+    expect(stock(), n(100));
+  });
+
   test('auto-sell also keeps what buildings on the body use in the step', () {
     // A press using 2 ore a second, crewed: a 10 s step needs 20 ore.
     final base = economyContent();
