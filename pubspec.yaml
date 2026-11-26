@@ -6,3 +6,4 @@ environment:
 
 workspace:
   - packages/game_core
+  - packages/game_sim
