@@ -54,8 +54,9 @@ Map<String, BigNum> upgradeCost(Content c, BuildingState b, UpgradeTrack t) {
 
 /// Cost for [factionId] to claim its next body.
 ///
-/// With `n` bodies owned: `claimBaseCredits × claimGrowth^(n−1)` credits plus
-/// `n − 1` outpost kits, so the first claim costs credits only. Kits are
+/// With `n` bodies owned: `claimBaseCredits × claimGrowth^(n−1)` credits,
+/// plus `n` outpost kits once more than the home body is owned, so the
+/// first claim costs credits only and each later one a kit more. Kits are
 /// listed only when needed.
 Map<String, BigNum> claimCost(GameState s, Content c, String factionId) {
   final owned = s.bodies.where((b) => b.ownerId == factionId).length;
@@ -63,7 +64,7 @@ Map<String, BigNum> claimCost(GameState s, Content c, String factionId) {
   final r = c.rules;
   return {
     _credits: r.claimBaseCredits * BigNum.from(r.claimGrowth).powInt(extra),
-    if (extra > 0) r.outpostKitResource: BigNum.from(extra),
+    if (extra > 0) r.outpostKitResource: BigNum.from(owned),
   };
 }
 

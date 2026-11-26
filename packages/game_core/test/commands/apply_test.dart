@@ -479,35 +479,42 @@ void main() {
   });
 
   group('claimBody', () {
-    test('first body costs credits only; second needs 1 outpost kit', () {
-      // Shipped content with the claim growth these numbers assume.
-      final c4 = withClaimGrowth(content, 4);
+    test('the first claim costs credits only; later ones a kit per body '
+        'owned', () {
+      // Shipped content with the claim numbers these tests assume.
+      final c4 = withClaims(content, base: 5000, growth: 4);
       final s = fresh();
-      s.faction('player').credits = n(30000);
+      s.faction('player').credits = n(1e6);
       expect(claimCost(s, c4, 'player'), {'credits': n(5000)});
       expectOk(s, ClaimBodyCommand('player', 'brine', 'kora'), using: c4);
       expect(s.body('brine').ownerId, 'player');
-      expect(s.faction('player').credits, n(25000));
+      expect(s.faction('player').credits, n(1e6 - 5000));
 
+      // Two bodies owned: two kits.
       expect(claimCost(s, c4, 'player'), {
         'credits': n(20000),
-        'outpost_kit': n(1),
+        'outpost_kit': n(2),
       });
+      s.body('kora').stock['outpost_kit'] = n(1);
       expectFails(
         s,
         ClaimBodyCommand('player', 'hollow_reach', 'kora'),
         CommandError.cannotAfford,
         using: c4,
       );
-      s.body('kora').stock['outpost_kit'] = n(1);
+      s.body('kora').stock['outpost_kit'] = n(2);
       expectOk(
         s,
         ClaimBodyCommand('player', 'hollow_reach', 'kora'),
         using: c4,
       );
       expect(s.body('hollow_reach').ownerId, 'player');
-      expect(s.faction('player').credits, n(5000));
+      expect(s.faction('player').credits, n(1e6 - 25000));
       expect(s.body('kora').stock['outpost_kit'], n(0));
+      expect(claimCost(s, c4, 'player'), {
+        'credits': n(80000),
+        'outpost_kit': n(3),
+      });
     });
 
     test('validation', () {
@@ -707,8 +714,9 @@ void main() {
   });
 }
 
-/// [c] with its rules' claim growth set to [growth].
-Content withClaimGrowth(Content c, double growth) {
+/// [c] with its rules' claim base credits set to [base] and claim growth
+/// to [growth].
+Content withClaims(Content c, {required double base, required double growth}) {
   final r = c.rules;
   return Content(
     rules: RulesDef(
@@ -723,7 +731,7 @@ Content withClaimGrowth(Content c, double growth) {
       offlineCapSeconds: r.offlineCapSeconds,
       marketFloor: r.marketFloor,
       marketRecoverySeconds: r.marketRecoverySeconds,
-      claimBaseCredits: r.claimBaseCredits,
+      claimBaseCredits: BigNum.from(base),
       claimGrowth: growth,
       slotBaseCredits: r.slotBaseCredits,
       slotGrowth: r.slotGrowth,
