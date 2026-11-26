@@ -72,7 +72,9 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// cap at the end of the tick ([clampStorage]), so a long step loses no
 /// more to the cap than many short ones. Each building's
 /// [BuildingState.lastRunFraction] and [BuildingState.lastLimitReason] are
-/// updated; habitat run fractions set next step's [crewEfficiency].
+/// updated; habitat run fractions set next step's [crewEfficiency]. What
+/// each body makes is added to its owner's
+/// [FactionState.lifetimeProduced].
 ///
 /// Crew efficiency is read once per faction before any body runs, so the
 /// result does not depend on body order. Habitats with no crew slots run
@@ -85,7 +87,7 @@ void stepProduction(GameState s, Content c, double dt) {
   for (final body in s.bodies) {
     final owner = body.ownerId;
     if (owner == null) continue;
-    _stepBody(c, body, dt, crewEff[owner]!);
+    _stepBody(c, body, dt, crewEff[owner]!, s.faction(owner).lifetimeProduced);
   }
 }
 
@@ -201,7 +203,14 @@ final class _Run {
   double fraction = 0;
 }
 
-void _stepBody(Content c, BodyState body, double dt, double crewEff) {
+/// Runs the buildings on [body], adding what they make to [produced].
+void _stepBody(
+  Content c,
+  BodyState body,
+  double dt,
+  double crewEff,
+  Map<String, BigNum> produced,
+) {
   final depth = recipeDepth(c);
   final habitats = <_Run>[];
   final others = <_Run>[];
@@ -241,22 +250,28 @@ void _stepBody(Content c, BodyState body, double dt, double crewEff) {
       end++;
     }
     claim();
-    _runGroup(c, body, [
-      for (final i in order.sublist(start, end)) others[i],
-    ], reserved);
+    _runGroup(
+      c,
+      body,
+      [for (final i in order.sublist(start, end)) others[i]],
+      reserved,
+      produced,
+    );
     start = end;
   }
-  if (habitats.isNotEmpty) _runGroup(c, body, habitats, const {});
+  if (habitats.isNotEmpty) _runGroup(c, body, habitats, const {}, produced);
 }
 
 /// Runs [runs], buildings on [body], on the stock the body holds now less
 /// [reserved] (resource id to units held back for habitats): shares each
-/// input in proportion to demand, takes the inputs, then adds the outputs.
+/// input in proportion to demand, takes the inputs, then adds the outputs
+/// to the stock and to [produced].
 void _runGroup(
   Content c,
   BodyState body,
   List<_Run> runs,
   Map<String, BigNum> reserved,
+  Map<String, BigNum> produced,
 ) {
   final demand = <String, BigNum>{};
   for (final run in runs) {
@@ -320,6 +335,7 @@ void _runGroup(
       final amount = made.mulDouble(run.fraction);
       if (amount.isZero) continue;
       body.stock[id] = (body.stock[id] ?? _zero) + amount;
+      produced[id] = (produced[id] ?? _zero) + amount;
     }
   }
 }

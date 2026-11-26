@@ -295,6 +295,23 @@ void main() {
     }
   });
 
+  test('every sale adds to lifetime credits, which spending never lowers', () {
+    final f = s.faction('p');
+    expect(f.lifetimeCredits, const BigNum.zero());
+    final r = sell(s, c, 'p', 'a', 'ore', n(10));
+    expect(f.lifetimeCredits, r.revenue);
+    f.autoSell.add(
+      AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(400)),
+    );
+    final before = f.credits;
+    stepMarket(s, c, 1);
+    final auto = f.credits - before;
+    expect(auto > const BigNum.zero(), isTrue);
+    expect(f.lifetimeCredits, r.revenue + auto);
+    f.credits = const BigNum.zero();
+    expect(f.lifetimeCredits, r.revenue + auto);
+  });
+
   test('every sale adds to the faction\'s sales revenue by resource', () {
     final f = s.faction('p');
     expect(f.salesRevenue, isEmpty);

@@ -221,7 +221,10 @@ final class GameEngine {
             ((stock ??= _empireStock(s, f.id))[resourceId] ??
                     const BigNum.zero()) >=
                 amount,
+          ProducedCondition(:final resourceId, :final amount) =>
+            (f.lifetimeProduced[resourceId] ?? const BigNum.zero()) >= amount,
           CreditsCondition(:final amount) => f.credits >= amount,
+          CreditsEarnedCondition(:final amount) => f.lifetimeCredits >= amount,
           BodiesOwnedCondition(:final count) =>
             s.bodies.where((b) => b.ownerId == f.id).length >= count,
           BuildingCountCondition(:final defId, :final count) =>

@@ -65,9 +65,18 @@ final class FactionState {
     List<AutoSellRule>? autoSell,
     Set<String>? reachedMilestones,
     Map<String, BigNum>? salesRevenue,
+    BigNum? lifetimeCredits,
+    Map<String, BigNum>? lifetimeProduced,
   }) : autoSell = autoSell ?? [],
        reachedMilestones = reachedMilestones ?? {},
-       salesRevenue = salesRevenue ?? {};
+       salesRevenue = salesRevenue ?? {},
+       lifetimeCredits =
+           lifetimeCredits ??
+           (salesRevenue ?? const {}).values.fold(
+             const BigNum.zero(),
+             (t, v) => t + v,
+           ),
+       lifetimeProduced = lifetimeProduced ?? {};
 
   /// Restores a faction written by [toJson].
   factory FactionState.fromJson(Map<String, Object?> j) => FactionState(
@@ -82,6 +91,14 @@ final class FactionState {
     },
     // Absent in saves from before sales were tracked.
     salesRevenue: j['salesRevenue'] == null ? null : _bigMap(j['salesRevenue']),
+    // Both absent in saves from before they were tracked: lifetime credits
+    // then default to the sales revenue's total.
+    lifetimeCredits: j['lifetimeCredits'] == null
+        ? null
+        : BigNum.fromJson(j['lifetimeCredits']! as String),
+    lifetimeProduced: j['lifetimeProduced'] == null
+        ? null
+        : _bigMap(j['lifetimeProduced']),
   );
 
   /// Unique id.
@@ -109,6 +126,16 @@ final class FactionState {
   /// game began, manual and auto-sales alike, in first-sale order.
   final Map<String, BigNum> salesRevenue;
 
+  /// Credits earned from market sales since the game began, manual and
+  /// auto-sales alike; spending never lowers it. The sum of
+  /// [salesRevenue]; credits-earned milestones count it.
+  BigNum lifetimeCredits;
+
+  /// Resource id to the units the faction's buildings have made since the
+  /// game began, before the storage cap, in first-made order; produced
+  /// milestones count it.
+  final Map<String, BigNum> lifetimeProduced;
+
   /// Serializes this faction; milestones are written sorted.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -120,6 +147,10 @@ final class FactionState {
     'reachedMilestones': reachedMilestones.toList()..sort(),
     'salesRevenue': {
       for (final e in salesRevenue.entries) e.key: e.value.toJson(),
+    },
+    'lifetimeCredits': lifetimeCredits.toJson(),
+    'lifetimeProduced': {
+      for (final e in lifetimeProduced.entries) e.key: e.value.toJson(),
     },
   };
 
@@ -133,6 +164,8 @@ final class FactionState {
     autoSell: [for (final r in autoSell) r.copy()],
     reachedMilestones: Set.of(reachedMilestones),
     salesRevenue: Map.of(salesRevenue),
+    lifetimeCredits: lifetimeCredits,
+    lifetimeProduced: Map.of(lifetimeProduced),
   );
 }
 

@@ -210,9 +210,11 @@ void stepMarket(
 const _zero = BigNum.zero();
 
 /// Pays [f] [revenue] for a sale of [resourceId], adding it to the
-/// faction's [FactionState.salesRevenue].
+/// faction's [FactionState.salesRevenue] and
+/// [FactionState.lifetimeCredits].
 void _earn(FactionState f, String resourceId, BigNum revenue) {
   f.credits = f.credits + revenue;
+  f.lifetimeCredits = f.lifetimeCredits + revenue;
   f.salesRevenue[resourceId] = (f.salesRevenue[resourceId] ?? _zero) + revenue;
 }
 

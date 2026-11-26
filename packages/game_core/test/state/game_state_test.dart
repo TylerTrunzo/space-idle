@@ -83,6 +83,24 @@ void main() {
     expect(back.body('kora').buildings.first.levels[UpgradeTrack.speed], 3);
   });
 
+  test('lifetime credits and produced round trip and copy deeply', () {
+    final s = newGameState(content, 3);
+    s.faction('player')
+      ..lifetimeCredits = BigNum.parse('1.5e6')
+      ..lifetimeProduced['steel'] = BigNum.parse('42')
+      ..lifetimeProduced['iron_ore'] = BigNum.parse('7');
+    final once = jsonEncode(s.toJson());
+    final back = GameState.fromJson(jsonDecode(once) as Map<String, Object?>);
+    expect(jsonEncode(back.toJson()), once);
+    expect(back.faction('player').lifetimeCredits, BigNum.parse('1.5e6'));
+    expect(back.faction('player').lifetimeProduced.keys, ['steel', 'iron_ore']);
+    final t = s.copy();
+    t.faction('player')
+      ..lifetimeCredits = BigNum.zero()
+      ..lifetimeProduced['steel'] = BigNum.zero();
+    expect(jsonEncode(s.toJson()), once);
+  });
+
   test('copy is a deep copy equal to a save round trip', () {
     final s = newGameState(content, 3)
       ..routes.add(

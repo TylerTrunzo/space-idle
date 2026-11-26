@@ -172,6 +172,12 @@ final class SaveCodec {
       for (final MapEntry(key: id, value: v) in f.salesRevenue.entries) {
         if (v < zero) return 'faction ${f.id}: negative sales revenue of $id';
       }
+      if (f.lifetimeCredits < zero) {
+        return 'faction ${f.id}: negative lifetime credits';
+      }
+      for (final MapEntry(key: id, value: v) in f.lifetimeProduced.entries) {
+        if (v < zero) return 'faction ${f.id}: negative lifetime $id made';
+      }
       final rules = <(String, String)>{};
       for (final r in f.autoSell) {
         if (r.keepAtLeast < zero) {
@@ -326,6 +332,11 @@ final class SaveCodec {
       for (final id in f.salesRevenue.keys) {
         if (!resource(id)) {
           return 'faction ${f.id}: sales revenue of unknown resource $id';
+        }
+      }
+      for (final id in f.lifetimeProduced.keys) {
+        if (!resource(id)) {
+          return 'faction ${f.id}: lifetime produced of unknown resource $id';
         }
       }
       for (final r in f.autoSell) {

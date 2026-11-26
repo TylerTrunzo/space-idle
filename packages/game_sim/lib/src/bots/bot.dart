@@ -727,10 +727,13 @@ final class _View {
         continue;
       }
       final step = switch (m.condition) {
-        StockCondition(:final resourceId) => ensureMade(resourceId),
+        StockCondition(:final resourceId) ||
+        ProducedCondition(:final resourceId) => ensureMade(resourceId),
         BodiesOwnedCondition() => _ensureClaimable(),
         BuildingCountCondition(:final defId) => _ensureBuilt(defId),
         CreditsCondition(:final amount) => _Save(amount),
+        // Earned credits come with growth; saving them up does not help.
+        CreditsEarnedCondition() => const _Waiting(),
       };
       if (worth(step) case final step?) return step;
     }
@@ -746,7 +749,10 @@ final class _View {
     StockCondition(:final resourceId, :final amount) =>
       owned.fold(const BigNum.zero(), (t, b) => t + stock(b, resourceId)) >=
           amount,
+    ProducedCondition(:final resourceId, :final amount) =>
+      (faction.lifetimeProduced[resourceId] ?? const BigNum.zero()) >= amount,
     CreditsCondition(:final amount) => faction.credits >= amount,
+    CreditsEarnedCondition(:final amount) => faction.lifetimeCredits >= amount,
     BodiesOwnedCondition(:final count) => owned.length >= count,
     BuildingCountCondition(:final defId, :final count) =>
       buildings.where((x) => x.$2.defId == defId).length >= count,

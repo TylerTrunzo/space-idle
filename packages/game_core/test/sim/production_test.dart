@@ -232,6 +232,20 @@ void main() {
     expect(d.lastLimitReason, isNull);
   });
 
+  test("output adds to the owner's lifetime produced, waste or not", () {
+    add(home, 'drill', crew: 2, deposit: 'iron_ore');
+    add(home, 'smelter');
+    stepProduction(s, c, 10);
+    final made = s.faction('p').lifetimeProduced;
+    // The drill made 3 ore; the smelter used it all for 0.75 steel.
+    expect(made.keys, ['iron_ore', 'steel']);
+    expect(made['iron_ore'], near(3));
+    expect(made['steel'], near(0.75));
+    home.stock.clear();
+    stepProduction(s, c, 10);
+    expect(made['iron_ore'], near(6));
+  });
+
   test('factory limited by input', () {
     final sm = add(home, 'smelter');
     home.stock['iron_ore'] = n(2);

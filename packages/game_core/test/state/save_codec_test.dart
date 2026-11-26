@@ -164,6 +164,12 @@ void main() {
       expectUnknown((s) => s.market.saturation['nope'] = 0.5);
     });
 
+    test('lifetime produced resource', () {
+      expectUnknown(
+        (s) => s.faction('player').lifetimeProduced['nope'] = BigNum.parse('1'),
+      );
+    });
+
     test('auto-sell body', () {
       expectUnknown(
         (s) => s.faction('player').autoSell.add(rule(body: 'nope')),
@@ -298,6 +304,9 @@ void main() {
       'negative credits': (m) => player(m)['credits'] = '-1',
       'negative sales revenue': (m) =>
           player(m)['salesRevenue'] = {'iron_ore': '-1'},
+      'negative lifetime credits': (m) => player(m)['lifetimeCredits'] = '-1',
+      'negative lifetime produced': (m) =>
+          player(m)['lifetimeProduced'] = {'steel': '-1'},
       'negative base crew': (m) => player(m)['baseCrew'] = -1,
       'saturation above 1': (m) => m['market'] = {
         'saturation': {'iron_ore': 5},
@@ -407,6 +416,19 @@ void main() {
     final r = SaveCodec.decode(jsonEncode(m), content);
     expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
     expect((r as SaveOk).state.faction('player').salesRevenue, isEmpty);
+  });
+
+  test('a save without lifetime totals loads with earnings from its sales', () {
+    final m = fresh();
+    (m['factions']! as List).cast<Map<String, Object?>>().first
+      ..remove('lifetimeCredits')
+      ..remove('lifetimeProduced')
+      ..['salesRevenue'] = {'steel': '30', 'iron_ore': '12'};
+    final r = SaveCodec.decode(jsonEncode(m), content);
+    expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+    final f = (r as SaveOk).state.faction('player');
+    expect(f.lifetimeCredits, BigNum.from(42));
+    expect(f.lifetimeProduced, isEmpty);
   });
 
   test('decode rejects missing fields', () {

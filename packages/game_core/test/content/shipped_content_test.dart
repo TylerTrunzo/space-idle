@@ -163,6 +163,21 @@ void main() {
     ]);
   });
 
+  test('credit milestones count credits earned; goods count units made', () {
+    for (final m in content.milestones) {
+      expect(m.condition, isNot(isA<CreditsCondition>()), reason: m.id);
+      expect(m.condition, isNot(isA<StockCondition>()), reason: m.id);
+    }
+    expect(
+      content.milestones.where((m) => m.condition is CreditsEarnedCondition),
+      hasLength(7),
+    );
+    expect(
+      content.milestones.where((m) => m.condition is ProducedCondition),
+      hasLength(8),
+    );
+  });
+
   test('stage-1 galaxy and starting setup', () {
     expect(system.bodies.map((b) => b.name), {
       'Kora',

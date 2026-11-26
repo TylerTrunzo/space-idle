@@ -304,11 +304,10 @@ void main() {
       engine.tick(s, 1);
       expect(player.reachedMilestones, isEmpty);
 
-      s.body('kora').stock['steel'] = n(60);
-      s.body('hollow_reach')
-        ..ownerId = 'player'
-        ..stock['steel'] = n(50);
-      player.credits = n(1e4);
+      s.body('hollow_reach').ownerId = 'player';
+      player
+        ..lifetimeProduced['steel'] = n(30)
+        ..lifetimeCredits = n(1e4);
       engine.tick(s, 1);
       expect(player.reachedMilestones, {
         'first_steel',
@@ -317,9 +316,61 @@ void main() {
       });
 
       // Reached milestones stay reached when the condition lapses.
-      player.credits = n(0);
+      s.body('hollow_reach').ownerId = null;
       engine.tick(s, 1);
-      expect(player.reachedMilestones, contains('credits_10k'));
+      expect(player.reachedMilestones, contains('own_2_bodies'));
+    });
+
+    test('credits-earned and produced milestones survive spending and '
+        'selling', () {
+      final s = engine.newGame(1);
+      final player = s.faction('player');
+      engine.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+      // Every bit of steel is sold as it is made, so the stock never holds
+      // 30, and the credits are spent as they come in.
+      for (var i = 0; i < 200 && player.lifetimeCredits < n(1e4); i++) {
+        engine.advance(s, 600);
+        player.credits = n(0);
+      }
+      expect(s.body('kora').stock['steel'] ?? const BigNum.zero(), n(0));
+      expect(
+        player.reachedMilestones,
+        containsAll(['first_steel', 'credits_10k']),
+      );
+    });
+
+    test('stock and credits milestones read what is held now', () {
+      final inline = Content(
+        rules: c.rules,
+        resources: c.resources,
+        buildings: c.buildings,
+        bodyTypes: c.bodyTypes,
+        galaxy: c.galaxy,
+        milestones: [
+          MilestoneDef(
+            id: 'hold_steel',
+            name: 'Hold Steel',
+            condition: StockCondition(resourceId: 'steel', amount: n(100)),
+          ),
+          MilestoneDef(
+            id: 'hold_credits',
+            name: 'Hold Credits',
+            condition: CreditsCondition(amount: n(1e4)),
+          ),
+        ],
+      );
+      final e = GameEngine(inline);
+      final s = e.newGame(1);
+      final player = s.faction('player')..lifetimeCredits = n(1e9);
+      s.body('kora').stock['steel'] = n(60);
+      s.body('hollow_reach')
+        ..ownerId = 'player'
+        ..stock['steel'] = n(50);
+      e.tick(s, 1);
+      expect(player.reachedMilestones, {'hold_steel'});
+      player.credits = n(1e4);
+      e.tick(s, 1);
+      expect(player.reachedMilestones, {'hold_steel', 'hold_credits'});
     });
 
     test('building-count milestones count the faction\'s buildings', () {
@@ -564,8 +615,9 @@ void main() {
 
     test('lists milestones reached while away, in content order', () {
       final s = engine.newGame(1);
-      s.faction('player').reachedMilestones.add('own_2_bodies');
-      s.faction('player').credits = n(1e4);
+      s.faction('player')
+        ..reachedMilestones.add('own_2_bodies')
+        ..lifetimeCredits = n(1e4);
       final sum = engine.catchUpOffline(s, 3600);
       expect(sum.milestonesReached, ['first_steel', 'credits_10k']);
     });

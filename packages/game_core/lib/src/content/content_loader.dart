@@ -572,10 +572,27 @@ final class _Loader {
           if (resource != null && amount != null) {
             condition = StockCondition(resourceId: resource, amount: amount);
           }
+        case 'produced':
+          final c = _Fields(this, path, raw, const {
+            'type',
+            'resource',
+            'amount',
+          });
+          final resource = c.string('resource');
+          final amount = c.bigNum('amount', positive: true);
+          if (resource != null && amount != null) {
+            condition = ProducedCondition(resourceId: resource, amount: amount);
+          }
         case 'credits':
           final c = _Fields(this, path, raw, const {'type', 'amount'});
           final amount = c.bigNum('amount', positive: true);
           if (amount != null) condition = CreditsCondition(amount: amount);
+        case 'creditsEarned':
+          final c = _Fields(this, path, raw, const {'type', 'amount'});
+          final amount = c.bigNum('amount', positive: true);
+          if (amount != null) {
+            condition = CreditsEarnedCondition(amount: amount);
+          }
         case 'bodiesOwned':
           final c = _Fields(this, path, raw, const {'type', 'count'});
           final count = c.integer('count', min: 1);
@@ -732,13 +749,16 @@ final class _Loader {
     for (final m in milestones.values) {
       final path = 'milestones.${m.id}.condition';
       switch (m.condition) {
-        case StockCondition(:final resourceId):
+        case StockCondition(:final resourceId) ||
+            ProducedCondition(:final resourceId):
           _needResource('$path.resource', resourceId);
         case BuildingCountCondition(:final defId):
           if (!_buildingIds.contains(defId)) {
             err('$path.defId', "unknown building '$defId'");
           }
-        case CreditsCondition() || BodiesOwnedCondition():
+        case CreditsCondition() ||
+            CreditsEarnedCondition() ||
+            BodiesOwnedCondition():
           break;
       }
     }

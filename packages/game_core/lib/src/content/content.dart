@@ -416,6 +416,30 @@ final class StockCondition extends MilestoneCondition {
   final BigNum amount;
 }
 
+/// Has made at least [amount] of [resourceId] since the game began, over
+/// all its bodies, whatever became of it (see
+/// `FactionState.lifetimeProduced`).
+final class ProducedCondition extends MilestoneCondition {
+  /// Creates a produced condition.
+  const ProducedCondition({required this.resourceId, required this.amount});
+
+  /// Resource counted.
+  final String resourceId;
+
+  /// Units needed.
+  final BigNum amount;
+}
+
+/// Has earned at least [amount] credits from market sales since the game
+/// began, whatever it spent (see `FactionState.lifetimeCredits`).
+final class CreditsEarnedCondition extends MilestoneCondition {
+  /// Creates a credits-earned condition.
+  const CreditsEarnedCondition({required this.amount});
+
+  /// Credits needed.
+  final BigNum amount;
+}
+
 /// Holds at least [amount] credits.
 final class CreditsCondition extends MilestoneCondition {
   /// Creates a credits condition.

@@ -531,6 +531,23 @@ void main() {
     );
   });
 
+  test('credits-earned and produced milestones load and are checked', () {
+    final b = minimalBundle();
+    (_entry(b, 'milestones', 'm1')['condition'] as Map)['type'] =
+        'creditsEarned';
+    (_entry(b, 'milestones', 'm2')['condition'] as Map)['type'] = 'produced';
+    final c = _ok(b);
+    expect(c.milestones[0].condition, isA<CreditsEarnedCondition>());
+    final produced = c.milestones[1].condition as ProducedCondition;
+    expect(produced.resourceId, 'bar');
+    expect(produced.amount, BigNum.from(100));
+    (_entry(b, 'milestones', 'm2')['condition'] as Map)['resource'] = 'gold';
+    expect(
+      _errors(b),
+      contains("milestones.m2.condition.resource: unknown resource 'gold'"),
+    );
+  });
+
   test('milestone references must exist', () {
     final b = minimalBundle();
     final m4 = _entry(b, 'milestones', 'm4');
