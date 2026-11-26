@@ -207,6 +207,6 @@ their timers run while the player is away.
   stands idle for an input, it routes the input in, grows the route, sends
   ships, or feeds the input's own makers in turn.
 
-`docs/balance/` holds the 30-day baselines of all three bots (seed 1, and a
+`docs/balance/stage1_5-30day-*.md` hold the 30-day baselines of all three bots (seed 1, and a
 seed 2 and 3 summary); rerun them after changing `content/*.json` and compare.
 
