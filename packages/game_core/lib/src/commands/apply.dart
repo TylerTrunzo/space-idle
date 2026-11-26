@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../num/change.dart';
 import '../num/format.dart';
 import '../sim/crew.dart';
 import '../sim/market.dart';
@@ -177,13 +178,14 @@ CommandFailed? _checkCost(
   return null;
 }
 
-/// Takes [cost] from [f]'s credits and [stockBody]'s stock.
+/// Takes [cost] from [f]'s credits and [stockBody]'s stock, snapping float
+/// residue below zero to zero ([takeFrom]).
 void _pay(FactionState f, BodyState stockBody, Map<String, BigNum> cost) {
   for (final MapEntry(key: id, value: amount) in cost.entries) {
     if (id == _credits) {
-      f.credits = f.credits - amount;
+      f.credits = takeFrom(f.credits, amount);
     } else {
-      stockBody.stock[id] = stockBody.stock[id]! - amount;
+      stockBody.take(id, amount);
     }
   }
 }

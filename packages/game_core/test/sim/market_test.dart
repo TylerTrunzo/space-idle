@@ -72,6 +72,13 @@ void main() {
     expect(s.market.saturation['ore'], closeTo(math.exp(-0.3), 1e-12));
   });
 
+  test('selling all the body holds leaves it at exactly zero', () {
+    // 30 − 1e-13 equals 30 at BigNum precision, so the sale is the full 30.
+    s.body('a').stock['ore'] = BigNum.from(30 - 1e-13);
+    sell(s, c, 'p', 'a', 'ore', n(30));
+    expect(stock().isNegative, isFalse);
+  });
+
   test('repeated sales clamp saturation at the floor', () {
     for (var i = 0; i < 5; i++) {
       sell(s, c, 'p', 'a', 'ore', n(100));

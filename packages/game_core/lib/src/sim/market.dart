@@ -73,7 +73,7 @@ SaleResult sell(
         (sold - BigNum.from(toFloor)) * res.basePrice.mulDouble(floor);
   }
   _earn(s.faction(factionId), resourceId, revenue);
-  body.stock[resourceId] = held - sold;
+  body.take(resourceId, sold);
   s.market.saturation[resourceId] = math.max(floor, s1);
   return SaleResult(sold: sold, revenue: revenue);
 }
@@ -146,7 +146,7 @@ void stepMarket(GameState s, Content c, double dt) {
     final unitPrice = c.resources[id]!.basePrice.mulDouble(priceShare);
     for (final (f, body, amount) in lots) {
       _earn(f, id, amount * unitPrice);
-      body.stock[id] = body.stock[id]! - amount;
+      body.take(id, amount);
     }
     sat[id] = end;
   }

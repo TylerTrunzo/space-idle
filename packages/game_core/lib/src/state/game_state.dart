@@ -1,5 +1,6 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../num/change.dart';
 import '../rng.dart';
 
 Map<String, Object?> _asMap(Object? v) => (v as Map).cast<String, Object?>();
@@ -279,6 +280,13 @@ final class BodyState {
   ///
   /// Transient: reset at the start of every tick, never serialized.
   final Map<String, BigNum> wastedThisStep = {};
+
+  /// Takes [amount] of [resourceId] from [stock], float residue below zero
+  /// snapped to zero ([takeFrom]).
+  void take(String resourceId, BigNum amount) => stock[resourceId] = takeFrom(
+    stock[resourceId] ?? const BigNum.zero(),
+    amount,
+  );
 
   /// Serializes this body; [wastedThisStep] is left out.
   Map<String, Object?> toJson() => {

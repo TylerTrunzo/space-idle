@@ -65,7 +65,7 @@ void sendCargo(
     final rate = r.ratePerSecond.min(routeCapacity(c, r));
     final amount = rate.mulDouble(dt).min(held);
     if (amount <= const BigNum.zero()) continue;
-    from.stock[r.resourceId] = held - amount;
+    from.take(r.resourceId, amount);
     final newest = _newestOf(s, r.id);
     if (newest != null &&
         s.time - newest.departAt < mergeSeconds &&

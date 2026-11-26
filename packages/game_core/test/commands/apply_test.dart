@@ -423,6 +423,55 @@ void main() {
     });
   });
 
+  group('paying never leaves float residue below zero', () {
+    // 1 − 2^-52: equal to 1 at BigNum precision, so it affords one unit,
+    // but subtracting 1 from it leaves −2.2e-16.
+    final almostOne = BigNum.from(1 - 2.220446049250313e-16);
+
+    test('a route takes its last cargo ship to exactly zero', () {
+      final s = twoBodies();
+      s.body('kora').stock['cargo_ship'] = almostOne;
+      expectOk(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(1),
+          1,
+        ),
+      );
+      expect(s.body('kora').stock['cargo_ship'], const BigNum.zero());
+      expect(s.body('kora').stock['cargo_ship']!.isNegative, isFalse);
+    });
+
+    test('a claim takes its last outpost kit to exactly zero', () {
+      final s = fresh()..faction('player').credits = n(1e9);
+      s.body('cinder').ownerId = 'player';
+      s.body('kora').stock['outpost_kit'] = BigNum.from(2 - 4.4e-16);
+      expectOk(s, const ClaimBodyCommand('player', 'brine', 'kora'));
+      expect(s.body('kora').stock['outpost_kit']!.isNegative, isFalse);
+    });
+
+    test('a build spends its last credits to exactly zero', () {
+      final s = fresh();
+      final cost = content.buildings['mine']!.buildCost['credits']!;
+      s.faction('player').credits = cost.mulDouble(1 - 2.220446049250313e-16);
+      expect(s.faction('player').credits >= cost, isTrue);
+      expectOk(
+        s,
+        const BuildCommand(
+          'player',
+          'kora',
+          'mine',
+          depositResourceId: 'silicon',
+        ),
+      );
+      expect(s.faction('player').credits.isNegative, isFalse);
+    });
+  });
+
   group('sell', () {
     test('happy path pays credits and saturates the market', () {
       final s = fresh();

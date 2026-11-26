@@ -147,6 +147,15 @@ void main() {
     expect(at(a).isZero, isTrue);
   });
 
+  test('a route sending all the source holds leaves it at exactly zero', () {
+    // 10 − 1e-14 equals 10 at BigNum precision, so the send is the full
+    // 10 and the source must not go below zero by the difference.
+    a.stock['ore'] = BigNum.from(10 - 1e-14);
+    s.routes.add(route(rate: 1, ships: 2));
+    stepLogistics(s, c, 10);
+    expect(a.stock['ore']!.isNegative, isFalse);
+  });
+
   test('route skipped when an end is no longer owned', () {
     route();
     b.ownerId = null;

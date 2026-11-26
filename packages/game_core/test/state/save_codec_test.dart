@@ -360,6 +360,36 @@ void main() {
     });
   });
 
+  group('float residue in a save', () {
+    // A balanced-bot save stored −2.2e-16 cargo ships on Cinder: float
+    // residue of taking the last ship, not a real overdraw.
+    Map<String, Object?> withCinderShips(String v) {
+      final m = jsonDecode(jsonEncode(fresh())) as Map<String, Object?>;
+      final cinder = (m['bodies']! as List)
+          .cast<Map<String, Object?>>()
+          .firstWhere((b) => b['id'] == 'cinder');
+      cinder['ownerId'] = 'player';
+      (cinder['stock']! as Map)['cargo_ship'] = v;
+      return m;
+    }
+
+    test('a tiny negative stock loads as zero', () {
+      final r = SaveCodec.decode(
+        jsonEncode(withCinderShips('-2.220446049250313e-16')),
+        content,
+      );
+      expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+      final stock = (r as SaveOk).state.body('cinder').stock['cargo_ship'];
+      expect(stock, const BigNum.zero());
+      expect(stock!.isNegative, isFalse);
+    });
+
+    test('a negative stock beyond residue is still rejected', () {
+      final r = SaveCodec.decode(jsonEncode(withCinderShips('-1e-3')), content);
+      expect(err(r).kind, SaveErrorKind.invalidValue);
+    });
+  });
+
   test('decode rejects missing fields', () {
     final m = fresh()..remove('bodies');
     expect(

@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import '../commands/apply.dart';
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../num/change.dart';
+import '../sim/production.dart';
 import '../sim/market.dart';
 import 'game_state.dart';
 
@@ -124,6 +126,7 @@ final class SaveCodec {
     }
     final bad = _unknownId(state, content);
     if (bad != null) return SaveError(SaveErrorKind.unknownContentId, bad);
+    _snapStockResidue(state, content);
     final invalid = _invalidValue(state, content);
     if (invalid != null) return SaveError(SaveErrorKind.invalidValue, invalid);
     return SaveOk(state);
@@ -138,6 +141,20 @@ final class SaveCodec {
 
   /// Highest upgrade level a save may hold on any track.
   static const int maxLevel = 1000;
+
+  /// Sets to zero each stock in [s] that lies below zero by no more than
+  /// [takeResidue] times its body's [storageCap] (at least 1): float
+  /// residue that older engine builds wrote, which [_invalidValue] would
+  /// otherwise reject. A larger negative is left for it to reject.
+  static void _snapStockResidue(GameState s, Content c) {
+    for (final b in s.bodies) {
+      final scale = storageCap(s, c, b).max(BigNum.from(1));
+      final limit = -scale.mulDouble(takeResidue);
+      for (final MapEntry(key: id, value: v) in b.stock.entries.toList()) {
+        if (v.isNegative && v >= limit) b.stock[id] = const BigNum.zero();
+      }
+    }
+  }
 
   /// The first broken integrity rule of [s], or null when it has none.
   ///
