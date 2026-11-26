@@ -28,7 +28,7 @@ final class GreedyBot implements Bot {
   @override
   List<Command> decide(GameEngine e, GameState s, String factionId) {
     var bought = false;
-    return _plan(e, s, (w) {
+    return planCommands(e, s, (w) {
       final v = _View(e.content, w, factionId);
       final housekeeping = v.assignFreeCrew() ?? v.autoSell();
       if (housekeeping != null || bought) return housekeeping;
@@ -59,7 +59,7 @@ final class BalancedBot implements Bot {
     // Each bottleneck gets one fix per decision: the 1 s sample cannot see
     // a fix work until stock has had a real step to refill.
     final tried = <String>{};
-    return _plan(e, s, (w) {
+    return planCommands(e, s, (w) {
       final v = _View(e.content, w, factionId, withReport: true);
       final quick =
           v.assignFreeCrew() ??
@@ -107,9 +107,13 @@ const double _routeSlack = 0.9;
 const int _maxChainDepth = 8;
 
 /// Plans commands on a deep copy of [s]: asks [next] for a command, applies
-/// it to the copy, and repeats until [next] returns null or a command is
-/// rejected.
-List<Command> _plan(
+/// it to the copy, and repeats until [next] returns null.
+///
+/// A command the copy rejects ends the plan but is still returned last:
+/// the copy matches [s], so the caller's [GameEngine.apply] rejects it too
+/// and the bot bug shows up in its count of rejected commands (see
+/// `BalanceReport.rejectedCommands`) instead of passing silently.
+List<Command> planCommands(
   GameEngine e,
   GameState s,
   Command? Function(GameState w) next,
@@ -120,8 +124,9 @@ List<Command> _plan(
   final out = <Command>[];
   for (var i = 0; i < _maxCommandsPerDecision; i++) {
     final cmd = next(w);
-    if (cmd == null || e.apply(w, cmd) is! CommandOk) break;
+    if (cmd == null) break;
     out.add(cmd);
+    if (e.apply(w, cmd) is! CommandOk) break;
   }
   return out;
 }

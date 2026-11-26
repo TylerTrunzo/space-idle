@@ -12,6 +12,27 @@ GameEngine _engine() => GameEngine(
 
 /// Plays like [inner] and keeps the state it was last shown, which is the
 /// session's live state, so a test can read it after the session ends.
+/// Plans one valid command, then one the engine rejects, through
+/// [planCommands] as the real bots do.
+final class _BrokenBot implements Bot {
+  @override
+  String get name => 'broken';
+
+  @override
+  List<Command> decide(GameEngine e, GameState s, String factionId) {
+    var step = 0;
+    return planCommands(
+      e,
+      s,
+      (w) => switch (step++) {
+        0 => SetAutoSellCommand(factionId, 'kora', 'steel', BigNum.from(1)),
+        1 => DemolishCommand(factionId, 'no_such_building'),
+        _ => const DemolishCommand('player', 'never_reached'),
+      },
+    );
+  }
+}
+
 final class _Spy implements Bot {
   _Spy(this.inner);
 
@@ -60,5 +81,18 @@ void main() {
   test('bots name themselves', () {
     expect(GreedyBot().name, 'greedy');
     expect(BalancedBot().name, 'balanced');
+  });
+
+  test('a command rejected while planning ends the plan and is returned', () {
+    final e = _engine();
+    final cmds = _BrokenBot().decide(e, e.newGame(1), 'player');
+    expect(cmds, hasLength(2));
+    expect(cmds.last, isA<DemolishCommand>());
+  });
+
+  test('rejected bot commands are counted in the report', () {
+    // 18 decisions per check-in, one rejected command in each.
+    final r = runBotSession(_engine(), _BrokenBot(), seed: 1, hours: 12);
+    expect(r.rejectedCommands, 2 * 18);
   });
 }
