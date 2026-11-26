@@ -62,8 +62,10 @@ Map<String, BigNum> claimCost(GameState s, Content c, String factionId) {
   };
 }
 
-/// Most crew [b] can hold; buildings with no base slots hold none.
-int _maxCrew(RulesDef r, BuildingDef def, BuildingState b) => def.crewSlots == 0
+/// Most crew [b], a building of type [def], can hold: base slots plus
+/// `capacityCrewPerLevel` per capacity level. Buildings with no base slots
+/// (warehouses) hold none.
+int maxCrew(RulesDef r, BuildingDef def, BuildingState b) => def.crewSlots == 0
     ? 0
     : def.crewSlots + r.capacityCrewPerLevel * b.levels[UpgradeTrack.capacity]!;
 
@@ -212,7 +214,7 @@ CommandResult _assignCrew(
   if (cmd.crew < 0) {
     return _fail(CommandError.invalidAmount, 'crew must be at least 0');
   }
-  final max = _maxCrew(c.rules, c.buildings[b.defId]!, b);
+  final max = maxCrew(c.rules, c.buildings[b.defId]!, b);
   if (cmd.crew > max) {
     return _fail(
       CommandError.crewSlotsExceeded,

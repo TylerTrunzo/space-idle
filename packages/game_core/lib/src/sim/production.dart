@@ -67,24 +67,73 @@ void stepProduction(GameState s, Content c, double dt) {
   }
 }
 
+/// Inputs and outputs of one building over a step at full input supply.
+typedef BuildingFlow = ({
+  Map<String, BigNum> inputs,
+  Map<String, BigNum> outputs,
+});
+
+/// What building [b] on [body] would take and make in [dt] game seconds if
+/// every input were fully supplied, with its faction working at [crewEff].
+///
+/// [stepProduction] scales both maps by the run fraction it settles on, so
+/// `amount × lastRunFraction` is what the building actually moved. Inputs
+/// are listed for every recipe input (zero when unstaffed); an extractor's
+/// only output is its deposit's resource, scaled by richness, and it makes
+/// nothing when that deposit is missing. Buildings with no crew slots
+/// (warehouses) take and make nothing.
+BuildingFlow fullRateFlow(
+  Content c,
+  BodyState body,
+  BuildingState b,
+  double dt,
+  double crewEff,
+) {
+  final r = c.rules;
+  final def = c.buildings[b.defId]!;
+  // Only warehouses have no slots in loaded content; a slot-less building
+  // of any other kind (inline content only) runs nothing either.
+  if (def.crewSlots == 0) return (inputs: const {}, outputs: const {});
+  // Crew fraction uses base slots, so crew in capacity-upgrade slots pushes
+  // output above 100%.
+  final crewFrac = b.crew / def.crewSlots * crewEff;
+  final cycles =
+      dt /
+      def.cycleSeconds *
+      speedMultiplier(r, b.levels[UpgradeTrack.speed]!) *
+      crewFrac;
+  final inputMult = efficiencyMultiplier(r, b.levels[UpgradeTrack.efficiency]!);
+  final inputs = {
+    for (final MapEntry(key: id, value: perCycle) in def.inputs.entries)
+      id: BigNum.from(perCycle).mulDouble(inputMult * cycles),
+  };
+  final outputs = <String, BigNum>{};
+  if (def.kind == BuildingKind.extractor) {
+    final id = b.depositResourceId;
+    final perCycle = def.outputs[id];
+    final deposit = body.deposits.where((d) => d.resourceId == id).firstOrNull;
+    if (id != null && perCycle != null && deposit != null) {
+      outputs[id] = BigNum.from(perCycle).mulDouble(deposit.richness * cycles);
+    }
+  } else {
+    for (final MapEntry(key: id, value: perCycle) in def.outputs.entries) {
+      outputs[id] = BigNum.from(perCycle).mulDouble(cycles);
+    }
+  }
+  return (inputs: inputs, outputs: outputs);
+}
+
 /// One building's planned run this step.
 final class _Run {
-  _Run(this.b, this.def, this.cycles, this.inputMult);
+  _Run(this.b, this.flow);
 
   final BuildingState b;
-  final BuildingDef def;
 
-  /// Potential recipe cycles this step at full input.
-  final double cycles;
+  /// Inputs and outputs at full input supply.
+  final BuildingFlow flow;
 
-  /// Efficiency multiplier on inputs.
-  final double inputMult;
-
-  /// Fraction of [cycles] actually run; set once satisfaction is known.
+  /// Fraction of [flow] actually run; set once satisfaction is known.
   double fraction = 0;
-
-  BigNum demand(String resourceId) =>
-      BigNum.from(def.inputs[resourceId]!).mulDouble(inputMult * cycles);
 }
 
 void _stepBody(
@@ -94,35 +143,16 @@ void _stepBody(
   double crewEff,
   BigNum cap,
 ) {
-  final r = c.rules;
-  final runs = <_Run>[];
-  for (final b in body.buildings) {
-    final def = c.buildings[b.defId]!;
-    // Only warehouses have no slots in loaded content; a slot-less building
-    // of any other kind (inline content only) runs nothing either.
-    if (def.crewSlots == 0) continue;
-    // Crew fraction uses base slots, so crew in capacity-upgrade slots pushes
-    // output above 100%.
-    final crewFrac = b.crew / def.crewSlots * crewEff;
-    final cycles =
-        dt /
-        def.cycleSeconds *
-        speedMultiplier(r, b.levels[UpgradeTrack.speed]!) *
-        crewFrac;
-    runs.add(
-      _Run(
-        b,
-        def,
-        cycles,
-        efficiencyMultiplier(r, b.levels[UpgradeTrack.efficiency]!),
-      ),
-    );
-  }
+  final runs = [
+    for (final b in body.buildings)
+      if (c.buildings[b.defId]!.crewSlots > 0)
+        _Run(b, fullRateFlow(c, body, b, dt, crewEff)),
+  ];
 
   final demand = <String, BigNum>{};
   for (final run in runs) {
-    for (final id in run.def.inputs.keys) {
-      demand[id] = (demand[id] ?? _zero) + run.demand(id);
+    for (final MapEntry(key: id, value: d) in run.flow.inputs.entries) {
+      demand[id] = (demand[id] ?? _zero) + d;
     }
   }
   final satisfaction = {
@@ -135,7 +165,7 @@ void _stepBody(
   for (final run in runs) {
     var f = 1.0;
     String? limit;
-    for (final id in run.def.inputs.keys) {
+    for (final id in run.flow.inputs.keys) {
       final sat = satisfaction[id]!;
       if (sat < f) {
         f = sat;
@@ -159,9 +189,8 @@ void _stepBody(
   final consumed = <String, BigNum>{};
   for (final run in runs) {
     if (run.fraction == 0) continue;
-    for (final id in run.def.inputs.keys) {
-      consumed[id] =
-          (consumed[id] ?? _zero) + run.demand(id).mulDouble(run.fraction);
+    for (final MapEntry(key: id, value: d) in run.flow.inputs.entries) {
+      consumed[id] = (consumed[id] ?? _zero) + d.mulDouble(run.fraction);
     }
   }
   for (final MapEntry(key: id, value: used) in consumed.entries) {
@@ -175,31 +204,8 @@ void _stepBody(
 
   for (final run in runs) {
     if (run.fraction == 0) continue;
-    final def = run.def;
-    if (def.kind == BuildingKind.extractor) {
-      final id = run.b.depositResourceId;
-      final perCycle = def.outputs[id];
-      final deposit = body.deposits
-          .where((d) => d.resourceId == id)
-          .firstOrNull;
-      if (id == null || perCycle == null || deposit == null) continue;
-      _store(
-        body,
-        id,
-        BigNum.from(
-          perCycle,
-        ).mulDouble(deposit.richness * run.cycles * run.fraction),
-        cap,
-      );
-    } else {
-      for (final MapEntry(key: id, value: perCycle) in def.outputs.entries) {
-        _store(
-          body,
-          id,
-          BigNum.from(perCycle).mulDouble(run.cycles * run.fraction),
-          cap,
-        );
-      }
+    for (final MapEntry(key: id, value: made) in run.flow.outputs.entries) {
+      _store(body, id, made.mulDouble(run.fraction), cap);
     }
   }
 }
