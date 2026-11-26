@@ -641,6 +641,46 @@ void main() {
     });
   });
 
+  test('the furnace and electrolyzer cycle steps without going negative, '
+      'the same every time', () {
+    // The hydrogen furnace makes water from hydrogen; the electrolyzer
+    // makes hydrogen from water. Recipe depth visits the furnace first
+    // (content order), reaches the electrolyzer through hydrogen, and
+    // drops the electrolyzer's edge back to the furnace's water: so the
+    // electrolyzer (depth 2) runs before the furnace (depth 3), and the
+    // furnace's water reaches it in the next step.
+    final shipped = shippedContent();
+    final depth = recipeDepth(shipped);
+    expect(depth['electrolyzer'], 2);
+    expect(depth['hydrogen_furnace'], 3);
+
+    String run() {
+      final gs = newGameState(shipped, 1)..faction('player').baseCrew = 50;
+      final kora = gs.body('kora')
+        ..buildings.clear()
+        ..stock.clear()
+        ..stock['iron_ore'] = n(500)
+        ..stock['hydrogen'] = n(7)
+        ..stock['water'] = n(3);
+      kora.buildings.addAll([
+        BuildingState(id: 'f', defId: 'hydrogen_furnace', crew: 2),
+        BuildingState(id: 'e', defId: 'electrolyzer', crew: 3),
+      ]);
+      final rng = Rng(9);
+      for (var step = 0; step < 300; step++) {
+        stepProduction(gs, shipped, 0.5 + rng.nextDouble() * 30);
+        for (final MapEntry(:key, :value) in kora.stock.entries) {
+          expect(value.isNegative, isFalse, reason: 'step $step $key $value');
+        }
+      }
+      // The cycle ran: the electrolyzer used the furnace's water.
+      expect(gs.faction('player').lifetimeProduced['oxygen'], isNotNull);
+      return jsonEncode(gs.toJson());
+    }
+
+    expect(run(), run());
+  });
+
   test('no stock goes negative', () {
     for (var seed = 1; seed <= 4; seed++) {
       final rng = Rng(seed);

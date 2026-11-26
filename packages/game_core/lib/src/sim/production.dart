@@ -358,7 +358,12 @@ void _runGroup(
 /// [stepProduction] plans them before every group and runs them after. A cycle in the recipe graph is
 /// broken by list order: buildings are visited in content order, inputs
 /// and their makers too, and an edge back to a building still being
-/// visited is left out. Computed once per [Content] and cached.
+/// visited is left out. In the shipped content the hydrogen furnace
+/// (water from hydrogen) and the electrolyzer (hydrogen from water) form
+/// such a cycle: the furnace is visited first, so the electrolyzer's edge
+/// back to the furnace's water is the one left out, and the electrolyzer
+/// runs first, using the furnace's water a step later. Computed once per
+/// [Content] and cached.
 Map<String, int> recipeDepth(Content c) => _depthCache[c] ??= _depths(c);
 
 final _depthCache = Expando<Map<String, int>>('recipeDepth');
