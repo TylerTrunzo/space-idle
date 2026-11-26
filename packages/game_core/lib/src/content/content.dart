@@ -30,8 +30,11 @@ final class ResourceDef {
   /// Neutral market price per unit at full saturation; zero means unsellable.
   final BigNum basePrice;
 
-  /// Units that must be sold to push the market price down by the full
-  /// saturation range; larger is a deeper, more forgiving market.
+  /// How deep the market is: each unit sold cuts the price by
+  /// `1 / marketDepth` of itself, so `marketDepth` units sold at once cut
+  /// it to 1/e, and steady selling of `marketDepth /
+  /// RulesDef.marketRecoverySeconds` units a second holds it at half
+  /// price. Larger is a deeper, more forgiving market.
   final double marketDepth;
 }
 
@@ -227,7 +230,8 @@ final class RulesDef {
   /// Lowest market saturation, in `[0, 1]`.
   final double marketFloor;
 
-  /// Seconds for market saturation to recover from 0 to 1.
+  /// Time constant of market recovery: an unsold resource's gap to full
+  /// price shrinks by a factor e every this many seconds.
   final double marketRecoverySeconds;
 
   /// Credits for a faction's first extra body.

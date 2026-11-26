@@ -25,15 +25,14 @@ BigNum price(GameState s, Content c, String resourceId) => c
     .mulDouble(s.market.saturation[resourceId] ?? 1);
 
 /// Sells up to [amount] of [resourceId] from [bodyId]'s stock for
-/// [factionId].
+/// [factionId], all at once.
 ///
-/// Each unit sold lowers the saturation by `1 / marketDepth`, down to the
-/// market floor, and earns the price at the saturation it sold at. Revenue
-/// is that price integrated over the sale: while the saturation falls from
-/// `s0` to `s1` above the floor, `basePrice × marketDepth × (s0² − s1²) / 2`
-/// (the units sold times the average of the two prices), and every unit
-/// past the floor earns `basePrice × marketFloor`. So one large sale earns
-/// what the same units sold in many small lots would.
+/// Each unit sold cuts the saturation by `1 / marketDepth` of itself, down
+/// to the market floor, and earns the price at the saturation it sold at.
+/// So `n` units take the saturation from `s0` to `s0 × e^(−n / depth)` and
+/// earn `basePrice × marketDepth × (s0 − s1)`; every unit past the floor
+/// earns `basePrice × marketFloor`. One large sale earns what the same
+/// units sold in many small lots would.
 ///
 /// Sells only what the body holds. Does no ownership checks; callers
 /// validate first (see `SellCommand`). The ids must exist.
@@ -56,18 +55,17 @@ SaleResult sell(
   final s0 = s.market.saturation[resourceId] ?? 1;
   final depth = res.marketDepth;
   // Units that take the saturation from s0 down to the floor.
-  final toFloor = depth * math.max(0.0, s0 - floor);
+  final toFloor = s0 <= floor ? 0.0 : depth * math.log(s0 / floor);
   final BigNum revenue;
   final double s1;
   if (sold.toDouble() <= toFloor) {
-    s1 = s0 - sold.toDouble() / depth;
-    revenue = (sold * res.basePrice).mulDouble((s0 + s1) / 2);
+    s1 = s0 * math.exp(-sold.toDouble() / depth);
+    revenue = res.basePrice.mulDouble(depth * (s0 - s1));
   } else {
     s1 = math.min(s0, floor);
-    final above = BigNum.from(toFloor);
     revenue =
-        (above * res.basePrice).mulDouble((s0 + s1) / 2) +
-        ((sold - above) * res.basePrice).mulDouble(floor);
+        res.basePrice.mulDouble(depth * (s0 - s1)) +
+        (sold - BigNum.from(toFloor)) * res.basePrice.mulDouble(floor);
   }
   _earn(s.faction(factionId), resourceId, revenue);
   body.stock[resourceId] = held - sold;
@@ -86,13 +84,16 @@ SaleResult sell(
 /// auto-selling an input never starves the factories that use it, however
 /// long the step.
 ///
-/// What is auto-sold of a resource counts as sold at a steady rate over
-/// the step while the saturation recovers at `1 / marketRecoverySeconds`
-/// a second: the saturation follows that net rate, held in
-/// `[marketFloor, 1]`, and the units earn the base price times its
-/// average over the step ([_sellOverStep]). So a long step earns what many
-/// short ones do. Every seller of a resource gets the same price per unit.
-/// A resource nobody auto-sells only recovers. Factions and their rules
+/// Saturation recovers toward 1: its gap to full price shrinks by a
+/// factor e every `marketRecoverySeconds`. What is auto-sold of a resource
+/// counts as sold at a steady rate over the step while it recovers, each
+/// unit cutting the saturation by `1 / marketDepth` of itself as in
+/// [sell]; the units earn the base price times the saturation's average
+/// over the step ([_sellOverStep]). So a long step earns what many short
+/// ones do, and steady selling settles at `1 / (1 + rate ×
+/// marketRecoverySeconds / marketDepth)` (or the floor): selling more
+/// always earns more, ever less per unit. Every seller of a resource gets
+/// the same price per unit. Factions and their rules
 /// run in list order; resources are settled in sorted-id order so the
 /// result does not depend on map insertion order.
 void stepMarket(GameState s, Content c, double dt) {
@@ -125,7 +126,8 @@ void stepMarket(GameState s, Content c, double dt) {
   for (final id in {...sat.keys, ...sales.keys}.toList()..sort()) {
     final lots = sales[id];
     if (lots == null) {
-      sat[id] = math.min(1, sat[id]! + dt / c.rules.marketRecoverySeconds);
+      sat[id] =
+          1 - (1 - sat[id]!) * math.exp(-dt / c.rules.marketRecoverySeconds);
       continue;
     }
     final total = lots.fold(_zero, (t, lot) => t + lot.$3);
@@ -149,10 +151,10 @@ void stepMarket(GameState s, Content c, double dt) {
 /// saturation [s0] while the market recovers: the average saturation the
 /// units sell at ([priceShare]) and the saturation at the end.
 ///
-/// The saturation moves at `1 / marketRecoverySeconds − rate /
-/// marketDepth` a second, held in `[marketFloor, 1]`: a market that can
-/// absorb the rate stays at (or recovers to) full price, and one that
-/// cannot falls to the floor and stays there.
+/// With recovery rate `r = 1 / marketRecoverySeconds` and sales cutting
+/// `b = rate / marketDepth` of the saturation a second, `ds/dt = r(1 − s)
+/// − b s`: the saturation moves exponentially, at rate `r + b`, toward
+/// `r / (r + b)`, and stops at the floor if that lies below it.
 ({double priceShare, double end}) _sellOverStep(
   Content c,
   ResourceDef res,
@@ -161,18 +163,19 @@ void stepMarket(GameState s, Content c, double dt) {
   double dt,
 ) {
   final floor = c.rules.marketFloor;
-  final k = 1 / c.rules.marketRecoverySeconds - units / dt / res.marketDepth;
-  if (k == 0) return (priceShare: s0, end: s0);
-  // The bound the saturation heads for, and when it gets there.
-  final bound = k > 0 ? 1.0 : floor;
-  final reach = (bound - s0) / k;
-  if (reach >= dt) {
-    final end = s0 + k * dt;
-    return (priceShare: (s0 + end) / 2, end: end);
-  }
-  final t = math.max(0.0, reach);
-  final area = (s0 + bound) / 2 * t + bound * (dt - t);
-  return (priceShare: area / dt, end: bound);
+  final r = 1 / c.rules.marketRecoverySeconds;
+  final k = r + units / dt / res.marketDepth;
+  final eq = r / k;
+  // Average saturation over the first t seconds, and the value at t.
+  double average(double t) => eq + (s0 - eq) * (1 - math.exp(-k * t)) / (k * t);
+  double at(double t) => eq + (s0 - eq) * math.exp(-k * t);
+  if (eq >= floor) return (priceShare: average(dt), end: at(dt));
+  if (s0 <= floor) return (priceShare: floor, end: floor);
+  // Heading below the floor: it gets there at tf and stays.
+  final tf = math.log((s0 - eq) / (floor - eq)) / k;
+  if (tf >= dt) return (priceShare: average(dt), end: at(dt));
+  final area = (tf > 0 ? average(tf) * tf : 0) + floor * (dt - tf);
+  return (priceShare: area / dt, end: floor);
 }
 
 const _zero = BigNum.zero();

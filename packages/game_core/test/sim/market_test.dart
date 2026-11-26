@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:game_core/game_core.dart';
 import 'package:test/test.dart';
 
@@ -15,32 +17,48 @@ void main() {
 
   BigNum stock() => s.body('a').stock['ore'] ?? const BigNum.zero();
 
+  // The fixture market: ore at 10, depth 100, recovery 1800 s, floor 0.2.
+  // Each unit sold cuts the price by 1/depth of itself, so selling n units
+  // at once takes the saturation from s0 to s0 × e^(−n/100); unsold, the
+  // gap to full price shrinks by a factor e every 1800 s.
+
   test('selling lowers price and recovers', () {
     final r = sell(s, c, 'p', 'a', 'ore', n(50));
     expect(r.sold, n(50));
-    // The price falls from 10 to 5 over the sale: 50 units at 7.5 on average.
-    expect(r.revenue, n(375));
-    expect(s.market.saturation['ore'], closeTo(0.5, 1e-12));
-    expect(s.faction('p').credits, n(375));
-    expect(price(s, c, 'ore').toDouble(), closeTo(5, 1e-9));
+    final s1 = math.exp(-0.5);
+    // Revenue is base × depth × (s0 − s1).
+    expect(r.revenue.toDouble(), closeTo(10 * 100 * (1 - s1), 1e-9));
+    expect(s.market.saturation['ore'], closeTo(s1, 1e-12));
+    expect(s.faction('p').credits, r.revenue);
+    expect(price(s, c, 'ore').toDouble(), closeTo(10 * s1, 1e-9));
     stepMarket(s, c, 1800);
-    expect(s.market.saturation['ore'], 1.0);
+    expect(
+      s.market.saturation['ore'],
+      closeTo(1 - (1 - s1) * math.exp(-1), 1e-12),
+    );
   });
 
-  test('recovery is gradual', () {
-    sell(s, c, 'p', 'a', 'ore', n(50));
+  test('recovery is gradual and never quite reaches full price', () {
+    s.market.saturation['ore'] = 0.5;
     stepMarket(s, c, 900);
-    expect(s.market.saturation['ore'], closeTo(1.0, 1e-12));
-    sell(s, c, 'p', 'a', 'ore', n(80)); // 1.0 -> 0.2
-    stepMarket(s, c, 900);
-    expect(s.market.saturation['ore'], closeTo(0.7, 1e-12));
+    expect(
+      s.market.saturation['ore'],
+      closeTo(1 - 0.5 * math.exp(-0.5), 1e-12),
+    );
+    stepMarket(s, c, 18000);
+    expect(s.market.saturation['ore'], lessThan(1));
+    expect(s.market.saturation['ore'], closeTo(1, 1e-4));
   });
 
   test('price floor', () {
     final r = sell(s, c, 'p', 'a', 'ore', n(500));
-    // 80 units take the price from 10 down to the floor of 2 (6 on
-    // average); the other 420 sell at the floor.
-    expect(r.revenue.toDouble(), closeTo(80 * 6 + 420 * 2, 1e-9));
+    // 100 × ln(1 / 0.2) units take the price from 10 down to the floor of
+    // 2; the rest sell at the floor.
+    final toFloor = 100 * math.log(5);
+    expect(
+      r.revenue.toDouble(),
+      closeTo(10 * 100 * 0.8 + (500 - toFloor) * 2, 1e-6),
+    );
     expect(s.market.saturation['ore'], 0.2);
     expect(price(s, c, 'ore').toDouble(), closeTo(2, 1e-9));
   });
@@ -49,9 +67,9 @@ void main() {
     s.body('a').stock['ore'] = n(30);
     final r = sell(s, c, 'p', 'a', 'ore', n(100));
     expect(r.sold, n(30));
-    expect(r.revenue.toDouble(), closeTo(30 * 8.5, 1e-9));
+    expect(r.revenue.toDouble(), closeTo(1000 * (1 - math.exp(-0.3)), 1e-9));
     expect(stock().isZero, isTrue);
-    expect(s.market.saturation['ore'], closeTo(0.7, 1e-12));
+    expect(s.market.saturation['ore'], closeTo(math.exp(-0.3), 1e-12));
   });
 
   test('repeated sales clamp saturation at the floor', () {
@@ -64,6 +82,46 @@ void main() {
     sell(s, c, 'p', 'a', 'ore', n(10));
     expect(s.faction('p').credits - before, n(20));
     expect(s.market.saturation['ore'], 0.2);
+  });
+
+  /// Credits a second, and the saturation, after [rate] units a second
+  /// have been auto-sold for long enough to settle.
+  (double, double) steady(double rate) {
+    final t = newGameState(c, 1);
+    final f = t.faction('p')
+      ..autoSell.add(
+        AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(0)),
+      );
+    for (var i = 0; i < 400; i++) {
+      t.body('a').stock['ore'] = n(rate * 60);
+      stepMarket(t, c, 60);
+    }
+    final before = f.credits;
+    t.body('a').stock['ore'] = n(rate * 60);
+    stepMarket(t, c, 60);
+    return ((f.credits - before).toDouble() / 60, t.market.saturation['ore']!);
+  }
+
+  test('steady selling settles where recovery meets the sales', () {
+    // At 0.1 a second: 1 / (1 + 0.1 × 1800 / 100).
+    final (income, sat) = steady(0.1);
+    expect(sat, closeTo(1 / 2.8, 1e-6));
+    expect(income, closeTo(10 * 0.1 / 2.8, 1e-6));
+  });
+
+  test('selling more always earns more, with diminishing returns', () {
+    final rates = [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0];
+    final incomes = [for (final r in rates) steady(r).$1];
+    for (var i = 1; i < rates.length; i++) {
+      expect(incomes[i], greaterThan(incomes[i - 1]), reason: '${rates[i]}');
+      // Never more per unit than at a lower rate.
+      expect(
+        incomes[i] / rates[i],
+        lessThanOrEqualTo(incomes[i - 1] / rates[i - 1] + 1e-12),
+      );
+    }
+    // Far past what the market absorbs, every unit sells at the floor.
+    expect(incomes.last, closeTo(10 * 10 * 0.2, 1e-6));
   });
 
   group('one lot earns what many small lots do', () {
@@ -94,7 +152,10 @@ void main() {
 
   test('a sale starting at the floor pays the floor price', () {
     s.market.saturation['ore'] = 0.2;
-    expect(sell(s, c, 'p', 'a', 'ore', n(10)).revenue, n(20));
+    expect(
+      sell(s, c, 'p', 'a', 'ore', n(10)).revenue.toDouble(),
+      closeTo(20, 1e-9),
+    );
   });
 
   test('auto-sell keeps minimum', () {
@@ -104,12 +165,12 @@ void main() {
         .add(AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(450)));
     stepMarket(s, c, 1);
     expect(stock(), n(450));
-    // 50 sold over the second: the saturation falls from 1 at
-    // 0.5 − 1/1800 a second, so they average 1 − (0.5 − 1/1800) / 2.
-    expect(
-      s.faction('p').credits.toDouble(),
-      closeTo(500 * (1 - (0.5 - 1 / 1800) / 2), 1e-9),
-    );
+    // 50 sold over the second: ds/dt = (1 − s) / 1800 − 0.5 s, so the
+    // saturation heads for e = (1/1800) / k at rate k = 1/1800 + 0.5.
+    const k = 1 / 1800 + 0.5;
+    const eq = (1 / 1800) / k;
+    final average = eq + (1 - eq) * (1 - math.exp(-k)) / k;
+    expect(s.faction('p').credits.toDouble(), closeTo(500 * average, 1e-9));
     stepMarket(s, c, 1); // nothing above the minimum
     expect(stock(), n(450));
   });

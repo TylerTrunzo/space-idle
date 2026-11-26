@@ -210,13 +210,12 @@ void main() {
       expect(sh.amount.toDouble(), closeTo(3.2, 1e-9));
       // Sent at time 0; Kora (orbit 2) to Hollow Reach (orbit 3): 120 × 2.
       expect(sh.arriveAt, 240);
-      // Production made 2 steel before the market sold all of it at 4: the
-      // market absorbs 0.2 a second at full price.
+      // Production made 2 steel before the market sold all of it at a hair
+      // under 4.
       expect(kora.stock['steel']!.isZero, isTrue);
-      expect(
-        s.faction('player').credits.toDouble(),
-        closeTo(250 + 2 * 4, 1e-9),
-      );
+      final credits = s.faction('player').credits.toDouble();
+      expect(credits, closeTo(250 + 2 * 4, 1e-2));
+      expect(credits, lessThan(258));
     });
 
     test('sends cargo before the market sells what is left', () {

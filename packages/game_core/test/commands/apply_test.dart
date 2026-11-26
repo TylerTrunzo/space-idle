@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
 import 'package:test/test.dart';
@@ -425,10 +426,14 @@ void main() {
     test('happy path pays credits and saturates the market', () {
       final s = fresh();
       expectOk(s, SellCommand('player', 'kora', 'iron_ore', n(10)));
-      // 10 units at an average price of 0.9995 as saturation falls to 0.999.
-      expect(s.faction('player').credits, n(250 + 10 * 0.9995));
+      // Depth 10000: saturation falls to e^(−0.001), and the 10 units earn
+      // 10000 × (1 − e^(−0.001)) at base price 1.
+      expect(
+        s.faction('player').credits.toDouble(),
+        closeTo(250 + 10000 * (1 - math.exp(-0.001)), 1e-9),
+      );
       expect(s.body('kora').stock['iron_ore'], n(30));
-      expect(s.market.saturation['iron_ore'], closeTo(0.999, 1e-12));
+      expect(s.market.saturation['iron_ore'], closeTo(math.exp(-0.001), 1e-12));
     });
 
     test('selling what the body does not hold fails', () {
