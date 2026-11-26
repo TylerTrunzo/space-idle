@@ -13,15 +13,6 @@ double travelSeconds(GameState s, Content c, BodyState a, BodyState b) =>
 BigNum routeCapacity(Content c, RouteState r) =>
     BigNum.from(r.cargoShips * c.rules.shipCapacityPerSecond);
 
-/// Game seconds within which a route's sends join its newest shipment
-/// instead of starting a new one.
-///
-/// Ticking once a second would otherwise put one shipment per route per
-/// second in flight; merged, a route has about one per this many seconds of
-/// travel. Merged cargo keeps the shipment's arrival time, so it lands up to
-/// this many seconds early.
-const double shipmentMergeSeconds = 10;
-
 /// Lands every shipment due by now (`arriveAt <= time`), in creation
 /// order, by [Shipment.toBodyId], whether or not its route still exists.
 ///
@@ -43,22 +34,58 @@ void deliverShipments(GameState s) {
   }
 }
 
+/// Units of route [r]'s resource still in flight on its shipments.
+BigNum routeInFlight(GameState s, RouteState r) {
+  var total = const BigNum.zero();
+  for (final sh in s.shipments) {
+    if (sh.routeId == r.id) total = total + sh.amount;
+  }
+  return total;
+}
+
+/// Units route [r] may still send before its destination holds its
+/// [RouteState.stopAtDestination]: that level less what the destination
+/// holds and what is in flight on the route ([routeInFlight]); null for a
+/// route with no stop level.
+BigNum? routeRoomBeforeStop(GameState s, RouteState r) {
+  final stop = r.stopAtDestination;
+  if (stop == null) return null;
+  final held = s.body(r.toBodyId).stock[r.resourceId] ?? const BigNum.zero();
+  return stop - held - routeInFlight(s, r);
+}
+
+/// Whether route [r] is paused: its destination holds, counting what is
+/// in flight on the route, at least its [RouteState.stopAtDestination].
+bool routePaused(GameState s, RouteState r) {
+  final room = routeRoomBeforeStop(s, r);
+  return room != null && room <= const BigNum.zero();
+}
+
 /// Sends cargo along every route for [dt] game seconds.
 ///
 /// Each route whose source and destination are both still owned by the
-/// route owner moves `min(rate, capacity) × dt`, limited by source stock.
-/// The cargo joins the route's newest shipment if that one departed less
-/// than [mergeSeconds] ago and is still in flight; otherwise it leaves in
-/// a new [Shipment] arriving at `time + travelSeconds`. Other routes are
-/// skipped this step. Nothing lands here; see [deliverShipments].
+/// route owner moves `min(rate, capacity) × dt`, limited by source stock
+/// and, for a route with a stop level, by [routeRoomBeforeStop], so the
+/// destination plus the route's cargo in flight never pass the level; a
+/// paused route ([routePaused]) sends nothing until the destination uses
+/// some up. The cargo joins the route's newest shipment if that one
+/// departed less than [mergeSeconds] (default the rules'
+/// [RulesDef.shipmentMergeSeconds]) ago and is still in flight; otherwise
+/// it leaves in a new [Shipment] arriving at `time + travelSeconds`. Other
+/// routes are skipped this step. Nothing lands here; see
+/// [deliverShipments].
+///
+/// The engine runs this before the market, so what a route sends is off
+/// its source's stock before auto-sell works out what it may sell there.
 ///
 /// Returns route id to the units it sent, for the routes that sent any.
 Map<String, BigNum> sendCargo(
   GameState s,
   Content c,
   double dt, {
-  double mergeSeconds = shipmentMergeSeconds,
+  double? mergeSeconds,
 }) {
+  final merge = mergeSeconds ?? c.rules.shipmentMergeSeconds;
   final sent = <String, BigNum>{};
   for (final r in s.routes) {
     final from = s.body(r.fromBodyId);
@@ -66,13 +93,14 @@ Map<String, BigNum> sendCargo(
     if (from.ownerId != r.ownerId || to.ownerId != r.ownerId) continue;
     final held = from.stock[r.resourceId] ?? const BigNum.zero();
     final rate = r.ratePerSecond.min(routeCapacity(c, r));
-    final amount = rate.mulDouble(dt).min(held);
+    var amount = rate.mulDouble(dt).min(held);
+    if (routeRoomBeforeStop(s, r) case final room?) amount = amount.min(room);
     if (amount <= const BigNum.zero()) continue;
     from.take(r.resourceId, amount);
     sent[r.id] = amount;
     final newest = _newestOf(s, r.id);
     if (newest != null &&
-        s.time - newest.departAt < mergeSeconds &&
+        s.time - newest.departAt < merge &&
         newest.arriveAt > s.time) {
       newest.amount = newest.amount + amount;
       continue;

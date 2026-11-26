@@ -34,7 +34,7 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 
 | Line | What it does |
 |---|---|
-| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
+| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, stop level and whether they are paused, and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
 | `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what selling one second's net output earns, not a stockpile being sold down), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
 | `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), and the next extra build slot on each body you own |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
@@ -69,15 +69,18 @@ counts are plain integers.
 | `{"cmd":"upgrade","buildingId":"b1","track":"speed"}` | Buy one level of `speed`, `efficiency` or `capacity` |
 | `{"cmd":"setAutoSell","bodyId":"kora","resourceId":"steel","keepAtLeast":"100"}` | Sell everything above 100 automatically; `null` removes the rule |
 | `{"cmd":"sell","bodyId":"kora","resourceId":"steel","amount":"50"}` | Sell once |
-| `{"cmd":"createRoute","fromBodyId":"kora","toBodyId":"brine","resourceId":"circuit","ratePerSecond":"0.2","cargoShips":1}` | Ship goods between your bodies; the cargo ships come from the source body's stock |
+| `{"cmd":"createRoute","fromBodyId":"kora","toBodyId":"brine","resourceId":"circuit","ratePerSecond":"0.2","cargoShips":1,"stopAtDestination":"500"}` | Ship goods between your bodies; the cargo ships come from the source body's stock. `stopAtDestination` is optional: the route pauses while Brine holds 500 (cargo in flight counts), so it never overfills |
+| `{"cmd":"updateRoute","routeId":"r1","ratePerSecond":"1","cargoShips":2,"stopAtDestination":"800"}` | Change a route's rate, ships or stop level (name any of them; the rest stay). `"removeStopAtDestination":true` takes the stop level off |
+| `{"cmd":"moveShips","fromBodyId":"kora","toBodyId":"brine","count":2}` | Send cargo ships to another of your bodies in the system; they land after the normal travel time |
 | `{"cmd":"removeRoute","routeId":"r1"}` | Close a route; its ships return to the source |
 | `{"cmd":"claimBody","bodyId":"brine","sourceBodyId":"kora"}` | Claim an unowned body; after the first claim it also takes outpost kits from the source body |
 | `{"cmd":"demolish","buildingId":"b4"}` | Remove a building for half its credit cost back |
 | `{"cmd":"expandSlots","bodyId":"kora"}` | Buy one more build slot on a body you own; each one costs more (see `costs`) |
 
 A successful command reply lists what it `spent` and `gained` (credits, and
-`body/resource` amounts). `claimBody`, `demolish` and `createRoute` also say
-in a `message` what was claimed, refunded or created, with ids. A
+`body/resource` amounts). `claimBody`, `demolish`, `createRoute`,
+`updateRoute` and `moveShips` also say in a `message` what was claimed,
+refunded, created, changed or sent, with ids. A
 `depositMissing` error lists the deposits the body has.
 
 Things worth knowing:
@@ -91,7 +94,9 @@ Things worth knowing:
   ammonia) or a protein vat (water and hydrogen, which an electrolyzer also
   makes).
 - Auto-sell never sells what the buildings on that body need for the next
-  tick, so it is safe on an input with `keepAtLeast` 0.
+  tick, or the next 10 seconds if the tick is shorter (route cargo lands in
+  lots about 10 s apart), so it is safe on an input with `keepAtLeast` 0. A
+  route out of a body takes its share before auto-sell sells the rest.
 - The market pays less as you sell more of one good, but never pays less in
   total for selling more. Raw goods bottom out very low; refined goods and
   components hold their price better, so refining and diversifying pays.

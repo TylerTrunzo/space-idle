@@ -378,6 +378,8 @@ void main() {
           m['routes'] = [route()..['cargoShips'] = 0],
       'route rate not above 0': (m) =>
           m['routes'] = [route()..['ratePerSecond'] = '0'],
+      'route stop level not above 0': (m) =>
+          m['routes'] = [route()..['stopAtDestination'] = '0'],
       'negative shipment amount': (m) =>
           m['shipments'] = [shipment()..['amount'] = '-1'],
       'negative time': (m) => m['time'] = -1,
@@ -396,6 +398,22 @@ void main() {
         expect(r.message, isNotEmpty);
       });
     }
+
+    test('a route stop level round trips; a save without one has none', () {
+      final m = jsonDecode(jsonEncode(fresh())) as Map<String, Object?>;
+      m['routes'] = [route()..['stopAtDestination'] = '250', route(id: 'r2')];
+      final r = SaveCodec.decode(jsonEncode(m), content);
+      expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+      final routes = (r as SaveOk).state.routes;
+      expect(routes.first.stopAtDestination, BigNum.from(250));
+      expect(routes.last.stopAtDestination, isNull);
+      expect(routes.first.copy().stopAtDestination, BigNum.from(250));
+      final again = SaveCodec.decode(SaveCodec.encode(r.state), content);
+      expect(
+        (again as SaveOk).state.routes.first.stopAtDestination,
+        BigNum.from(250),
+      );
+    });
 
     test('an expanded body may hold a building past its type\'s slots', () {
       final m = jsonDecode(jsonEncode(fresh())) as Map<String, Object?>;

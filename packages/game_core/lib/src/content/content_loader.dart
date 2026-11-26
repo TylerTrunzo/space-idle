@@ -280,6 +280,7 @@ final class _Loader {
       'shipCapacityPerSecond',
       'cargoShipResource',
       'baseTravelSeconds',
+      'shipmentMergeSeconds',
       'claimSecondsBase',
       'claimSecondsPerOwned',
       'expandSlotsSeconds',
@@ -329,6 +330,11 @@ final class _Loader {
     final shipCapacityPerSecond = f.number('shipCapacityPerSecond', gt: 0);
     final cargoShipResource = f.string('cargoShipResource');
     final baseTravelSeconds = f.number('baseTravelSeconds', gt: 0);
+    final shipmentMergeSeconds = f.number(
+      'shipmentMergeSeconds',
+      fallback: RulesDef.defaultShipmentMergeSeconds,
+      ge: 0,
+    );
     final claimSecondsBase = f.number(
       'claimSecondsBase',
       fallback: RulesDef.defaultClaimSecondsBase,
@@ -389,6 +395,7 @@ final class _Loader {
       shipCapacityPerSecond: shipCapacityPerSecond!,
       cargoShipResource: cargoShipResource!,
       baseTravelSeconds: baseTravelSeconds!,
+      shipmentMergeSeconds: shipmentMergeSeconds!,
       claimSecondsBase: claimSecondsBase!,
       claimSecondsPerOwned: claimSecondsPerOwned!,
       expandSlotsSeconds: expandSlotsSeconds!,

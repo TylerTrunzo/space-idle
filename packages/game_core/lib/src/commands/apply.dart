@@ -6,6 +6,7 @@ import '../num/change.dart';
 import '../num/format.dart';
 import '../sim/contracts.dart';
 import '../sim/crew.dart';
+import '../sim/logistics.dart';
 import '../sim/market.dart';
 import '../sim/megaprojects.dart';
 import '../sim/production.dart';
@@ -36,6 +37,8 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
     AssignCrewCommand() => _assignCrew(s, c, faction, cmd),
     UpgradeCommand() => _upgrade(s, c, faction, cmd),
     CreateRouteCommand() => _createRoute(s, c, faction, cmd),
+    UpdateRouteCommand() => _updateRoute(s, c, faction, cmd),
+    MoveShipsCommand() => _moveShips(s, c, faction, cmd),
     RemoveRouteCommand() => _removeRoute(s, c, faction, cmd),
     SellCommand() => _sell(s, c, faction, cmd),
     SetAutoSellCommand() => _setAutoSell(s, c, faction, cmd),
@@ -418,6 +421,38 @@ CommandResult _upgrade(
   return const CommandOk();
 }
 
+/// The failure if [from] and [to], bodies in sight of [f], are not a pair
+/// goods can move between: both owned by [f], different, and in one
+/// system; else null.
+CommandFailed? _checkPair(FactionState f, BodyState from, BodyState to) {
+  if (from.ownerId != f.id) return _notOwner(from.name);
+  if (to.ownerId != f.id) return _notOwner(to.name);
+  if (from.id == to.id) {
+    return _fail(
+      CommandError.routeInvalid,
+      'From and to are both ${from.name}; pick two different bodies',
+    );
+  }
+  if (from.systemId != to.systemId) {
+    return _fail(
+      CommandError.routeInvalid,
+      '${from.name} and ${to.name} are in different systems',
+    );
+  }
+  return null;
+}
+
+/// The failure if [stop], a route's stop level, is not above zero.
+CommandFailed? _checkStop(BigNum? stop) =>
+    stop != null && stop <= const BigNum.zero()
+    ? _fail(CommandError.invalidAmount, 'The stock to stop at must be above 0')
+    : null;
+
+/// "the route from Kora to Brine": route [r] by its endpoints' names.
+String _routeName(GameState s, RouteState r) =>
+    'the route from ${s.body(r.fromBodyId).name} '
+    'to ${s.body(r.toBodyId).name}';
+
 CommandResult _createRoute(
   GameState s,
   Content c,
@@ -431,20 +466,8 @@ CommandResult _createRoute(
   if (!c.resources.containsKey(cmd.resourceId)) {
     return _unknownResource(cmd.resourceId);
   }
-  if (from.ownerId != f.id) return _notOwner(from.name);
-  if (to.ownerId != f.id) return _notOwner(to.name);
-  if (from.id == to.id) {
-    return _fail(
-      CommandError.routeInvalid,
-      'A route needs two different bodies',
-    );
-  }
-  if (from.systemId != to.systemId) {
-    return _fail(
-      CommandError.routeInvalid,
-      '${from.name} and ${to.name} are in different systems',
-    );
-  }
+  final bad = _checkPair(f, from, to);
+  if (bad != null) return bad;
   if (cmd.cargoShips < 1) {
     return _fail(
       CommandError.invalidAmount,
@@ -454,6 +477,8 @@ CommandResult _createRoute(
   if (cmd.ratePerSecond <= const BigNum.zero()) {
     return _fail(CommandError.invalidAmount, 'Rate must be above 0');
   }
+  final badStop = _checkStop(cmd.stopAtDestination);
+  if (badStop != null) return badStop;
   final ships = {c.rules.cargoShipResource: BigNum.from(cmd.cargoShips)};
   final short = _checkCost(c, f, from, ships);
   if (short != null) return short;
@@ -467,9 +492,125 @@ CommandResult _createRoute(
     resourceId: cmd.resourceId,
     ratePerSecond: cmd.ratePerSecond,
     cargoShips: cmd.cargoShips,
+    stopAtDestination: cmd.stopAtDestination,
   );
   s.routes.add(r);
   return CommandOk(createdId: r.id);
+}
+
+/// [f]'s route [id], or the failure if there is none or another faction
+/// owns it.
+(RouteState?, CommandFailed?) _ownedRoute(
+  GameState s,
+  FactionState f,
+  String id,
+) {
+  for (final r in s.routes) {
+    if (r.id != id) continue;
+    if (r.ownerId != f.id) return (null, _notOwner(_routeName(s, r)));
+    return (r, null);
+  }
+  return (null, _fail(CommandError.routeInvalid, 'There is no route $id'));
+}
+
+CommandResult _updateRoute(
+  GameState s,
+  Content c,
+  FactionState f,
+  UpdateRouteCommand cmd,
+) {
+  final (r, missing) = _ownedRoute(s, f, cmd.routeId);
+  if (r == null) return missing!;
+  final rate = cmd.ratePerSecond;
+  final ships = cmd.cargoShips;
+  final stop = cmd.stopAtDestination;
+  if (rate == null &&
+      ships == null &&
+      stop == null &&
+      !cmd.removeStopAtDestination) {
+    return _fail(
+      CommandError.invalidAmount,
+      'Name what to change on ${_routeName(s, r)}: its rate, cargo ships '
+      'or the stock to stop at',
+    );
+  }
+  if (stop != null && cmd.removeStopAtDestination) {
+    return _fail(
+      CommandError.invalidAmount,
+      'Set a stock to stop at or remove it, not both',
+    );
+  }
+  if (rate != null && rate <= const BigNum.zero()) {
+    return _fail(CommandError.invalidAmount, 'Rate must be above 0');
+  }
+  final badStop = _checkStop(stop);
+  if (badStop != null) return badStop;
+  final from = s.body(r.fromBodyId);
+  final extra = (ships ?? r.cargoShips) - r.cargoShips;
+  if (ships != null) {
+    if (ships < 1) {
+      return _fail(
+        CommandError.invalidAmount,
+        'A route needs at least one cargo ship',
+      );
+    }
+    if (extra != 0 && from.ownerId != f.id) return _notOwner(from.name);
+    if (extra > 0) {
+      final short = _checkCost(c, f, from, {
+        c.rules.cargoShipResource: BigNum.from(extra),
+      });
+      if (short != null) return short;
+    }
+  }
+
+  final shipId = c.rules.cargoShipResource;
+  if (extra > 0) {
+    from.take(shipId, BigNum.from(extra));
+  } else if (extra < 0) {
+    from.stock[shipId] =
+        (from.stock[shipId] ?? const BigNum.zero()) + BigNum.from(-extra);
+  }
+  r.cargoShips += extra;
+  if (rate != null) r.ratePerSecond = rate;
+  if (stop != null) r.stopAtDestination = stop;
+  if (cmd.removeStopAtDestination) r.stopAtDestination = null;
+  return const CommandOk();
+}
+
+CommandResult _moveShips(
+  GameState s,
+  Content c,
+  FactionState f,
+  MoveShipsCommand cmd,
+) {
+  final from = _findBody(s, f, cmd.fromBodyId);
+  if (from == null) return _unknownBody(cmd.fromBodyId);
+  final to = _findBody(s, f, cmd.toBodyId);
+  if (to == null) return _unknownBody(cmd.toBodyId);
+  final bad = _checkPair(f, from, to);
+  if (bad != null) return bad;
+  if (cmd.count < 1) {
+    return _fail(CommandError.invalidAmount, 'Move at least one cargo ship');
+  }
+  final ships = {c.rules.cargoShipResource: BigNum.from(cmd.count)};
+  final short = _checkCost(c, f, from, ships);
+  if (short != null) return short;
+
+  _pay(f, from, ships);
+  final id = s.newId('m');
+  s.shipments.add(
+    Shipment(
+      routeId: id,
+      fromBodyId: from.id,
+      toBodyId: to.id,
+      ownerId: f.id,
+      resourceId: c.rules.cargoShipResource,
+      amount: BigNum.from(cmd.count),
+      departAt: s.time,
+      arriveAt: s.time + travelSeconds(s, c, from, to),
+    ),
+  );
+  return CommandOk(createdId: id);
 }
 
 CommandResult _removeRoute(
@@ -478,23 +619,14 @@ CommandResult _removeRoute(
   FactionState f,
   RemoveRouteCommand cmd,
 ) {
-  final i = s.routes.indexWhere((r) => r.id == cmd.routeId);
-  if (i < 0) {
-    return _fail(CommandError.routeInvalid, 'There is no route ${cmd.routeId}');
-  }
-  final r = s.routes[i];
-  if (r.ownerId != f.id) {
-    return _notOwner(
-      'the route from ${s.body(r.fromBodyId).name} '
-      'to ${s.body(r.toBodyId).name}',
-    );
-  }
+  final (r, missing) = _ownedRoute(s, f, cmd.routeId);
+  if (r == null) return missing!;
 
   final from = s.body(r.fromBodyId);
   final ships = c.rules.cargoShipResource;
   from.stock[ships] =
       (from.stock[ships] ?? const BigNum.zero()) + BigNum.from(r.cargoShips);
-  s.routes.removeAt(i);
+  s.routes.remove(r);
   return const CommandOk();
 }
 

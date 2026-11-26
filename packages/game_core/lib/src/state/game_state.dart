@@ -594,9 +594,10 @@ final class RouteState {
     required this.resourceId,
     required this.ratePerSecond,
     required this.cargoShips,
+    this.stopAtDestination,
   });
 
-  /// Restores a route written by [toJson].
+  /// Restores a route written by [toJson]; a missing stop level is none.
   factory RouteState.fromJson(Map<String, Object?> j) => RouteState(
     id: j['id']! as String,
     ownerId: j['ownerId']! as String,
@@ -605,6 +606,10 @@ final class RouteState {
     resourceId: j['resourceId']! as String,
     ratePerSecond: BigNum.fromJson(j['ratePerSecond']! as String),
     cargoShips: j['cargoShips']! as int,
+    stopAtDestination: switch (j['stopAtDestination']) {
+      null => null,
+      final v => BigNum.fromJson(v as String),
+    },
   );
 
   /// Unique id.
@@ -628,6 +633,11 @@ final class RouteState {
   /// Cargo ships assigned.
   int cargoShips;
 
+  /// Destination stock at which the route pauses, above zero, or null to
+  /// send without stopping. Cargo in flight on the route counts toward it,
+  /// so the destination never ends up holding more (see `sendCargo`).
+  BigNum? stopAtDestination;
+
   /// Serializes this route.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -637,6 +647,7 @@ final class RouteState {
     'resourceId': resourceId,
     'ratePerSecond': ratePerSecond.toJson(),
     'cargoShips': cargoShips,
+    'stopAtDestination': stopAtDestination?.toJson(),
   };
 
   /// An independent copy of this route.
@@ -648,10 +659,12 @@ final class RouteState {
     resourceId: resourceId,
     ratePerSecond: ratePerSecond,
     cargoShips: cargoShips,
+    stopAtDestination: stopAtDestination,
   );
 }
 
-/// Cargo in flight along a route.
+/// Cargo in flight along a route, or cargo ships being moved
+/// (`MoveShipsCommand`).
 final class Shipment {
   /// Creates a shipment.
   Shipment({
@@ -677,7 +690,8 @@ final class Shipment {
     arriveAt: (j['arriveAt']! as num).toDouble(),
   );
 
-  /// Route that sent it.
+  /// Route that sent it, or for cargo ships being moved the id the move
+  /// was given (`MoveShipsCommand`), which no route has.
   final String routeId;
 
   /// Source body id, where the goods return if the destination is lost.
@@ -697,7 +711,7 @@ final class Shipment {
   BigNum amount;
 
   /// Game time in seconds at which it left; later sends within
-  /// `shipmentMergeSeconds` of this join it.
+  /// [RulesDef.shipmentMergeSeconds] of this join it.
   final double departAt;
 
   /// Game time in seconds at which it arrives.

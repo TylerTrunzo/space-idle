@@ -326,6 +326,9 @@ final class SaveCodec {
       }
       if (r.cargoShips < 1) return 'route ${r.id}: no cargo ships';
       if (r.ratePerSecond <= zero) return 'route ${r.id}: rate not above 0';
+      if (r.stopAtDestination case final stop? when stop <= zero) {
+        return 'route ${r.id}: stop level not above 0';
+      }
     }
     for (final sh in s.shipments) {
       if (!factionIds.contains(sh.ownerId)) {

@@ -157,6 +157,8 @@ void main() {
         'resourceId': 'iron_ore',
         'ratePerSecond': {'value': '5e-1', 'display': '0.5'},
         'cargoShips': 1,
+        'stopAtDestination': null,
+        'paused': false,
       },
     ]);
     expect(st['milestones'], [
@@ -218,6 +220,78 @@ void main() {
       ((route['spent']! as Map)['kora/cargo_ship']! as Map)['display'],
       '1',
     );
+  });
+
+  test('routes take a stop level, can be changed, and ships can be moved', () {
+    final r = _runner();
+    r.state.body('hollow_reach').ownerId = 'player';
+    r.state.body('kora').stock['cargo_ship'] = BigNum.from(5);
+    final route = r.handle({
+      'cmd': 'createRoute',
+      'fromBodyId': 'kora',
+      'toBodyId': 'hollow_reach',
+      'resourceId': 'iron_ore',
+      'ratePerSecond': '0.5',
+      'cargoShips': 1,
+      'stopAtDestination': '20',
+    });
+    final id = route['createdId'];
+    expect(
+      route['message'],
+      'Created route $id: Iron Ore from Kora to Hollow Reach at 0.5/s with '
+      '1 Cargo Ship, pausing while Hollow Reach holds 20',
+    );
+    final update = r.handle({
+      'cmd': 'updateRoute',
+      'routeId': id,
+      'ratePerSecond': '2',
+      'cargoShips': 2,
+    });
+    expect(
+      update['message'],
+      'Updated route $id: Iron Ore from Kora to Hollow Reach at 2/s with '
+      '2 Cargo Ships, pausing while Hollow Reach holds 20',
+    );
+    expect(
+      ((update['spent']! as Map)['kora/cargo_ship']! as Map)['display'],
+      '1',
+    );
+    r.handle({'cmd': 'advance', 'seconds': 60});
+    final routes = r.handle({'cmd': 'state'})['routes']! as List;
+    expect((routes.single as Map)['stopAtDestination'], {
+      'value': '2e1',
+      'display': '20',
+    });
+    // 20 iron ore are in flight: the route waits for them to land.
+    expect((routes.single as Map)['paused'], isTrue);
+    final off = r.handle({
+      'cmd': 'updateRoute',
+      'routeId': id,
+      'removeStopAtDestination': true,
+    });
+    expect(
+      off['message'],
+      'Updated route $id: Iron Ore from Kora to Hollow Reach at 2/s with '
+      '2 Cargo Ships',
+    );
+    final move = r.handle({
+      'cmd': 'moveShips',
+      'fromBodyId': 'kora',
+      'toBodyId': 'hollow_reach',
+      'count': 2,
+    });
+    expect(
+      move['message'],
+      'Sent 2 Cargo Ships from Kora to Hollow Reach; they land in 2m',
+    );
+    expect(move['createdId'], isA<String>());
+    // Landed at the start of the first tick from 2 minutes on.
+    r.handle({'cmd': 'advance', 'seconds': 180});
+    final st = r.handle({'cmd': 'state'});
+    final reach = (st['bodies']! as List)
+        .cast<Map<String, Object?>>()
+        .firstWhere((b) => b['id'] == 'hollow_reach');
+    expect(((reach['stock']! as Map)['cargo_ship']! as Map)['display'], '2');
   });
 
   test('an extra slot reply says when it arrives', () {

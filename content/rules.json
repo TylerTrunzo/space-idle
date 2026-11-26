@@ -21,6 +21,7 @@
   "shipCapacityPerSecond": 10,
   "cargoShipResource": "cargo_ship",
   "baseTravelSeconds": 60,
+  "shipmentMergeSeconds": 10,
   "claimSecondsBase": 1800,
   "claimSecondsPerOwned": 1800,
   "expandSlotsSeconds": 3600,

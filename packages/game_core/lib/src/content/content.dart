@@ -199,6 +199,7 @@ final class RulesDef {
     required this.shipCapacityPerSecond,
     required this.cargoShipResource,
     required this.baseTravelSeconds,
+    this.shipmentMergeSeconds = defaultShipmentMergeSeconds,
     this.claimSecondsBase = defaultClaimSecondsBase,
     this.claimSecondsPerOwned = defaultClaimSecondsPerOwned,
     this.expandSlotsSeconds = defaultExpandSlotsSeconds,
@@ -297,6 +298,20 @@ final class RulesDef {
 
   /// Travel seconds between bodies at the same orbit in one system.
   final double baseTravelSeconds;
+
+  /// [shipmentMergeSeconds] when the rules do not set it.
+  static const double defaultShipmentMergeSeconds = 10;
+
+  /// Game seconds within which a route's sends join its newest shipment
+  /// instead of starting a new one; at least zero.
+  ///
+  /// Ticking once a second would otherwise put one shipment per route per
+  /// second in flight; merged, a route has about one per this many seconds
+  /// of travel. Merged cargo keeps the shipment's arrival time, so it lands
+  /// up to this many seconds early. Auto-sell keeps this long's local
+  /// demand back at least (see `stepMarket`), so a body fed in lots this
+  /// far apart does not sell what it needs before the next lot lands.
+  final double shipmentMergeSeconds;
 
   /// Shortest a timed project (a claim or a slot expansion) takes, in
   /// seconds: 10 minutes.

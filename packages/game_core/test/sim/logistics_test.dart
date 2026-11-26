@@ -4,12 +4,7 @@ import 'package:test/test.dart';
 import 'economy_fixture.dart';
 
 /// One logistics step in the engine's order: land what is due, then send.
-void stepLogistics(
-  GameState s,
-  Content c,
-  double dt, {
-  double mergeSeconds = shipmentMergeSeconds,
-}) {
+void stepLogistics(GameState s, Content c, double dt, {double? mergeSeconds}) {
   deliverShipments(s);
   sendCargo(s, c, dt, mergeSeconds: mergeSeconds);
 }
@@ -124,7 +119,9 @@ void main() {
       return (peak, landed.toDouble());
     }
 
-    final (mergedPeak, merged) = play(mergeSeconds: shipmentMergeSeconds);
+    final (mergedPeak, merged) = play(
+      mergeSeconds: c.rules.shipmentMergeSeconds,
+    );
     final (unmergedPeak, unmerged) = play(mergeSeconds: 0);
     // One shipment per route per 10 s of travel: 12 + 6 + 12.
     expect(mergedPeak, lessThanOrEqualTo(30));
@@ -221,5 +218,52 @@ void main() {
     loaded.time = 500;
     stepLogistics(loaded, c, 1);
     expect(at(loaded.body('b')).toDouble(), closeTo(10, 1e-9));
+  });
+
+  group('stop at destination', () {
+    test('cargo in flight counts, so the route never overshoots', () {
+      final r = route(rate: 1)..stopAtDestination = n(15);
+      expect(routeRoomBeforeStop(s, r), n(15));
+      run(20);
+      // Nothing has landed yet (120 s of travel), and 15 left.
+      expect(at(b).isZero, isTrue);
+      expect(inTransit().toDouble(), closeTo(15, 1e-9));
+      expect(routeInFlight(s, r).toDouble(), closeTo(15, 1e-9));
+      expect(routePaused(s, r), isTrue);
+      run(200);
+      expect(at(b).toDouble(), closeTo(15, 1e-9));
+      expect(inTransit().isZero, isTrue);
+      expect(at(a).toDouble(), closeTo(985, 1e-9));
+      expect(routePaused(s, r), isTrue);
+    });
+
+    test('a paused route resumes when the destination uses some up', () {
+      final r = route(rate: 1)..stopAtDestination = n(15);
+      b.stock['ore'] = n(20);
+      run(5);
+      expect(s.shipments, isEmpty);
+      b.stock['ore'] = n(12);
+      expect(routePaused(s, r), isFalse);
+      run(10);
+      // It sent the 3 short, at its 1 a second, then paused again.
+      expect(inTransit().toDouble(), closeTo(3, 1e-9));
+      expect(routePaused(s, r), isTrue);
+    });
+
+    test('a route without a stop level never pauses', () {
+      final r = route(rate: 1);
+      b.stock['ore'] = n(900);
+      expect(routeRoomBeforeStop(s, r), isNull);
+      expect(routePaused(s, r), isFalse);
+      run(5);
+      expect(inTransit().toDouble(), closeTo(5, 1e-9));
+    });
+  });
+
+  test('the merge window comes from the rules', () {
+    expect(c.rules.shipmentMergeSeconds, RulesDef.defaultShipmentMergeSeconds);
+    route();
+    run(25);
+    expect(s.shipments, hasLength(3));
   });
 }

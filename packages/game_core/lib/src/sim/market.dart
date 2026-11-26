@@ -96,14 +96,21 @@ SaleResult sell(
 /// faction's auto-sell rules.
 ///
 /// A rule sells what the body holds beyond `keepAtLeast` plus what the
-/// body's own buildings would use of the resource in a step of [dt] at
-/// full supply ([fullRateFlow]), the two together kept no higher than the
-/// body's [storageCap] unless `keepAtLeast` alone is; only while its
-/// faction owns the body. A rule sees the stock less what earlier rules on
-/// the same body and resource queued, so duplicate rules (which saves
-/// reject) never sell more than is held. Keeping that step's demand back means
-/// auto-selling an input never starves the factories that use it, however
-/// long the step.
+/// body's own buildings would use of the resource at full supply
+/// ([fullRateFlow]) over the keep horizon, `max(dt,
+/// shipmentMergeSeconds)` ([RulesDef.shipmentMergeSeconds]), the two
+/// together kept no higher than the body's [storageCap] unless
+/// `keepAtLeast` alone is; only while its faction owns the body. A rule
+/// sees the stock less what earlier rules on the same body and resource
+/// queued, so duplicate rules (which saves reject) never sell more than is
+/// held. Keeping that demand back means auto-selling an input never starves
+/// the factories that use it, however long the step; and since a route's
+/// sends land in lots up to `shipmentMergeSeconds` apart, short steps keep
+/// enough of a lot to last until the next one lands.
+///
+/// The engine runs this after `sendCargo`, so what a route sends this
+/// step has already left the source's stock: a rule there with
+/// `keepAtLeast` 0 sells only what the route leaves.
 ///
 /// Saturation recovers toward 1: its gap to full price shrinks by a
 /// factor e every `marketRecoverySeconds`. What is auto-sold of a resource
@@ -140,7 +147,7 @@ void stepMarket(
       final used = demand[body.id] ??= _stepDemand(
         c,
         body,
-        dt,
+        math.max(dt, c.rules.shipmentMergeSeconds),
         crewEff ??= crewEfficiency(s, c, f.id),
       );
       final taken = queued[body.id] ??= {};

@@ -244,6 +244,80 @@ void main() {
       expect(kora.stock['silicon'] ?? const BigNum.zero(), const BigNum.zero());
     });
 
+    test('auto-sell keeping 0 never starves a route out of the same body', () {
+      for (final step in [1.0, 60.0]) {
+        final s = engine.newGame(1);
+        final kora = s.body('kora');
+        s.body('hollow_reach').ownerId = 'player';
+        kora.stock['cargo_ship'] = n(1);
+        // Kora's smelter idle: the iron mine's 0.4 a second is all surplus.
+        engine.apply(s, const AssignCrewCommand('player', 'b3', 0));
+        engine.apply(s, SetAutoSellCommand('player', 'kora', 'iron_ore', n(0)));
+        engine.apply(
+          s,
+          CreateRouteCommand(
+            'player',
+            'kora',
+            'hollow_reach',
+            'iron_ore',
+            n(0.3),
+            1,
+          ),
+        );
+        engine.advance(s, 600, maxStep: step);
+        // The route sent its full 0.3 a second; auto-sell got the rest.
+        final moved =
+            (s.body('hollow_reach').stock['iron_ore'] ?? const BigNum.zero()) +
+            s.shipments.fold(const BigNum.zero(), (t, sh) => t + sh.amount);
+        expect(moved.toDouble(), closeTo(0.3 * 600, 1e-6), reason: '$step');
+        expect(s.faction('player').salesRevenue['iron_ore'], isNotNull);
+      }
+    });
+
+    test('at 1 s ticks, auto-selling a route-fed input keeps it for the '
+        'factory until the next lot lands', () {
+      final s = engine.newGame(1);
+      s.faction('player').baseCrew = 100;
+      final kora = s.body('kora');
+      final reach = s.body('hollow_reach')..ownerId = 'player';
+      kora.stock
+        ..['cargo_ship'] = n(1)
+        ..['iron_ore'] = n(0);
+      engine.apply(s, const AssignCrewCommand('player', 'b3', 0));
+      final smelter = engine.apply(
+        s,
+        const BuildCommand('player', 'hollow_reach', 'smelter'),
+      );
+      engine.apply(
+        s,
+        AssignCrewCommand('player', (smelter as CommandOk).createdId!, 1),
+      );
+      engine.apply(
+        s,
+        SetAutoSellCommand('player', 'hollow_reach', 'iron_ore', n(0)),
+      );
+      // The smelter's whole need, 0.4 iron ore a second, landing in lots
+      // [RulesDef.shipmentMergeSeconds] apart.
+      engine.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(0.4),
+          1,
+        ),
+      );
+      engine.advance(s, 600, maxStep: 1);
+      final before = reach.stock['steel'] ?? const BigNum.zero();
+      engine.advance(s, 600, maxStep: 1);
+      // At full rate it makes 0.2 steel a second.
+      final made = (reach.stock['steel']! - before).toDouble();
+      expect(made, greaterThan(0.95 * 0.2 * 600));
+      expect(s.faction('player').salesRevenue['iron_ore'], isNull);
+    });
+
     test('output past the storage cap is auto-sold, not wasted', () {
       final s = engine.newGame(1);
       final kora = s.body('kora');

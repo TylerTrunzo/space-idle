@@ -19,6 +19,19 @@ int _int(Map<String, Object?> j, String k) {
   throw FormatException('command field "$k" must be an integer', j);
 }
 
+int? _optInt(Map<String, Object?> j, String k) {
+  final v = j[k];
+  if (v == null || v is int) return v as int?;
+  throw FormatException('command field "$k" must be an integer or null', j);
+}
+
+bool _optBool(Map<String, Object?> j, String k, {required bool absent}) {
+  final v = j[k];
+  if (v == null) return absent;
+  if (v is bool) return v;
+  throw FormatException('command field "$k" must be true or false', j);
+}
+
 BigNum _big(Map<String, Object?> j, String k) => BigNum.parse(_str(j, k));
 
 BigNum? _optBig(Map<String, Object?> j, String k) {
@@ -80,6 +93,25 @@ sealed class Command {
         _str(j, 'resourceId'),
         _big(j, 'ratePerSecond'),
         _int(j, 'cargoShips'),
+        stopAtDestination: _optBig(j, 'stopAtDestination'),
+      ),
+      'updateRoute' => UpdateRouteCommand(
+        f,
+        _str(j, 'routeId'),
+        ratePerSecond: _optBig(j, 'ratePerSecond'),
+        cargoShips: _optInt(j, 'cargoShips'),
+        stopAtDestination: _optBig(j, 'stopAtDestination'),
+        removeStopAtDestination: _optBool(
+          j,
+          'removeStopAtDestination',
+          absent: false,
+        ),
+      ),
+      'moveShips' => MoveShipsCommand(
+        f,
+        _str(j, 'fromBodyId'),
+        _str(j, 'toBodyId'),
+        _int(j, 'count'),
       ),
       'removeRoute' => RemoveRouteCommand(f, _str(j, 'routeId')),
       'sell' => SellCommand(
@@ -206,15 +238,17 @@ final class UpgradeCommand extends Command {
 
 /// Opens a transport route, taking cargo ships from the from-body's stock.
 final class CreateRouteCommand extends Command {
-  /// Creates a create-route command.
+  /// Creates a create-route command; with [stopAtDestination] the route
+  /// pauses while its destination holds that much.
   const CreateRouteCommand(
     super.factionId,
     this.fromBodyId,
     this.toBodyId,
     this.resourceId,
     this.ratePerSecond,
-    this.cargoShips,
-  );
+    this.cargoShips, {
+    this.stopAtDestination,
+  });
 
   /// Source body; must differ from [toBodyId] and share its system.
   final String fromBodyId;
@@ -231,6 +265,11 @@ final class CreateRouteCommand extends Command {
   /// Cargo ships to assign; at least one.
   final int cargoShips;
 
+  /// Destination stock, cargo in flight on the route included, at which
+  /// the route pauses; above zero, or null to never pause. See
+  /// `RouteState.stopAtDestination`.
+  final BigNum? stopAtDestination;
+
   @override
   String get _cmd => 'createRoute';
 
@@ -241,6 +280,87 @@ final class CreateRouteCommand extends Command {
     'resourceId': resourceId,
     'ratePerSecond': ratePerSecond.toJson(),
     'cargoShips': cargoShips,
+    'stopAtDestination': stopAtDestination?.toJson(),
+  };
+}
+
+/// Changes an existing route's rate, cargo ships or stop level; whatever is
+/// left null stays as it is.
+///
+/// More cargo ships are taken from the from-body's stock, fewer go back to
+/// it.
+final class UpdateRouteCommand extends Command {
+  /// Creates an update-route command; it must change at least one thing.
+  const UpdateRouteCommand(
+    super.factionId,
+    this.routeId, {
+    this.ratePerSecond,
+    this.cargoShips,
+    this.stopAtDestination,
+    this.removeStopAtDestination = false,
+  });
+
+  /// Route to change.
+  final String routeId;
+
+  /// New requested units per second, above zero; null keeps the rate.
+  final BigNum? ratePerSecond;
+
+  /// New number of cargo ships, at least one; null keeps them.
+  final int? cargoShips;
+
+  /// New stop level, above zero; null keeps the current one (or none).
+  final BigNum? stopAtDestination;
+
+  /// Whether to take the stop level off so the route never pauses; not
+  /// together with [stopAtDestination].
+  final bool removeStopAtDestination;
+
+  @override
+  String get _cmd => 'updateRoute';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'routeId': routeId,
+    'ratePerSecond': ratePerSecond?.toJson(),
+    'cargoShips': cargoShips,
+    'stopAtDestination': stopAtDestination?.toJson(),
+    'removeStopAtDestination': removeStopAtDestination,
+  };
+}
+
+/// Sends [count] cargo ships from one owned body's stock to another in the
+/// same system, as a shipment that leaves now and lands after the normal
+/// travel time (`travelSeconds`).
+///
+/// It is the way to get ships to a body before opening a route from it.
+final class MoveShipsCommand extends Command {
+  /// Creates a move-ships command.
+  const MoveShipsCommand(
+    super.factionId,
+    this.fromBodyId,
+    this.toBodyId,
+    this.count,
+  );
+
+  /// Body whose stock the ships leave; must differ from [toBodyId] and
+  /// share its system.
+  final String fromBodyId;
+
+  /// Body the ships land on.
+  final String toBodyId;
+
+  /// Cargo ships to move; at least one.
+  final int count;
+
+  @override
+  String get _cmd => 'moveShips';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'fromBodyId': fromBodyId,
+    'toBodyId': toBodyId,
+    'count': count,
   };
 }
 

@@ -397,6 +397,15 @@ void main() {
     expect(_errors(b), contains('rules.claimKitsBase: must be >= 0'));
   });
 
+  test('the shipment merge window defaults to 10 s and may be 0', () {
+    expect(_ok(minimalBundle()).rules.shipmentMergeSeconds, 10);
+    final b = minimalBundle();
+    (b['rules'] as Map)['shipmentMergeSeconds'] = 0;
+    expect(_ok(b).rules.shipmentMergeSeconds, 0);
+    (b['rules'] as Map)['shipmentMergeSeconds'] = -1;
+    expect(_errors(b), contains('rules.shipmentMergeSeconds: must be >= 0'));
+  });
+
   test('bad values are reported with paths', () {
     final b = minimalBundle();
     _entry(b, 'resources', 'ore')['basePrice'] = 'lots';

@@ -653,6 +653,183 @@ void main() {
     });
   });
 
+  group('route stop level, updates and moving ships', () {
+    String route(GameState s, {num? stop}) => expectOk(
+      s,
+      CreateRouteCommand(
+        'player',
+        'kora',
+        'hollow_reach',
+        'iron_ore',
+        n(2),
+        2,
+        stopAtDestination: stop == null ? null : n(stop),
+      ),
+    )!;
+
+    RouteState only(GameState s) => s.routes.single;
+
+    test('create keeps the stop level; it must be above 0', () {
+      final s = twoBodies();
+      route(s, stop: 500);
+      expect(only(s).stopAtDestination, n(500));
+      final msg = expectFails(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(2),
+          1,
+          stopAtDestination: n(0),
+        ),
+        CommandError.invalidAmount,
+      );
+      expect(msg, 'The stock to stop at must be above 0');
+    });
+
+    test('update changes the rate and stop level and keeps the rest', () {
+      final s = twoBodies();
+      final id = route(s);
+      expectOk(s, UpdateRouteCommand('player', id, ratePerSecond: n(5)));
+      expect(only(s).ratePerSecond, n(5));
+      expect(only(s).cargoShips, 2);
+      expect(only(s).stopAtDestination, isNull);
+      expectOk(s, UpdateRouteCommand('player', id, stopAtDestination: n(80)));
+      expect(only(s).stopAtDestination, n(80));
+      expect(only(s).ratePerSecond, n(5));
+      expectOk(
+        s,
+        UpdateRouteCommand('player', id, removeStopAtDestination: true),
+      );
+      expect(only(s).stopAtDestination, isNull);
+    });
+
+    test('update takes extra ships from the from-body and returns spare '
+        'ones', () {
+      final s = twoBodies();
+      final id = route(s);
+      expect(s.body('kora').stock['cargo_ship'], n(1));
+      expectOk(s, UpdateRouteCommand('player', id, cargoShips: 3));
+      expect(only(s).cargoShips, 3);
+      expect(s.body('kora').stock['cargo_ship'], n(0));
+      final msg = expectFails(
+        s,
+        UpdateRouteCommand('player', id, cargoShips: 4),
+        CommandError.cannotAfford,
+      );
+      expect(msg, 'Needs 1 Cargo Ship on Kora (you have 0)');
+      expectOk(s, UpdateRouteCommand('player', id, cargoShips: 1));
+      expect(only(s).cargoShips, 1);
+      expect(s.body('kora').stock['cargo_ship'], n(2));
+    });
+
+    test('update validation', () {
+      final s = withRival();
+      s.body('hollow_reach').ownerId = 'player';
+      s.body('kora').stock['cargo_ship'] = n(3);
+      final id = route(s);
+      final msgs = [
+        expectFails(
+          s,
+          UpdateRouteCommand('player', id),
+          CommandError.invalidAmount,
+        ),
+        expectFails(
+          s,
+          UpdateRouteCommand('player', id, ratePerSecond: n(0)),
+          CommandError.invalidAmount,
+        ),
+        expectFails(
+          s,
+          UpdateRouteCommand('player', id, cargoShips: 0),
+          CommandError.invalidAmount,
+        ),
+        expectFails(
+          s,
+          UpdateRouteCommand('player', id, stopAtDestination: n(-1)),
+          CommandError.invalidAmount,
+        ),
+        expectFails(
+          s,
+          UpdateRouteCommand(
+            'player',
+            id,
+            stopAtDestination: n(5),
+            removeStopAtDestination: true,
+          ),
+          CommandError.invalidAmount,
+        ),
+        expectFails(
+          s,
+          const UpdateRouteCommand('player', 'r999', cargoShips: 1),
+          CommandError.routeInvalid,
+        ),
+        expectFails(
+          s,
+          UpdateRouteCommand('rival', id, cargoShips: 1),
+          CommandError.notOwner,
+        ),
+      ];
+      expect(msgs, [
+        'Name what to change on the route from Kora to Hollow Reach: its '
+            'rate, cargo ships or the stock to stop at',
+        'Rate must be above 0',
+        'A route needs at least one cargo ship',
+        'The stock to stop at must be above 0',
+        'Set a stock to stop at or remove it, not both',
+        'There is no route r999',
+        "You don't own the route from Kora to Hollow Reach",
+      ]);
+    });
+
+    test('move ships sends them as a shipment with the normal travel time', () {
+      final s = twoBodies()..time = 100;
+      final id = expectOk(
+        s,
+        const MoveShipsCommand('player', 'kora', 'hollow_reach', 2),
+      )!;
+      expect(s.body('kora').stock['cargo_ship'], n(1));
+      final sh = s.shipments.single;
+      expect(sh.routeId, id);
+      expect(s.routes.where((r) => r.id == id), isEmpty);
+      expect(sh.ownerId, 'player');
+      expect(sh.fromBodyId, 'kora');
+      expect(sh.toBodyId, 'hollow_reach');
+      expect(sh.resourceId, 'cargo_ship');
+      expect(sh.amount, n(2));
+      expect(sh.departAt, 100);
+      expect(
+        sh.arriveAt,
+        100 + travelSeconds(s, content, s.body('kora'), s.body('hollow_reach')),
+      );
+      s.time = sh.arriveAt;
+      deliverShipments(s);
+      expect(s.body('hollow_reach').stock['cargo_ship'], n(2));
+    });
+
+    test('move ships validation matches routes', () {
+      final s = twoBodies();
+      MoveShipsCommand move({String to = 'hollow_reach', int count = 1}) =>
+          MoveShipsCommand('player', 'kora', to, count);
+      final msgs = [
+        expectFails(s, move(to: 'kora'), CommandError.routeInvalid),
+        expectFails(s, move(to: 'brine'), CommandError.notOwner),
+        expectFails(s, move(to: 'nowhere'), CommandError.unknownBody),
+        expectFails(s, move(count: 0), CommandError.invalidAmount),
+        expectFails(s, move(count: 4), CommandError.cannotAfford),
+      ];
+      expect(msgs, [
+        'From and to are both Kora; pick two different bodies',
+        "You don't own Brine",
+        'There is no body nowhere',
+        'Move at least one cargo ship',
+        'Needs 4 Cargo Ship on Kora (you have 3)',
+      ]);
+    });
+  });
+
   group('paying never leaves float residue below zero', () {
     // 1 − 2^-52: equal to 1 at BigNum precision, so it affords one unit,
     // but subtracting 1 from it leaves −2.2e-16.
@@ -881,6 +1058,24 @@ void main() {
       AssignCrewCommand('player', 'b1', 3),
       UpgradeCommand('player', 'b1', UpgradeTrack.capacity),
       CreateRouteCommand('player', 'kora', 'brine', 'steel', n(2.5), 2),
+      CreateRouteCommand(
+        'player',
+        'kora',
+        'brine',
+        'steel',
+        n(2.5),
+        2,
+        stopAtDestination: n(400),
+      ),
+      UpdateRouteCommand('player', 'r4', ratePerSecond: n(3)),
+      UpdateRouteCommand(
+        'player',
+        'r4',
+        cargoShips: 5,
+        stopAtDestination: n(10),
+      ),
+      const UpdateRouteCommand('player', 'r4', removeStopAtDestination: true),
+      const MoveShipsCommand('player', 'kora', 'brine', 3),
       RemoveRouteCommand('player', 'r4'),
       SellCommand('player', 'kora', 'steel', BigNum.parse('1.5e20')),
       SetAutoSellCommand('player', 'kora', 'steel', n(100)),

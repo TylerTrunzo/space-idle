@@ -10,13 +10,15 @@ dart run game_sim:game_sim bot --bot balanced|casual|greedy --hours 168 --seed 1
 ```
 
 Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`,
-`upgrade`, `createRoute`, `removeRoute`, `sell`, `setAutoSell`, `claimBody`,
-`survey`, `expandSlots`, `startMegaprojectStage`, `deliverContract`, `discardContract`);
+`upgrade`, `createRoute`, `updateRoute`, `moveShips`, `removeRoute`, `sell`,
+`setAutoSell`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`,
+`deliverContract`, `discardContract`);
 `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts that
 changed), `createdId` for a new building, route or project, and for
 `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`, `demolish`,
-`createRoute`, `deliverContract` and `discardContract` a `message` such as
+`createRoute`, `updateRoute`, `moveShips`, `deliverContract` and
+`discardContract` a `message` such as
 `"Started claiming Brine for 5K credits; done in 30m"`. Claims, extra build
 slots and megaproject stages are projects: they are paid for at once and take
 effect when their timer runs out (a claim of a body, a second slot on one, or
@@ -25,6 +27,20 @@ a second stage of a megaproject, already under way fails with
 "orbital_station","bodyId":"kora"}` pays the next level's cost from the body's
 stock and credits; each completed stage raises the megaproject's level, a
 permanent bonus.
+
+Routes move one resource between two of the player's bodies in one system,
+using cargo ships from the source body's stock. `createRoute` takes an optional
+`"stopAtDestination":"500"`: the route pauses while the destination holds 500,
+counting its cargo still in flight, so it never overshoots, and resumes once the
+destination uses some up. `{"cmd":"updateRoute","routeId":"r4",
+"ratePerSecond":"2","cargoShips":3,"stopAtDestination":"800"}` changes any of
+the three and keeps the rest (more ships are taken from the source body, fewer go
+back to it); `"removeStopAtDestination":true` takes the stop level off.
+`{"cmd":"moveShips","fromBodyId":"kora","toBodyId":"brine","count":2}` sends
+cargo ships to another body as a shipment with the normal travel time, the way
+to get ships to a body before opening a route from it. A route takes its share
+of the source's stock before auto-sell sells there, so a rule with `keepAtLeast`
+0 sells only what the route leaves.
 
 Some bodies are hidden until surveyed. A hidden body is not in `state` or
 `costs`, and every command but `survey` treats it as `unknownBody`.
@@ -62,7 +78,9 @@ commands:
   `quantity`, `delivered`, `reward` in credits) and when its empty slots
   refill (`contractRefills`: `at` and `timeLeft`), every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
-  player's routes, its running projects soonest first (`kind`, `targetId`,
+  player's routes (`stopAtDestination`, null for none, and `paused`, true
+  while the destination plus the route's cargo in flight hold at least that
+  much), its running projects soonest first (`kind`, `targetId`,
   `name`, `startedAt`, `finishAt`, `secondsLeft` and `timeLeft` such as
   `"1h 30m"`), and price and saturation of the goods the player holds
 - `{"cmd":"costs"}` upgrade costs of the player's buildings (a track that

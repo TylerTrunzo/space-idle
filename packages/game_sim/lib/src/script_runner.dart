@@ -21,6 +21,8 @@ const _gameCommands = {
   'assignCrew',
   'upgrade',
   'createRoute',
+  'updateRoute',
+  'moveShips',
   'removeRoute',
   'sell',
   'setAutoSell',
@@ -195,8 +197,8 @@ final class ScriptRunner {
     return null;
   }
 
-  /// A sentence on what a claim, extra slot, megaproject stage, demolish or
-  /// new route did; null for other commands.
+  /// A sentence on what a claim, extra slot, megaproject stage, demolish,
+  /// new or changed route or ship move did; null for other commands.
   String? _message(
     Command cmd,
     String? createdId,
@@ -213,6 +215,10 @@ final class ScriptRunner {
     ].join(' and ');
     String done() => formatDuration(
       state.projects.firstWhere((p) => p.id == createdId).finishAt - state.time,
+    );
+    String lands() => formatDuration(
+      state.shipments.firstWhere((sh) => sh.routeId == createdId).arriveAt -
+          state.time,
     );
     return switch (cmd) {
       ClaimBodyCommand(:final bodyId) =>
@@ -235,20 +241,39 @@ final class ScriptRunner {
       DemolishCommand() =>
         'Demolished $demolished'
             '${gained.isEmpty ? '' : '; got back ${list(gained)}'}',
-      CreateRouteCommand(
-        :final fromBodyId,
-        :final toBodyId,
-        :final resourceId,
-        :final ratePerSecond,
-        :final cargoShips,
-      ) =>
-        'Created route $createdId: ${c.resources[resourceId]!.name} from '
-            '${state.body(fromBodyId).name} to ${state.body(toBodyId).name} '
-            'at ${formatNumber(ratePerSecond)}/s with $cargoShips '
-            '${c.resources[c.rules.cargoShipResource]!.name}'
-            '${cargoShips == 1 ? '' : 's'}',
+      CreateRouteCommand() =>
+        'Created route $createdId: ${_routeText(createdId!)}',
+      UpdateRouteCommand(:final routeId) =>
+        'Updated route $routeId: ${_routeText(routeId)}',
+      MoveShipsCommand(:final fromBodyId, :final toBodyId, :final count) =>
+        'Sent ${_ships(count)} from ${state.body(fromBodyId).name} to '
+            '${state.body(toBodyId).name}; '
+            '${count == 1 ? 'it lands' : 'they land'} in ${lands()}',
       _ => null,
     };
+  }
+
+  /// [n] cargo ships by their display name, such as "2 Cargo Ships".
+  String _ships(int n) {
+    final c = engine.content;
+    final name = c.resources[c.rules.cargoShipResource]!.name;
+    return '$n $name${n == 1 ? '' : 's'}';
+  }
+
+  /// Route [id] as a phrase: "Steel from Kora to Brine at 0.2/s with
+  /// 1 Cargo Ship", plus ", pausing while Brine holds 500" when it has a
+  /// stop level.
+  String _routeText(String id) {
+    final c = engine.content;
+    final r = state.routes.firstWhere((x) => x.id == id);
+    final to = state.body(r.toBodyId).name;
+    final stop = switch (r.stopAtDestination) {
+      final v? => ', pausing while $to holds ${formatNumber(v)}',
+      null => '',
+    };
+    return '${c.resources[r.resourceId]!.name} from '
+        '${state.body(r.fromBodyId).name} to $to at '
+        '${formatNumber(r.ratePerSecond)}/s with ${_ships(r.cargoShips)}$stop';
   }
 
   /// [factionId]'s contract [id], or null if there is no such faction or
@@ -477,6 +502,11 @@ final class ScriptRunner {
               'resourceId': r.resourceId,
               'ratePerSecond': _num(r.ratePerSecond),
               'cargoShips': r.cargoShips,
+              'stopAtDestination': switch (r.stopAtDestination) {
+                final v? => _num(v),
+                null => null,
+              },
+              'paused': routePaused(state, r),
             },
       ],
       'projects': [
