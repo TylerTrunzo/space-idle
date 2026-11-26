@@ -59,8 +59,9 @@ final class SaveCodec {
   /// Serializes [s] to JSON text.
   static String encode(GameState s) => jsonEncode(s.toJson());
 
-  /// Parses save [text], migrating old versions with [migrations] and
-  /// checking every content id against [content]; never throws.
+  /// Parses save [text], migrating old versions with [migrations], checking
+  /// every content id against [content] and every body reference against the
+  /// save's own bodies; never throws.
   static SaveResult decode(
     String text,
     Content content, {
@@ -117,24 +118,54 @@ final class SaveCodec {
   }
 
   static String? _unknownId(GameState s, Content c) {
+    bool resource(String? id) => id == null || c.resources.containsKey(id);
+    final bodyIds = {for (final b in s.bodies) b.id};
     for (final b in s.bodies) {
       if (!c.bodyTypes.containsKey(b.typeId)) {
         return 'body ${b.id}: unknown body type ${b.typeId}';
       }
-      for (final r in b.stock.keys) {
-        if (!c.resources.containsKey(r)) {
-          return 'body ${b.id}: unknown resource $r';
+      for (final d in b.deposits) {
+        if (!resource(d.resourceId)) {
+          return 'body ${b.id}: unknown deposit ${d.resourceId}';
         }
+      }
+      for (final r in b.stock.keys) {
+        if (!resource(r)) return 'body ${b.id}: unknown resource $r';
       }
       for (final bl in b.buildings) {
         if (!c.buildings.containsKey(bl.defId)) {
           return 'building ${bl.id}: unknown building ${bl.defId}';
         }
+        if (!resource(bl.depositResourceId)) {
+          return 'building ${bl.id}: unknown deposit ${bl.depositResourceId}';
+        }
+      }
+    }
+    for (final f in s.factions) {
+      for (final r in f.autoSell) {
+        if (!bodyIds.contains(r.bodyId)) {
+          return 'faction ${f.id}: auto-sell on unknown body ${r.bodyId}';
+        }
+        if (!resource(r.resourceId)) {
+          return 'faction ${f.id}: auto-sell of unknown resource '
+              '${r.resourceId}';
+        }
       }
     }
     for (final r in s.routes) {
-      if (!c.resources.containsKey(r.resourceId)) {
+      if (!resource(r.resourceId)) {
         return 'route ${r.id}: unknown resource ${r.resourceId}';
+      }
+      for (final id in [r.fromBodyId, r.toBodyId]) {
+        if (!bodyIds.contains(id)) return 'route ${r.id}: unknown body $id';
+      }
+    }
+    for (final sh in s.shipments) {
+      if (!bodyIds.contains(sh.toBodyId)) {
+        return 'shipment on ${sh.routeId}: unknown body ${sh.toBodyId}';
+      }
+      if (!resource(sh.resourceId)) {
+        return 'shipment on ${sh.routeId}: unknown resource ${sh.resourceId}';
       }
     }
     return null;

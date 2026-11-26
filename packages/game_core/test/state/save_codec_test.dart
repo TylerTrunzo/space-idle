@@ -81,6 +81,96 @@ void main() {
     );
   });
 
+  group('decode rejects unknown ids in', () {
+    void expectUnknown(void Function(GameState s) corrupt) {
+      final s = newGameState(content, 3);
+      corrupt(s);
+      expect(
+        err(SaveCodec.decode(SaveCodec.encode(s), content)).kind,
+        SaveErrorKind.unknownContentId,
+      );
+    }
+
+    RouteState route({String from = 'kora', String to = 'brine'}) => RouteState(
+      id: 'r1',
+      ownerId: 'player',
+      fromBodyId: from,
+      toBodyId: to,
+      resourceId: 'iron_ore',
+      ratePerSecond: BigNum.parse('1'),
+      cargoShips: 1,
+    );
+
+    Shipment shipment({String to = 'brine', String resource = 'iron_ore'}) =>
+        Shipment(
+          routeId: 'r1',
+          toBodyId: to,
+          resourceId: resource,
+          amount: BigNum.parse('1'),
+          arriveAt: 5,
+        );
+
+    AutoSellRule rule({String body = 'kora', String resource = 'iron_ore'}) =>
+        AutoSellRule(
+          bodyId: body,
+          resourceId: resource,
+          keepAtLeast: BigNum.parse('1'),
+        );
+
+    test('building deposit', () {
+      expectUnknown(
+        (s) => s
+            .body('kora')
+            .buildings
+            .add(
+              BuildingState(
+                id: 'b99',
+                defId: 'mine',
+                depositResourceId: 'nope',
+                crew: 0,
+              ),
+            ),
+      );
+    });
+
+    test('body deposits', () {
+      expectUnknown(
+        (s) => s
+            .body('kora')
+            .deposits
+            .add(const DepositDef(resourceId: 'nope', richness: 1)),
+      );
+    });
+
+    test('auto-sell resource', () {
+      expectUnknown(
+        (s) => s.faction('player').autoSell.add(rule(resource: 'nope')),
+      );
+    });
+
+    test('auto-sell body', () {
+      expectUnknown(
+        (s) => s.faction('player').autoSell.add(rule(body: 'nope')),
+      );
+    });
+
+    test('route from-body', () {
+      expectUnknown((s) => s.routes.add(route(from: 'nope')));
+    });
+
+    test('route to-body', () {
+      expectUnknown((s) => s.routes.add(route(to: 'nope')));
+    });
+
+    test('shipment body', () {
+      expectUnknown((s) => s.shipments.add(shipment(to: 'nope')));
+    });
+
+    test('shipment resource', () {
+      expectUnknown((s) => s.shipments.add(shipment(resource: 'nope')));
+    });
+  });
+
   test('decode rejects missing fields', () {
     final m = fresh()..remove('bodies');
     expect(
