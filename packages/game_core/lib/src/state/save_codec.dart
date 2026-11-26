@@ -151,6 +151,9 @@ final class SaveCodec {
       if (!factionIds.add(f.id)) return 'duplicate faction ${f.id}';
       if (f.credits < zero) return 'faction ${f.id}: negative credits';
       if (f.baseCrew < 0) return 'faction ${f.id}: negative base crew';
+      for (final MapEntry(key: id, value: v) in f.salesRevenue.entries) {
+        if (v < zero) return 'faction ${f.id}: negative sales revenue of $id';
+      }
       for (final r in f.autoSell) {
         if (r.keepAtLeast < zero) {
           return 'faction ${f.id}: negative keepAtLeast for ${r.resourceId}';
@@ -297,6 +300,11 @@ final class SaveCodec {
       }
     }
     for (final f in s.factions) {
+      for (final id in f.salesRevenue.keys) {
+        if (!resource(id)) {
+          return 'faction ${f.id}: sales revenue of unknown resource $id';
+        }
+      }
       for (final r in f.autoSell) {
         if (!bodyIds.contains(r.bodyId)) {
           return 'faction ${f.id}: auto-sell on unknown body ${r.bodyId}';

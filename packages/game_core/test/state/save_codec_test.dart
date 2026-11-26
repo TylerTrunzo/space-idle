@@ -154,6 +154,12 @@ void main() {
       );
     });
 
+    test('sales revenue resource', () {
+      expectUnknown(
+        (s) => s.faction('player').salesRevenue['nope'] = BigNum.parse('1'),
+      );
+    });
+
     test('auto-sell body', () {
       expectUnknown(
         (s) => s.faction('player').autoSell.add(rule(body: 'nope')),
@@ -281,6 +287,8 @@ void main() {
         {'bodyId': 'kora', 'resourceId': 'iron_ore', 'keepAtLeast': '-1e9'},
       ],
       'negative credits': (m) => player(m)['credits'] = '-1',
+      'negative sales revenue': (m) =>
+          player(m)['salesRevenue'] = {'iron_ore': '-1'},
       'negative base crew': (m) => player(m)['baseCrew'] = -1,
       'saturation above 1': (m) => m['market'] = {
         'saturation': {'iron_ore': 5},

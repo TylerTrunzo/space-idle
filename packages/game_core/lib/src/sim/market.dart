@@ -69,8 +69,7 @@ SaleResult sell(
         (above * res.basePrice).mulDouble((s0 + s1) / 2) +
         ((sold - above) * res.basePrice).mulDouble(floor);
   }
-  final faction = s.faction(factionId);
-  faction.credits = faction.credits + revenue;
+  _earn(s.faction(factionId), resourceId, revenue);
   body.stock[resourceId] = held - sold;
   s.market.saturation[resourceId] = math.max(floor, s1);
   return SaleResult(sold: sold, revenue: revenue);
@@ -139,7 +138,7 @@ void stepMarket(GameState s, Content c, double dt) {
     );
     final unitPrice = c.resources[id]!.basePrice.mulDouble(priceShare);
     for (final (f, body, amount) in lots) {
-      f.credits = f.credits + amount * unitPrice;
+      _earn(f, id, amount * unitPrice);
       body.stock[id] = body.stock[id]! - amount;
     }
     sat[id] = end;
@@ -177,6 +176,13 @@ void stepMarket(GameState s, Content c, double dt) {
 }
 
 const _zero = BigNum.zero();
+
+/// Pays [f] [revenue] for a sale of [resourceId], adding it to the
+/// faction's [FactionState.salesRevenue].
+void _earn(FactionState f, String resourceId, BigNum revenue) {
+  f.credits = f.credits + revenue;
+  f.salesRevenue[resourceId] = (f.salesRevenue[resourceId] ?? _zero) + revenue;
+}
 
 /// Resource id to what [body]'s buildings use in [dt] at full supply.
 Map<String, BigNum> _stepDemand(

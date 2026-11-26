@@ -63,8 +63,10 @@ final class FactionState {
     required this.baseCrew,
     List<AutoSellRule>? autoSell,
     Set<String>? reachedMilestones,
+    Map<String, BigNum>? salesRevenue,
   }) : autoSell = autoSell ?? [],
-       reachedMilestones = reachedMilestones ?? {};
+       reachedMilestones = reachedMilestones ?? {},
+       salesRevenue = salesRevenue ?? {};
 
   /// Restores a faction written by [toJson].
   factory FactionState.fromJson(Map<String, Object?> j) => FactionState(
@@ -77,6 +79,7 @@ final class FactionState {
     reachedMilestones: {
       for (final e in j['reachedMilestones']! as List) e as String,
     },
+    salesRevenue: _bigMap(j['salesRevenue']),
   );
 
   /// Unique id.
@@ -100,6 +103,10 @@ final class FactionState {
   /// Ids of milestones already reached.
   final Set<String> reachedMilestones;
 
+  /// Resource id to the credits earned selling it on the market since the
+  /// game began, manual and auto-sales alike, in first-sale order.
+  final Map<String, BigNum> salesRevenue;
+
   /// Serializes this faction; milestones are written sorted.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -109,6 +116,9 @@ final class FactionState {
     'baseCrew': baseCrew,
     'autoSell': [for (final r in autoSell) r.toJson()],
     'reachedMilestones': reachedMilestones.toList()..sort(),
+    'salesRevenue': {
+      for (final e in salesRevenue.entries) e.key: e.value.toJson(),
+    },
   };
 
   /// An independent deep copy of this faction.
@@ -120,6 +130,7 @@ final class FactionState {
     baseCrew: baseCrew,
     autoSell: [for (final r in autoSell) r.copy()],
     reachedMilestones: Set.of(reachedMilestones),
+    salesRevenue: Map.of(salesRevenue),
   );
 }
 

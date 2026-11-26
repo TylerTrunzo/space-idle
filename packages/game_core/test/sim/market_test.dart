@@ -186,6 +186,19 @@ void main() {
     }
   });
 
+  test('every sale adds to the faction\'s sales revenue by resource', () {
+    final f = s.faction('p');
+    expect(f.salesRevenue, isEmpty);
+    final r = sell(s, c, 'p', 'a', 'ore', n(10));
+    expect(f.salesRevenue, {'ore': r.revenue});
+    f.autoSell.add(
+      AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(400)),
+    );
+    final before = f.credits;
+    stepMarket(s, c, 1);
+    expect(f.salesRevenue['ore'], r.revenue + (f.credits - before));
+  });
+
   test('auto-sell skips bodies the faction no longer owns', () {
     s
         .faction('p')
