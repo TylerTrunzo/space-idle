@@ -420,3 +420,27 @@ The owner wants ship customization for moving between planets, pirate risk on ro
 - **Stage 4 (war):** fighting ships use the same design system. Fleets are groups of designed ships, and pirate bases
   can be attacked.
 - **Stage 5 (galaxy content):** explorers, unsurveyed bodies, and system discovery.
+
+## 14. Decisions after playtest round 2 **[Owner, 2026-11-26]**
+
+Source: docs/playtests/2026-11-26-round2-findings.md (7 AI playtesters). Every playtester enjoyed days 1–2, and then
+the content ran out (day 2–4 for an optimizer, day 10–12 for a casual player).
+
+- **Real-time timers on big things only [Owner].** Claims, extra building slots, megaproject stages, surveys and
+  research take real time, mostly 1–6 h, never under 10 minutes, with no skip button. Ordinary buildings and upgrades
+  stay instant. Several timers can run at once, and finished ones appear in the away summary.
+- **Repeatable megaprojects as the endless spine, starting now [Owner].** The first is the Orbital Station. Each level
+  consumes large deliveries of tier 2–3 goods plus a timer, and grants a permanent empire-wide bonus; the next level
+  costs about ×3. More types come in later stages. No resets.
+- **Small research tree from stage 3 [Owner].** Labs turn components into research points. Nodes take real time.
+  It starts with about 8 nodes and grows to 40–50 by stage 5. Basic conveniences (auto-assign crew, buy ×10) are free,
+  never locked behind research.
+- **Relaxed contracts board [Owner].** 3 orders at a time with long or no expiry. Empty slots refill over time and
+  bank up, so missing a day costs nothing. Orders start from a neutral exchange; factions with reputation post them
+  from stage 3. There are no limited-time events.
+- **Routes [Claude's call].** A "stop when the destination has N" cap now; "keep the destination stocked" supply
+  routes from a shared ship pool arrive with ship designs (stage 3).
+- **Galaxy [Claude's call].** The home system stays hand-made. Outer systems are generated from the game seed in
+  stage 5.
+- **Offline cap [spec 6.7].** It rises from 12 h to 48 h through megaproject levels. The away summary always says
+  plainly how much of the absence was counted.
