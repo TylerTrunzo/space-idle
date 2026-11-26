@@ -301,6 +301,60 @@ void main() {
     });
   });
 
+  group('a body being claimed', () {
+    test('is still being claimed, not "not yours", for every command', () {
+      final s = rich();
+      s.body('kora').stock['cargo_ship'] = n(5);
+      ok(s, claimBrine);
+      s.body('brine').stock['steel'] = n(5);
+      s
+          .faction('player')
+          .contracts
+          .add(
+            ContractState(
+              id: 'c99',
+              templateId: content.contractTemplates.keys.first,
+              resourceId: 'steel',
+              quantity: n(10),
+              rewardCredits: n(100),
+              postedAt: 0,
+            ),
+          );
+      final cmds = <Command>[
+        DeliverContractCommand('player', 'c99', 'brine', n(1)),
+        const BuildCommand('player', 'brine', 'smelter'),
+        CreateRouteCommand('player', 'kora', 'brine', 'steel', n(1), 1),
+        const MoveShipsCommand('player', 'kora', 'brine', 1),
+        const ExpandSlotsCommand('player', 'brine'),
+        SellCommand('player', 'brine', 'steel', n(1)),
+        SetAutoSellCommand('player', 'brine', 'steel', n(0)),
+        const ClaimBodyCommand('player', 'cinder', 'brine'),
+        const SurveyCommand('player', null, 'brine'),
+        DeliverToMegaprojectCommand('player', 'orbital_station', 'brine', {
+          'credits': n(1),
+        }),
+      ];
+      for (final cmd in cmds) {
+        expect(
+          fails(s, cmd, CommandError.stillClaiming),
+          'Brine is still being claimed (30m left)',
+          reason: cmd.toJson()['cmd'] as String,
+        );
+      }
+      // A rival's claim is no claim of the player's.
+      addRival(s);
+      s.projects[0] = ProjectState(
+        id: 'p99',
+        factionId: 'rival',
+        kind: ProjectKind.claim,
+        targetId: 'brine',
+        startedAt: 0,
+        finishAt: 1800,
+      );
+      fails(s, cmds.first, CommandError.notOwner);
+    });
+  });
+
   group('stepProjects', () {
     test('completes due projects in finishAt-then-id order', () {
       final s = rich()..body('kora').stock['outpost_kit'] = n(10);

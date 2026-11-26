@@ -680,6 +680,10 @@ enum CommandError {
   /// The faction does not own what the command touches.
   notOwner,
 
+  /// The body the command touches is not the faction's yet: its claim of
+  /// it is still under way.
+  stillClaiming,
+
   /// The body has no free build slot.
   noBuildSlot,
 

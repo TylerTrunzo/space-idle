@@ -184,6 +184,20 @@ CommandFailed _unknownBody(String id) =>
 CommandFailed _notOwner(String what) =>
     _fail(CommandError.notOwner, "You don't own $what");
 
+/// The failure for a command on [body], which [f] does not own:
+/// `stillClaiming` while [f]'s claim of it is under way, such as "Brine is
+/// still being claimed (25m left)", else `notOwner`.
+CommandFailed _notYours(GameState s, FactionState f, BodyState body) {
+  final claim = projectOn(s, ProjectKind.claim, body.id);
+  if (claim != null && claim.factionId == f.id) {
+    return _fail(
+      CommandError.stillClaiming,
+      '${body.name} is still being claimed (${_left(s, claim)} left)',
+    );
+  }
+  return _notOwner(body.name);
+}
+
 CommandFailed _unknownResource(String id) =>
     _fail(CommandError.unknownDef, 'There is no resource $id');
 
@@ -338,7 +352,7 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
       '${_buildable(c, body)}',
     );
   }
-  if (body.ownerId != f.id) return _notOwner(body.name);
+  if (body.ownerId != f.id) return _notYours(s, f, body);
   if (body.buildings.length >= buildSlots(c, body)) {
     return _fail(
       CommandError.noBuildSlot,
@@ -480,9 +494,14 @@ CommandResult _upgrade(
 /// The failure if [from] and [to], bodies in sight of [f], are not a pair
 /// goods can move between: both owned by [f], different, and in one
 /// system; else null.
-CommandFailed? _checkPair(FactionState f, BodyState from, BodyState to) {
-  if (from.ownerId != f.id) return _notOwner(from.name);
-  if (to.ownerId != f.id) return _notOwner(to.name);
+CommandFailed? _checkPair(
+  GameState s,
+  FactionState f,
+  BodyState from,
+  BodyState to,
+) {
+  if (from.ownerId != f.id) return _notYours(s, f, from);
+  if (to.ownerId != f.id) return _notYours(s, f, to);
   if (from.id == to.id) {
     return _fail(
       CommandError.routeInvalid,
@@ -522,7 +541,7 @@ CommandResult _createRoute(
   if (!c.resources.containsKey(cmd.resourceId)) {
     return _unknownResource(cmd.resourceId);
   }
-  final bad = _checkPair(f, from, to);
+  final bad = _checkPair(s, f, from, to);
   if (bad != null) return bad;
   if (cmd.cargoShips < 1) {
     return _fail(
@@ -610,7 +629,7 @@ CommandResult _updateRoute(
         'A route needs at least one cargo ship',
       );
     }
-    if (extra != 0 && from.ownerId != f.id) return _notOwner(from.name);
+    if (extra != 0 && from.ownerId != f.id) return _notYours(s, f, from);
     if (extra > 0) {
       final short = _checkCost(c, f, from, {
         c.rules.cargoShipResource: BigNum.from(extra),
@@ -643,7 +662,7 @@ CommandResult _moveShips(
   if (from == null) return _unknownBody(cmd.fromBodyId);
   final to = _findBody(s, f, cmd.toBodyId);
   if (to == null) return _unknownBody(cmd.toBodyId);
-  final bad = _checkPair(f, from, to);
+  final bad = _checkPair(s, f, from, to);
   if (bad != null) return bad;
   if (cmd.count < 1) {
     return _fail(CommandError.invalidAmount, 'Move at least one cargo ship');
@@ -692,7 +711,7 @@ CommandResult _sell(GameState s, Content c, FactionState f, SellCommand cmd) {
   if (!c.resources.containsKey(cmd.resourceId)) {
     return _unknownResource(cmd.resourceId);
   }
-  if (body.ownerId != f.id) return _notOwner(body.name);
+  if (body.ownerId != f.id) return _notYours(s, f, body);
   if (cmd.amount <= const BigNum.zero()) {
     return _fail(CommandError.invalidAmount, 'Amount must be above 0');
   }
@@ -719,7 +738,7 @@ CommandResult _setAutoSell(
   if (!c.resources.containsKey(cmd.resourceId)) {
     return _unknownResource(cmd.resourceId);
   }
-  if (body.ownerId != f.id) return _notOwner(body.name);
+  if (body.ownerId != f.id) return _notYours(s, f, body);
   final keep = cmd.keepAtLeast;
   if (keep != null && keep.isNegative) {
     return _fail(
@@ -777,7 +796,7 @@ CommandResult _claim(
                 '${target.name}',
     );
   }
-  if (source.ownerId != f.id) return _notOwner(source.name);
+  if (source.ownerId != f.id) return _notYours(s, f, source);
   final cost = claimCost(s, c, f.id);
   final kit = c.rules.outpostKitResource;
   final short = _checkCost(
@@ -840,7 +859,7 @@ CommandResult _survey(
   final source = _findBody(s, f, cmd.sourceBodyId);
   if (source == null) return _unknownBody(cmd.sourceBodyId);
   if (hidden == null) {
-    if (source.ownerId != f.id) return _notOwner(source.name);
+    if (source.ownerId != f.id) return _notYours(s, f, source);
     final (next, none) = _nextToSurvey(s, c, source);
     if (next == null) return none!;
     hidden = next;
@@ -857,7 +876,7 @@ CommandResult _survey(
       'A survey of that body is already under way',
     );
   }
-  if (source.ownerId != f.id) return _notOwner(source.name);
+  if (source.ownerId != f.id) return _notYours(s, f, source);
   final cost = surveyCost(c);
   final short = _checkCost(c, f, source, cost);
   if (short != null) return short;
@@ -881,7 +900,7 @@ CommandResult _expandSlots(
 ) {
   final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
-  if (body.ownerId != f.id) return _notOwner(body.name);
+  if (body.ownerId != f.id) return _notYours(s, f, body);
   final running = projectOn(s, ProjectKind.expandSlots, body.id);
   if (running != null) {
     return _fail(
@@ -1023,7 +1042,7 @@ CommandFailed? _checkMegaproject(
   }
   final body = _findBody(s, f, bodyId);
   if (body == null) return _unknownBody(bodyId);
-  if (body.ownerId != f.id) return _notOwner(body.name);
+  if (body.ownerId != f.id) return _notYours(s, f, body);
   final host = def.hostBodyType;
   if (host != null &&
       !s.bodies.any((b) => b.ownerId == f.id && b.typeId == host)) {
@@ -1094,7 +1113,7 @@ CommandResult _deliverContract(
   if (k == null) return _unknownContract(cmd.contractId);
   final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
-  if (body.ownerId != f.id) return _notOwner(body.name);
+  if (body.ownerId != f.id) return _notYours(s, f, body);
   if (cmd.amount <= const BigNum.zero()) {
     return _fail(CommandError.invalidAmount, 'Amount must be above 0');
   }
