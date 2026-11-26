@@ -83,11 +83,14 @@ void main() {
     }
   });
 
-  test('crew growth is possible after any single first claim', () {
+  test('crew grows after any two claims, or after one of three first '
+      'claims', () {
     // Habitats need their inputs plus a habitat module. Whatever the
     // player claims first, at most one more claim, any one of the rest,
     // restores crew growth, and three different first claims give it
-    // straight away (no single body is the only way).
+    // straight away (no single body is the only way). Cinder alone does
+    // not: home plus Cinder has no water or hydrogen source for life
+    // support, so a player who claims it first needs a second claim.
     final habitat = content.buildings.values.singleWhere(
       (b) => b.kind == BuildingKind.habitat,
     );
@@ -101,6 +104,7 @@ void main() {
         if (housing([first])) first.name,
     ];
     expect(atOnce.length, greaterThanOrEqualTo(3), reason: '$atOnce');
+    expect(housing([bodies['cinder']!]), isFalse);
     for (final first in others) {
       for (final second in others.where((b) => b != first)) {
         expect(
