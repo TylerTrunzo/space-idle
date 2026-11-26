@@ -28,6 +28,16 @@ const _gameCommands = {
   'expandSlots',
 };
 
+/// Lowest resource tier whose stock `state` shows in whole units.
+const int _wholeUnitTier = 2;
+
+/// [v] rounded down to a whole number, when it is small enough to have a
+/// fractional part.
+BigNum _floor(BigNum v) {
+  final d = v.toDouble();
+  return d.abs() < 1e15 ? BigNum.from(d.floorToDouble()) : v;
+}
+
 /// A number as JSON: the raw `BigNum.toJson()` value and a display string.
 Map<String, Object?> _num(BigNum v) => {
   'value': v.toJson(),
@@ -102,10 +112,100 @@ final class ScriptRunner {
   Map<String, Object?> _game(Map<String, Object?> line) {
     final j = {...line};
     j['factionId'] ??= _player.id;
-    final result = engine.apply(state, Command.fromJson(j));
-    return switch (result) {
-      CommandOk(:final createdId) => {'ok': true, 'createdId': ?createdId},
-      CommandFailed(:final error, :final message) => _fail(error.name, message),
+    final cmd = Command.fromJson(j);
+    final before = _holdings(cmd.factionId);
+    // Read before a demolish removes the building.
+    final demolished = cmd is DemolishCommand
+        ? _describe(cmd.buildingId)
+        : null;
+    final result = engine.apply(state, cmd);
+    switch (result) {
+      case CommandFailed(:final error, :final message):
+        return _fail(error.name, message);
+      case CommandOk(:final createdId):
+        final after = _holdings(cmd.factionId);
+        final spent = <String, BigNum>{};
+        final gained = <String, BigNum>{};
+        for (final k in {...before.keys, ...after.keys}) {
+          final d = changeBetween(
+            after[k] ?? const BigNum.zero(),
+            before[k] ?? const BigNum.zero(),
+          );
+          if (d.isNegative) spent[k] = -d;
+          if (d > const BigNum.zero()) gained[k] = d;
+        }
+        final message = _message(cmd, createdId, spent, gained, demolished);
+        return {
+          'ok': true,
+          'createdId': ?createdId,
+          'message': ?message,
+          if (spent.isNotEmpty) 'spent': _nums(spent),
+          if (gained.isNotEmpty) 'gained': _nums(gained),
+        };
+    }
+  }
+
+  /// `credits` and `<body>/<resource>` to what [factionId] holds on its
+  /// bodies, for showing what a command took and gave.
+  Map<String, BigNum> _holdings(String factionId) {
+    final f = state.factions.where((x) => x.id == factionId).firstOrNull;
+    return {
+      if (f != null) 'credits': f.credits,
+      for (final b in state.bodies)
+        if (b.ownerId == factionId)
+          for (final MapEntry(key: id, value: v) in b.stock.entries)
+            '${b.id}/$id': v,
+    };
+  }
+
+  /// "Smelter on Kora (b3)", or null if there is no such building.
+  String? _describe(String buildingId) {
+    final c = engine.content;
+    for (final body in state.bodies) {
+      for (final b in body.buildings) {
+        if (b.id == buildingId) {
+          return '${c.buildings[b.defId]!.name} on ${body.name} ($buildingId)';
+        }
+      }
+    }
+    return null;
+  }
+
+  /// A sentence on what a claim, demolish or new route did; null for other
+  /// commands.
+  String? _message(
+    Command cmd,
+    String? createdId,
+    Map<String, BigNum> spent,
+    Map<String, BigNum> gained,
+    String? demolished,
+  ) {
+    final c = engine.content;
+    String list(Map<String, BigNum> m) => [
+      for (final MapEntry(key: k, value: v) in m.entries)
+        k == 'credits'
+            ? '${formatNumber(v)} credits'
+            : '${formatNumber(v)} ${c.resources[k.split('/').last]!.name}',
+    ].join(' and ');
+    return switch (cmd) {
+      ClaimBodyCommand(:final bodyId) =>
+        'Claimed ${state.body(bodyId).name} for ${list(spent)}',
+      DemolishCommand() =>
+        'Demolished $demolished'
+            '${gained.isEmpty ? '' : '; got back ${list(gained)}'}',
+      CreateRouteCommand(
+        :final fromBodyId,
+        :final toBodyId,
+        :final resourceId,
+        :final ratePerSecond,
+        :final cargoShips,
+      ) =>
+        'Created route $createdId: ${c.resources[resourceId]!.name} from '
+            '${state.body(fromBodyId).name} to ${state.body(toBodyId).name} '
+            'at ${formatNumber(ratePerSecond)}/s with $cargoShips '
+            '${c.resources[c.rules.cargoShipResource]!.name}'
+            '${cargoShips == 1 ? '' : 's'}',
+      _ => null,
     };
   }
 
@@ -200,8 +300,15 @@ final class ScriptRunner {
   }
 
   Map<String, Object?> _state() {
+    final c = engine.content;
     final p = _player;
-    final crew = crewTotals(state, engine.content, p.id);
+    final crew = crewTotals(state, c, p.id);
+    final held = <String>{
+      for (final b in state.bodies)
+        if (b.ownerId == p.id)
+          for (final MapEntry(key: id, value: v) in b.stock.entries)
+            if (!v.isZero) id,
+    };
     return {
       'ok': true,
       'time': state.time,
@@ -212,18 +319,59 @@ final class ScriptRunner {
         'assigned': crew.assigned,
         'free': crew.free,
       },
+      'milestones': [
+        for (final m in c.milestones)
+          if (p.reachedMilestones.contains(m.id)) {'id': m.id, 'name': m.name},
+      ],
       'bodies': [
         for (final b in state.bodies)
-          if (b.ownerId == p.id)
-            {
-              'id': b.id,
-              'name': b.name,
-              'buildings': b.buildings.length,
+          {
+            'id': b.id,
+            'name': b.name,
+            'type': c.bodyTypes[b.typeId]!.name,
+            'owner': b.ownerId,
+            'deposits': [
+              for (final d in b.deposits)
+                {
+                  'resourceId': d.resourceId,
+                  'name': c.resources[d.resourceId]!.name,
+                  'richness': d.richness,
+                },
+            ],
+            'slots': {'used': b.buildings.length, 'total': buildSlots(c, b)},
+            'storageCap': _num(storageCap(state, c, b)),
+            if (b.ownerId == p.id)
               'stock': _nums({
-                for (final id in engine.content.resources.keys)
-                  if (b.stock[id] case final v? when !v.isZero) id: v,
+                for (final id in c.resources.keys)
+                  if (b.stock[id] case final v? when !v.isZero)
+                    id: c.resources[id]!.tier >= _wholeUnitTier ? _floor(v) : v,
               }),
+          },
+      ],
+      'routes': [
+        for (final r in state.routes)
+          if (r.ownerId == p.id)
+            {
+              'id': r.id,
+              'from': r.fromBodyId,
+              'to': r.toBodyId,
+              'resourceId': r.resourceId,
+              'ratePerSecond': _num(r.ratePerSecond),
+              'cargoShips': r.cargoShips,
             },
+      ],
+      'market': {
+        for (final id in c.resources.keys)
+          if (held.contains(id))
+            id: {
+              'price': _num(price(state, c, id)),
+              'saturation': state.market.saturation[id] ?? 1.0,
+            },
+      },
+      'notes': [
+        'Stock of tier $_wholeUnitTier and up (components such as cargo '
+            'ships and outpost kits) shows whole units; the part-made unit '
+            'is kept and finishes later.',
       ],
     };
   }
@@ -234,6 +382,10 @@ final class ScriptRunner {
     return {
       'ok': true,
       'claim': _nums(claimCost(state, c, p.id)),
+      'extraSlot': {
+        for (final b in state.bodies)
+          if (b.ownerId == p.id) b.id: _nums(slotCost(c, b)),
+      },
       'upgrades': [
         for (final body in state.bodies)
           if (body.ownerId == p.id)

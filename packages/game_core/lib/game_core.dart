@@ -5,6 +5,7 @@ export 'src/commands/apply.dart';
 export 'src/commands/command.dart';
 export 'src/content/content.dart';
 export 'src/num/big_num.dart';
+export 'src/num/change.dart';
 export 'src/num/format.dart';
 export 'src/report/flow_report.dart';
 export 'src/rng.dart';

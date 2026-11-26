@@ -13,6 +13,12 @@ ScriptRunner _runner() {
   return ScriptRunner(engine, engine.newGame(1));
 }
 
+/// Kora's entry in a `state` reply.
+Map<String, Object?> _kora(Map<String, Object?> state) =>
+    (state['bodies']! as List).cast<Map<String, Object?>>().singleWhere(
+      (b) => b['id'] == 'kora',
+    );
+
 void main() {
   test('advance then state shows time passing and stock/credits', () {
     final r = _runner();
@@ -31,14 +37,12 @@ void main() {
       isTrue,
     );
     final bodies = after['bodies']! as List;
-    expect(bodies, isNotEmpty);
+    expect(bodies, hasLength(5));
   });
 
   test('stock grows after building an extractor and advancing', () {
     final r = _runner();
-    final body =
-        (r.handle({'cmd': 'state'})['bodies']! as List).first
-            as Map<String, Object?>;
+    final body = _kora(r.handle({'cmd': 'state'}));
     final content = r.engine.content;
     final def = content.buildings.values.firstWhere(
       (d) => d.kind == BuildingKind.extractor,
@@ -60,9 +64,7 @@ void main() {
       'crew': 1,
     });
     r.handle({'cmd': 'advance', 'seconds': 600});
-    final stock =
-        (r.handle({'cmd': 'state'})['bodies']! as List).first
-            as Map<String, Object?>;
+    final stock = _kora(r.handle({'cmd': 'state'}));
     expect((stock['stock']! as Map), isNotEmpty);
     expect(r.handle({'cmd': 'report'})['ok'], isTrue);
     expect(r.handle({'cmd': 'costs'})['ok'], isTrue);
@@ -90,6 +92,123 @@ void main() {
       'assigned': 3,
       'free': 17,
     });
+  });
+
+  test('state describes every body, owned or not', () {
+    final st = _runner().handle({'cmd': 'state'});
+    final bodies = (st['bodies']! as List).cast<Map<String, Object?>>();
+    expect(bodies.map((b) => b['id']), [
+      'cinder',
+      'kora',
+      'hollow_reach',
+      'vastmere',
+      'brine',
+    ]);
+    final kora = _kora(st);
+    expect(kora['type'], 'Rocky World');
+    expect(kora['owner'], 'player');
+    expect(kora['deposits'], [
+      {'resourceId': 'iron_ore', 'name': 'Iron Ore', 'richness': 1.0},
+      {'resourceId': 'copper_ore', 'name': 'Copper Ore', 'richness': 0.8},
+      {'resourceId': 'silicon', 'name': 'Silicon', 'richness': 0.7},
+    ]);
+    expect(kora['slots'], {'used': 3, 'total': 12});
+    expect((kora['storageCap']! as Map)['display'], '1K');
+    expect((kora['stock']! as Map).keys, ['iron_ore']);
+    final cinder = bodies.first;
+    expect(cinder['owner'], isNull);
+    expect(cinder['type'], 'Volcanic World');
+    expect(cinder['slots'], {'used': 0, 'total': 6});
+    expect(cinder.containsKey('stock'), isFalse);
+  });
+
+  test('state lists routes, milestones and prices of goods held', () {
+    final r = _runner();
+    r.state.body('hollow_reach').ownerId = 'player';
+    r.state.body('kora').stock['cargo_ship'] = BigNum.from(2.6);
+    final route = r.handle({
+      'cmd': 'createRoute',
+      'fromBodyId': 'kora',
+      'toBodyId': 'hollow_reach',
+      'resourceId': 'iron_ore',
+      'ratePerSecond': '0.5',
+      'cargoShips': 1,
+    });
+    r.handle({'cmd': 'advance', 'seconds': 600});
+    final st = r.handle({'cmd': 'state'});
+    expect(st['routes'], [
+      {
+        'id': route['createdId'],
+        'from': 'kora',
+        'to': 'hollow_reach',
+        'resourceId': 'iron_ore',
+        'ratePerSecond': {'value': '5e-1', 'display': '0.5'},
+        'cargoShips': 1,
+      },
+    ]);
+    expect(st['milestones'], [
+      {'id': 'first_steel', 'name': 'First Foundry'},
+      {'id': 'own_2_bodies', 'name': 'First Claim'},
+    ]);
+    final market = st['market']! as Map;
+    expect(market.keys, containsAll(['iron_ore', 'steel', 'cargo_ship']));
+    expect(market['steel'], {
+      'price': {'value': '6e0', 'display': '6'},
+      'saturation': 1.0,
+    });
+    // Cargo ships are whole units in state: 1.6 shows as 1.
+    expect(
+      ((_kora(st)['stock']! as Map)['cargo_ship']! as Map)['display'],
+      '1',
+    );
+    expect(st['notes'], isNotEmpty);
+  });
+
+  test('claim, demolish and route replies say what they took and gave', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    final claim = r.handle({
+      'cmd': 'claimBody',
+      'bodyId': 'brine',
+      'sourceBodyId': 'kora',
+    });
+    expect(claim['ok'], isTrue);
+    expect(claim['message'], 'Claimed Brine for 5K credits');
+    expect((claim['spent']! as Map).keys, ['credits']);
+    final demolish = r.handle({'cmd': 'demolish', 'buildingId': 'b3'});
+    expect(
+      demolish['message'],
+      'Demolished Smelter on Kora (b3); got back 75 credits',
+    );
+    expect(((demolish['gained']! as Map)['credits']! as Map)['display'], '75');
+    r.state.body('kora').stock['cargo_ship'] = BigNum.from(1);
+    final route = r.handle({
+      'cmd': 'createRoute',
+      'fromBodyId': 'kora',
+      'toBodyId': 'brine',
+      'resourceId': 'steel',
+      'ratePerSecond': '0.2',
+      'cargoShips': 1,
+    });
+    expect(
+      route['message'],
+      'Created route ${route['createdId']}: Steel from Kora to Brine at 0.2/s '
+      'with 1 Cargo Ship',
+    );
+    expect(
+      ((route['spent']! as Map)['kora/cargo_ship']! as Map)['display'],
+      '1',
+    );
+  });
+
+  test('costs include the next extra build slot of each owned body', () {
+    final costs = _runner().handle({'cmd': 'costs'});
+    expect((costs['extraSlot']! as Map).keys, ['kora']);
+    expect(
+      (((costs['extraSlot']! as Map)['kora']! as Map)['credits']!
+          as Map)['display'],
+      '50K',
+    );
   });
 
   test('away catches up offline and summarizes it', () {
