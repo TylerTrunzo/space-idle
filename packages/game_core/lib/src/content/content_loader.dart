@@ -137,7 +137,7 @@ final class _Loader {
     _checkBuildings(buildings);
     _checkBodyTypes(bodyTypes);
     if (galaxy != null) _checkGalaxy(galaxy, buildings, bodyTypes);
-    _checkMilestones(milestones);
+    _checkMilestones(milestones, buildings, galaxy);
     _checkMegaprojects(megaprojects);
 
     if (_errors.isEmpty) {
@@ -735,6 +735,54 @@ final class _Loader {
           if (count != null) {
             condition = ContractsCompletedCondition(count: count);
           }
+        case 'productionRate':
+          final c = _Fields(this, path, raw, const {
+            'type',
+            'resource',
+            'perSec',
+          });
+          final resource = c.string('resource');
+          final perSec = c.bigNum('perSec', positive: true);
+          if (resource != null && perSec != null) {
+            condition = ProductionRateCondition(
+              resourceId: resource,
+              perSec: perSec,
+            );
+          }
+        case 'buildingTypesBuilt':
+          final c = _Fields(this, path, raw, const {'type', 'count'});
+          final count = c.integer('count', min: 1);
+          if (count != null) {
+            condition = BuildingTypesBuiltCondition(count: count);
+          }
+        case 'crewTotal':
+          final c = _Fields(this, path, raw, const {'type', 'count'});
+          final count = c.integer('count', min: 1);
+          if (count != null) condition = CrewTotalCondition(count: count);
+        case 'megaprojectLevel':
+          final c = _Fields(this, path, raw, const {
+            'type',
+            'megaproject',
+            'level',
+          });
+          final id = c.string('megaproject');
+          final level = c.integer('level', min: 1);
+          if (id != null && level != null) {
+            condition = MegaprojectLevelCondition(
+              megaprojectId: id,
+              level: level,
+            );
+          }
+        case 'zeroWasteFor':
+          final c = _Fields(this, path, raw, const {'type', 'seconds'});
+          final seconds = c.number('seconds', gt: 0);
+          if (seconds != null) {
+            condition = ZeroWasteForCondition(seconds: seconds);
+          }
+        case 'bodiesSurveyed':
+          final c = _Fields(this, path, raw, const {'type', 'count'});
+          final count = c.integer('count', min: 1);
+          if (count != null) condition = BodiesSurveyedCondition(count: count);
         case null:
           err('$path.type', 'missing');
         default:
@@ -969,13 +1017,33 @@ final class _Loader {
     }
   }
 
-  void _checkMilestones(Map<String, MilestoneDef> milestones) {
+  void _checkMilestones(
+    Map<String, MilestoneDef> milestones,
+    Map<String, BuildingDef> buildings,
+    GalaxyDef? galaxy,
+  ) {
+    final hidden = galaxy == null
+        ? 0
+        : galaxy.systems.expand((s) => s.bodies).where((b) => b.hidden).length;
     for (final m in milestones.values) {
       final path = 'milestones.${m.id}.condition';
       switch (m.condition) {
         case StockCondition(:final resourceId) ||
-            ProducedCondition(:final resourceId):
+            ProducedCondition(:final resourceId) ||
+            ProductionRateCondition(:final resourceId):
           _needResource('$path.resource', resourceId);
+        case BuildingTypesBuiltCondition(:final count):
+          if (count > buildings.length) {
+            err('$path.count', 'above the ${buildings.length} building types');
+          }
+        case MegaprojectLevelCondition(:final megaprojectId):
+          if (!_megaprojectIds.contains(megaprojectId)) {
+            err('$path.megaproject', "unknown megaproject '$megaprojectId'");
+          }
+        case BodiesSurveyedCondition(:final count):
+          if (count > hidden) {
+            err('$path.count', 'above the $hidden hidden bodies');
+          }
         case BuildingCountCondition(:final defId):
           if (!_buildingIds.contains(defId)) {
             err('$path.defId', "unknown building '$defId'");
@@ -983,7 +1051,9 @@ final class _Loader {
         case CreditsCondition() ||
             CreditsEarnedCondition() ||
             BodiesOwnedCondition() ||
-            ContractsCompletedCondition():
+            ContractsCompletedCondition() ||
+            CrewTotalCondition() ||
+            ZeroWasteForCondition():
           break;
       }
     }

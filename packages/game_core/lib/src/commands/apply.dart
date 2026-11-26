@@ -773,6 +773,7 @@ CommandResult _deliverContract(
   if (k.delivered >= k.quantity) {
     k.delivered = k.quantity;
     f.credits = f.credits + k.rewardCredits;
+    f.lifetimeCredits = f.lifetimeCredits + k.rewardCredits;
     f.contractsCompleted++;
     f.contracts.remove(k);
     freeContractSlot(f, c, s.time);

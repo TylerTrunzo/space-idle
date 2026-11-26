@@ -207,6 +207,7 @@ final class FactionState {
     List<ContractState>? contracts,
     List<double>? contractRefillAt,
     this.contractsCompleted = 0,
+    this.wasteFreeSince = 0,
   }) : autoSell = autoSell ?? [],
        megaprojectLevels = megaprojectLevels ?? {},
        contracts = contracts ?? [],
@@ -272,6 +273,8 @@ final class FactionState {
       final v => [for (final t in v as List) (t! as num).toDouble()],
     },
     contractsCompleted: (j['contractsCompleted'] as int?) ?? 0,
+    // Absent in saves from before waste-free time was tracked.
+    wasteFreeSince: (j['wasteFreeSince'] as num?)?.toDouble() ?? 0,
   );
 
   /// Unique id.
@@ -299,9 +302,9 @@ final class FactionState {
   /// game began, manual and auto-sales alike, in first-sale order.
   final Map<String, BigNum> salesRevenue;
 
-  /// Credits earned from market sales since the game began, manual and
-  /// auto-sales alike; spending never lowers it. The sum of
-  /// [salesRevenue]; credits-earned milestones count it.
+  /// Credits earned since the game began: market sales, manual and
+  /// auto-sales alike (the sum of [salesRevenue]), plus contract rewards;
+  /// spending never lowers it. Credits-earned milestones count it.
   BigNum lifetimeCredits;
 
   /// Resource id to the units the faction's buildings have made since the
@@ -332,6 +335,12 @@ final class FactionState {
   /// milestones count it.
   int contractsCompleted;
 
+  /// Game time in seconds since which the faction has had no waste (or the
+  /// game's start); the engine moves it to the end of every tick in which a
+  /// body it owns wasted anything, or it owns no building. Zero-waste
+  /// milestones measure from it.
+  double wasteFreeSince;
+
   /// Serializes this faction; milestones are written sorted.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -353,6 +362,7 @@ final class FactionState {
     'contracts': [for (final k in contracts) k.toJson()],
     'contractRefillAt': List.of(contractRefillAt),
     'contractsCompleted': contractsCompleted,
+    'wasteFreeSince': wasteFreeSince,
   };
 
   /// An independent deep copy of this faction.
@@ -373,6 +383,7 @@ final class FactionState {
     contracts: [for (final k in contracts) k.copy()],
     contractRefillAt: List.of(contractRefillAt),
     contractsCompleted: contractsCompleted,
+    wasteFreeSince: wasteFreeSince,
   );
 }
 

@@ -8,6 +8,7 @@ import '../num/change.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
 import 'contracts.dart';
+import 'crew.dart';
 import 'logistics.dart';
 import 'market.dart';
 import 'megaprojects.dart';
@@ -97,10 +98,21 @@ const double _offlineStepSeconds = 60;
 /// Runs the game: new games, commands and the passage of time.
 final class GameEngine {
   /// Creates an engine for [content].
-  GameEngine(this.content);
+  GameEngine(this.content)
+    : _hiddenBodyIds = {
+        for (final sys in content.galaxy.systems)
+          for (final b in sys.bodies)
+            if (b.hidden) b.id,
+      };
 
   /// The validated game content every call uses.
   final Content content;
+
+  /// Ids of the bodies content hides until surveyed.
+  final Set<String> _hiddenBodyIds;
+
+  /// Seconds between checks of production-rate milestones.
+  static const double _rateCheckSeconds = 60;
 
   /// Bottlenecks [catchUpOffline] reports at most.
   static const int topBottleneckCount = 3;
@@ -123,7 +135,8 @@ final class GameEngine {
   /// shipments due ([deliverShipments]), production, send cargo
   /// ([sendCargo]), market (recovery and auto-sell), complete the projects
   /// due ([stepProjects]), [clampStorage], [noteBottlenecks], post the
-  /// contracts due by `time + dt` ([stepContracts]), milestone check,
+  /// contracts due by `time + dt` ([stepContracts]), waste tracking,
+  /// milestone check,
   /// then `time += dt`. Stock may pass the storage cap
   /// during the tick; production uses landed cargo, and cargo and
   /// auto-sell take from what is made, before the clamp, so long steps
@@ -153,7 +166,8 @@ final class GameEngine {
     clampStorage(s, content, kept);
     noteBottlenecks(s, content, s.time);
     stepContracts(s, content, s.time + dt);
-    _checkMilestones(s);
+    _noteWaste(s, s.time + dt);
+    _checkMilestones(s, dt);
     s.time += dt;
   }
 
@@ -277,9 +291,33 @@ final class GameEngine {
     );
   }
 
+  /// Moves each faction's [FactionState.wasteFreeSince] to [end], the time
+  /// this tick ends, if it wasted anything this tick or owns no building.
+  void _noteWaste(GameState s, double end) {
+    for (final f in s.factions) {
+      var built = false;
+      var wasted = false;
+      for (final b in s.bodies) {
+        if (b.ownerId != f.id) continue;
+        built = built || b.buildings.isNotEmpty;
+        wasted =
+            wasted ||
+            b.wastedThisStep.values.any((v) => v > const BigNum.zero());
+      }
+      if (wasted || !built) f.wasteFreeSince = end;
+    }
+  }
+
   /// Adds every milestone each faction now meets to its reached set,
-  /// factions and milestones in content order.
-  void _checkMilestones(GameState s) {
+  /// factions and milestones in content order. [dt] is this tick's length.
+  ///
+  /// Production-rate milestones read the steady rates ([netProductionRate])
+  /// and are tested only in ticks that cross a whole game minute.
+  void _checkMilestones(GameState s, double dt) {
+    final end = s.time + dt;
+    final rateDue =
+        (s.time / _rateCheckSeconds).floor() !=
+        (end / _rateCheckSeconds).floor();
     for (final f in s.factions) {
       // Built on first use: most ticks have every milestone already reached
       // or no stock condition to test.
@@ -306,6 +344,27 @@ final class GameEngine {
                 count,
           ContractsCompletedCondition(:final count) =>
             f.contractsCompleted >= count,
+          ProductionRateCondition(:final resourceId, :final perSec) =>
+            rateDue &&
+                netProductionRate(s, content, f.id, resourceId) >= perSec,
+          BuildingTypesBuiltCondition(:final count) =>
+            {
+                  for (final b in s.bodies)
+                    if (b.ownerId == f.id)
+                      for (final x in b.buildings) x.defId,
+                }.length >=
+                count,
+          CrewTotalCondition(:final count) =>
+            crewTotals(s, content, f.id).supported >= count,
+          MegaprojectLevelCondition(:final megaprojectId, :final level) =>
+            (f.megaprojectLevels[megaprojectId] ?? 0) >= level,
+          ZeroWasteForCondition(:final seconds) =>
+            end - f.wasteFreeSince >= seconds,
+          BodiesSurveyedCondition(:final count) =>
+            s.bodies
+                    .where((b) => b.surveyed && _hiddenBodyIds.contains(b.id))
+                    .length >=
+                count,
         };
         if (met) f.reachedMilestones.add(m.id);
       }

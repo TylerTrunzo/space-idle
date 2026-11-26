@@ -342,12 +342,73 @@ void main() {
     }
     expect(
       content.milestones.where((m) => m.condition is CreditsEarnedCondition),
-      hasLength(7),
+      hasLength(11),
     );
     expect(
       content.milestones.where((m) => m.condition is ProducedCondition),
       hasLength(8),
     );
+  });
+
+  group('milestones', () {
+    test('there are about forty, with unique names', () {
+      expect(content.milestones.length, inInclusiveRange(38, 45));
+      expect(
+        content.milestones.map((m) => m.name).toSet(),
+        hasLength(content.milestones.length),
+      );
+    });
+
+    test('each is reachable in principle', () {
+      final hidden = system.bodies.where((b) => b.hidden).length;
+      final made = _producible(content, _depositsOf(system.bodies));
+      for (final m in content.milestones) {
+        switch (m.condition) {
+          case ProducedCondition(:final resourceId) ||
+              ProductionRateCondition(:final resourceId):
+            expect(made, contains(resourceId), reason: m.id);
+          case BuildingTypesBuiltCondition(:final count):
+            expect(count, lessThanOrEqualTo(content.buildings.length));
+          case BodiesSurveyedCondition(:final count):
+            expect(count, lessThanOrEqualTo(hidden), reason: m.id);
+          case MegaprojectLevelCondition(:final megaprojectId, :final level):
+            expect(content.megaprojects, contains(megaprojectId));
+            expect(level, lessThanOrEqualTo(SaveCodec.maxMegaprojectLevel));
+          case BodiesOwnedCondition(:final count):
+            expect(count, lessThanOrEqualTo(system.bodies.length));
+          case BuildingCountCondition(:final defId):
+            expect(content.buildings, contains(defId));
+          case StockCondition() ||
+              CreditsCondition() ||
+              CreditsEarnedCondition() ||
+              ContractsCompletedCondition() ||
+              CrewTotalCondition() ||
+              ZeroWasteForCondition():
+            break;
+        }
+      }
+    });
+
+    test('every new condition type is used', () {
+      final types = content.milestones.map((m) => m.condition.runtimeType);
+      expect(
+        types,
+        containsAll([
+          ProductionRateCondition,
+          BuildingTypesBuiltCondition,
+          CrewTotalCondition,
+          MegaprojectLevelCondition,
+          ContractsCompletedCondition,
+          ZeroWasteForCondition,
+          BodiesSurveyedCondition,
+        ]),
+      );
+      final earned = [
+        for (final m in content.milestones)
+          if (m.condition case CreditsEarnedCondition(:final amount)) amount,
+      ];
+      expect(earned.any((a) => a >= BigNum.parse('1e12')), isTrue);
+    });
   });
 
   test('stage-1 galaxy and starting setup', () {
@@ -369,7 +430,7 @@ void main() {
       ('smelter', null),
     ]);
     expect(content.rules.claimBaseCredits, BigNum.from(5000));
-    expect(content.milestones, hasLength(19));
+    expect(content.milestones, hasLength(42));
   });
 
   group('hidden bodies', () {

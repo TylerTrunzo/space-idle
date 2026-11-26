@@ -534,6 +534,14 @@ void main() {
   });
 
   group('content validation', () {
+    /// [b] without the milestones that name a megaproject.
+    void dropMegaprojectMilestones(Map<String, Object?> b) {
+      b['milestones'] = [
+        for (final m in (b['milestones']! as List).cast<Map<String, Object?>>())
+          if ((m['condition']! as Map)['type'] != 'megaprojectLevel') m,
+      ];
+    }
+
     List<String> errors(Map<String, Object?> megaproject) {
       final b = shippedBundle()..['megaprojects'] = [megaproject];
       return switch (Content.fromBundle(b)) {
@@ -544,6 +552,7 @@ void main() {
 
     test('content without megaprojects has none', () {
       final b = shippedBundle()..remove('megaprojects');
+      dropMegaprojectMilestones(b);
       final c = (Content.fromBundle(b) as ContentOk).content;
       expect(c.megaprojects, isEmpty);
     });
@@ -644,6 +653,7 @@ void main() {
       res.firstWhere((r) => r['id'] == 'station_segment')['basePrice'] = '0';
       expect(Content.fromBundle(b), isA<ContentOk>());
       b['megaprojects'] = <Object?>[];
+      dropMegaprojectMilestones(b);
       expect(
         (Content.fromBundle(b) as ContentInvalid).errors,
         contains(

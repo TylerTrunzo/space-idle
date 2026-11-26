@@ -208,6 +208,12 @@ final class SaveCodec {
               '[0, $maxMegaprojectLevel]';
         }
       }
+      if (!f.wasteFreeSince.isFinite ||
+          f.wasteFreeSince < 0 ||
+          f.wasteFreeSince > s.time) {
+        return 'faction ${f.id}: waste-free since ${f.wasteFreeSince}, '
+            'outside [0, ${s.time}]';
+      }
       if (f.contractsCompleted < 0) {
         return 'faction ${f.id}: negative contracts completed';
       }

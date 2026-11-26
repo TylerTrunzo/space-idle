@@ -87,9 +87,21 @@ void main() {
     expect(hit.single.gameHours, lessThanOrEqualTo(72));
   });
 
-  test('balanced bot reaches every milestone within a week', () {
+  test('balanced bot reaches every early milestone within a week', () {
     // The magnet chain needs a slot on a body that is full by then; the
-    // bot buys one rather than giving up on the magnet works.
+    // bot buys one rather than giving up on the magnet works. Only the
+    // milestones of goods made, bodies owned and credits up to a billion
+    // are due by then; the rest (contracts, megaproject levels, surveys,
+    // rates, waste-free time, later credits) are paced over the weeks.
+    final early = {
+      for (final m in _engine().content.milestones)
+        if (switch (m.condition) {
+          ProducedCondition() || BodiesOwnedCondition() => true,
+          CreditsEarnedCondition(:final amount) => amount <= BigNum.from(1e9),
+          _ => false,
+        })
+          m.id,
+    };
     GameState? end;
     final r = runBotSession(
       _engine(),
@@ -99,12 +111,14 @@ void main() {
       onFinished: (s) => end = s,
     );
     expect(
-      r.milestonesNotReached.map((m) => m.id),
+      r.milestonesNotReached.map((m) => m.id).where(early.contains),
       isEmpty,
       reason: r.toMarkdown(),
     );
     expect(
-      r.milestones.where((m) => m.gameHours > 168).map((m) => m.id),
+      r.milestones
+          .where((m) => early.contains(m.id) && m.gameHours > 168)
+          .map((m) => m.id),
       isEmpty,
       reason: r.toMarkdown(),
     );

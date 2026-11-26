@@ -217,6 +217,38 @@ BuildingFlow fullRateFlow(
   return (inputs: inputs, outputs: outputs);
 }
 
+/// Units of [resourceId] the buildings of [factionId] make a second less
+/// what they use, at the run fractions their last tick settled on: the
+/// steady rate [FlowReport.netProducedPerSec] reports, read without a
+/// trial step. Before the storage cap, cargo and sales. Throws if the
+/// faction does not exist.
+BigNum netProductionRate(
+  GameState s,
+  Content c,
+  String factionId,
+  String resourceId,
+) {
+  final crewEff = crewEfficiency(s, c, factionId);
+  final bonuses = bonusesFor(s, c, factionId);
+  var net = const BigNum.zero();
+  for (final body in s.bodies) {
+    if (body.ownerId != factionId) continue;
+    for (final b in body.buildings) {
+      if (b.lastRunFraction == 0) continue;
+      final flow = fullRateFlow(c, body, b, 1, crewEff, bonuses: bonuses);
+      net =
+          net +
+          (flow.outputs[resourceId] ?? const BigNum.zero()).mulDouble(
+            b.lastRunFraction,
+          ) -
+          (flow.inputs[resourceId] ?? const BigNum.zero()).mulDouble(
+            b.lastRunFraction,
+          );
+    }
+  }
+  return net;
+}
+
 /// One building's planned run this step.
 final class _Run {
   _Run(this.b, this.flow);

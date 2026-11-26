@@ -445,13 +445,13 @@ void main() {
       expect(player(s).contractsCompleted, 1);
     });
 
-    test('reward credits are not market earnings', () {
+    test('reward credits count as lifetime earnings', () {
       final s = fullBoard();
       final k = postOn(s, 'iron_ore', 30, reward: 75);
       s.body('kora').stock['iron_ore'] = n(30);
       final earned = player(s).lifetimeCredits;
       ok(s, DeliverContractCommand('player', k.id, 'kora', n(30)));
-      expect(player(s).lifetimeCredits, earned);
+      expect(player(s).lifetimeCredits, earned + n(75));
     });
 
     test('invalid deliveries change nothing', () {

@@ -323,6 +323,9 @@ void main() {
       'negative sales revenue': (m) =>
           player(m)['salesRevenue'] = {'iron_ore': '-1'},
       'negative lifetime credits': (m) => player(m)['lifetimeCredits'] = '-1',
+      'waste-free since the future': (m) => player(m)['wasteFreeSince'] = 5,
+      'waste-free since before the start': (m) =>
+          player(m)['wasteFreeSince'] = -1,
       'negative lifetime produced': (m) =>
           player(m)['lifetimeProduced'] = {'steel': '-1'},
       'bottleneck seen after the save time': (m) =>

@@ -535,8 +535,8 @@ final class ProducedCondition extends MilestoneCondition {
   final BigNum amount;
 }
 
-/// Has earned at least [amount] credits from market sales since the game
-/// began, whatever it spent (see `FactionState.lifetimeCredits`).
+/// Has earned at least [amount] credits from market sales and contract
+/// rewards since the game began, whatever it spent (see `FactionState.lifetimeCredits`).
 final class CreditsEarnedCondition extends MilestoneCondition {
   /// Creates a credits-earned condition.
   const CreditsEarnedCondition({required this.amount});
@@ -582,6 +582,74 @@ final class ContractsCompletedCondition extends MilestoneCondition {
   const ContractsCompletedCondition({required this.count});
 
   /// Contracts needed.
+  final int count;
+}
+
+/// Its buildings net at least [perSec] units of [resourceId] a second, in
+/// steady state over the whole empire (see `FlowReport.netProducedPerSec`).
+final class ProductionRateCondition extends MilestoneCondition {
+  /// Creates a production-rate condition.
+  const ProductionRateCondition({
+    required this.resourceId,
+    required this.perSec,
+  });
+
+  /// Resource measured.
+  final String resourceId;
+
+  /// Net units a second needed.
+  final BigNum perSec;
+}
+
+/// Owns buildings of at least [count] different types.
+final class BuildingTypesBuiltCondition extends MilestoneCondition {
+  /// Creates a building-types-built condition.
+  const BuildingTypesBuiltCondition({required this.count});
+
+  /// Distinct building types needed.
+  final int count;
+}
+
+/// Has crew support for at least [count] people (see `CrewTotals.supported`).
+final class CrewTotalCondition extends MilestoneCondition {
+  /// Creates a crew-total condition.
+  const CrewTotalCondition({required this.count});
+
+  /// Supported crew needed.
+  final int count;
+}
+
+/// Has completed at least [level] stages of megaproject [megaprojectId].
+final class MegaprojectLevelCondition extends MilestoneCondition {
+  /// Creates a megaproject-level condition.
+  const MegaprojectLevelCondition({
+    required this.megaprojectId,
+    required this.level,
+  });
+
+  /// Megaproject measured.
+  final String megaprojectId;
+
+  /// Level needed.
+  final int level;
+}
+
+/// Has had no empire waste, with buildings standing, for [seconds] of game
+/// time running (see `FactionState.wasteFreeSince`).
+final class ZeroWasteForCondition extends MilestoneCondition {
+  /// Creates a zero-waste condition.
+  const ZeroWasteForCondition({required this.seconds});
+
+  /// Game seconds without waste needed.
+  final double seconds;
+}
+
+/// Has surveyed at least [count] of the bodies that began hidden.
+final class BodiesSurveyedCondition extends MilestoneCondition {
+  /// Creates a bodies-surveyed condition.
+  const BodiesSurveyedCondition({required this.count});
+
+  /// Hidden bodies revealed needed.
   final int count;
 }
 

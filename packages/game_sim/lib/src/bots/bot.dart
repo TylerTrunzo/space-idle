@@ -1070,6 +1070,14 @@ final class _View {
         CreditsEarnedCondition() => const _Waiting(),
         // Contracts are worked as they are posted ([workContracts]).
         ContractsCompletedCondition() => const _Waiting(),
+        // These follow from play (growth, projects, surveys); nothing to
+        // build for them directly.
+        ProductionRateCondition() ||
+        BuildingTypesBuiltCondition() ||
+        CrewTotalCondition() ||
+        MegaprojectLevelCondition() ||
+        ZeroWasteForCondition() ||
+        BodiesSurveyedCondition() => const _Waiting(),
       };
       if (worth(step) case final step?) return step;
     }
@@ -1096,6 +1104,14 @@ final class _View {
       buildings.where((x) => x.$2.defId == defId).length >= count,
     ContractsCompletedCondition(:final count) =>
       faction.contractsCompleted >= count,
+    // Checked by the engine from flow reports and elapsed time; the bot does
+    // not plan around them.
+    ProductionRateCondition() ||
+    BuildingTypesBuiltCondition() ||
+    CrewTotalCondition() ||
+    MegaprojectLevelCondition() ||
+    ZeroWasteForCondition() ||
+    BodiesSurveyedCondition() => false,
   };
 
   /// Gets the next claim within reach: makes its outpost kits, then saves
