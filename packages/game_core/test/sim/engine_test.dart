@@ -208,14 +208,16 @@ void main() {
       // Production made 3.2 copper ore before logistics shipped 10 s of it.
       final sh = s.shipments.single;
       expect(sh.amount.toDouble(), closeTo(3.2, 1e-9));
-      // Sent at time 0; Kora (orbit 2) to Hollow Reach (orbit 3): 120 × 2.
-      expect(sh.arriveAt, 240);
+      // Sent at time 0; Kora (orbit 2) to Hollow Reach (orbit 3): base
+      // travel × 2.
+      expect(sh.arriveAt, c.rules.baseTravelSeconds * 2);
       // Production made 2 steel before the market sold all of it at a hair
-      // under 4.
+      // under its base price.
       expect(kora.stock['steel']!.isZero, isTrue);
+      final steel = c.resources['steel']!.basePrice.toDouble();
       final credits = s.faction('player').credits.toDouble();
-      expect(credits, closeTo(250 + 2 * 4, 1e-2));
-      expect(credits, lessThan(258));
+      expect(credits, closeTo(250 + 2 * steel, 1e-2));
+      expect(credits, lessThan(250 + 2 * steel));
     });
 
     test('sends cargo before the market sells what is left', () {

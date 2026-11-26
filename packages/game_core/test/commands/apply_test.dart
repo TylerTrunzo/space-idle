@@ -327,8 +327,9 @@ void main() {
       expectOk(s, UpgradeCommand('player', mine.id, UpgradeTrack.speed));
       expect(mine.levels[UpgradeTrack.speed], 1);
       expect(s.faction('player').credits, n(200));
+      final curve = content.buildings['mine']!.upgrades[UpgradeTrack.speed]!;
       expect(upgradeCost(content, mine, UpgradeTrack.speed), {
-        'credits': n(60),
+        'credits': n(50 * curve.growth),
       });
     });
 

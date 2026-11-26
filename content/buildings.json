@@ -6,7 +6,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "100"},
     "upgrades": {
-      "speed": {"baseCredits": "50", "growth": 1.2},
+      "speed": {"baseCredits": "50", "growth": 1.25},
       "capacity": {"baseCredits": "60", "growth": 1.25}
     }
   },
@@ -17,7 +17,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "250"},
     "upgrades": {
-      "speed": {"baseCredits": "120", "growth": 1.2},
+      "speed": {"baseCredits": "120", "growth": 1.25},
       "capacity": {"baseCredits": "150", "growth": 1.25}
     }
   },
@@ -28,7 +28,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "600"},
     "upgrades": {
-      "speed": {"baseCredits": "300", "growth": 1.2},
+      "speed": {"baseCredits": "300", "growth": 1.25},
       "capacity": {"baseCredits": "350", "growth": 1.25}
     }
   },
@@ -39,9 +39,21 @@
     "crewSlots": 1,
     "buildCost": {"credits": "150"},
     "upgrades": {
-      "speed": {"baseCredits": "75", "growth": 1.2},
+      "speed": {"baseCredits": "75", "growth": 1.25},
       "efficiency": {"baseCredits": "100", "growth": 1.3},
       "capacity": {"baseCredits": "90", "growth": 1.25}
+    }
+  },
+  {
+    "id": "hydrogen_furnace", "name": "Hydrogen Furnace", "kind": "factory", "cycleSeconds": 6,
+    "inputs": {"iron_ore": 2, "hydrogen": 3},
+    "outputs": {"steel": 1, "water": 1},
+    "crewSlots": 1,
+    "buildCost": {"credits": "800"},
+    "upgrades": {
+      "speed": {"baseCredits": "400", "growth": 1.25},
+      "efficiency": {"baseCredits": "528", "growth": 1.3},
+      "capacity": {"baseCredits": "480", "growth": 1.25}
     }
   },
   {
@@ -51,7 +63,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "150"},
     "upgrades": {
-      "speed": {"baseCredits": "75", "growth": 1.2},
+      "speed": {"baseCredits": "75", "growth": 1.25},
       "efficiency": {"baseCredits": "100", "growth": 1.3},
       "capacity": {"baseCredits": "90", "growth": 1.25}
     }
@@ -63,7 +75,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "250"},
     "upgrades": {
-      "speed": {"baseCredits": "120", "growth": 1.2},
+      "speed": {"baseCredits": "120", "growth": 1.25},
       "efficiency": {"baseCredits": "160", "growth": 1.3},
       "capacity": {"baseCredits": "150", "growth": 1.25}
     }
@@ -75,7 +87,7 @@
     "crewSlots": 2,
     "buildCost": {"credits": "600"},
     "upgrades": {
-      "speed": {"baseCredits": "300", "growth": 1.2},
+      "speed": {"baseCredits": "300", "growth": 1.25},
       "efficiency": {"baseCredits": "400", "growth": 1.3},
       "capacity": {"baseCredits": "350", "growth": 1.25}
     }
@@ -87,7 +99,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "500"},
     "upgrades": {
-      "speed": {"baseCredits": "250", "growth": 1.2},
+      "speed": {"baseCredits": "250", "growth": 1.25},
       "efficiency": {"baseCredits": "330", "growth": 1.3},
       "capacity": {"baseCredits": "300", "growth": 1.25}
     }
@@ -99,7 +111,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "200"},
     "upgrades": {
-      "speed": {"baseCredits": "100", "growth": 1.2},
+      "speed": {"baseCredits": "100", "growth": 1.25},
       "efficiency": {"baseCredits": "130", "growth": 1.3},
       "capacity": {"baseCredits": "120", "growth": 1.25}
     }
@@ -111,7 +123,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "400"},
     "upgrades": {
-      "speed": {"baseCredits": "200", "growth": 1.2},
+      "speed": {"baseCredits": "200", "growth": 1.25},
       "efficiency": {"baseCredits": "260", "growth": 1.3},
       "capacity": {"baseCredits": "240", "growth": 1.25}
     }
@@ -123,7 +135,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "500"},
     "upgrades": {
-      "speed": {"baseCredits": "250", "growth": 1.2},
+      "speed": {"baseCredits": "250", "growth": 1.25},
       "efficiency": {"baseCredits": "330", "growth": 1.3},
       "capacity": {"baseCredits": "300", "growth": 1.25}
     }
@@ -135,19 +147,19 @@
     "crewSlots": 2,
     "buildCost": {"credits": "3000"},
     "upgrades": {
-      "speed": {"baseCredits": "1500", "growth": 1.2},
+      "speed": {"baseCredits": "1500", "growth": 1.25},
       "efficiency": {"baseCredits": "2000", "growth": 1.3},
       "capacity": {"baseCredits": "1800", "growth": 1.25}
     }
   },
   {
     "id": "propellant_mixer", "name": "Propellant Mixer", "kind": "factory", "cycleSeconds": 8,
-    "inputs": {"sulfur": 3},
+    "inputs": {"sulfur": 2},
     "outputs": {"fuel": 1},
     "crewSlots": 1,
     "buildCost": {"credits": "400"},
     "upgrades": {
-      "speed": {"baseCredits": "200", "growth": 1.2},
+      "speed": {"baseCredits": "200", "growth": 1.25},
       "efficiency": {"baseCredits": "260", "growth": 1.3},
       "capacity": {"baseCredits": "240", "growth": 1.25}
     }
@@ -159,7 +171,7 @@
     "crewSlots": 1,
     "buildCost": {"credits": "300"},
     "upgrades": {
-      "speed": {"baseCredits": "150", "growth": 1.2},
+      "speed": {"baseCredits": "150", "growth": 1.25},
       "efficiency": {"baseCredits": "200", "growth": 1.3},
       "capacity": {"baseCredits": "180", "growth": 1.25}
     }
@@ -171,9 +183,21 @@
     "crewSlots": 1,
     "buildCost": {"credits": "400"},
     "upgrades": {
-      "speed": {"baseCredits": "200", "growth": 1.2},
+      "speed": {"baseCredits": "200", "growth": 1.25},
       "efficiency": {"baseCredits": "260", "growth": 1.3},
       "capacity": {"baseCredits": "240", "growth": 1.25}
+    }
+  },
+  {
+    "id": "protein_vat", "name": "Protein Vat", "kind": "factory", "cycleSeconds": 10,
+    "inputs": {"water": 2, "hydrogen": 2},
+    "outputs": {"food": 1},
+    "crewSlots": 1,
+    "buildCost": {"credits": "500"},
+    "upgrades": {
+      "speed": {"baseCredits": "250", "growth": 1.25},
+      "efficiency": {"baseCredits": "330", "growth": 1.3},
+      "capacity": {"baseCredits": "300", "growth": 1.25}
     }
   },
   {
@@ -183,9 +207,21 @@
     "crewSlots": 2,
     "buildCost": {"credits": "1500"},
     "upgrades": {
-      "speed": {"baseCredits": "750", "growth": 1.2},
+      "speed": {"baseCredits": "750", "growth": 1.25},
       "efficiency": {"baseCredits": "1000", "growth": 1.3},
       "capacity": {"baseCredits": "900", "growth": 1.25}
+    }
+  },
+  {
+    "id": "reactor_works", "name": "Reactor Works", "kind": "factory", "cycleSeconds": 30,
+    "inputs": {"magnet": 2, "helium_3": 3, "circuit": 1},
+    "outputs": {"reactor_core": 1},
+    "crewSlots": 2,
+    "buildCost": {"credits": "4000"},
+    "upgrades": {
+      "speed": {"baseCredits": "2000", "growth": 1.25},
+      "efficiency": {"baseCredits": "2640", "growth": 1.3},
+      "capacity": {"baseCredits": "2400", "growth": 1.25}
     }
   },
   {
@@ -195,7 +231,7 @@
     "crewSlots": 2,
     "buildCost": {"credits": "1500"},
     "upgrades": {
-      "speed": {"baseCredits": "750", "growth": 1.2},
+      "speed": {"baseCredits": "750", "growth": 1.25},
       "efficiency": {"baseCredits": "1000", "growth": 1.3},
       "capacity": {"baseCredits": "900", "growth": 1.25}
     }
@@ -207,9 +243,21 @@
     "crewSlots": 2,
     "buildCost": {"credits": "1000"},
     "upgrades": {
-      "speed": {"baseCredits": "500", "growth": 1.2},
+      "speed": {"baseCredits": "500", "growth": 1.25},
       "efficiency": {"baseCredits": "660", "growth": 1.3},
       "capacity": {"baseCredits": "600", "growth": 1.25}
+    }
+  },
+  {
+    "id": "drone_works", "name": "Drone Works", "kind": "factory", "cycleSeconds": 60,
+    "inputs": {"cargo_ship": 1, "magnet": 2, "circuit": 2},
+    "outputs": {"survey_drone": 1},
+    "crewSlots": 2,
+    "buildCost": {"credits": "8000"},
+    "upgrades": {
+      "speed": {"baseCredits": "4000", "growth": 1.25},
+      "efficiency": {"baseCredits": "5280", "growth": 1.3},
+      "capacity": {"baseCredits": "4800", "growth": 1.25}
     }
   },
   {
@@ -219,9 +267,21 @@
     "crewSlots": 2,
     "buildCost": {"credits": "2500"},
     "upgrades": {
-      "speed": {"baseCredits": "1250", "growth": 1.2},
+      "speed": {"baseCredits": "1250", "growth": 1.25},
       "efficiency": {"baseCredits": "1650", "growth": 1.3},
       "capacity": {"baseCredits": "1500", "growth": 1.25}
+    }
+  },
+  {
+    "id": "station_dock", "name": "Station Dock", "kind": "factory", "cycleSeconds": 120,
+    "inputs": {"habitat_module": 1, "reactor_core": 1, "hull_plate": 4},
+    "outputs": {"station_segment": 1},
+    "crewSlots": 3,
+    "buildCost": {"credits": "20000"},
+    "upgrades": {
+      "speed": {"baseCredits": "10000", "growth": 1.25},
+      "efficiency": {"baseCredits": "13200", "growth": 1.3},
+      "capacity": {"baseCredits": "12000", "growth": 1.25}
     }
   },
   {

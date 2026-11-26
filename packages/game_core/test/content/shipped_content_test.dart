@@ -83,6 +83,57 @@ void main() {
     }
   });
 
+  test('crew growth is possible after any single first claim', () {
+    // Habitats need their inputs plus a habitat module. Whatever the
+    // player claims first, at most one more claim, any one of the rest,
+    // restores crew growth, and three different first claims give it
+    // straight away (no single body is the only way).
+    final habitat = content.buildings.values.singleWhere(
+      (b) => b.kind == BuildingKind.habitat,
+    );
+    final needs = {...habitat.inputs.keys, ...habitat.buildCost.keys}
+      ..remove('credits');
+    bool housing(Iterable<BodyDef> bs) =>
+        _producible(content, _depositsOf([home, ...bs])).containsAll(needs);
+    final others = bodies.values.where((b) => b != home).toList();
+    final atOnce = [
+      for (final first in others)
+        if (housing([first])) first.name,
+    ];
+    expect(atOnce.length, greaterThanOrEqualTo(3), reason: '$atOnce');
+    for (final first in others) {
+      for (final second in others.where((b) => b != first)) {
+        expect(
+          housing([first, second]),
+          isTrue,
+          reason: 'no crew growth after ${first.name} then ${second.name}',
+        );
+      }
+    }
+  });
+
+  test('raw goods sell for at most 40% of what refining them earns', () {
+    // Value added per chain step: every recipe's raw inputs at base price
+    // are worth at most 40% of its outputs.
+    for (final b in content.buildings.values) {
+      if (b.kind != BuildingKind.factory) continue;
+      double worth(String id, double n) =>
+          n * content.resources[id]!.basePrice.toDouble();
+      final out = b.outputs.entries.fold(
+        0.0,
+        (t, e) => t + worth(e.key, e.value),
+      );
+      for (final MapEntry(key: id, value: n) in b.inputs.entries) {
+        if (content.resources[id]!.tier != 0) continue;
+        expect(
+          worth(id, n),
+          lessThanOrEqualTo(0.4 * out),
+          reason: '${b.id}: $n $id against outputs worth $out',
+        );
+      }
+    }
+  });
+
   test('cargo ships and habitat modules can be made at home', () {
     // Routes need ships before any goods can move between bodies.
     final atHome = _producible(content, _depositsOf([home]));
@@ -129,6 +180,6 @@ void main() {
       ('smelter', null),
     ]);
     expect(content.rules.claimBaseCredits, BigNum.from(5000));
-    expect(content.milestones, hasLength(14));
+    expect(content.milestones, hasLength(19));
   });
 }

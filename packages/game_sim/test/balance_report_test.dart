@@ -85,8 +85,19 @@ void main() {
       expect(d.share.keys, ['copper_ore', 'steel']);
       expect(d.share.values.fold(0.0, (a, b) => a + b), closeTo(1, 1e-9));
     }
-    // 0.32 copper ore a second at 1.5 against 0.2 steel at 4.
-    expect(r.days.last.share['steel'], closeTo(0.8 / (0.8 + 0.48), 0.01));
+    // 0.32 copper ore and 0.2 steel a second, each market settled at
+    // 1 / (1 + rate × recovery / depth).
+    final c = _engine().content;
+    double income(String id, double rate) {
+      final res = c.resources[id]!;
+      final settled =
+          1 / (1 + rate * c.rules.marketRecoverySeconds / res.marketDepth);
+      return rate * res.basePrice.toDouble() * settled;
+    }
+
+    final steel = income('steel', 0.2);
+    final copper = income('copper_ore', 0.32);
+    expect(r.days.last.share['steel'], closeTo(steel / (steel + copper), 0.01));
     final md = r.toMarkdown();
     expect(md, contains('## Income by day'));
     expect(md, contains('| Day | Credits earned | Top resources |'));

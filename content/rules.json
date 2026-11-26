@@ -9,14 +9,14 @@
   "capacityHousingPerLevel": 0.25,
   "baseStorageCap": 1000,
   "offlineCapSeconds": 43200,
-  "marketFloor": 0.2,
-  "marketRecoverySeconds": 3600,
+  "marketFloor": 0.15,
+  "marketRecoverySeconds": 1800,
   "claimBaseCredits": "5e3",
-  "claimGrowth": 70,
-  "slotBaseCredits": "2e4",
+  "claimGrowth": 13,
+  "slotBaseCredits": "5e4",
   "slotGrowth": 2.5,
   "outpostKitResource": "outpost_kit",
   "shipCapacityPerSecond": 2,
   "cargoShipResource": "cargo_ship",
-  "baseTravelSeconds": 120
+  "baseTravelSeconds": 60
 }
