@@ -15,6 +15,7 @@ export 'src/sim/engine.dart';
 export 'src/sim/logistics.dart';
 export 'src/sim/market.dart';
 export 'src/sim/megaprojects.dart';
+export 'src/sim/milestones.dart';
 export 'src/sim/production.dart';
 export 'src/sim/projects.dart';
 export 'src/sim/survey.dart';

@@ -303,4 +303,157 @@ void main() {
       expect(s.copy().faction('player').wasteFreeSince, 7);
     });
   });
+
+  group('milestoneProgress', () {
+    /// Every condition type, ids `m0` to `m12` in this order.
+    final conds = <Map<String, Object?>>[
+      {'type': 'stock', 'resource': 'steel', 'amount': '50'},
+      {'type': 'produced', 'resource': 'steel', 'amount': '30'},
+      {'type': 'credits', 'amount': '1e6'},
+      {'type': 'creditsEarned', 'amount': '1e4'},
+      {'type': 'bodiesOwned', 'count': 3},
+      {'type': 'buildingCount', 'defId': 'mine', 'count': 1},
+      {'type': 'contractsCompleted', 'count': 5},
+      {'type': 'productionRate', 'resource': 'copper_ore', 'perSec': '0.3'},
+      {'type': 'buildingTypesBuilt', 'count': 2},
+      {'type': 'crewTotal', 'count': 40},
+      {
+        'type': 'megaprojectLevel',
+        'megaproject': 'orbital_station',
+        'level': 3,
+      },
+      {'type': 'zeroWasteFor', 'seconds': 7200},
+      {'type': 'bodiesSurveyed', 'count': 2},
+    ];
+    final c = contentWith(conds);
+    final e = GameEngine(c);
+
+    test('gives current and target for every condition type', () {
+      final s = e.newGame(1);
+      final f = s.faction('player')
+        ..credits = n(250000)
+        ..lifetimeCredits = n(20000)
+        ..contractsCompleted = 2
+        ..megaprojectLevels['orbital_station'] = 1;
+      f.lifetimeProduced['steel'] = n(12);
+      s.body('kora').stock['steel'] = n(60);
+      s.body('tessaly').surveyed = true;
+      s.time = 3600;
+      ({num current, num target, bool met}) at(int i) {
+        final p = milestoneProgress(s, c, 'player', c.milestones[i]);
+        return (
+          current: p.current.toDouble(),
+          target: p.target.toDouble(),
+          met: p.met,
+        );
+      }
+
+      final crew = crewTotals(s, c, 'player').supported;
+      final types = {for (final b in s.body('kora').buildings) b.defId}.length;
+      final mines = s
+          .body('kora')
+          .buildings
+          .where((b) => b.defId == 'mine')
+          .length;
+      expect(at(0), (current: 60, target: 50, met: true));
+      expect(at(1), (current: 12, target: 30, met: false));
+      expect(at(2), (current: 250000, target: 1e6, met: false));
+      expect(at(3), (current: 20000, target: 1e4, met: true));
+      expect(at(4), (current: 1, target: 3, met: false));
+      expect(at(5), (current: mines, target: 1, met: mines >= 1));
+      expect(at(6), (current: 2, target: 5, met: false));
+      expect(at(7).target, closeTo(0.3, 1e-12));
+      expect(
+        at(7).current,
+        closeTo(
+          netProductionRate(s, c, 'player', 'copper_ore').toDouble(),
+          1e-12,
+        ),
+      );
+      expect(at(8), (current: types, target: 2, met: types >= 2));
+      expect(at(9), (current: crew, target: 40, met: crew >= 40));
+      expect(at(10), (current: 1, target: 3, met: false));
+      expect(at(11), (current: 3600, target: 7200, met: false));
+      expect(at(12), (current: 1, target: 2, met: false));
+    });
+
+    test('agrees with what the engine reaches as a game runs', () {
+      final s = e.newGame(1);
+      s.faction('player').credits = n(5e4);
+      e.apply(
+        s,
+        const BuildCommand(
+          'player',
+          'kora',
+          'mine',
+          depositResourceId: 'iron_ore',
+        ),
+      );
+      for (var i = 0; i < 180; i++) {
+        e.tick(s, 60);
+        final f = s.faction('player');
+        for (final m in c.milestones) {
+          // Rate milestones are checked once a minute, at the tick's end.
+          if (m.condition is ProductionRateCondition) continue;
+          if (milestoneProgress(s, c, 'player', m).met) {
+            expect(f.reachedMilestones, contains(m.id), reason: m.id);
+          }
+        }
+      }
+      expect(s.faction('player').reachedMilestones, contains('m1'));
+    });
+
+    test('throws for a faction that does not exist', () {
+      expect(
+        () => milestoneProgress(e.newGame(1), c, 'ghost', c.milestones.first),
+        throwsStateError,
+      );
+    });
+  });
+
+  group('milestoneGoalText', () {
+    test('says what each condition type asks for', () {
+      final c = contentWith([
+        {'type': 'stock', 'resource': 'steel', 'amount': '50'},
+        {'type': 'produced', 'resource': 'steel', 'amount': '30'},
+        {'type': 'credits', 'amount': '1e6'},
+        {'type': 'creditsEarned', 'amount': '1e4'},
+        {'type': 'bodiesOwned', 'count': 3},
+        {'type': 'buildingCount', 'defId': 'mine', 'count': 1},
+        {'type': 'buildingCount', 'defId': 'ice_drill', 'count': 4},
+        {'type': 'contractsCompleted', 'count': 1},
+        {'type': 'contractsCompleted', 'count': 5},
+        {'type': 'productionRate', 'resource': 'copper_wire', 'perSec': '20'},
+        {'type': 'buildingTypesBuilt', 'count': 12},
+        {'type': 'crewTotal', 'count': 40},
+        {
+          'type': 'megaprojectLevel',
+          'megaproject': 'orbital_station',
+          'level': 3,
+        },
+        {'type': 'zeroWasteFor', 'seconds': 7200},
+        {'type': 'bodiesSurveyed', 'count': 1},
+      ]);
+      expect(
+        [for (final m in c.milestones) milestoneGoalText(c, m)],
+        [
+          'Hold 50 Steel',
+          'Make 30 Steel',
+          'Reach 1M credits',
+          'Earn 10K credits',
+          'Own 3 bodies',
+          'Build a Mine',
+          'Own 4 Ice Drill buildings',
+          'Complete a contract',
+          'Complete 5 contracts',
+          'Make 20 Copper Wire a second',
+          'Build 12 kinds of building',
+          'House 40 crew',
+          'Reach Orbital Station level 3',
+          'Waste nothing for 2h',
+          'Survey a hidden body',
+        ],
+      );
+    });
+  });
 }

@@ -9,10 +9,10 @@ import '../num/format.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
 import 'contracts.dart';
-import 'crew.dart';
 import 'logistics.dart';
 import 'market.dart';
 import 'megaprojects.dart';
+import 'milestones.dart';
 import 'production.dart';
 import 'projects.dart';
 
@@ -120,12 +120,7 @@ const double _offlineStepSeconds = 60;
 /// Runs the game: new games, commands and the passage of time.
 final class GameEngine {
   /// Creates an engine for [content].
-  GameEngine(this.content)
-    : _hiddenBodyIds = {
-        for (final sys in content.galaxy.systems)
-          for (final b in sys.bodies)
-            if (b.hidden) b.id,
-      };
+  GameEngine(this.content) : _hiddenBodyIds = hiddenBodies(content);
 
   /// The validated game content every call uses.
   final Content content;
@@ -248,7 +243,7 @@ final class GameEngine {
     final player = s.factions.firstWhere((f) => f.isPlayer);
     final cap = capSeconds ?? offlineCapFor(s, content, player.id);
     final simulated = math.max(0.0, math.min(secondsAway, cap));
-    final stockBefore = _empireStock(s, player.id);
+    final stockBefore = factionStock(s, player.id);
     final creditsBefore = player.credits;
     final reachedBefore = Set.of(player.reachedMilestones);
     final projectsBefore = runningProjects(s, player.id);
@@ -264,7 +259,7 @@ final class GameEngine {
       }
     });
 
-    final stockAfter = _empireStock(s, player.id);
+    final stockAfter = factionStock(s, player.id);
     final gained = <String, BigNum>{};
     for (final id in content.resources.keys) {
       final delta = changeBetween(
@@ -331,8 +326,9 @@ final class GameEngine {
     }
   }
 
-  /// Adds every milestone each faction now meets to its reached set,
-  /// factions and milestones in content order. [dt] is this tick's length.
+  /// Adds every milestone each faction now meets ([milestoneProgressAt]
+  /// as of the tick's end) to its reached set, factions and milestones in
+  /// content order. [dt] is this tick's length.
   ///
   /// Production-rate milestones read the steady rates ([netProductionRate])
   /// and are tested only in ticks that cross a whole game minute.
@@ -347,62 +343,18 @@ final class GameEngine {
       Map<String, BigNum>? stock;
       for (final m in content.milestones) {
         if (f.reachedMilestones.contains(m.id)) continue;
-        final met = switch (m.condition) {
-          StockCondition(:final resourceId, :final amount) =>
-            ((stock ??= _empireStock(s, f.id))[resourceId] ??
-                    const BigNum.zero()) >=
-                amount,
-          ProducedCondition(:final resourceId, :final amount) =>
-            (f.lifetimeProduced[resourceId] ?? const BigNum.zero()) >= amount,
-          CreditsCondition(:final amount) => f.credits >= amount,
-          CreditsEarnedCondition(:final amount) => f.lifetimeCredits >= amount,
-          BodiesOwnedCondition(:final count) =>
-            s.bodies.where((b) => b.ownerId == f.id).length >= count,
-          BuildingCountCondition(:final defId, :final count) =>
-            s.bodies
-                    .where((b) => b.ownerId == f.id)
-                    .expand((b) => b.buildings)
-                    .where((b) => b.defId == defId)
-                    .length >=
-                count,
-          ContractsCompletedCondition(:final count) =>
-            f.contractsCompleted >= count,
-          ProductionRateCondition(:final resourceId, :final perSec) =>
-            rateDue &&
-                netProductionRate(s, content, f.id, resourceId) >= perSec,
-          BuildingTypesBuiltCondition(:final count) =>
-            {
-                  for (final b in s.bodies)
-                    if (b.ownerId == f.id)
-                      for (final x in b.buildings) x.defId,
-                }.length >=
-                count,
-          CrewTotalCondition(:final count) =>
-            crewTotals(s, content, f.id).supported >= count,
-          MegaprojectLevelCondition(:final megaprojectId, :final level) =>
-            (f.megaprojectLevels[megaprojectId] ?? 0) >= level,
-          ZeroWasteForCondition(:final seconds) =>
-            end - f.wasteFreeSince >= seconds,
-          BodiesSurveyedCondition(:final count) =>
-            s.bodies
-                    .where((b) => b.surveyed && _hiddenBodyIds.contains(b.id))
-                    .length >=
-                count,
-        };
-        if (met) f.reachedMilestones.add(m.id);
+        if (m.condition is ProductionRateCondition && !rateDue) continue;
+        final progress = milestoneProgressAt(
+          s,
+          content,
+          f,
+          m,
+          now: end,
+          empireStock: () => stock ??= factionStock(s, f.id),
+          hiddenBodyIds: _hiddenBodyIds,
+        );
+        if (progress.met) f.reachedMilestones.add(m.id);
       }
     }
   }
-}
-
-/// Resource id to units held over every body [factionId] owns.
-Map<String, BigNum> _empireStock(GameState s, String factionId) {
-  final total = <String, BigNum>{};
-  for (final b in s.bodies) {
-    if (b.ownerId != factionId) continue;
-    for (final MapEntry(key: id, value: v) in b.stock.entries) {
-      total[id] = (total[id] ?? const BigNum.zero()) + v;
-    }
-  }
-  return total;
 }

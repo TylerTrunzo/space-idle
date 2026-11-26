@@ -1161,7 +1161,7 @@ final class _View {
       if (_ensureHousing() case final _Do step) return step;
     }
     for (final m in c.milestones) {
-      if (faction.reachedMilestones.contains(m.id) || _met(m.condition)) {
+      if (faction.reachedMilestones.contains(m.id) || _met(m)) {
         continue;
       }
       final step = switch (m.condition) {
@@ -1197,32 +1197,17 @@ final class _View {
     return const _Waiting();
   }
 
-  /// Whether [cond] holds in this (possibly planned-ahead) state, which the
-  /// engine has not yet checked for milestones, or will once the faction's
-  /// claims under way complete.
-  bool _met(MilestoneCondition cond) => switch (cond) {
-    StockCondition(:final resourceId, :final amount) =>
-      owned.fold(const BigNum.zero(), (t, b) => t + stock(b, resourceId)) >=
-          amount,
-    ProducedCondition(:final resourceId, :final amount) =>
-      (faction.lifetimeProduced[resourceId] ?? const BigNum.zero()) >= amount,
-    CreditsCondition(:final amount) => faction.credits >= amount,
-    CreditsEarnedCondition(:final amount) => faction.lifetimeCredits >= amount,
+  /// Whether [m] holds in this (possibly planned-ahead) state, which the
+  /// engine has not yet checked for milestones ([milestoneProgress]), or
+  /// will once the faction's claims under way complete.
+  bool _met(MilestoneDef m) => switch (m.condition) {
+    // Unlike the engine, claims under way count: the bot plans as if they
+    // had completed, so it does not save for a body it is already claiming.
     BodiesOwnedCondition(:final count) =>
       bodiesOwnedOrClaiming(s, factionId) >= count,
-    BuildingCountCondition(:final defId, :final count) =>
-      buildings.where((x) => x.$2.defId == defId).length >= count,
-    ContractsCompletedCondition(:final count) =>
-      faction.contractsCompleted >= count,
-    MegaprojectLevelCondition(:final megaprojectId, :final level) =>
-      (faction.megaprojectLevels[megaprojectId] ?? 0) >= level,
-    // Checked by the engine from flow reports and elapsed time; the bot does
-    // not plan around them.
-    ProductionRateCondition() ||
-    BuildingTypesBuiltCondition() ||
-    CrewTotalCondition() ||
-    ZeroWasteForCondition() ||
-    BodiesSurveyedCondition() => false,
+    // A flow report per check is costly, and the bot waits on it anyway.
+    ProductionRateCondition() => false,
+    _ => milestoneProgress(s, c, factionId, m).met,
   };
 
   /// Gets the next claim within reach: makes its outpost kits, then saves
