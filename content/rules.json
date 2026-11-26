@@ -12,7 +12,7 @@
   "marketFloor": 0.002,
   "marketRecoverySeconds": 1800,
   "claimBaseCredits": "5e3",
-  "claimGrowth": 13,
+  "claimGrowth": 8,
   "claimKitsBase": 5,
   "claimKitsPerOwned": 5,
   "slotBaseCredits": "5e4",

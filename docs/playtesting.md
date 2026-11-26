@@ -143,11 +143,13 @@ dart run game_sim:game_sim bot --bot greedy --hours 24 --format json
   (auto-sell rules aside): the casual persona's pace.
 
 The report shows when each milestone was first seen (check-in index and hours),
-the market income of each day with each resource's share, dead zones (check-ins
+the market income of each day with each resource's share, a Days table (new things
+seen per day, bodies, megaproject levels, contracts completed and income share by
+tier), a timeline of completed projects and contracts, dead zones (check-ins
 where the bot found nothing to do), resources never produced or never used, the
 final stock and credits, and the worst bottleneck at each check-in.
-`docs/balance/stage1-baseline.md` holds the 168 h baselines; use them to compare your
-experience against the bots', and rerun them after any content change.
+`docs/balance/` holds the 30-day baselines (`stage1_5-30day-*.md`); use them to
+compare your experience against the bots', and rerun them after any content change.
 
 ## Personas
 

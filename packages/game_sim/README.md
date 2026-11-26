@@ -169,7 +169,11 @@ with nothing to do), unused resources, final stock and credits, and the worst
 bottleneck at each check-in. `--format md` gives Markdown; JSON is the default.
 
 The report also gives the market income of each day with each resource's
-share.
+share, a Days table (new things seen each day: milestones, completed claims,
+surveys, extra slots and megaproject stages, and completed contracts; bodies
+owned, megaproject levels and contracts completed at the day's end; and each
+tier's share of the day's income), the "days with something new" pacing line,
+and a Timeline of every completed project and contract.
 
 - `greedy` buys the cheapest affordable upgrade, building, extra slot or
   claim each decision.
@@ -179,17 +183,30 @@ share.
 - `casual` plays like `balanced` but issues at most 15 commands per check-in
   (auto-sell rules aside), a stand-in for a player with a few minutes.
 
-The bots build with `autoCrew` off and staff buildings themselves, habitats
-first. Routes they open to move cargo ships, build parts or a megaproject
-stage's goods carry a `stopAtDestination`, so they pause once the destination
-has enough; the balanced bot raises a gathering route's stop level with
-`updateRoute` when a later stage needs more. Routes feeding a factory run
-without one.
+The bots build with `autoCrew` on, so a new building takes its crew at once;
+they assign what crew is left (from new housing) themselves. Timed things come
+first in a check-in (surveys, claims, contracts, megaproject deliveries), so
+their timers run while the player is away.
 
-Every bot works the contracts board: it holds a contract's goods back from
-auto-sell, delivers what a body holds beyond its own needs, and discards a
-contract on a resource it neither makes nor holds.
+- **Megaprojects.** Each bot delivers a stage's goods from every body that
+  holds more than it keeps for its own use, then the credits once every good
+  is in, which starts the timer. Auto-sell holds back what the stage being
+  paid for still lacks (the whole next level while a stage runs).
+- **Surveys** take only drones beyond what that stage still lacks.
+- **Contracts** come before the station: the bots hold a contract's goods back
+  from auto-sell, deliver once a body holds enough to finish it (or its store
+  is nearly full), and discard a contract on a resource they neither make nor
+  hold.
+- **Routes.** A route feeding buildings carries twice their demand and stops at
+  what the destination keeps for them (`stopAtDestination`), so it keeps up as
+  they grow without filling the store; the surplus is sold at the source. A
+  route too small is grown with `updateRoute` (more rate, more ships), and
+  cargo ships go where a route needs them with `moveShips`. Build-part routes
+  stop at the parts needed.
+- **Starved makers.** When every maker of a good the bot is working toward
+  stands idle for an input, it routes the input in, grows the route, sends
+  ships, or feeds the input's own makers in turn.
 
-`docs/balance/stage1-baseline.md` holds the 168 h baselines of all three
-bots; rerun them after changing `content/*.json` and compare.
+`docs/balance/` holds the 30-day baselines of all three bots (seed 1, and a
+seed 2 and 3 summary); rerun them after changing `content/*.json` and compare.
 

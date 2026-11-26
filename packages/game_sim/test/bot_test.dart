@@ -70,12 +70,12 @@ final class _Counter implements Bot {
   }
 }
 
-/// Plays like [inner], keeping every route it opens.
-final class _Routes implements Bot {
-  _Routes(this.inner);
+/// Plays like [inner], keeping every command it issues.
+final class _Log implements Bot {
+  _Log(this.inner);
 
   final Bot inner;
-  final List<CreateRouteCommand> created = [];
+  final List<Command> issued = [];
 
   @override
   String get name => inner.name;
@@ -83,30 +83,40 @@ final class _Routes implements Bot {
   @override
   List<Command> decide(GameEngine e, GameState s, String factionId) {
     final cmds = inner.decide(e, s, factionId);
-    created.addAll(cmds.whereType<CreateRouteCommand>());
+    issued.addAll(cmds);
     return cmds;
   }
 }
 
 void main() {
-  test('routes moving cargo ships or build parts stop once they are there', () {
-    final bot = _Routes(BalancedBot());
-    runBotSession(_engine(), bot, seed: 1, hours: 168);
-    final ships = [
-      for (final c in bot.created)
-        if (c.resourceId == 'cargo_ship') c,
-    ];
-    expect(ships, isNotEmpty);
-    for (final c in ships) {
-      expect(c.stopAtDestination, BigNum.from(2));
-    }
+  test('ships move as shipments, and every route stops at what it needs', () {
+    final bot = _Log(BalancedBot());
+    final r = runBotSession(_engine(), bot, seed: 1, hours: 168);
+    expect(r.rejectedCommands, 0);
+    final routes = bot.issued.whereType<CreateRouteCommand>().toList();
+    // Cargo ships go to a body as a move, not a route.
+    expect(routes.where((c) => c.resourceId == 'cargo_ship'), isEmpty);
+    final moves = bot.issued.whereType<MoveShipsCommand>();
+    expect(moves, isNotEmpty);
+    expect(moves.map((m) => m.count), everyElement(greaterThan(0)));
     // A habitat's module comes one at a time.
     final modules = [
-      for (final c in bot.created)
+      for (final c in routes)
         if (c.resourceId == 'habitat_module') c.stopAtDestination,
     ];
     expect(modules, isNotEmpty);
     expect(modules, everyElement(BigNum.from(1)));
+    // Routes feeding buildings pause once the destination holds what it
+    // keeps for them; none fills a store.
+    expect(routes.map((c) => c.stopAtDestination), everyElement(isNotNull));
+  });
+
+  test('new buildings come with their crew', () {
+    final bot = _Log(CasualBot());
+    runBotSession(_engine(), bot, seed: 1, hours: 48);
+    final builds = bot.issued.whereType<BuildCommand>().toList();
+    expect(builds, isNotEmpty);
+    expect(builds.map((b) => b.autoCrew), everyElement(isTrue));
   });
 
   test('greedy bot makes progress in 24h', () {
@@ -140,14 +150,8 @@ void main() {
         })
           m.id,
     };
-    GameState? end;
-    final r = runBotSession(
-      _engine(),
-      BalancedBot(),
-      seed: 1,
-      hours: 192,
-      onFinished: (s) => end = s,
-    );
+    expect(early.length, greaterThanOrEqualTo(19));
+    final r = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 192);
     expect(
       r.milestonesNotReached.map((m) => m.id).where(early.contains),
       isEmpty,
@@ -161,13 +165,55 @@ void main() {
       reason: r.toMarkdown(),
     );
     expect(r.rejectedCommands, 0);
-    // Its goods made on different bodies, the Orbital Station still gets
-    // built, a day later: the bot routes them to one body. (Station
-    // pacing is retuned with the bots in Task 8.)
-    expect(
-      end!.faction('player').megaprojectLevels['orbital_station'],
-      greaterThanOrEqualTo(1),
-    );
+    // The optimizer gets five bodies within three days.
+    final five = r.milestones.singleWhere((m) => m.id == 'own_5_bodies');
+    expect(five.gameHours, lessThanOrEqualTo(72));
+  });
+
+  group('the Orbital Station is paced', () {
+    // Station goods come from bodies all over the system and add up in
+    // deliveries: a casual player reaches level 1 in days 4 to 6 and level
+    // 3 in two to three weeks; the optimizer gets there sooner and keeps
+    // building.
+    late BalanceReport casual;
+    late BalanceReport balanced;
+    setUpAll(() {
+      casual = runBotSession(_engine(), CasualBot(), seed: 1, hours: 504);
+      balanced = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 336);
+    });
+
+    double hoursTo(BalanceReport r, String id) => r.milestones
+        .singleWhere(
+          (m) => m.id == id,
+          orElse: () {
+            fail('${r.botName}: $id not reached\n${r.toMarkdown()}');
+          },
+        )
+        .gameHours;
+
+    test('a casual player reaches level 1 in days 4 to 6', () {
+      expect(hoursTo(casual, 'station_1'), inInclusiveRange(72, 144));
+    });
+
+    test('and level 3 within three weeks, not before the second', () {
+      expect(hoursTo(casual, 'station_3'), inInclusiveRange(240, 504));
+    });
+
+    test('the optimizer reaches level 3 sooner, and more by day 14', () {
+      expect(
+        hoursTo(balanced, 'station_3'),
+        lessThan(hoursTo(casual, 'station_3')),
+      );
+      expect(
+        balanced.dayEnds.last.megaprojectLevels['orbital_station'],
+        greaterThan(3),
+      );
+    });
+
+    test('a casual player sees something new on 5 of every 7 days', () {
+      expect(casual.worstWeekWithNewThings(21), greaterThanOrEqualTo(5));
+      expect(casual.rejectedCommands, 0);
+    });
   });
 
   test('bot commands are valid and sessions are deterministic', () {
@@ -208,98 +254,109 @@ void main() {
   });
 
   group('a megaproject stage', () {
-    /// A new game with the goods and credits for the next Orbital Station
-    /// stage on Kora.
-    GameState stocked(GameEngine e) {
+    /// A new game with [share] of the goods for the next Orbital Station
+    /// stage on Kora, the rest on Hollow Reach (the player's too), and a
+    /// billion credits.
+    GameState stocked(GameEngine e, {double share = 1}) {
       final s = e.newGame(1)..faction('player').credits = BigNum.from(1e9);
+      s.body('hollow_reach').ownerId = 'player';
       final station = e.content.megaprojects['orbital_station']!;
       for (final MapEntry(:key, :value) in megaprojectCost(
         e.content,
         station,
         0,
       ).entries) {
-        if (key != 'credits') s.body('kora').stock[key] = value;
+        if (key == 'credits') continue;
+        s.body('kora').stock[key] = value.mulDouble(share);
+        if (share < 1) {
+          s.body('hollow_reach').stock[key] = value.mulDouble(1 - share);
+        }
       }
       return s;
     }
 
     for (final bot in [BalancedBot(), CasualBot(), GreedyBot()]) {
-      test('is started by the ${bot.name} bot when it can afford one', () {
+      test('is paid for and started by the ${bot.name} bot', () {
         final e = _engine();
         final s = stocked(e);
         final cmds = bot.decide(e, s, 'player');
-        expect(
-          cmds.whereType<StartMegaprojectStageCommand>().single.toJson(),
-          const StartMegaprojectStageCommand(
-            'player',
-            'orbital_station',
-            'kora',
-          ).toJson(),
-        );
+        final deliveries = cmds.whereType<DeliverToMegaprojectCommand>();
+        expect(deliveries.map((d) => d.bodyId), ['kora', 'kora']);
+        // Goods first, then the credits once every good is in.
+        expect(deliveries.last.amounts.keys, ['credits']);
         for (final cmd in cmds) {
           expect(e.apply(s, cmd), isA<CommandOk>());
         }
+        expect(
+          megaprojectStageOf(s, 'player', 'orbital_station'),
+          isNotNull,
+          reason: '$cmds',
+        );
       });
     }
 
-    test("is gathered by a route that pauses at the stage's need", () {
+    test('is delivered from every body that holds its goods', () {
       final e = _engine();
-      final s = stocked(e);
-      final kora = s.body('kora')..stock.remove('hull_plate');
-      s.body('hollow_reach')
-        ..ownerId = 'player'
-        ..stock['hull_plate'] = BigNum.from(100)
-        ..stock['cargo_ship'] = BigNum.from(2);
-      final route = BalancedBot()
-          .decide(e, s, 'player')
-          .whereType<CreateRouteCommand>()
-          .singleWhere((c) => c.resourceId == 'hull_plate');
-      expect(route.toBodyId, kora.id);
-      expect(route.stopAtDestination, greaterThanOrEqualTo(BigNum.from(60)));
-
-      // A route paused below the stage's need is raised, not left waiting.
-      expect(e.apply(s, route), isA<CommandOk>());
-      final rt = s.routes.single..stopAtDestination = BigNum.from(1);
-      final raise = BalancedBot()
-          .decide(e, s, 'player')
-          .whereType<UpdateRouteCommand>()
-          .single;
-      expect(raise.routeId, rt.id);
-      expect(raise.stopAtDestination, route.stopAtDestination);
+      final s = stocked(e, share: 0.5);
+      final cmds = BalancedBot().decide(e, s, 'player');
+      expect(
+        cmds.whereType<DeliverToMegaprojectCommand>().map((d) => d.bodyId),
+        ['kora', 'hollow_reach', 'kora'],
+      );
+      for (final cmd in cmds) {
+        expect(e.apply(s, cmd), isA<CommandOk>());
+      }
+      expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNotNull);
     });
 
-    test('is not started when the goods are short', () {
+    test('takes what is held when the goods are short, and waits', () {
       final e = _engine();
       final s = stocked(e)..body('kora').stock['reactor_core'] = BigNum.from(1);
-      expect(
-        BalancedBot()
-            .decide(e, s, 'player')
-            .whereType<StartMegaprojectStageCommand>(),
-        isEmpty,
+      final cmds = BalancedBot().decide(e, s, 'player');
+      for (final cmd in cmds) {
+        expect(e.apply(s, cmd), isA<CommandOk>());
+      }
+      expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNull);
+      final owed = megaprojectRemaining(
+        s,
+        e.content,
+        'player',
+        e.content.megaprojects['orbital_station']!,
       );
+      expect(owed.keys, ['credits', 'reactor_core']);
     });
 
-    test("auto-sell keeps the next stage's goods", () {
+    test("auto-sell keeps what the next stage still lacks", () {
       final e = _engine();
+      // A rule already set: the bot delivers the segment it holds, then
+      // retunes the rule.
       final s = e.newGame(1)
         ..body('kora').stock['station_segment'] = BigNum.from(1);
-      // At level 5 a stage needs more than a quarter of Kora's storage.
-      s.faction('player').megaprojectLevels['orbital_station'] = 5;
-      final need = megaprojectCost(
-        e.content,
-        e.content.megaprojects['orbital_station']!,
-        5,
-      )['station_segment']!;
-      final cap = storageCap(s, e.content, s.body('kora'));
-      expect(need, greaterThan(cap.mulDouble(0.25)));
-      expect(need, lessThan(cap));
+      expect(
+        e.apply(
+          s,
+          const SetAutoSellCommand(
+            'player',
+            'kora',
+            'station_segment',
+            BigNum.zero(),
+          ),
+        ),
+        isA<CommandOk>(),
+      );
+      final station = e.content.megaprojects['orbital_station']!;
+      final need = megaprojectCost(e.content, station, 0)['station_segment']!;
+      s.faction('player').megaprojectProgress['orbital_station'] = {
+        'station_segment': need.mulDouble(0.25),
+      };
       final rule = GreedyBot()
           .decide(e, s, 'player')
           .whereType<SetAutoSellCommand>()
           .firstWhere(
             (c) => c.bodyId == 'kora' && c.resourceId == 'station_segment',
           );
-      expect(rule.keepAtLeast, need);
+      // Three quarters still lacking, less the one segment just delivered.
+      expect(rule.keepAtLeast, need.mulDouble(0.75) - BigNum.from(1));
     });
   });
 
@@ -442,10 +499,16 @@ void main() {
   });
 
   group('surveys', () {
+    /// A rich new game whose next Orbital Station stage has every drone
+    /// it needs, with three more on Kora.
     GameState withDrones(GameEngine e) {
       final s = e.newGame(1);
       s.faction('player').credits = BigNum.from(1e9);
       s.body('kora').stock['survey_drone'] = BigNum.from(3);
+      final station = e.content.megaprojects['orbital_station']!;
+      s.faction('player').megaprojectProgress['orbital_station'] = {
+        'survey_drone': megaprojectCost(e.content, station, 0)['survey_drone']!,
+      };
       return s;
     }
 
@@ -465,6 +528,21 @@ void main() {
         final e = _engine();
         final s = withDrones(e)..body('kora').stock.remove('survey_drone');
         expect(bot.decide(e, s, 'player').whereType<SurveyCommand>(), isEmpty);
+      });
+    }
+
+    for (final bot in [GreedyBot(), BalancedBot()]) {
+      test('the ${bot.name} bot keeps drones the station still needs', () {
+        final e = _engine();
+        final s = withDrones(e)..faction('player').megaprojectProgress.clear();
+        final cmds = bot.decide(e, s, 'player');
+        expect(cmds.whereType<SurveyCommand>(), isEmpty);
+        expect(
+          cmds.whereType<DeliverToMegaprojectCommand>().expand(
+            (d) => d.amounts.keys,
+          ),
+          contains('survey_drone'),
+        );
       });
     }
 

@@ -19,8 +19,8 @@ abstract interface class Bot {
 }
 
 /// Buys the cheapest affordable upgrade, building, extra build slot or
-/// claim each decision, after filling free crew slots, starting any
-/// megaproject stage it can afford, working its contracts and setting
+/// claim each decision, after filling free crew slots, working its
+/// contracts, delivering to megaproject stages, surveying and setting
 /// auto-sell on surplus.
 final class GreedyBot implements Bot {
   @override
@@ -33,9 +33,9 @@ final class GreedyBot implements Bot {
       final v = _View(e.content, w, factionId);
       final housekeeping =
           v.assignFreeCrew() ??
-          v.survey() ??
-          v.startMegaproject() ??
           v.workContracts() ??
+          v.deliverMegaproject() ??
+          v.survey() ??
           v.autoSell();
       if (housekeeping != null || bought) return housekeeping;
       bought = true;
@@ -46,16 +46,18 @@ final class GreedyBot implements Bot {
 
 /// Plays toward the content's milestones like a steady player.
 ///
-/// Each planning step takes the first of: staff idle buildings; fix one of
-/// the worst bottlenecks (assign crew, then an efficiency or speed upgrade
-/// on the starving supplier, then build another supplier, then open a
-/// route); survey a hidden body when it has the drones and credits, one
-/// survey at a time; claim a body when affordable, surveyed ones included; start a megaproject stage when
-/// affordable, else route its goods to one body; deliver to or discard
-/// contracts ([_View.workContracts]); auto-sell surplus; work
-/// toward the next milestone or more housing when crew runs out, saving
-/// credits for it; and with what is left, buy whatever adds the most
-/// credits per second for its price.
+/// Each planning step takes the first of: staff idle buildings and shed
+/// crew housing cannot support; start what takes time, so it runs while
+/// the player is away: survey a hidden body with drones the station does
+/// not need ([_View.survey]), claim a body when affordable, deliver to or
+/// discard contracts ([_View.workContracts]) and deliver megaproject goods
+/// from every body ([_View.deliverMegaproject]); fix one of the worst
+/// bottlenecks (an efficiency or speed upgrade on the starving supplier,
+/// another supplier, or a route, grown when too small); auto-sell surplus;
+/// work toward the next milestone, the next megaproject level or more
+/// housing when crew runs out, saving credits for it; and with what is
+/// left, buy whatever adds the most credits per second for its price.
+/// New buildings take their crew as they are built (`autoCrew`).
 final class BalancedBot implements Bot {
   /// Bottlenecks, worst first, the bot tries to fix per planning step.
   static const int bottlenecksConsidered = 3;
@@ -83,13 +85,11 @@ final class BalancedBot implements Bot {
       final quick =
           v.assignFreeCrew() ??
           v.shedCrew() ??
-          v.closeShipTransfers() ??
-          v.fixBottleneck(tried) ??
           v.survey() ??
           v.claim() ??
-          v.startMegaproject() ??
-          v.gatherMegaproject() ??
           v.workContracts() ??
+          v.deliverMegaproject() ??
+          v.fixBottleneck(tried) ??
           v.autoSell();
       if (quick != null) return quick;
       return switch (v.pursueGoals()) {
@@ -149,6 +149,10 @@ const int _maxCommandsPerDecision = 60;
 /// Storage share a bot keeps of a resource it uses; the rest is sold.
 const double _keepShareOfCap = 0.25;
 
+/// Share of a body's storage cap from which its store of a good counts as
+/// nearly full, so a contract takes what it holds ([_View.workContracts]).
+const double _fullShare = 0.9;
+
 /// Share of a goal's price in hand from which the balanced bot may save
 /// for it instead of spending.
 const double _saveFrom = 0.5;
@@ -162,16 +166,16 @@ const double _pettyShare = 0.01;
 /// 6 h check-in gap. Further off, investing first gets there sooner.
 const double _saveWithinSeconds = 21600;
 
-/// Units per second of a route moving build parts or cargo ships: a slow
-/// trickle, one every 100 s.
+/// Units per second of a route moving build parts: a slow trickle, one
+/// every 100 s.
 const double _trickleRate = 0.01;
-
-/// Seconds in which a route gathering a megaproject stage's goods should
-/// bring what its host body lacks ([_View.gatherMegaproject]).
-const double _gatherSeconds = 3600;
 
 /// Cargo ships the balanced bot sends to a body that has goods to ship.
 const int _shipsSent = 2;
+
+/// Times the demand a route feeding a body's buildings carries, so it
+/// keeps up as they grow; its stop level keeps the extra from piling up.
+const double _feedHeadroom = 2;
 
 /// Seconds of its buildings' input demand a body keeps back from
 /// auto-sell ([_View.keep]).
@@ -191,6 +195,9 @@ const double _marketFullShare = 0.9;
 /// Free crew below which the balanced bot works toward more housing before
 /// saving for a goal, so crew is left to staff the life-support chain.
 const int _housingAheadCrew = 3;
+
+/// Run share at or above which a maker counts as fed ([_View._feed]).
+const double _fedShare = 0.5;
 
 /// How deep [_View.ensureMade] follows a recipe chain.
 const int _maxChainDepth = 8;
@@ -368,7 +375,8 @@ final class _View {
 
   /// Credits per second that selling [extra] more units a second of [id]
   /// would add once the market settles, on top of what the faction makes
-  /// for sale now.
+  /// for sale now; while a megaproject stage still wants [id]
+  /// ([stageNeed]), its full base price, as the stage takes every unit.
   ///
   /// Steady sales of `q` a second hold the saturation at
   /// `1 / (1 + q × marketRecoverySeconds / depth)` (or the floor), so the
@@ -379,6 +387,7 @@ final class _View {
   /// held back for later is not valued as if every extra unit sold at
   /// full price.
   double extraRevenue(String id, double extra) {
+    if (_stageWants(id)) return extra * c.resources[id]!.basePrice.toDouble();
     final now = _soldPerSec(id);
     return _income(id, now + extra) - _income(id, now);
   }
@@ -471,8 +480,9 @@ final class _View {
   /// Assigns free crew to an unstaffed habitat, else another unstaffed
   /// building, else a building with open slots; body and list order.
   ///
-  /// The bots build with `autoCrew` off and staff through this, so free
-  /// crew goes to habitats first rather than to whatever was built last.
+  /// New buildings take their crew as they are built (`autoCrew`); this
+  /// staffs what is left: crew freed by new housing, or a building that
+  /// was built while crew ran short.
   Command? assignFreeCrew() {
     if (freeCrew < 1) return null;
     final open = [
@@ -528,14 +538,15 @@ final class _View {
       lifeSupport.any((id) => makes(b, id));
 
   /// Units of [resourceId] kept back from auto-sell on [body]: what it
-  /// keeps for its own use ([keepForUse]) plus what the faction's
-  /// contracts still want of it ([contractNeed]), so the goods pile up to
-  /// be delivered; at most the storage cap.
+  /// keeps for its own use ([keepForUse]) plus what the next megaproject
+  /// stages ([stageNeed]) and the faction's contracts ([contractNeed]) still
+  /// want of it, so the goods pile up to be delivered; at most the storage
+  /// cap.
   BigNum keep(BodyState body, String resourceId) {
-    final need = contractNeed(resourceId);
+    final want = stageNeed(resourceId) + contractNeed(resourceId);
     final own = keepForUse(body, resourceId);
-    if (need.isZero) return own;
-    return (own + need).min(storageCap(s, c, body));
+    if (want.isZero) return own;
+    return (own + want).min(storageCap(s, c, body));
   }
 
   /// Units of [resourceId] the contracts on the faction's board still
@@ -551,8 +562,11 @@ final class _View {
   /// One step on the faction's contracts board, contracts in board order:
   /// discards a contract on a resource no staffed building makes and no
   /// owned body holds, or delivers what an owned body holds of a contract's
-  /// resource beyond what it keeps for its own use ([keepForUse]); null if
-  /// neither is wanted.
+  /// resource beyond what it keeps for its own use ([keepForUse], at most half
+  /// of what it holds) once that
+  /// finishes the contract or the body's store is nearly full; null if
+  /// neither is wanted. Contracts come before megaproject stages, which
+  /// would otherwise take every unit of a good they share.
   Command? workContracts() {
     for (final k in faction.contracts) {
       final id = k.resourceId;
@@ -560,8 +574,13 @@ final class _View {
         return DiscardContractCommand(factionId, k.id);
       }
       for (final body in owned) {
-        final spare = stock(body, id) - keepForUse(body, id);
-        if (spare > const BigNum.zero()) {
+        final held = stock(body, id);
+        // At most half of what a body holds is kept back from a contract,
+        // so a good its own buildings use heavily can still be delivered.
+        final spare = held - keepForUse(body, id).min(held.mulDouble(0.5));
+        if (spare <= const BigNum.zero()) continue;
+        if (spare >= k.remaining ||
+            stock(body, id) >= storageCap(s, c, body).mulDouble(_fullShare)) {
           return DeliverContractCommand(
             factionId,
             k.id,
@@ -576,17 +595,15 @@ final class _View {
 
   /// Units of [resourceId] kept on [body] for the faction's own use: when
   /// a building there uses it, a route ships it, or it pays for builds,
-  /// routes, claims or megaproject stages; otherwise none.
+  /// routes or claims; otherwise none. Megaproject stages and contracts get
+  /// what is held beyond it.
   ///
-  /// The largest of a share of storage, [_demandBufferSeconds] of what the
-  /// body's buildings use and what the next stages of the megaprojects
-  /// cost ([stageNeed]), at most the storage cap.
+  /// The larger of a share of storage and [_demandBufferSeconds] of what
+  /// the body's buildings use, at most the storage cap.
   BigNum keepForUse(BodyState body, String resourceId) {
-    final stage = stageNeed(resourceId);
     final used =
         resourceId == r.cargoShipResource ||
         resourceId == r.outpostKitResource ||
-        !stage.isZero ||
         body.buildings.any((b) => def(b).inputs.containsKey(resourceId)) ||
         s.routes.any(
           (rt) => rt.fromBodyId == body.id && rt.resourceId == resourceId,
@@ -602,165 +619,93 @@ final class _View {
     return cap
         .mulDouble(_keepShareOfCap)
         .max(demand.mulDouble(_demandBufferSeconds))
-        .max(stage)
         .min(cap);
   }
 
-  /// Units of [resourceId] the next stage of every megaproject costs,
-  /// summed; zero when none uses it.
+  /// Whether a megaproject's next stage still wants [id]; cached per view.
+  bool _stageWants(String id) =>
+      _wanted.putIfAbsent(id, () => !stageNeed(id).isZero);
+  final Map<String, bool> _wanted = {};
+
+  /// Units of [resourceId] the megaprojects still want for their next
+  /// stages, summed: what the stage being paid for still lacks
+  /// ([megaprojectRemaining]), or, while a stage is under way, the whole
+  /// cost of the one after it; zero when none uses it.
   BigNum stageNeed(String resourceId) {
     var total = const BigNum.zero();
     for (final m in c.megaprojects.values) {
       if (!m.baseCost.containsKey(resourceId)) continue;
       final level = faction.megaprojectLevels[m.id] ?? 0;
-      total = total + megaprojectCost(c, m, level)[resourceId]!;
+      if (level >= SaveCodec.maxMegaprojectLevel) continue;
+      final next = megaprojectStageOf(s, factionId, m.id) == null
+          ? megaprojectRemaining(s, c, factionId, m)[resourceId]
+          : megaprojectCost(c, m, level + 1)[resourceId];
+      if (next != null) total = total + next;
     }
     return total;
   }
 
-  /// Starts the next stage of the first megaproject, in content order, that
-  /// has none under way and that an owned body (of its host type, if it has
-  /// one) can pay for, on the first such body; null if there is none.
-  Command? startMegaproject() {
-    for (final m in c.megaprojects.values) {
-      if (megaprojectStageOf(s, factionId, m.id) != null) continue;
-      final level = faction.megaprojectLevels[m.id] ?? 0;
-      if (level >= SaveCodec.maxMegaprojectLevel) continue;
-      final cost = megaprojectCost(c, m, level);
-      for (final body in owned) {
-        final host = m.hostBodyType;
-        if (host != null && body.typeId != host) continue;
-        if (canPay(body, cost)) {
-          return StartMegaprojectStageCommand(factionId, m.id, body.id);
-        }
-      }
-    }
-    return null;
-  }
-
-  /// A route bringing a good the next stage of a megaproject lacks to the
-  /// body that best hosts it, from another owned body in its system that
-  /// holds some; or, when no such body has a cargo ship, a route sending
-  /// one there. Null if no route is wanted.
+  /// One delivery toward the next stage of the first megaproject, in
+  /// content order, that has none under way: the goods it still lacks from
+  /// the first owned body holding more of them than it keeps for its own
+  /// use ([keepForUse]), body order; once every good is in, the credits,
+  /// when the faction holds them all. Null if there is nothing to deliver.
   ///
-  /// The host is the owned body (of the host type, if any) that has the
-  /// most of the stage's goods in hand or routed in, body order breaking a
-  /// tie, so routes once opened keep it the host. A route asks for what the
-  /// host's buildings use of the good plus the shortfall over
-  /// [_gatherSeconds], so local use does not eat it all, and stays open
-  /// for later stages.
-  Command? gatherMegaproject() {
+  /// Deliveries add up, so goods go in as they are made, from every body,
+  /// and the stage's timer starts as soon as the last of its cost is in.
+  Command? deliverMegaproject() {
     for (final m in c.megaprojects.values) {
       if (megaprojectStageOf(s, factionId, m.id) != null) continue;
       final level = faction.megaprojectLevels[m.id] ?? 0;
       if (level >= SaveCodec.maxMegaprojectLevel) continue;
-      final goods = {
-        for (final MapEntry(:key, :value) in megaprojectCost(
-          c,
-          m,
-          level,
-        ).entries)
-          if (key != 'credits') key: value,
-      };
-      bool covered(BodyState b, String id) =>
-          stock(b, id) >= goods[id]! || routeInto(b, id);
-      BodyState? host;
-      var best = -1;
-      for (final b in owned) {
-        if (m.hostBodyType case final t? when b.typeId != t) continue;
-        final score = goods.keys.where((id) => covered(b, id)).length;
-        if (score > best) {
-          host = b;
-          best = score;
-        }
-      }
-      if (host == null) continue;
-      for (final MapEntry(key: id, value: need) in goods.entries) {
-        // A route opened for an earlier, cheaper stage pauses too soon.
-        final raise = _raiseStop(host, id);
-        if (raise != null && stock(host, id) < need) return raise;
-        if (covered(host, id)) continue;
-        final sources = [
-          for (final o in owned)
-            if (o != host &&
-                o.systemId == host.systemId &&
-                stock(o, id) > const BigNum.zero())
-              o,
-        ];
-        if (sources.isEmpty) continue;
-        final from = sources.where(hasShip).firstOrNull;
-        if (from == null) {
-          final send = _sendShips(sources.first);
-          if (send != null) return send;
-          continue;
-        }
-        var used = const BigNum.zero();
-        for (final b in host.buildings) {
-          used = used + (flowOf(host, b).inputs[id] ?? const BigNum.zero());
-        }
-        final rate =
-            used + (need - stock(host, id)).mulDouble(1 / _gatherSeconds);
-        final ships = math.min(
-          stock(from, r.cargoShipResource).toDouble().floor(),
-          (rate.toDouble() / r.shipCapacityPerSecond).ceil(),
-        );
-        return CreateRouteCommand(
-          factionId,
-          from.id,
-          host.id,
-          id,
-          rate,
-          math.max(1, ships),
-          stopAtDestination: stopFor(host, id),
-        );
-      }
-    }
-    return null;
-  }
-
-  /// A raise of the stop level of the faction's route bringing
-  /// [resourceId] to [to] up to [stopFor], when it pauses below that; null
-  /// if no route needs one.
-  Command? _raiseStop(BodyState to, String resourceId) {
-    final want = stopFor(to, resourceId);
-    if (want == null) return null;
-    for (final rt in s.routes) {
-      if (rt.ownerId != factionId ||
-          rt.toBodyId != to.id ||
-          rt.resourceId != resourceId) {
+      if (m.hostBodyType case final t? when !owned.any((b) => b.typeId == t)) {
         continue;
       }
-      if (rt.stopAtDestination case final stop? when stop < want) {
-        return UpdateRouteCommand(factionId, rt.id, stopAtDestination: want);
+      final owed = megaprojectRemaining(s, c, factionId, m);
+      for (final body in owned) {
+        final give = <String, BigNum>{};
+        for (final MapEntry(key: id, value: need) in owed.entries) {
+          if (id == 'credits') continue;
+          final spare = stock(body, id) - keepForUse(body, id);
+          if (spare > const BigNum.zero()) give[id] = spare.min(need);
+        }
+        if (give.isNotEmpty) {
+          return DeliverToMegaprojectCommand(factionId, m.id, body.id, give);
+        }
+      }
+      if (_onlyCredits(owed) case final credits?
+          when faction.credits >= credits) {
+        return DeliverToMegaprojectCommand(factionId, m.id, owned.first.id, {
+          'credits': credits,
+        });
       }
     }
     return null;
   }
 
-  /// A route sending cargo ships to [to], from the first other owned body
-  /// in its system holding more than [_shipsSent]; null if none does or a
-  /// route already brings them. [closeShipTransfers] ends it.
-  Command? _sendShips(BodyState to) {
-    final ship = r.cargoShipResource;
-    if (routeInto(to, ship)) return null;
-    final from = owned
-        .where(
-          (o) =>
-              o != to &&
-              o.systemId == to.systemId &&
-              stock(o, ship) >= BigNum.from(_shipsSent + 1),
-        )
-        .firstOrNull;
-    if (from == null) return null;
-    return CreateRouteCommand(
-      factionId,
-      from.id,
-      to.id,
-      ship,
-      BigNum.from(_trickleRate),
-      1,
-      stopAtDestination: BigNum.from(_shipsSent),
-    );
+  /// The next step toward the next stage of [m]: making each good it still
+  /// lacks ([ensureMade], which also feeds makers that stand idle), then
+  /// saving its credits once every good is in. [_Waiting] while a stage is
+  /// under way or goods are on their way.
+  _Step _ensureStage(MegaprojectDef m) {
+    if (megaprojectStageOf(s, factionId, m.id) != null) {
+      return const _Waiting();
+    }
+    if ((faction.megaprojectLevels[m.id] ?? 0) >=
+        SaveCodec.maxMegaprojectLevel) {
+      return const _Waiting();
+    }
+    final owed = megaprojectRemaining(s, c, factionId, m);
+    final goods = [
+      for (final id in owed.keys)
+        if (id != 'credits') id,
+    ];
+    for (final id in goods) {
+      final step = ensureMade(id);
+      if (_acts(step)) return step;
+    }
+    if (_onlyCredits(owed) case final credits?) return _Save(credits);
+    return const _Waiting();
   }
 
   /// Adds or updates one auto-sell rule so every sellable resource in stock
@@ -813,13 +758,7 @@ final class _View {
       for (final d in c.buildings.values) {
         for (final dep in buildDeposits(d, body)) {
           offer(
-            BuildCommand(
-              factionId,
-              body.id,
-              d.id,
-              depositResourceId: dep,
-              autoCrew: false,
-            ),
+            BuildCommand(factionId, body.id, d.id, depositResourceId: dep),
             body,
             d.buildCost,
           );
@@ -890,7 +829,7 @@ final class _View {
         .firstOrNull;
     if (depot == null) return null;
     if (hasFreeSlot(body) && canPay(body, depot.buildCost)) {
-      return BuildCommand(factionId, body.id, depot.id, autoCrew: false);
+      return BuildCommand(factionId, body.id, depot.id);
     }
     (Command, BigNum)? best;
     for (final b in body.buildings) {
@@ -931,11 +870,22 @@ final class _View {
       // The route is big enough; its source is what runs short.
       return _boostSupply(from, resourceId);
     }
-    // Too small for today's demand: close it so a later decision opens a
-    // bigger one, its ships back at the source.
-    final canGrow =
-        existing.ratePerSecond < demand.mulDouble(_routeSlack) || hasShip(from);
-    return canGrow ? RemoveRouteCommand(factionId, existing.id) : null;
+    // Too small for today's demand: carry more, with the ships for it from
+    // the source, or ships sent there first.
+    final rate = existing.ratePerSecond.max(demand.mulDouble(_feedHeadroom));
+    final want = (rate.toDouble() / r.shipCapacityPerSecond).ceil();
+    final held = stock(from, r.cargoShipResource).toDouble().floor();
+    final ships = math.min(want, existing.cargoShips + held);
+    if (ships > existing.cargoShips ||
+        existing.ratePerSecond < demand.mulDouble(_routeSlack)) {
+      return UpdateRouteCommand(
+        factionId,
+        existing.id,
+        ratePerSecond: rate,
+        cargoShips: ships > existing.cargoShips ? ships : null,
+      );
+    }
+    return moveShipsTo(from, count: want - existing.cargoShips + held);
   }
 
   /// More [resourceId] made on [body]: the cheapest affordable upgrade of a
@@ -981,13 +931,7 @@ final class _View {
       final credits = d.buildCost['credits'] ?? const BigNum.zero();
       if (best == null || credits < best.$2) {
         best = (
-          BuildCommand(
-            factionId,
-            body.id,
-            d.id,
-            depositResourceId: deposit,
-            autoCrew: false,
-          ),
+          BuildCommand(factionId, body.id, d.id, depositResourceId: deposit),
           credits,
         );
       }
@@ -995,25 +939,92 @@ final class _View {
     return best?.$1;
   }
 
-  /// A route bringing up to [rate] per second of [resourceId] to [to] from
-  /// [routeSource], with enough cargo ships for the rate if it has them.
+  /// A route feeding [to]'s buildings [resourceId] at [_feedHeadroom]
+  /// times their [rate] from the body in its system that makes the most
+  /// spare of it (else one that holds some), with ships for that rate, or
+  /// cargo ships sent to that body first when it has none ([moveShipsTo]).
+  /// Null if no body can supply it or a route already brings it.
   ///
-  /// It runs without a stop level: the rate already matches what [to]
-  /// uses, and [to]'s auto-sell sells the rest there. (A stop at
-  /// [stopFor] leaves more on the source body and moves day-14 income
-  /// past the one-resource share the balance targets allow.)
+  /// The route stops at what [to] keeps for its buildings ([stopFor]): the
+  /// headroom lets it keep up as they grow, and the stop keeps it from
+  /// filling [to]'s storage, the surplus staying to be sold at the source.
   Command? _route(String resourceId, BodyState to, BigNum rate) {
-    final from = routeSource(resourceId, to);
+    if (routeInto(to, resourceId)) return null;
+    final from = _supplier(resourceId, to);
     if (from == null) return null;
+    if (!hasShip(from)) return moveShipsTo(from);
+    final carry = rate.mulDouble(_feedHeadroom);
     final ships = stock(from, r.cargoShipResource).toDouble().floor();
-    final want = (rate.toDouble() / r.shipCapacityPerSecond).ceil();
+    final want = (carry.toDouble() / r.shipCapacityPerSecond).ceil();
     return CreateRouteCommand(
       factionId,
       from.id,
       to.id,
       resourceId,
-      rate,
+      carry,
       math.max(1, math.min(ships, want)),
+      stopAtDestination: stopFor(to, resourceId),
+    );
+  }
+
+  /// The other owned body in [to]'s system with the largest surplus of
+  /// [resourceId], else the first holding some; body order on a tie.
+  BodyState? _supplier(String resourceId, BodyState to) {
+    BodyState? best;
+    var most = 0.0;
+    for (final from in owned) {
+      if (from.id == to.id || from.systemId != to.systemId) continue;
+      final spare = surplus(from, resourceId);
+      if (spare > most) {
+        best = from;
+        most = spare;
+      }
+    }
+    return best ??
+        owned
+            .where(
+              (o) =>
+                  o.id != to.id &&
+                  o.systemId == to.systemId &&
+                  stock(o, resourceId) > const BigNum.zero(),
+            )
+            .firstOrNull;
+  }
+
+  /// Cargo ships on their way to [to] or held there.
+  int shipsAt(BodyState to) {
+    var n = stock(to, r.cargoShipResource).toDouble().floor();
+    for (final sh in s.shipments) {
+      if (sh.toBodyId == to.id && sh.resourceId == r.cargoShipResource) {
+        n += sh.amount.toDouble().floor();
+      }
+    }
+    return n;
+  }
+
+  /// Sends cargo ships to [to] until it holds or has on their way [count]
+  /// ([_shipsSent] by default), from the other owned body in its system
+  /// holding the most beyond [_shipsSent] of its own, as many as it can
+  /// spare; null if [to] has them already or none can be spared.
+  Command? moveShipsTo(BodyState to, {int count = _shipsSent}) {
+    final short = count - shipsAt(to);
+    if (short < 1) return null;
+    BodyState? from;
+    var most = _shipsSent;
+    for (final o in owned) {
+      if (o.id == to.id || o.systemId != to.systemId) continue;
+      final held = stock(o, r.cargoShipResource).toDouble().floor();
+      if (held > most) {
+        from = o;
+        most = held;
+      }
+    }
+    if (from == null) return null;
+    return MoveShipsCommand(
+      factionId,
+      from.id,
+      to.id,
+      math.min(short, most - _shipsSent),
     );
   }
 
@@ -1038,8 +1049,10 @@ final class _View {
 
   /// Starts surveying the first hidden body not yet surveyed, in body
   /// order, paid from the first owned body that holds the drones; null
-  /// while a survey of its own is under way, when it cannot pay, or when
-  /// nothing is left to survey.
+  /// while a survey of its own is under way, when it cannot pay, when
+  /// nothing is left to survey, or when the drones held are needed for the
+  /// megaproject stage being paid for: a survey only takes drones beyond
+  /// what that stage still lacks.
   Command? survey() {
     if (s.projects.any(
       (p) => p.factionId == factionId && p.kind == ProjectKind.survey,
@@ -1054,7 +1067,28 @@ final class _View {
     final cost = surveyCost(c);
     final source = owned.where((b) => canPay(b, cost)).firstOrNull;
     if (target == null || source == null) return null;
+    final drones = cost.keys.where((id) => id != 'credits');
+    for (final id in drones) {
+      final held = owned.fold(const BigNum.zero(), (t, b) => t + stock(b, id));
+      if (held - _owedToStages(id) < cost[id]!) return null;
+    }
     return SurveyCommand(factionId, target.id, source.id);
+  }
+
+  /// Units of [resourceId] the megaproject stages being paid for (none
+  /// under way) still lack, summed.
+  BigNum _owedToStages(String resourceId) {
+    var total = const BigNum.zero();
+    for (final m in c.megaprojects.values) {
+      if (megaprojectStageOf(s, factionId, m.id) != null) continue;
+      if ((faction.megaprojectLevels[m.id] ?? 0) >=
+          SaveCodec.maxMegaprojectLevel) {
+        continue;
+      }
+      final owed = megaprojectRemaining(s, c, factionId, m)[resourceId];
+      if (owed != null) total = total + owed;
+    }
+    return total;
   }
 
   /// Claims the best unowned body when the faction can pay, kits taken from
@@ -1140,16 +1174,22 @@ final class _View {
         CreditsEarnedCondition() => const _Waiting(),
         // Contracts are worked as they are posted ([workContracts]).
         ContractsCompletedCondition() => const _Waiting(),
+        MegaprojectLevelCondition(:final megaprojectId) => _ensureStage(
+          c.megaprojects[megaprojectId]!,
+        ),
         // These follow from play (growth, projects, surveys); nothing to
         // build for them directly.
         ProductionRateCondition() ||
         BuildingTypesBuiltCondition() ||
         CrewTotalCondition() ||
-        MegaprojectLevelCondition() ||
         ZeroWasteForCondition() ||
         BodiesSurveyedCondition() => const _Waiting(),
       };
       if (worth(step) case final step?) return step;
+    }
+    // Megaproject levels go on past their milestones.
+    for (final m in c.megaprojects.values) {
+      if (worth(_ensureStage(m)) case final step?) return step;
     }
     if (freeCrew < 1) {
       if (worth(_ensureHousing()) case final step?) return step;
@@ -1174,12 +1214,13 @@ final class _View {
       buildings.where((x) => x.$2.defId == defId).length >= count,
     ContractsCompletedCondition(:final count) =>
       faction.contractsCompleted >= count,
+    MegaprojectLevelCondition(:final megaprojectId, :final level) =>
+      (faction.megaprojectLevels[megaprojectId] ?? 0) >= level,
     // Checked by the engine from flow reports and elapsed time; the bot does
     // not plan around them.
     ProductionRateCondition() ||
     BuildingTypesBuiltCondition() ||
     CrewTotalCondition() ||
-    MegaprojectLevelCondition() ||
     ZeroWasteForCondition() ||
     BodiesSurveyedCondition() => false,
   };
@@ -1224,7 +1265,7 @@ final class _View {
     if (visiting.length > _maxChainDepth || visiting.contains(resourceId)) {
       return const _Stuck();
     }
-    if (made(resourceId)) return const _Waiting();
+    if (made(resourceId)) return _feed(resourceId, {...visiting, resourceId});
     for (final (_, b) in buildings) {
       if (b.crew == 0 && makes(b, resourceId)) return _staff(b);
     }
@@ -1267,6 +1308,45 @@ final class _View {
     return const _Stuck();
   }
 
+  /// The next step toward an input that every staffed maker of
+  /// [resourceId] stands idle for want of: making it, routing it in from a
+  /// body that has it (or growing the route that brings it), getting cargo
+  /// ships to such a body, or, when the input's own makers starve too,
+  /// feeding them in turn. [_Waiting] while some maker runs at
+  /// [_fedShare] or more, or nothing can be done.
+  _Step _feed(String resourceId, Set<String> visiting) {
+    final makers = [
+      for (final (body, b) in buildings)
+        if (b.crew > 0 && makes(b, resourceId)) (body, b),
+    ];
+    if (makers.any((x) => x.$2.lastRunFraction >= _fedShare)) {
+      return const _Waiting();
+    }
+    for (final (body, b) in makers) {
+      final reason = b.lastLimitReason;
+      if (reason == null || !reason.startsWith('input:')) continue;
+      final input = reason.substring('input:'.length);
+      if (visiting.contains(input)) continue;
+      final deeper = {...visiting, input};
+      if (!made(input)) {
+        final step = ensureMade(input, deeper);
+        if (_acts(step)) return step;
+        continue;
+      }
+      if (routeInto(body, input)) {
+        if (_fixInput(body, input) case final fix?) return _Do(fix);
+      } else if (!madeAt(body, input)) {
+        final need = flowOf(body, b).inputs[input]!;
+        if (_route(input, body, need) case final cmd?) return _Do(cmd);
+        final ships = _shipsFor([input], deeper);
+        if (_acts(ships)) return ships;
+      }
+      final upstream = _feed(input, deeper);
+      if (_acts(upstream)) return upstream;
+    }
+    return const _Waiting();
+  }
+
   /// [_Waiting] once something makes every one of [inputs], else the first
   /// step toward that, or [_Stuck].
   _Step _ensureInputs(Iterable<String> inputs, Set<String> visiting) {
@@ -1307,51 +1387,17 @@ final class _View {
 
   /// The next step toward cargo ships on a body that makes one of
   /// [inputs] and has none: making ships, then sending [_shipsSent] there
-  /// from a body holding more.
+  /// from a body holding more ([moveShipsTo]).
   _Step _shipsFor(Iterable<String> inputs, Set<String> visiting) {
-    final ship = r.cargoShipResource;
-    final making = ensureMade(ship, visiting);
+    final making = ensureMade(r.cargoShipResource, visiting);
     if (_acts(making) || making is _Stuck) return making;
     for (final to in owned) {
-      if (hasShip(to) || routeInto(to, ship)) continue;
+      if (shipsAt(to) >= 1) continue;
       if (!inputs.any((i) => madeAt(to, i))) continue;
-      final from = owned
-          .where(
-            (o) =>
-                o != to &&
-                o.systemId == to.systemId &&
-                stock(o, ship) >= BigNum.from(_shipsSent + 1),
-          )
-          .firstOrNull;
-      if (from == null) return const _Waiting();
-      return _Do(
-        CreateRouteCommand(
-          factionId,
-          from.id,
-          to.id,
-          ship,
-          BigNum.from(_trickleRate),
-          1,
-          stopAtDestination: BigNum.from(_shipsSent),
-        ),
-      );
+      final move = moveShipsTo(to);
+      return move == null ? const _Waiting() : _Do(move);
     }
     return const _Waiting();
-  }
-
-  /// Closes a route moving cargo ships once its destination holds
-  /// [_shipsSent] of them.
-  Command? closeShipTransfers() {
-    for (final rt in s.routes) {
-      if (rt.ownerId != factionId || rt.resourceId != r.cargoShipResource) {
-        continue;
-      }
-      if (stock(s.body(rt.toBodyId), r.cargoShipResource) >=
-          BigNum.from(_shipsSent)) {
-        return RemoveRouteCommand(factionId, rt.id);
-      }
-    }
-    return null;
   }
 
   /// One more build slot on full [body]: bought now, saved for, waited for
@@ -1381,13 +1427,7 @@ final class _View {
       return short ? const _Stuck() : _Save(credits);
     }
     return _Do(
-      BuildCommand(
-        factionId,
-        body.id,
-        d.id,
-        depositResourceId: deposit,
-        autoCrew: false,
-      ),
+      BuildCommand(factionId, body.id, d.id, depositResourceId: deposit),
     );
   }
 
@@ -1702,13 +1742,7 @@ final class _View {
             for (final dep in buildDeposits(d, body)) {
               if (_onlyFullMarkets(d, dep)) continue;
               consider(
-                BuildCommand(
-                  factionId,
-                  body.id,
-                  d.id,
-                  depositResourceId: dep,
-                  autoCrew: false,
-                ),
+                BuildCommand(factionId, body.id, d.id, depositResourceId: dep),
                 body,
                 d.buildCost,
                 gain(body, probe(d, body, dep)),
@@ -1723,6 +1757,10 @@ final class _View {
     return best;
   }
 }
+
+/// The credits [owed] holds when they are all it holds, else null.
+BigNum? _onlyCredits(Map<String, BigNum> owed) =>
+    owed.length == 1 ? owed['credits'] : null;
 
 BuildingFlow _scaledFlow(BuildingFlow f, double by) =>
     (inputs: _scaled(f.inputs, by), outputs: _scaled(f.outputs, by));

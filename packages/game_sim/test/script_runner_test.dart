@@ -337,7 +337,7 @@ void main() {
     });
     expect(
       claim['message'],
-      'Started claiming Cinder for 65K credits and 10 Outpost Kit; done in 1h',
+      'Started claiming Cinder for 40K credits and 10 Outpost Kit; done in 1h',
     );
   });
 
@@ -449,9 +449,9 @@ void main() {
     expect(out['ok'], isTrue, reason: '$out');
     expect(
       out['message'],
-      'Started Orbital Station level 1 on Kora for 200K credits and '
-      '4 Station Segment and 2 Survey Drone and 10 Reactor Core and '
-      '60 Hull Plate; done in 2h',
+      'Started Orbital Station level 1 on Kora for 5M credits and '
+      '200 Station Segment and 40 Survey Drone and 30 Reactor Core and '
+      '1.5K Hull Plate; done in 2h',
     );
     final projects = r.handle({'cmd': 'state'})['projects']! as List;
     expect((projects.single as Map)['name'], 'Orbital Station');
@@ -568,14 +568,14 @@ void main() {
             as Map);
     expect(next['nextLevel'], 1);
     expect(next['timeTaken'], '2h');
-    expect(((next['cost']! as Map)['hull_plate']! as Map)['display'], '60');
+    expect(((next['cost']! as Map)['hull_plate']! as Map)['display'], '1.5K');
     r.state.faction('player').megaprojectLevels['orbital_station'] = 1;
     final later =
         ((r.handle({'cmd': 'costs'})['megaprojects']!
                 as Map)['orbital_station']!
             as Map);
     expect(later['nextLevel'], 2);
-    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '180');
+    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '4.5K');
   });
 
   test('away catches up offline and summarizes it', () {

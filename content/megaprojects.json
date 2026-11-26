@@ -3,11 +3,11 @@
     "id": "orbital_station",
     "name": "Orbital Station",
     "baseCost": {
-      "credits": "2e5",
-      "station_segment": "4",
-      "survey_drone": "2",
-      "reactor_core": "10",
-      "hull_plate": "60"
+      "credits": "5e6",
+      "station_segment": "200",
+      "survey_drone": "40",
+      "reactor_core": "30",
+      "hull_plate": "1500"
     },
     "costGrowth": 3,
     "stageSeconds": 7200,

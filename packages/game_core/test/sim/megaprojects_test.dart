@@ -174,7 +174,10 @@ void main() {
       for (final id in station.baseCost.keys) {
         if (id != 'credits') expect(kora.stock[id], const BigNum.zero());
       }
-      expect(s.faction('player').credits, n(1e9 - 2e5));
+      expect(
+        s.faction('player').credits,
+        n(1e9) - megaprojectCost(content, station, 0)['credits']!,
+      );
       final p = e.projectsFor(s, 'player').single;
       expect(p.kind, ProjectKind.megaprojectStage);
       expect(p.targetId, 'orbital_station');
