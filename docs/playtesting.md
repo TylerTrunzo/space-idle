@@ -34,12 +34,17 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 
 | Line | What it does |
 |---|---|
-| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free), the bodies you own and their stock |
+| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
 | `{"cmd":"report"}` | Per-second production, use, net flow and waste per body, credits per second, each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
-| `{"cmd":"costs"}` | Next upgrade cost of every track of every building, and the next claim cost |
+| `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost, and the next extra build slot on each body you own |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
-| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h) and shows the away summary, with credits and stock gained, units wasted, milestones reached and the top bottlenecks |
+| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h) and shows the away summary, with credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
+
+`advance` and `away` step the engine the same way (60 s ticks; every chain on a
+body runs through within a tick and cargo that lands is used in the same tick),
+so a long `advance` earns what many short ones do. `away` only adds the 12 h cap
+and the summary.
 
 A bottleneck in `report` has a `kind`: `input` (a building is short of
 `resourceId`), `noCrew`, `crewShortage` (habitats and base crew support fewer
@@ -64,12 +69,35 @@ counts are plain integers.
 | `{"cmd":"removeRoute","routeId":"r1"}` | Close a route; its ships return to the source |
 | `{"cmd":"claimBody","bodyId":"brine","sourceBodyId":"kora"}` | Claim an unowned body; after the first claim it also takes outpost kits from the source body |
 | `{"cmd":"demolish","buildingId":"b4"}` | Remove a building for half its credit cost back |
+| `{"cmd":"expandSlots","bodyId":"kora"}` | Buy one more build slot on a body you own; each one costs more (see `costs`) |
+
+A successful command reply lists what it `spent` and `gained` (credits, and
+`body/resource` amounts). `claimBody`, `demolish` and `createRoute` also say
+in a `message` what was claimed, refunded or created, with ids. A
+`depositMissing` error lists the deposits the body has.
+
+Things worth knowing:
+
+- Upgrade tracks: `speed` makes more per second (inputs and outputs alike),
+  `efficiency` cuts the inputs per output, `capacity` adds a crew slot and
+  some storage on the body. On a habitat, `capacity` adds a quarter more
+  housing per level instead.
+- Habitats need no crew. They house crew as long as they get food, water and
+  oxygen. Food comes from a hydroponic farm (water and fertilizer, from
+  ammonia) or a protein vat (water and hydrogen, which an electrolyzer also
+  makes).
+- Auto-sell never sells what the buildings on that body need for the next
+  tick, so it is safe on an input with `keepAtLeast` 0.
+- The market pays less as you sell more of one good, but never pays less in
+  total for selling more. Raw goods bottom out very low; refined goods and
+  components hold their price better, so refining and diversifying pays.
 
 Starting position: you own Kora with an iron mine (`b1`), a copper mine (`b2`) and
 a smelter (`b3`), 250 credits and 40 iron ore. Nothing sells until you sell it or
 set auto-sell. The other bodies in the system are Cinder, Hollow Reach, Vastmere and
-Brine (`state` only lists bodies you own; the ids are `cinder`, `hollow_reach`,
-`vastmere`, `brine`). Building types, recipes and prices are in `content/*.json`.
+Brine (ids `cinder`, `hollow_reach`, `vastmere`, `brine`); `state` shows what each
+one has before you claim it. Building types, recipes and prices are in
+`content/*.json`.
 
 ### Playing to a schedule
 
@@ -89,19 +117,25 @@ Bots play the same schedule automatically and print a balance report:
 
 ```
 dart run game_sim:game_sim bot --bot balanced --hours 168 --seed 1 --format md
+dart run game_sim:game_sim bot --bot casual --hours 168 --format md
 dart run game_sim:game_sim bot --bot greedy --hours 24 --format json
 ```
 
-- `greedy` buys the cheapest affordable upgrade or building each decision.
+- `greedy` buys the cheapest affordable upgrade, building, extra slot or claim
+  each decision. It is a floor: it never plans a chain, and shows that "buy the
+  cheapest thing" does not win.
 - `balanced` fixes the worst bottlenecks, claims bodies, auto-sells surplus, works
   toward the next milestone (and housing when crew runs out), and spends the rest on
-  the best return.
+  the best return. It plays like an attentive optimizer.
+- `casual` plays like `balanced` but with at most 15 commands per check-in
+  (auto-sell rules aside): the casual persona's pace.
 
 The report shows when each milestone was first seen (check-in index and hours),
-dead zones (check-ins where the bot found nothing to do), resources never produced
-or never used, the final stock and credits, and the worst bottleneck at each
-check-in. `docs/balance/stage1-baseline.md` is the balanced 168 h baseline; use it to
-compare your experience against the bot's, and rerun it after any content change.
+the market income of each day with each resource's share, dead zones (check-ins
+where the bot found nothing to do), resources never produced or never used, the
+final stock and credits, and the worst bottleneck at each check-in.
+`docs/balance/stage1-baseline.md` holds the 168 h baselines; use them to compare your
+experience against the bots', and rerun them after any content change.
 
 ## Personas
 
