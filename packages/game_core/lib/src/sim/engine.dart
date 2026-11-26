@@ -42,9 +42,11 @@ final class OfflineSummary {
   /// Change in the player's credits; negative if it fell.
   final BigNum creditsGained;
 
-  /// Units lost on the player's bodies while away, every resource summed:
-  /// cut by storage caps, or cargo lost with both its ends. Zero means
-  /// nothing was wasted.
+  /// Units cut by storage caps on the player's bodies while away, every
+  /// resource summed. Zero means nothing was wasted.
+  ///
+  /// Cargo lost because the player no longer owns either end of its route
+  /// is recorded on a body the player does not own, so it is not counted.
   final BigNum totalWasted;
 
   /// Ids of milestones the player reached while away, in content order.
