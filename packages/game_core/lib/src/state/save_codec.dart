@@ -8,6 +8,7 @@ import '../num/change.dart';
 import '../report/flow_report.dart';
 import '../sim/production.dart';
 import '../sim/market.dart';
+import '../sim/megaprojects.dart';
 import 'game_state.dart';
 
 /// Upgrades an older save map by one version.
@@ -207,6 +208,10 @@ final class SaveCodec {
           return 'faction ${f.id}: $id level $level outside '
               '[0, $maxMegaprojectLevel]';
         }
+      }
+      for (final id in f.megaprojectProgress.keys) {
+        final why = _invalidProgress(s, c, f, c.megaprojects[id]!);
+        if (why != null) return 'faction ${f.id}: $id progress $why';
       }
       if (!f.wasteFreeSince.isFinite ||
           f.wasteFreeSince < 0 ||
@@ -423,6 +428,36 @@ final class SaveCodec {
     return null;
   }
 
+  /// What is wrong with what [f] has delivered toward [m]'s next stage, or
+  /// null if nothing is: every amount a key of that stage's cost, at least
+  /// zero and at most the cost, something still owed, no stage under way
+  /// and a level below the highest.
+  static String? _invalidProgress(
+    GameState s,
+    Content c,
+    FactionState f,
+    MegaprojectDef m,
+  ) {
+    final level = f.megaprojectLevels[m.id] ?? 0;
+    if (level >= maxMegaprojectLevel) return 'past level $maxMegaprojectLevel';
+    if (megaprojectStageOf(s, f.id, m.id) != null) {
+      return 'while a stage is under way';
+    }
+    final cost = megaprojectCost(c, m, level);
+    for (final MapEntry(key: id, value: v)
+        in f.megaprojectProgress[m.id]!.entries) {
+      final need = cost[id];
+      if (need == null) return 'in $id, which the stage does not take';
+      if (v < const BigNum.zero() || v > need) {
+        return 'of $id is $v, outside [0, $need]';
+      }
+    }
+    if (megaprojectRemaining(s, c, f.id, m).isEmpty) {
+      return 'complete with no stage started';
+    }
+    return null;
+  }
+
   /// What is wrong with contract [k] in [s], or null if nothing is.
   static String? _invalidContract(GameState s, ContractState k) {
     const zero = BigNum.zero();
@@ -521,6 +556,17 @@ final class SaveCodec {
       for (final id in f.megaprojectLevels.keys) {
         if (!c.megaprojects.containsKey(id)) {
           return 'faction ${f.id}: level of unknown megaproject $id';
+        }
+      }
+      for (final MapEntry(key: id, value: got)
+          in f.megaprojectProgress.entries) {
+        if (!c.megaprojects.containsKey(id)) {
+          return 'faction ${f.id}: progress on unknown megaproject $id';
+        }
+        for (final k in got.keys) {
+          if (k != 'credits' && !resource(k)) {
+            return 'faction ${f.id}: $id progress in unknown resource $k';
+          }
         }
       }
       for (final r in f.autoSell) {

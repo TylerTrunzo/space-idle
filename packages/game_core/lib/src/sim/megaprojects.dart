@@ -123,6 +123,35 @@ Map<String, BigNum> megaprojectCost(Content c, MegaprojectDef m, int level) {
   };
 }
 
+/// What [factionId] still owes toward the next stage of [m]: each entry
+/// of its next level's [megaprojectCost] less what has been delivered
+/// toward it (`FactionState.megaprojectProgress`), in cost order; entries
+/// delivered in full are left out, so it is empty once nothing is owed. A
+/// faction that does not exist owes level 0's full cost.
+Map<String, BigNum> megaprojectRemaining(
+  GameState s,
+  Content c,
+  String factionId,
+  MegaprojectDef m,
+) {
+  FactionState? f;
+  for (final x in s.factions) {
+    if (x.id == factionId) f = x;
+  }
+  final level = f?.megaprojectLevels[m.id] ?? 0;
+  final got = f?.megaprojectProgress[m.id] ?? const <String, BigNum>{};
+  return {
+    for (final MapEntry(key: id, value: need) in megaprojectCost(
+      c,
+      m,
+      level,
+    ).entries)
+      if (need - (got[id] ?? const BigNum.zero()) case final left
+          when left > const BigNum.zero())
+        id: left,
+  };
+}
+
 /// Seconds the stage that takes [m] from [level] to `level + 1` takes:
 /// `stageSeconds × stageSecondsGrowth^level`, clamped to
 /// [[RulesDef.minProjectSeconds], [RulesDef.maxProjectSeconds]].

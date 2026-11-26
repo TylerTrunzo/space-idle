@@ -51,6 +51,7 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
       faction,
       cmd,
     ),
+    DeliverToMegaprojectCommand() => _deliverToMegaproject(s, c, faction, cmd),
     DeliverContractCommand() => _deliverContract(s, c, faction, cmd),
     DiscardContractCommand() => _discardContract(s, c, faction, cmd),
   };
@@ -917,22 +918,119 @@ CommandResult _startMegaprojectStage(
   FactionState f,
   StartMegaprojectStageCommand cmd,
 ) {
-  final def = c.megaprojects[cmd.megaprojectId];
+  final failed = _checkMegaproject(s, c, f, cmd.megaprojectId, cmd.bodyId);
+  if (failed != null) return failed;
+  final def = c.megaprojects[cmd.megaprojectId]!;
+  final body = _findBody(s, f, cmd.bodyId)!;
+  final owed = megaprojectRemaining(s, c, f.id, def);
+  final short = _checkCost(c, f, body, owed);
+  if (short != null) return short;
+
+  _pay(f, body, owed);
+  return CommandOk(createdId: _startStage(s, f, def).id);
+}
+
+CommandResult _deliverToMegaproject(
+  GameState s,
+  Content c,
+  FactionState f,
+  DeliverToMegaprojectCommand cmd,
+) {
+  final failed = _checkMegaproject(s, c, f, cmd.megaprojectId, cmd.bodyId);
+  if (failed != null) return failed;
+  final def = c.megaprojects[cmd.megaprojectId]!;
+  final body = _findBody(s, f, cmd.bodyId)!;
+  if (cmd.amounts.isEmpty) {
+    return _fail(CommandError.invalidAmount, 'Nothing to deliver');
+  }
+  final cost = megaprojectCost(c, def, f.megaprojectLevels[def.id] ?? 0);
+  final owed = megaprojectRemaining(s, c, f.id, def);
+  for (final MapEntry(key: id, value: amount) in cmd.amounts.entries) {
+    if (id != _credits && !c.resources.containsKey(id)) {
+      return _fail(CommandError.unknownDef, 'There is no resource $id');
+    }
+    if (!cost.containsKey(id)) {
+      return _fail(
+        CommandError.invalidAmount,
+        '${def.name} takes no ${_costName(c, id)}',
+      );
+    }
+    if (amount <= const BigNum.zero()) {
+      return _fail(CommandError.invalidAmount, 'Amounts must be above 0');
+    }
+  }
+  final wanted = [
+    for (final id in cmd.amounts.keys)
+      if (owed.containsKey(id)) id,
+  ];
+  if (wanted.isEmpty) {
+    final names = [for (final id in cmd.amounts.keys) _costName(c, id)];
+    return _fail(
+      CommandError.invalidAmount,
+      '${def.name} already has all the ${_and(names)} its next stage needs',
+    );
+  }
+  final take = <String, BigNum>{};
+  for (final id in wanted) {
+    final held = id == _credits
+        ? f.credits
+        : body.stock[id] ?? const BigNum.zero();
+    final n = cmd.amounts[id]!.min(owed[id]!).min(held);
+    if (n > const BigNum.zero()) take[id] = n;
+  }
+  if (take.isEmpty) {
+    final names = [for (final id in wanted) _costName(c, id)];
+    final where = wanted.every((id) => id == _credits)
+        ? ''
+        : ' on ${body.name}';
+    return _fail(
+      CommandError.cannotAfford,
+      'There is no ${_or(names)}$where to deliver',
+    );
+  }
+
+  _pay(f, body, take);
+  final got = f.megaprojectProgress.putIfAbsent(def.id, () => {});
+  for (final MapEntry(key: id, value: n) in take.entries) {
+    final total = (got[id] ?? const BigNum.zero()) + n;
+    // What is owed and what is taken came from the same numbers, so a
+    // full delivery lands on the cost exactly, float residue aside.
+    got[id] = take[id] == owed[id] ? cost[id]! : total.min(cost[id]!);
+  }
+  if (megaprojectRemaining(s, c, f.id, def).isNotEmpty) {
+    return const CommandOk();
+  }
+  return CommandOk(createdId: _startStage(s, f, def).id);
+}
+
+/// Why a stage command on megaproject [megaprojectId] from body [bodyId]
+/// cannot go ahead, or null if it can: an unknown megaproject or body, a
+/// body [f] does not own, a host body type [f] owns none of, a stage under
+/// way or the highest level reached.
+CommandFailed? _checkMegaproject(
+  GameState s,
+  Content c,
+  FactionState f,
+  String megaprojectId,
+  String bodyId,
+) {
+  final def = c.megaprojects[megaprojectId];
   if (def == null) {
     return _fail(
       CommandError.unknownDef,
-      'There is no megaproject ${cmd.megaprojectId}',
+      'There is no megaproject $megaprojectId',
     );
   }
-  final body = _findBody(s, f, cmd.bodyId);
-  if (body == null) return _unknownBody(cmd.bodyId);
+  final body = _findBody(s, f, bodyId);
+  if (body == null) return _unknownBody(bodyId);
   if (body.ownerId != f.id) return _notOwner(body.name);
   final host = def.hostBodyType;
-  if (host != null && body.typeId != host) {
+  if (host != null &&
+      !s.bodies.any((b) => b.ownerId == f.id && b.typeId == host)) {
     return _fail(
       CommandError.wrongBodyType,
-      '${def.name} is built on ${c.bodyTypes[host]!.name} bodies, and '
-      '${body.name} is not one',
+      '${def.name} is built at a ${c.bodyTypes[host]!.name}, and you own '
+      'none',
     );
   }
   final running = megaprojectStageOf(s, f.id, def.id);
@@ -950,20 +1048,30 @@ CommandResult _startMegaprojectStage(
       '${def.name} is at its highest level (${SaveCodec.maxMegaprojectLevel})',
     );
   }
-  final cost = megaprojectCost(c, def, level);
-  final short = _checkCost(c, f, body, cost);
-  if (short != null) return short;
+  return null;
+}
 
-  _pay(f, body, cost);
-  final p = startProject(
+/// Starts the timer of [def]'s next stage for [f], everything for it
+/// delivered, and clears what was delivered toward it.
+ProjectState _startStage(GameState s, FactionState f, MegaprojectDef def) {
+  f.megaprojectProgress.remove(def.id);
+  return startProject(
     s,
     f.id,
     ProjectKind.megaprojectStage,
     def.id,
-    megaprojectStageSeconds(def, level),
+    megaprojectStageSeconds(def, f.megaprojectLevels[def.id] ?? 0),
   );
-  return CommandOk(createdId: p.id);
 }
+
+/// Display name of a cost key: "credits" or the resource's name.
+String _costName(Content c, String id) =>
+    id == _credits ? 'credits' : _resourceName(c, id);
+
+/// [items] as "a, b or c".
+String _or(List<String> items) => items.length < 2
+    ? items.join()
+    : '${items.sublist(0, items.length - 1).join(', ')} or ${items.last}';
 
 /// [f]'s contract [id], or null if its board has none.
 ContractState? _findContract(FactionState f, String id) {

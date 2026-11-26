@@ -39,6 +39,24 @@ BigNum? _optBig(Map<String, Object?> j, String k) {
   return v == null ? null : BigNum.parse(v);
 }
 
+Map<String, BigNum> _bigs(Map<String, Object?> j, String k) {
+  final v = j[k];
+  if (v is! Map) {
+    throw FormatException('command field "$k" must be an object', j);
+  }
+  final out = <String, BigNum>{};
+  for (final MapEntry(key: id, value: n) in v.entries) {
+    if (id is! String || n is! String) {
+      throw FormatException(
+        'command field "$k" must map ids to number strings',
+        j,
+      );
+    }
+    out[id] = BigNum.parse(n);
+  }
+  return out;
+}
+
 UpgradeTrack _track(Map<String, Object?> j, String k) =>
     UpgradeTrack.values.asNameMap()[_str(j, k)] ??
     (throw FormatException('command field "$k" is not an upgrade track', j));
@@ -142,6 +160,12 @@ sealed class Command {
         f,
         _str(j, 'megaprojectId'),
         _str(j, 'bodyId'),
+      ),
+      'deliverToMegaproject' => DeliverToMegaprojectCommand(
+        f,
+        _str(j, 'megaprojectId'),
+        _str(j, 'bodyId'),
+        _bigs(j, 'amounts'),
       ),
       'deliverContract' => DeliverContractCommand(
         f,
@@ -516,9 +540,12 @@ final class ExpandSlotsCommand extends Command {
   Map<String, Object?> get _fields => {'bodyId': bodyId};
 }
 
-/// Starts the next stage of a megaproject on an owned body, paying the
-/// level's cost now (`megaprojectCost`: credits from the faction, goods
-/// from the body's stock); the faction's level rises by one when the stage
+/// Delivers everything the next stage of a megaproject still needs from
+/// one owned body, all or nothing, and so starts the stage: credits from
+/// the faction, goods from the body's stock, as a
+/// [DeliverToMegaprojectCommand] of whatever `megaprojectRemaining` lists.
+/// With nothing delivered yet that is the whole level's cost
+/// (`megaprojectCost`). The faction's level rises by one when the stage
 /// completes, after `megaprojectStageSeconds`.
 final class StartMegaprojectStageCommand extends Command {
   /// Creates a start-megaproject-stage command.
@@ -531,8 +558,7 @@ final class StartMegaprojectStageCommand extends Command {
   /// Megaproject whose next stage to start.
   final String megaprojectId;
 
-  /// Owned body that hosts the stage and supplies its goods; of the
-  /// megaproject's host body type, if it has one.
+  /// Owned body that supplies the goods still owed.
   final String bodyId;
 
   @override
@@ -542,6 +568,47 @@ final class StartMegaprojectStageCommand extends Command {
   Map<String, Object?> get _fields => {
     'megaprojectId': megaprojectId,
     'bodyId': bodyId,
+  };
+}
+
+/// Hands goods and credits toward the next stage of a megaproject; the
+/// deliveries add up in `FactionState.megaprojectProgress`, from any owned
+/// bodies over any time, so a stage may cost more than one body can store.
+///
+/// Each amount is clamped to what the stage still needs of it and to what
+/// is held (the body's stock; the faction's credits for `credits`).
+/// Credits are paid as they are delivered, like goods. The delivery that
+/// completes the last cost entry starts the stage's timer at once, as a
+/// megaproject-stage project, and clears the progress. A megaproject with a
+/// host body type takes deliveries only while the faction owns a body of
+/// that type. While a stage is under way, no deliveries are taken.
+final class DeliverToMegaprojectCommand extends Command {
+  /// Creates a deliver-to-megaproject command.
+  const DeliverToMegaprojectCommand(
+    super.factionId,
+    this.megaprojectId,
+    this.bodyId,
+    this.amounts,
+  );
+
+  /// Megaproject whose next stage to deliver to.
+  final String megaprojectId;
+
+  /// Owned body whose stock supplies the goods.
+  final String bodyId;
+
+  /// Cost key (`credits` or a resource id of the stage's cost) to the
+  /// amount to deliver, each above zero; at least one entry.
+  final Map<String, BigNum> amounts;
+
+  @override
+  String get _cmd => 'deliverToMegaproject';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'megaprojectId': megaprojectId,
+    'bodyId': bodyId,
+    'amounts': {for (final e in amounts.entries) e.key: e.value.toJson()},
   };
 }
 

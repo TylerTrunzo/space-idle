@@ -475,6 +475,57 @@ void main() {
     ]);
   });
 
+  test('deliveries to a megaproject add up and start its stage', () {
+    final r = _runner();
+    final c = r.engine.content;
+    final station = c.megaprojects['orbital_station']!;
+    final cost = megaprojectCost(c, station, 0);
+    final plates = cost['hull_plate']!;
+    r.state.body('kora').stock['hull_plate'] = plates;
+    final part = r.handle({
+      'cmd': 'deliverToMegaproject',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+      'amounts': {'hull_plate': plates.toJson()},
+    });
+    expect(part['ok'], isTrue, reason: '$part');
+    expect(part['createdId'], isNull);
+    expect(
+      part['message'],
+      allOf(
+        startsWith(
+          'Delivered ${formatNumber(plates)} Hull Plate to Orbital Station '
+          'level 1; it still needs ',
+        ),
+        contains('credits'),
+        isNot(contains('Hull Plate and')),
+      ),
+    );
+    final shown =
+        (r.handle({'cmd': 'state'})['megaprojects']! as List).single as Map;
+    expect((shown['delivered'] as Map).keys, ['hull_plate']);
+    expect((shown['stillNeeded'] as Map).keys, [
+      for (final k in cost.keys)
+        if (k != 'hull_plate') k,
+    ]);
+
+    stockStation(r);
+    final rest = r.handle({
+      'cmd': 'deliverToMegaproject',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+      'amounts': {
+        for (final MapEntry(:key, :value) in cost.entries) key: value.toJson(),
+      },
+    });
+    expect(rest['ok'], isTrue, reason: '$rest');
+    expect(rest['createdId'], startsWith('p'));
+    expect(rest['message'], endsWith('; level 1 started, done in 2h'));
+    final after =
+        (r.handle({'cmd': 'state'})['megaprojects']! as List).single as Map;
+    expect(after.containsKey('delivered'), isFalse);
+  });
+
   test('costs mark a track that cannot get better as maxed', () {
     final r = _runner();
     final smelter = r.state

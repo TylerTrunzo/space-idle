@@ -30,6 +30,7 @@ const _gameCommands = {
   'survey',
   'expandSlots',
   'startMegaprojectStage',
+  'deliverToMegaproject',
   'deliverContract',
   'discardContract',
 };
@@ -242,6 +243,8 @@ final class ScriptRunner {
             '${_level(factionId, megaprojectId) + 1} on '
             '${state.body(bodyId).name} for ${list(spent)}; '
             'done in ${done()}',
+      DeliverToMegaprojectCommand(:final factionId, :final megaprojectId) =>
+        _deliveredMessage(factionId, megaprojectId, createdId, list(spent)),
       DemolishCommand() =>
         'Demolished $demolished'
             '${gained.isEmpty ? '' : '; got back ${list(gained)}'}',
@@ -335,6 +338,38 @@ final class ScriptRunner {
       default:
         return null;
     }
+  }
+
+  /// "Delivered 30 Hull Plate to Orbital Station level 2; it still needs
+  /// …", or "…; level 2 started, done in 2h" once [createdId], the stage,
+  /// has started.
+  String _deliveredMessage(
+    String factionId,
+    String megaprojectId,
+    String? createdId,
+    String delivered,
+  ) {
+    final c = engine.content;
+    final m = c.megaprojects[megaprojectId]!;
+    final level = _level(factionId, megaprojectId) + 1;
+    final head = 'Delivered $delivered to ${m.name} level $level';
+    if (createdId != null) {
+      final p = state.projects.firstWhere((p) => p.id == createdId);
+      return '$head; level $level started, done in '
+          '${formatDuration(p.finishAt - state.time)}';
+    }
+    final owed = [
+      for (final MapEntry(key: k, value: v) in megaprojectRemaining(
+        state,
+        c,
+        factionId,
+        m,
+      ).entries)
+        k == 'credits'
+            ? '${formatNumber(v)} credits'
+            : '${formatNumber(v)} ${c.resources[k]!.name}',
+    ];
+    return '$head; it still needs ${owed.join(' and ')}';
   }
 
   /// [factionId]'s level of megaproject [id]; 0 before its first stage.
@@ -468,7 +503,15 @@ final class ScriptRunner {
       ],
       'megaprojects': [
         for (final m in c.megaprojects.values)
-          {'id': m.id, 'name': m.name, 'level': _level(p.id, m.id)},
+          {
+            'id': m.id,
+            'name': m.name,
+            'level': _level(p.id, m.id),
+            if (p.megaprojectProgress[m.id] case final got?) ...{
+              'delivered': _nums(got),
+              'stillNeeded': _nums(megaprojectRemaining(state, c, p.id, m)),
+            },
+          },
       ],
       'contracts': [
         for (final k in p.contracts)

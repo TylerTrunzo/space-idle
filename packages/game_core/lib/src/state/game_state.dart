@@ -204,12 +204,14 @@ final class FactionState {
     Map<String, BigNum>? lifetimeProduced,
     List<SeenBottleneck>? seenBottlenecks,
     Map<String, int>? megaprojectLevels,
+    Map<String, Map<String, BigNum>>? megaprojectProgress,
     List<ContractState>? contracts,
     List<double>? contractRefillAt,
     this.contractsCompleted = 0,
     this.wasteFreeSince = 0,
   }) : autoSell = autoSell ?? [],
        megaprojectLevels = megaprojectLevels ?? {},
+       megaprojectProgress = megaprojectProgress ?? {},
        contracts = contracts ?? [],
        contractRefillAt = contractRefillAt ?? [],
        seenBottlenecks = seenBottlenecks ?? [],
@@ -258,6 +260,13 @@ final class FactionState {
         : {
             for (final e in _asMap(j['megaprojectLevels']).entries)
               e.key: e.value! as int,
+          },
+    // Absent in saves from before deliveries accumulated.
+    megaprojectProgress: j['megaprojectProgress'] == null
+        ? null
+        : {
+            for (final e in _asMap(j['megaprojectProgress']).entries)
+              e.key: _bigMap(e.value),
           },
     // All three absent in saves from before contracts existed.
     contracts: j['contracts'] == null
@@ -321,6 +330,13 @@ final class FactionState {
   /// megaproject's bonuses for good (see `bonusesFor`).
   final Map<String, int> megaprojectLevels;
 
+  /// Megaproject id to what has been delivered toward its next stage, in
+  /// first-delivered order: each cost key (`credits` or a resource id) to
+  /// the amount handed over, at most the stage's cost. The stage starts,
+  /// and its entry goes, once every key is delivered in full; absent means
+  /// nothing delivered yet. See `DeliverToMegaprojectCommand`.
+  final Map<String, Map<String, BigNum>> megaprojectProgress;
+
   /// Its contracts board, in the order they were posted; at most
   /// [RulesDef.contractSlots]. Only the player has a board in stage 1.5.
   final List<ContractState> contracts;
@@ -359,6 +375,10 @@ final class FactionState {
     },
     'seenBottlenecks': [for (final b in seenBottlenecks) b.toJson()],
     'megaprojectLevels': Map.of(megaprojectLevels),
+    'megaprojectProgress': {
+      for (final MapEntry(key: id, value: got) in megaprojectProgress.entries)
+        id: {for (final e in got.entries) e.key: e.value.toJson()},
+    },
     'contracts': [for (final k in contracts) k.toJson()],
     'contractRefillAt': List.of(contractRefillAt),
     'contractsCompleted': contractsCompleted,
@@ -380,6 +400,10 @@ final class FactionState {
     // Records are immutable, so a new list is a deep copy.
     seenBottlenecks: List.of(seenBottlenecks),
     megaprojectLevels: Map.of(megaprojectLevels),
+    megaprojectProgress: {
+      for (final MapEntry(key: id, value: got) in megaprojectProgress.entries)
+        id: Map.of(got),
+    },
     contracts: [for (final k in contracts) k.copy()],
     contractRefillAt: List.of(contractRefillAt),
     contractsCompleted: contractsCompleted,

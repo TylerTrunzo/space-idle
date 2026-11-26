@@ -12,11 +12,12 @@ dart run game_sim:game_sim bot --bot balanced|casual|greedy --hours 168 --seed 1
 Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`,
 `upgrade`, `createRoute`, `updateRoute`, `moveShips`, `removeRoute`, `sell`,
 `setAutoSell`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`,
-`deliverContract`, `discardContract`);
+`deliverToMegaproject`, `deliverContract`, `discardContract`);
 `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts that
 changed), `createdId` for a new building, route, ship move or project, and for
-`build`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`, `demolish`,
+`build`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`,
+`deliverToMegaproject`, `demolish`,
 `createRoute`, `updateRoute`, `moveShips`, `deliverContract` and
 `discardContract` a `message` such as
 `"Started claiming Brine for 5K credits (no kits needed); done in 30m"` (only
@@ -24,10 +25,19 @@ the first claim needs no outpost kits). Claims, extra build
 slots and megaproject stages are projects: they are paid for at once and take
 effect when their timer runs out (a claim of a body, a second slot on one, or
 a second stage of a megaproject, already under way fails with
-`projectInProgress`). `{"cmd":"startMegaprojectStage","megaprojectId":
-"orbital_station","bodyId":"kora"}` pays the next level's cost from the body's
-stock and credits; each completed stage raises the megaproject's level, a
-permanent bonus.
+`projectInProgress`). A megaproject stage is paid for in deliveries that add
+up: `{"cmd":"deliverToMegaproject","megaprojectId":"orbital_station",
+"bodyId":"kora","amounts":{"hull_plate":"120","credits":"5e5"}}` hands over up
+to those amounts from the body's stock (credits from the faction), each clamped
+to what the next level still needs and to what is held, from any owned body at
+any time, so a level may cost more than one body can store. The delivery that
+completes the last entry starts the stage's timer (the reply has its
+`createdId` and says "level 2 started, done in 2h"; otherwise it says what is
+still needed). `state.megaprojects` shows `delivered` and `stillNeeded` while
+a level is part-paid. `{"cmd":"startMegaprojectStage","megaprojectId":
+"orbital_station","bodyId":"kora"}` delivers everything still needed from one
+body at once, or fails with `cannotAfford`. Each completed stage raises the
+megaproject's level, a permanent bonus.
 
 A new building takes free crew up to its base crew slots (fewer if fewer are
 free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew"`);
