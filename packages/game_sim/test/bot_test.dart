@@ -247,4 +247,84 @@ void main() {
     final r = runBotSession(_engine(), _BrokenBot(), seed: 1, hours: 12);
     expect(r.rejectedCommands, 2 * 18);
   });
+
+  group('contracts', () {
+    /// A new game with one contract for [quantity] of [resourceId] on the
+    /// player's board, and [stock] of it on Kora.
+    (GameState, ContractState) withContract(
+      GameEngine e,
+      String resourceId,
+      num quantity, {
+      num stock = 0,
+    }) {
+      final s = e.newGame(1);
+      final f = s.faction('player')..contractRefillAt.clear();
+      final k = ContractState(
+        id: s.newId('c'),
+        templateId: e.content.contractTemplates.keys.first,
+        resourceId: resourceId,
+        quantity: BigNum.from(quantity),
+        rewardCredits: BigNum.from(1000),
+        postedAt: 0,
+      );
+      f.contracts.add(k);
+      s.body('kora').stock[resourceId] = BigNum.from(stock);
+      return (s, k);
+    }
+
+    for (final bot in [BalancedBot(), CasualBot(), GreedyBot()]) {
+      test('the ${bot.name} bot delivers spare stock and completes it', () {
+        final e = _engine();
+        final (s, k) = withContract(e, 'steel', 100, stock: 600);
+        final cmds = bot.decide(e, s, 'player');
+        expect(
+          cmds.whereType<DeliverContractCommand>().single.toJson(),
+          DeliverContractCommand(
+            'player',
+            k.id,
+            'kora',
+            BigNum.from(100),
+          ).toJson(),
+        );
+        for (final cmd in cmds) {
+          expect(e.apply(s, cmd), isA<CommandOk>());
+        }
+        expect(s.faction('player').contractsCompleted, 1);
+      });
+
+      test('the ${bot.name} bot discards a contract nothing makes', () {
+        final e = _engine();
+        final (s, k) = withContract(e, 'reactor_core', 10);
+        final cmds = bot.decide(e, s, 'player');
+        expect(
+          cmds.whereType<DiscardContractCommand>().single.toJson(),
+          DiscardContractCommand('player', k.id).toJson(),
+        );
+        for (final cmd in cmds) {
+          expect(e.apply(s, cmd), isA<CommandOk>());
+        }
+      });
+    }
+
+    test('a contract it can work toward is kept, its goods held back', () {
+      final e = _engine();
+      // Kora makes steel; none spare yet.
+      final (s, k) = withContract(e, 'steel', 300);
+      final plain = withContract(e, 'iron_ore', 100).$1
+        ..faction('player').contracts.clear();
+      SetAutoSellCommand? steelRule(GameState g) => GreedyBot()
+          .decide(e, g, 'player')
+          .whereType<SetAutoSellCommand>()
+          .where((c) => c.bodyId == 'kora' && c.resourceId == 'steel')
+          .firstOrNull;
+      s.body('kora').stock['steel'] = BigNum.from(1);
+      plain.body('kora').stock['steel'] = BigNum.from(1);
+      final cmds = GreedyBot().decide(e, s, 'player');
+      expect(cmds.whereType<DiscardContractCommand>(), isEmpty);
+      expect(cmds.whereType<DeliverContractCommand>(), isEmpty);
+      expect(s.faction('player').contracts, [k]);
+      final base = steelRule(plain)?.keepAtLeast ?? const BigNum.zero();
+      expect(steelRule(s)!.keepAtLeast, base + BigNum.from(300));
+    });
+  });
 }

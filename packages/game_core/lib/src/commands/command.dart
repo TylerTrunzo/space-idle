@@ -105,6 +105,13 @@ sealed class Command {
         _str(j, 'megaprojectId'),
         _str(j, 'bodyId'),
       ),
+      'deliverContract' => DeliverContractCommand(
+        f,
+        _str(j, 'contractId'),
+        _str(j, 'bodyId'),
+        _big(j, 'amount'),
+      ),
+      'discardContract' => DiscardContractCommand(f, _str(j, 'contractId')),
       final other => throw FormatException('unknown command "$other"', j),
     };
   }
@@ -376,6 +383,56 @@ final class StartMegaprojectStageCommand extends Command {
   };
 }
 
+/// Delivers up to [amount] of a contract's resource from an owned body's
+/// stock to the faction's contract; partial deliveries add up, and the
+/// reward is paid when the last unit is delivered (see `stepContracts`).
+final class DeliverContractCommand extends Command {
+  /// Creates a deliver-contract command.
+  const DeliverContractCommand(
+    super.factionId,
+    this.contractId,
+    this.bodyId,
+    this.amount,
+  );
+
+  /// Contract on the faction's board to deliver to.
+  final String contractId;
+
+  /// Owned body whose stock supplies the goods.
+  final String bodyId;
+
+  /// Units to deliver; above zero, clamped to what the contract still
+  /// wants and to the stock held, which must not be empty.
+  final BigNum amount;
+
+  @override
+  String get _cmd => 'deliverContract';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'contractId': contractId,
+    'bodyId': bodyId,
+    'amount': amount.toJson(),
+  };
+}
+
+/// Takes a contract off the faction's board with no penalty; goods already
+/// delivered to it are not returned. Its slot refills after
+/// `contractRefillSeconds`, banked after any refills already waiting.
+final class DiscardContractCommand extends Command {
+  /// Creates a discard-contract command.
+  const DiscardContractCommand(super.factionId, this.contractId);
+
+  /// Contract on the faction's board to discard.
+  final String contractId;
+
+  @override
+  String get _cmd => 'discardContract';
+
+  @override
+  Map<String, Object?> get _fields => {'contractId': contractId};
+}
+
 /// Why a command was rejected.
 enum CommandError {
   /// The acting faction does not exist.
@@ -424,6 +481,9 @@ enum CommandError {
 
   /// The body is not of the type the megaproject must be built on.
   wrongBodyType,
+
+  /// The faction's contracts board has no contract with that id.
+  unknownContract,
 }
 
 /// Outcome of applying a command.

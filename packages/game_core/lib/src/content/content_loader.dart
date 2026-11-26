@@ -19,6 +19,7 @@ const _sections = {
   'galaxy',
   'milestones',
   'megaprojects',
+  'contracts',
 };
 
 const _credits = 'credits';
@@ -42,6 +43,7 @@ final class _Loader {
   final _factionIds = <String>{};
   final _milestoneIds = <String>{};
   final _megaprojectIds = <String>{};
+  final _contractTemplateIds = <String>{};
 
   void err(String path, String message) => _errors.add('$path: $message');
 
@@ -112,6 +114,24 @@ final class _Loader {
             _megaproject,
           )
         : <String, MegaprojectDef>{};
+    // Optional: content without the file posts no contracts.
+    final contractTemplates = bundle.containsKey('contracts')
+        ? _entries(
+            'contracts',
+            _listAt('contracts', bundle['contracts']),
+            _contractTemplateIds,
+            const {
+              'id',
+              'issuer',
+              'minTier',
+              'maxTier',
+              'quantitySeconds',
+              'rewardMultiplier',
+              'minQuantity',
+            },
+            _contractTemplate,
+          )
+        : <String, ContractTemplateDef>{};
 
     if (rules != null) _checkRules(rules);
     _checkBuildings(buildings);
@@ -133,6 +153,7 @@ final class _Loader {
         galaxy: galaxy!,
         milestones: milestones.values.toList(),
         megaprojects: megaprojects,
+        contractTemplates: contractTemplates,
       ),
     );
   }
@@ -260,6 +281,7 @@ final class _Loader {
       'claimSecondsBase',
       'claimSecondsPerOwned',
       'expandSlotsSeconds',
+      'contractRefillSeconds',
     });
     if (f == null) return null;
     final before = _errors.length;
@@ -307,6 +329,11 @@ final class _Loader {
       ge: RulesDef.minProjectSeconds,
       le: RulesDef.maxProjectSeconds,
     );
+    final contractRefillSeconds = f.number(
+      'contractRefillSeconds',
+      fallback: RulesDef.defaultContractRefillSeconds,
+      gt: 0,
+    );
     if (_errors.length > before) return null;
     return RulesDef(
       speedPerLevel: speedPerLevel!,
@@ -332,6 +359,7 @@ final class _Loader {
       claimSecondsBase: claimSecondsBase!,
       claimSecondsPerOwned: claimSecondsPerOwned!,
       expandSlotsSeconds: expandSlotsSeconds!,
+      contractRefillSeconds: contractRefillSeconds!,
     );
   }
 
@@ -653,6 +681,12 @@ final class _Loader {
           if (defId != null && count != null) {
             condition = BuildingCountCondition(defId: defId, count: count);
           }
+        case 'contractsCompleted':
+          final c = _Fields(this, path, raw, const {'type', 'count'});
+          final count = c.integer('count', min: 1);
+          if (count != null) {
+            condition = ContractsCompletedCondition(count: count);
+          }
         case null:
           err('$path.type', 'missing');
         default:
@@ -706,6 +740,40 @@ final class _Loader {
       stageSeconds: stageSeconds!,
       stageSecondsGrowth: stageSecondsGrowth!,
       bonusesPerLevel: bonuses,
+    );
+  }
+
+  ContractTemplateDef? _contractTemplate(_Fields f, String id) {
+    final before = _errors.length;
+    final issuer = f.string('issuer');
+    const top = ResourceDef.megaprojectTier;
+    final minTier = f.integer('minTier', min: 0, max: top);
+    final maxTier = f.integer('maxTier', min: 0, max: top);
+    if (minTier != null && maxTier != null && maxTier < minTier) {
+      f.err('maxTier', 'must be >= minTier ($minTier)');
+    }
+    final quantitySeconds = f.number(
+      'quantitySeconds',
+      fallback: ContractTemplateDef.defaultQuantitySeconds,
+      gt: 0,
+    );
+    final rewardMultiplier = f.number(
+      'rewardMultiplier',
+      fallback: ContractTemplateDef.defaultRewardMultiplier,
+      gt: 0,
+    );
+    final minQuantity = f.map.containsKey('minQuantity')
+        ? f.bigNum('minQuantity', positive: true)
+        : null;
+    if (_errors.length > before) return null;
+    return ContractTemplateDef(
+      id: id,
+      issuer: issuer!,
+      minTier: minTier!,
+      maxTier: maxTier!,
+      quantitySeconds: quantitySeconds!,
+      rewardMultiplier: rewardMultiplier!,
+      minQuantity: minQuantity,
     );
   }
 
@@ -853,7 +921,8 @@ final class _Loader {
           }
         case CreditsCondition() ||
             CreditsEarnedCondition() ||
-            BodiesOwnedCondition():
+            BodiesOwnedCondition() ||
+            ContractsCompletedCondition():
           break;
       }
     }

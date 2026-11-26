@@ -27,6 +27,8 @@ const _gameCommands = {
   'claimBody',
   'expandSlots',
   'startMegaprojectStage',
+  'deliverContract',
+  'discardContract',
 };
 
 /// Lowest resource tier whose stock `state` shows in whole units.
@@ -128,6 +130,15 @@ final class ScriptRunner {
     final demolished = cmd is DemolishCommand
         ? _describe(cmd.buildingId)
         : null;
+    // Copied before the command changes it or takes it off the board.
+    final contract = switch (cmd) {
+      DeliverContractCommand(:final factionId, :final contractId) ||
+      DiscardContractCommand(
+        :final factionId,
+        :final contractId,
+      ) => _contract(factionId, contractId)?.copy(),
+      _ => null,
+    };
     final result = engine.apply(state, cmd);
     switch (result) {
       case CommandFailed(:final error, :final message):
@@ -144,7 +155,9 @@ final class ScriptRunner {
           if (d.isNegative) spent[k] = -d;
           if (d > const BigNum.zero()) gained[k] = d;
         }
-        final message = _message(cmd, createdId, spent, gained, demolished);
+        final message =
+            _contractMessage(cmd, contract, spent) ??
+            _message(cmd, createdId, spent, gained, demolished);
         return {
           'ok': true,
           'createdId': ?createdId,
@@ -233,6 +246,51 @@ final class ScriptRunner {
             '${cargoShips == 1 ? '' : 's'}',
       _ => null,
     };
+  }
+
+  /// [factionId]'s contract [id], or null if there is no such faction or
+  /// contract.
+  ContractState? _contract(String factionId, String id) => state.factions
+      .where((f) => f.id == factionId)
+      .expand((f) => f.contracts)
+      .where((k) => k.id == id)
+      .firstOrNull;
+
+  /// A sentence on what a delivery or discard did to [before], the
+  /// contract as it was; null for other commands.
+  String? _contractMessage(
+    Command cmd,
+    ContractState? before,
+    Map<String, BigNum> spent,
+  ) {
+    if (before == null) return null;
+    final c = engine.content;
+    final what = c.resources[before.resourceId]!.name;
+    final f = state.faction(cmd.factionId);
+    // The freed slot's refill is the one banked last.
+    String wait() => formatDuration(f.contractRefillAt.last - state.time);
+    switch (cmd) {
+      case DeliverContractCommand(:final bodyId):
+        final sent =
+            spent['$bodyId/${before.resourceId}'] ?? const BigNum.zero();
+        final from = state.body(bodyId).name;
+        final now = _contract(cmd.factionId, before.id);
+        if (now != null) {
+          return 'Delivered ${formatNumber(sent)} $what from $from to '
+              'contract ${before.id} (${formatNumber(now.delivered)} of '
+              '${formatNumber(now.quantity)})';
+        }
+        return 'Delivered ${formatNumber(sent)} $what from $from and '
+            'completed contract ${before.id}; paid '
+            '${formatNumber(before.rewardCredits)} credits. '
+            'A new contract arrives in ${wait()}';
+      case DiscardContractCommand():
+        return 'Discarded contract ${before.id} for '
+            '${formatNumber(before.quantity)} $what; '
+            'a new contract arrives in ${wait()}';
+      default:
+        return null;
+    }
   }
 
   /// [factionId]'s level of megaproject [id]; 0 before its first stage.
@@ -364,6 +422,22 @@ final class ScriptRunner {
       'megaprojects': [
         for (final m in c.megaprojects.values)
           {'id': m.id, 'name': m.name, 'level': _level(p.id, m.id)},
+      ],
+      'contracts': [
+        for (final k in p.contracts)
+          {
+            'id': k.id,
+            'issuer': c.contractTemplates[k.templateId]!.issuer,
+            'resourceId': k.resourceId,
+            'resource': c.resources[k.resourceId]!.name,
+            'quantity': _num(k.quantity),
+            'delivered': _num(k.delivered),
+            'reward': _num(k.rewardCredits),
+          },
+      ],
+      'contractRefills': [
+        for (final t in p.contractRefillAt)
+          {'at': t, 'timeLeft': formatDuration(t - state.time)},
       ],
       'bodies': [
         for (final b in state.bodies)

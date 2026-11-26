@@ -114,6 +114,80 @@ String bottleneckKey(
   String? resourceId,
 ) => '$kind/${bodyId ?? ''}/${buildingId ?? ''}/${resourceId ?? ''}';
 
+/// An order on a faction's contracts board: deliver [quantity] of
+/// [resourceId] for [rewardCredits], paid once all of it has been
+/// delivered. It never expires (see `stepContracts`).
+final class ContractState {
+  /// Creates a contract; [delivered] defaults to none.
+  ContractState({
+    required this.id,
+    required this.templateId,
+    required this.resourceId,
+    required this.quantity,
+    this.delivered = const BigNum.zero(),
+    required this.rewardCredits,
+    required this.postedAt,
+  });
+
+  /// Restores a contract written by [toJson].
+  factory ContractState.fromJson(Map<String, Object?> j) => ContractState(
+    id: j['id']! as String,
+    templateId: j['templateId']! as String,
+    resourceId: j['resourceId']! as String,
+    quantity: BigNum.fromJson(j['quantity']! as String),
+    delivered: BigNum.fromJson(j['delivered']! as String),
+    rewardCredits: BigNum.fromJson(j['rewardCredits']! as String),
+    postedAt: (j['postedAt']! as num).toDouble(),
+  );
+
+  /// Unique id, such as `c12`.
+  final String id;
+
+  /// Id of the [ContractTemplateDef] it was posted from.
+  final String templateId;
+
+  /// Resource asked for.
+  final String resourceId;
+
+  /// Units asked for in all.
+  final BigNum quantity;
+
+  /// Units delivered so far, at most [quantity].
+  BigNum delivered;
+
+  /// Credits paid when the last unit is delivered.
+  final BigNum rewardCredits;
+
+  /// Game time in seconds at which it was posted.
+  final double postedAt;
+
+  /// Units still to deliver: [quantity] less [delivered], never below zero.
+  BigNum get remaining =>
+      takeFrom(quantity, delivered).max(const BigNum.zero());
+
+  /// Serializes this contract.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'templateId': templateId,
+    'resourceId': resourceId,
+    'quantity': quantity.toJson(),
+    'delivered': delivered.toJson(),
+    'rewardCredits': rewardCredits.toJson(),
+    'postedAt': postedAt,
+  };
+
+  /// An independent copy of this contract.
+  ContractState copy() => ContractState(
+    id: id,
+    templateId: templateId,
+    resourceId: resourceId,
+    quantity: quantity,
+    delivered: delivered,
+    rewardCredits: rewardCredits,
+    postedAt: postedAt,
+  );
+}
+
 /// A faction's mutable state: the player or an AI rival.
 final class FactionState {
   /// Creates a faction.
@@ -130,8 +204,13 @@ final class FactionState {
     Map<String, BigNum>? lifetimeProduced,
     List<SeenBottleneck>? seenBottlenecks,
     Map<String, int>? megaprojectLevels,
+    List<ContractState>? contracts,
+    List<double>? contractRefillAt,
+    this.contractsCompleted = 0,
   }) : autoSell = autoSell ?? [],
        megaprojectLevels = megaprojectLevels ?? {},
+       contracts = contracts ?? [],
+       contractRefillAt = contractRefillAt ?? [],
        seenBottlenecks = seenBottlenecks ?? [],
        reachedMilestones = reachedMilestones ?? {},
        salesRevenue = salesRevenue ?? {},
@@ -144,6 +223,10 @@ final class FactionState {
        lifetimeProduced = lifetimeProduced ?? {};
 
   /// Restores a faction written by [toJson].
+  ///
+  /// A save from before contracts existed has none; a player's board then
+  /// has every slot due to refill at once, so contracts appear as soon as
+  /// it produces something.
   factory FactionState.fromJson(Map<String, Object?> j) => FactionState(
     id: j['id']! as String,
     name: j['name']! as String,
@@ -175,6 +258,20 @@ final class FactionState {
             for (final e in _asMap(j['megaprojectLevels']).entries)
               e.key: e.value! as int,
           },
+    // All three absent in saves from before contracts existed.
+    contracts: j['contracts'] == null
+        ? null
+        : _list(j['contracts'], ContractState.fromJson),
+    contractRefillAt: switch (j['contractRefillAt']) {
+      null when j['isPlayer'] == true => List.filled(
+        RulesDef.contractSlots,
+        0,
+        growable: true,
+      ),
+      null => null,
+      final v => [for (final t in v as List) (t! as num).toDouble()],
+    },
+    contractsCompleted: (j['contractsCompleted'] as int?) ?? 0,
   );
 
   /// Unique id.
@@ -221,6 +318,20 @@ final class FactionState {
   /// megaproject's bonuses for good (see `bonusesFor`).
   final Map<String, int> megaprojectLevels;
 
+  /// Its contracts board, in the order they were posted; at most
+  /// [RulesDef.contractSlots]. Only the player has a board in stage 1.5.
+  final List<ContractState> contracts;
+
+  /// Game times in seconds at which its empty contract slots refill,
+  /// earliest first; banked one after another (see `freeContractSlot`), at
+  /// most [RulesDef.contractSlots]. A faction with no contracts and no
+  /// refills banked has no board.
+  final List<double> contractRefillAt;
+
+  /// Contracts it has completed since the game began; contracts-completed
+  /// milestones count it.
+  int contractsCompleted;
+
   /// Serializes this faction; milestones are written sorted.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -239,6 +350,9 @@ final class FactionState {
     },
     'seenBottlenecks': [for (final b in seenBottlenecks) b.toJson()],
     'megaprojectLevels': Map.of(megaprojectLevels),
+    'contracts': [for (final k in contracts) k.toJson()],
+    'contractRefillAt': List.of(contractRefillAt),
+    'contractsCompleted': contractsCompleted,
   };
 
   /// An independent deep copy of this faction.
@@ -256,6 +370,9 @@ final class FactionState {
     // Records are immutable, so a new list is a deep copy.
     seenBottlenecks: List.of(seenBottlenecks),
     megaprojectLevels: Map.of(megaprojectLevels),
+    contracts: [for (final k in contracts) k.copy()],
+    contractRefillAt: List.of(contractRefillAt),
+    contractsCompleted: contractsCompleted,
   );
 }
 
@@ -839,6 +956,7 @@ GameState newGameState(Content content, int seed) {
           ),
     ],
   );
+  final refill = content.rules.contractRefillSeconds;
   for (final f in content.galaxy.factions) {
     state.factions.add(
       FactionState(
@@ -847,6 +965,12 @@ GameState newGameState(Content content, int seed) {
         isPlayer: f.isPlayer,
         credits: f.credits,
         baseCrew: f.baseCrew,
+        // The player's board starts empty: its first slot fills as soon as
+        // something is made, the others one refill apart. Only the player
+        // trades with the exchange in stage 1.5.
+        contractRefillAt: f.isPlayer
+            ? [for (var i = 0; i < RulesDef.contractSlots; i++) refill * i]
+            : null,
       ),
     );
     final home = state.body(f.homeBodyId)..ownerId = f.id;

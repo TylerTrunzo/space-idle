@@ -4,6 +4,7 @@ import '../content/content.dart';
 import '../num/big_num.dart';
 import '../num/change.dart';
 import '../num/format.dart';
+import '../sim/contracts.dart';
 import '../sim/crew.dart';
 import '../sim/market.dart';
 import '../sim/megaprojects.dart';
@@ -44,6 +45,8 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
       faction,
       cmd,
     ),
+    DeliverContractCommand() => _deliverContract(s, c, faction, cmd),
+    DiscardContractCommand() => _discardContract(s, c, faction, cmd),
   };
 }
 
@@ -613,6 +616,66 @@ CommandResult _startMegaprojectStage(
     megaprojectStageSeconds(def, level),
   );
   return CommandOk(createdId: p.id);
+}
+
+/// [f]'s contract [id], or null if its board has none.
+ContractState? _findContract(FactionState f, String id) {
+  for (final k in f.contracts) {
+    if (k.id == id) return k;
+  }
+  return null;
+}
+
+CommandFailed _unknownContract(String id) =>
+    _fail(CommandError.unknownContract, 'You have no contract $id');
+
+CommandResult _deliverContract(
+  GameState s,
+  Content c,
+  FactionState f,
+  DeliverContractCommand cmd,
+) {
+  final k = _findContract(f, cmd.contractId);
+  if (k == null) return _unknownContract(cmd.contractId);
+  final body = _findBody(s, cmd.bodyId);
+  if (body == null) return _unknownBody(cmd.bodyId);
+  if (body.ownerId != f.id) return _notOwner(body.name);
+  if (cmd.amount <= const BigNum.zero()) {
+    return _fail(CommandError.invalidAmount, 'Amount must be above 0');
+  }
+  final held = body.stock[k.resourceId] ?? const BigNum.zero();
+  if (held <= const BigNum.zero()) {
+    return _fail(
+      CommandError.invalidAmount,
+      '${body.name} has no ${_resourceName(c, k.resourceId)} to deliver',
+    );
+  }
+
+  final amount = cmd.amount.min(held).min(k.remaining);
+  body.take(k.resourceId, amount);
+  k.delivered = k.delivered + amount;
+  if (k.delivered >= k.quantity) {
+    k.delivered = k.quantity;
+    f.credits = f.credits + k.rewardCredits;
+    f.contractsCompleted++;
+    f.contracts.remove(k);
+    freeContractSlot(f, c, s.time);
+  }
+  return const CommandOk();
+}
+
+CommandResult _discardContract(
+  GameState s,
+  Content c,
+  FactionState f,
+  DiscardContractCommand cmd,
+) {
+  final k = _findContract(f, cmd.contractId);
+  if (k == null) return _unknownContract(cmd.contractId);
+
+  f.contracts.remove(k);
+  freeContractSlot(f, c, s.time);
+  return const CommandOk();
 }
 
 /// Time left on project [p], such as `25m`.

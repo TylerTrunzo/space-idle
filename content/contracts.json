@@ -1,0 +1,5 @@
+[
+  {"id": "veyra_bulk", "issuer": "Veyra Exchange", "minTier": 0, "maxTier": 1, "quantitySeconds": 14400, "rewardMultiplier": 2.5, "minQuantity": "100"},
+  {"id": "veyra_parts", "issuer": "Veyra Exchange", "minTier": 2, "maxTier": 2, "quantitySeconds": 14400, "rewardMultiplier": 2.5, "minQuantity": "10"},
+  {"id": "veyra_advanced", "issuer": "Veyra Exchange", "minTier": 3, "maxTier": 3, "quantitySeconds": 14400, "rewardMultiplier": 2.5, "minQuantity": "2"}
+]

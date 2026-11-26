@@ -198,6 +198,7 @@ final class RulesDef {
     this.claimSecondsBase = defaultClaimSecondsBase,
     this.claimSecondsPerOwned = defaultClaimSecondsPerOwned,
     this.expandSlotsSeconds = defaultExpandSlotsSeconds,
+    this.contractRefillSeconds = defaultContractRefillSeconds,
   });
 
   /// Speed multiplier per speed level.
@@ -301,6 +302,17 @@ final class RulesDef {
   /// Seconds an extra build slot takes, in
   /// [[minProjectSeconds], [maxProjectSeconds]].
   final double expandSlotsSeconds;
+
+  /// Contracts a faction's board holds at most.
+  static const int contractSlots = 3;
+
+  /// [contractRefillSeconds] when the rules do not set it: 4 hours.
+  static const double defaultContractRefillSeconds = 14400;
+
+  /// Seconds after which an emptied contract slot is filled again; above
+  /// zero. Refills bank one after another (see `freeContractSlot`), so a
+  /// board emptied while the player is away is full again when they return.
+  final double contractRefillSeconds;
 }
 
 /// A deposit of one raw resource on a body.
@@ -507,6 +519,16 @@ final class BuildingCountCondition extends MilestoneCondition {
   final int count;
 }
 
+/// Has completed at least [count] contracts since the game began (see
+/// `FactionState.contractsCompleted`).
+final class ContractsCompletedCondition extends MilestoneCondition {
+  /// Creates a contracts-completed condition.
+  const ContractsCompletedCondition({required this.count});
+
+  /// Contracts needed.
+  final int count;
+}
+
 /// A named progress marker shown in reports.
 final class MilestoneDef {
   /// Creates a milestone.
@@ -605,6 +627,56 @@ final class MegaprojectDef {
   final List<BonusDef> bonusesPerLevel;
 }
 
+/// A kind of order a neutral exchange posts on a faction's contracts board:
+/// deliver a quantity of one resource for a reward in credits (see
+/// `stepContracts`).
+final class ContractTemplateDef {
+  /// Creates a contract template; [minQuantity] defaults to
+  /// [defaultMinQuantity].
+  ContractTemplateDef({
+    required this.id,
+    required this.issuer,
+    required this.minTier,
+    required this.maxTier,
+    this.quantitySeconds = defaultQuantitySeconds,
+    this.rewardMultiplier = defaultRewardMultiplier,
+    BigNum? minQuantity,
+  }) : minQuantity = minQuantity ?? BigNum.from(defaultMinQuantity);
+
+  /// [quantitySeconds] when a template does not set it: 4 hours.
+  static const double defaultQuantitySeconds = 14400;
+
+  /// [rewardMultiplier] when a template does not set it.
+  static const double defaultRewardMultiplier = 2.5;
+
+  /// [minQuantity] when a template does not set it.
+  static const double defaultMinQuantity = 10;
+
+  /// Unique id.
+  final String id;
+
+  /// Display name of who posts it, such as "Veyra Exchange".
+  final String issuer;
+
+  /// Lowest resource tier it asks for.
+  final int minTier;
+
+  /// Highest resource tier it asks for; at least [minTier].
+  final int maxTier;
+
+  /// Seconds of the faction's current net production of the resource that
+  /// a contract asks for; above zero.
+  final double quantitySeconds;
+
+  /// Reward per unit as a multiple of the resource's base price: a contract
+  /// pays `quantity × basePrice × rewardMultiplier` credits; above zero.
+  final double rewardMultiplier;
+
+  /// Fewest units a contract asks for, above zero: what a resource made
+  /// slowly, or not yet at all, is asked for.
+  final BigNum minQuantity;
+}
+
 /// All game content, validated.
 final class Content {
   /// Creates content without validation; prefer [fromBundle].
@@ -618,11 +690,13 @@ final class Content {
     required this.galaxy,
     required List<MilestoneDef> milestones,
     Map<String, MegaprojectDef> megaprojects = const {},
+    Map<String, ContractTemplateDef> contractTemplates = const {},
   }) : resources = Map.unmodifiable(resources),
        buildings = Map.unmodifiable(buildings),
        bodyTypes = Map.unmodifiable(bodyTypes),
        milestones = List.unmodifiable(milestones),
-       megaprojects = Map.unmodifiable(megaprojects);
+       megaprojects = Map.unmodifiable(megaprojects),
+       contractTemplates = Map.unmodifiable(contractTemplates);
 
   /// Global tuning numbers.
   final RulesDef rules;
@@ -645,11 +719,16 @@ final class Content {
   /// Megaprojects by id, in content order.
   final Map<String, MegaprojectDef> megaprojects;
 
+  /// Contract templates by id, in content order; none means no contracts
+  /// are posted.
+  final Map<String, ContractTemplateDef> contractTemplates;
+
   /// Parses and validates decoded content JSON without throwing.
   ///
   /// [bundle] maps each content file stem (`rules`, `resources`,
   /// `buildings`, `body_types`, `galaxy`, `milestones`, and the optional
-  /// `megaprojects`, absent meaning none) to its decoded JSON.
+  /// `megaprojects` and `contracts`, absent meaning none) to its decoded
+  /// JSON.
   static ContentResult fromBundle(Map<String, Object?> bundle) =>
       loadContentBundle(bundle);
 }

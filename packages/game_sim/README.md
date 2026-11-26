@@ -11,11 +11,12 @@ dart run game_sim:game_sim bot --bot balanced|casual|greedy --hours 168 --seed 1
 
 Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`,
 `upgrade`, `createRoute`, `removeRoute`, `sell`, `setAutoSell`, `claimBody`,
-`expandSlots`, `startMegaprojectStage`); `factionId` defaults to the player. A successful game command
+`expandSlots`, `startMegaprojectStage`, `deliverContract`, `discardContract`);
+`factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts that
 changed), `createdId` for a new building, route or project, and for
-`claimBody`, `expandSlots`, `startMegaprojectStage`, `demolish` and
-`createRoute` a `message` such as
+`claimBody`, `expandSlots`, `startMegaprojectStage`, `demolish`,
+`createRoute`, `deliverContract` and `discardContract` a `message` such as
 `"Started claiming Brine for 5K credits; done in 30m"`. Claims, extra build
 slots and megaproject stages are projects: they are paid for at once and take
 effect when their timer runs out (a claim of a body, a second slot on one, or
@@ -23,7 +24,18 @@ a second stage of a megaproject, already under way fails with
 `projectInProgress`). `{"cmd":"startMegaprojectStage","megaprojectId":
 "orbital_station","bodyId":"kora"}` pays the next level's cost from the body's
 stock and credits; each completed stage raises the megaproject's level, a
-permanent bonus. Meta commands:
+permanent bonus.
+
+The Veyra Exchange posts up to 3 contracts on the player's board. They never
+expire. `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
+"amount":"500"}` delivers up to `amount` of the contract's resource from the
+body's stock (clamped to what is held and to what the contract still wants;
+deliveries add up), and pays the reward once the last unit is in.
+`{"cmd":"discardContract","contractId":"c12"}` takes a contract off the board
+with no penalty. Either way the freed slot refills 4 h later, banked after any
+refills already waiting, so a board emptied before a long absence is full
+again on return. An unknown contract fails with `unknownContract`. Meta
+commands:
 
 - `{"cmd":"advance","seconds":N}` run the simulation for N seconds, no cap
 - `{"cmd":"away","seconds":N}` simulate the player being away for N seconds
@@ -36,7 +48,10 @@ permanent bonus. Meta commands:
   completed (`projectsCompleted`: `kind`, `targetId`, `name`)
 - `{"cmd":"report"}` per-second flows and bottlenecks
 - `{"cmd":"state"}` time, credits, crew, reached milestones, the level of
-  every megaproject (`megaprojects`: `id`, `name`, `level`), every body
+  every megaproject (`megaprojects`: `id`, `name`, `level`), the contracts
+  board (`contracts`: `id`, `issuer`, `resourceId`, `resource` name,
+  `quantity`, `delivered`, `reward` in credits) and when its empty slots
+  refill (`contractRefills`: `at` and `timeLeft`), every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
   player's routes, its running projects soonest first (`kind`, `targetId`,
   `name`, `startedAt`, `finishAt`, `secondsLeft` and `timeLeft` such as
@@ -105,6 +120,10 @@ share.
   spends the rest on the best return.
 - `casual` plays like `balanced` but issues at most 15 commands per check-in
   (auto-sell rules aside), a stand-in for a player with a few minutes.
+
+Every bot works the contracts board: it holds a contract's goods back from
+auto-sell, delivers what a body holds beyond its own needs, and discards a
+contract on a resource it neither makes nor holds.
 
 `docs/balance/stage1-baseline.md` holds the 168 h baselines of all three
 bots; rerun them after changing `content/*.json` and compare.

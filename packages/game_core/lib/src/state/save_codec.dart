@@ -208,6 +208,26 @@ final class SaveCodec {
               '[0, $maxMegaprojectLevel]';
         }
       }
+      if (f.contractsCompleted < 0) {
+        return 'faction ${f.id}: negative contracts completed';
+      }
+      if (f.contracts.length > RulesDef.contractSlots) {
+        return 'faction ${f.id}: ${f.contracts.length} contracts, at most '
+            '${RulesDef.contractSlots}';
+      }
+      if (f.contractRefillAt.length > RulesDef.contractSlots) {
+        return 'faction ${f.id}: ${f.contractRefillAt.length} contract '
+            'refills, at most ${RulesDef.contractSlots}';
+      }
+      for (final t in f.contractRefillAt) {
+        if (!(t.isFinite && t >= 0)) {
+          return 'faction ${f.id}: contract refill at $t';
+        }
+      }
+      for (final k in f.contracts) {
+        final problem = _invalidContract(s, k);
+        if (problem != null) return 'contract ${k.id}: $problem';
+      }
       final rules = <(String, String)>{};
       for (final r in f.autoSell) {
         if (r.keepAtLeast < zero) {
@@ -293,6 +313,13 @@ final class SaveCodec {
         return 'shipment on ${sh.routeId}: time not finite';
       }
     }
+    final contractIds = <String>{};
+    for (final f in s.factions) {
+      for (final k in f.contracts) {
+        final dup = checkId(contractIds, 'contract', k.id);
+        if (dup != null) return dup;
+      }
+    }
     final projectIds = <String>{};
     // A body has at most one claim and one slot expansion under way, and a
     // faction at most one stage of each megaproject.
@@ -360,6 +387,21 @@ final class SaveCodec {
         }
       case ProjectKind.survey:
         break;
+    }
+    return null;
+  }
+
+  /// What is wrong with contract [k] in [s], or null if nothing is.
+  static String? _invalidContract(GameState s, ContractState k) {
+    const zero = BigNum.zero();
+    if (k.quantity < zero) return 'negative quantity';
+    if (k.delivered < zero) return 'negative delivery';
+    if (k.delivered > k.quantity) {
+      return 'delivered ${k.delivered} of ${k.quantity}';
+    }
+    if (k.rewardCredits < zero) return 'negative reward';
+    if (!(k.postedAt >= 0 && k.postedAt <= s.time)) {
+      return 'posted at ${k.postedAt}, outside [0, ${s.time}]';
     }
     return null;
   }
@@ -434,6 +476,14 @@ final class SaveCodec {
         }
         if (b.bodyId case final id? when !bodyIds.contains(id)) {
           return 'faction ${f.id}: bottleneck on unknown body $id';
+        }
+      }
+      for (final k in f.contracts) {
+        if (!resource(k.resourceId)) {
+          return 'contract ${k.id}: unknown resource ${k.resourceId}';
+        }
+        if (!c.contractTemplates.containsKey(k.templateId)) {
+          return 'contract ${k.id}: unknown template ${k.templateId}';
         }
       }
       for (final id in f.megaprojectLevels.keys) {

@@ -471,4 +471,93 @@ void main() {
       expect(r.handleLine(jsonEncode({'cmd': 'state'}))['ok'], isTrue);
     },
   );
+
+  group('contracts', () {
+    test('state lists the board and when the next contract comes', () {
+      final r = _runner();
+      expect(r.handle({'cmd': 'state'})['contracts'], isEmpty);
+      r.handle({'cmd': 'advance', 'seconds': 60});
+      final state = r.handle({'cmd': 'state'});
+      final k = r.state.faction('player').contracts.single;
+      final name = r.engine.content.resources[k.resourceId]!.name;
+      expect(state['contracts'], [
+        {
+          'id': k.id,
+          'issuer': 'Veyra Exchange',
+          'resourceId': k.resourceId,
+          'resource': name,
+          'quantity': {
+            'value': k.quantity.toJson(),
+            'display': formatNumber(k.quantity),
+          },
+          'delivered': {'value': '0', 'display': '0'},
+          'reward': {
+            'value': k.rewardCredits.toJson(),
+            'display': formatNumber(k.rewardCredits),
+          },
+        },
+      ]);
+      expect(state['contractRefills'], [
+        {'at': 14400.0, 'timeLeft': '3h 59m'},
+        {'at': 28800.0, 'timeLeft': '7h 59m'},
+      ]);
+    });
+
+    test('deliver and discard reply with what they did', () {
+      final r = _runner();
+      r.handle({'cmd': 'advance', 'seconds': 14400 * 2 + 60});
+      final f = r.state.faction('player');
+      final k = f.contracts.first;
+      final name = r.engine.content.resources[k.resourceId]!.name;
+      final half = k.quantity.mulDouble(0.5);
+      r.state.body('kora').stock[k.resourceId] = k.quantity;
+
+      final part = r.handle({
+        'cmd': 'deliverContract',
+        'contractId': k.id,
+        'bodyId': 'kora',
+        'amount': half.toJson(),
+      });
+      expect(part['ok'], isTrue, reason: '$part');
+      expect(
+        part['message'],
+        'Delivered ${formatNumber(half)} $name from Kora to contract '
+        '${k.id} (${formatNumber(half)} of ${formatNumber(k.quantity)})',
+      );
+
+      final rest = r.handle({
+        'cmd': 'deliverContract',
+        'contractId': k.id,
+        'bodyId': 'kora',
+        'amount': k.quantity.toJson(),
+      });
+      expect(rest['ok'], isTrue, reason: '$rest');
+      expect(
+        rest['message'],
+        'Delivered ${formatNumber(half)} $name from Kora and completed '
+        'contract ${k.id}; paid ${formatNumber(k.rewardCredits)} credits. '
+        'A new contract arrives in 4h',
+      );
+      expect(
+        (rest['gained']! as Map)['credits'],
+        isNotNull,
+        reason: 'the reward shows as gained',
+      );
+
+      final other = f.contracts.first;
+      final otherName = r.engine.content.resources[other.resourceId]!.name;
+      final gone = r.handle({'cmd': 'discardContract', 'contractId': other.id});
+      expect(gone['ok'], isTrue, reason: '$gone');
+      expect(
+        gone['message'],
+        'Discarded contract ${other.id} for '
+        '${formatNumber(other.quantity)} $otherName; '
+        'a new contract arrives in 8h',
+      );
+      expect(
+        r.handle({'cmd': 'discardContract', 'contractId': other.id})['error'],
+        'unknownContract',
+      );
+    });
+  });
 }

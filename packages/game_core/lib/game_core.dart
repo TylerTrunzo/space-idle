@@ -9,6 +9,7 @@ export 'src/num/change.dart';
 export 'src/num/format.dart';
 export 'src/report/flow_report.dart';
 export 'src/rng.dart';
+export 'src/sim/contracts.dart';
 export 'src/sim/crew.dart';
 export 'src/sim/engine.dart';
 export 'src/sim/logistics.dart';

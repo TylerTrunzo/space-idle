@@ -20,7 +20,8 @@ abstract interface class Bot {
 
 /// Buys the cheapest affordable upgrade, building, extra build slot or
 /// claim each decision, after filling free crew slots, starting any
-/// megaproject stage it can afford and setting auto-sell on surplus.
+/// megaproject stage it can afford, working its contracts and setting
+/// auto-sell on surplus.
 final class GreedyBot implements Bot {
   @override
   String get name => 'greedy';
@@ -31,7 +32,10 @@ final class GreedyBot implements Bot {
     return planCommands(e, s, (w) {
       final v = _View(e.content, w, factionId);
       final housekeeping =
-          v.assignFreeCrew() ?? v.startMegaproject() ?? v.autoSell();
+          v.assignFreeCrew() ??
+          v.startMegaproject() ??
+          v.workContracts() ??
+          v.autoSell();
       if (housekeeping != null || bought) return housekeeping;
       bought = true;
       return v.cheapestPurchase();
@@ -45,7 +49,8 @@ final class GreedyBot implements Bot {
 /// the worst bottlenecks (assign crew, then an efficiency or speed upgrade
 /// on the starving supplier, then build another supplier, then open a
 /// route); claim a body when affordable; start a megaproject stage when
-/// affordable, else route its goods to one body; auto-sell surplus; work
+/// affordable, else route its goods to one body; deliver to or discard
+/// contracts ([_View.workContracts]); auto-sell surplus; work
 /// toward the next milestone or more housing when crew runs out, saving
 /// credits for it; and with what is left, buy whatever adds the most
 /// credits per second for its price.
@@ -71,6 +76,7 @@ final class BalancedBot implements Bot {
           v.claim() ??
           v.startMegaproject() ??
           v.gatherMegaproject() ??
+          v.workContracts() ??
           v.autoSell();
       if (quick != null) return quick;
       return switch (v.pursueGoals()) {
@@ -412,14 +418,61 @@ final class _View {
       def(b).kind == BuildingKind.habitat ||
       lifeSupport.any((id) => makes(b, id));
 
-  /// Units of [resourceId] kept on [body] when a building there uses it, a
-  /// route ships it, or it pays for builds, routes, claims or megaproject
-  /// stages; otherwise none.
+  /// Units of [resourceId] kept back from auto-sell on [body]: what it
+  /// keeps for its own use ([keepForUse]) plus what the faction's
+  /// contracts still want of it ([contractNeed]), so the goods pile up to
+  /// be delivered; at most the storage cap.
+  BigNum keep(BodyState body, String resourceId) {
+    final need = contractNeed(resourceId);
+    final own = keepForUse(body, resourceId);
+    if (need.isZero) return own;
+    return (own + need).min(storageCap(s, c, body));
+  }
+
+  /// Units of [resourceId] the contracts on the faction's board still
+  /// want, summed.
+  BigNum contractNeed(String resourceId) {
+    var total = const BigNum.zero();
+    for (final k in faction.contracts) {
+      if (k.resourceId == resourceId) total = total + k.remaining;
+    }
+    return total;
+  }
+
+  /// One step on the faction's contracts board, contracts in board order:
+  /// discards a contract on a resource no staffed building makes and no
+  /// owned body holds, or delivers what an owned body holds of a contract's
+  /// resource beyond what it keeps for its own use ([keepForUse]); null if
+  /// neither is wanted.
+  Command? workContracts() {
+    for (final k in faction.contracts) {
+      final id = k.resourceId;
+      if (!made(id) && owned.every((b) => stock(b, id).isZero)) {
+        return DiscardContractCommand(factionId, k.id);
+      }
+      for (final body in owned) {
+        final spare = stock(body, id) - keepForUse(body, id);
+        if (spare > const BigNum.zero()) {
+          return DeliverContractCommand(
+            factionId,
+            k.id,
+            body.id,
+            spare.min(k.remaining),
+          );
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Units of [resourceId] kept on [body] for the faction's own use: when
+  /// a building there uses it, a route ships it, or it pays for builds,
+  /// routes, claims or megaproject stages; otherwise none.
   ///
   /// The largest of a share of storage, [_demandBufferSeconds] of what the
   /// body's buildings use and what the next stages of the megaprojects
   /// cost ([stageNeed]), at most the storage cap.
-  BigNum keep(BodyState body, String resourceId) {
+  BigNum keepForUse(BodyState body, String resourceId) {
     final stage = stageNeed(resourceId);
     final used =
         resourceId == r.cargoShipResource ||
@@ -905,6 +958,8 @@ final class _View {
         CreditsCondition(:final amount) => _Save(amount),
         // Earned credits come with growth; saving them up does not help.
         CreditsEarnedCondition() => const _Waiting(),
+        // Contracts are worked as they are posted ([workContracts]).
+        ContractsCompletedCondition() => const _Waiting(),
       };
       if (worth(step) case final step?) return step;
     }
@@ -929,6 +984,8 @@ final class _View {
       bodiesOwnedOrClaiming(s, factionId) >= count,
     BuildingCountCondition(:final defId, :final count) =>
       buildings.where((x) => x.$2.defId == defId).length >= count,
+    ContractsCompletedCondition(:final count) =>
+      faction.contractsCompleted >= count,
   };
 
   /// Gets the next claim within reach: makes its outpost kits, then saves

@@ -21,5 +21,6 @@
   "baseTravelSeconds": 60,
   "claimSecondsBase": 1800,
   "claimSecondsPerOwned": 1800,
-  "expandSlotsSeconds": 3600
+  "expandSlotsSeconds": 3600,
+  "contractRefillSeconds": 14400
 }

@@ -220,6 +220,21 @@ final class FlowReport {
   /// a crew shortage first, then each body's buildings in order followed by
   /// its full stores in content resource order.
   final List<Bottleneck> bottlenecks;
+
+  /// Units of [resourceId] the faction's buildings make a second less what
+  /// they use, summed over its bodies: [BodyFlow.producedPerSec] minus
+  /// [BodyFlow.consumedPerSec]. Before the storage cap, cargo and sales;
+  /// negative when its buildings use more than they make.
+  BigNum netProducedPerSec(String resourceId) {
+    var net = const BigNum.zero();
+    for (final b in bodies) {
+      net =
+          net +
+          (b.producedPerSec[resourceId] ?? const BigNum.zero()) -
+          (b.consumedPerSec[resourceId] ?? const BigNum.zero());
+    }
+    return net;
+  }
 }
 
 /// Seconds of the sample step the rates are measured over.

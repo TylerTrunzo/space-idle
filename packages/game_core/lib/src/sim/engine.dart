@@ -7,6 +7,7 @@ import '../num/big_num.dart';
 import '../num/change.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
+import 'contracts.dart';
 import 'logistics.dart';
 import 'market.dart';
 import 'megaprojects.dart';
@@ -121,15 +122,18 @@ final class GameEngine {
   /// In order: reset each body's [BodyState.wastedThisStep], land the
   /// shipments due ([deliverShipments]), production, send cargo
   /// ([sendCargo]), market (recovery and auto-sell), complete the projects
-  /// due ([stepProjects]), [clampStorage], [noteBottlenecks], milestone
-  /// check, then `time += dt`. Stock may pass the storage cap
+  /// due ([stepProjects]), [clampStorage], [noteBottlenecks], post the
+  /// contracts due by `time + dt` ([stepContracts]), milestone check,
+  /// then `time += dt`. Stock may pass the storage cap
   /// during the tick; production uses landed cargo, and cargo and
   /// auto-sell take from what is made, before the clamp, so long steps
   /// lose no more to the cap than short ones. Routes take their share
   /// before auto-sell does: a rule selling a body's whole surplus never
   /// starves a route out of it. Because time moves last, a
   /// shipment or project due at exactly `time + dt` lands or completes at
-  /// the start of the next tick.
+  /// the start of the next tick; a contract refill due then is posted in
+  /// this one, from the state the tick leaves, which is the state at
+  /// `time + dt`.
   ///
   /// Throws [ArgumentError], changing nothing, if [dt] is not finite and
   /// above zero.
@@ -148,6 +152,7 @@ final class GameEngine {
     stepProjects(s, content);
     clampStorage(s, content, kept);
     noteBottlenecks(s, content, s.time);
+    stepContracts(s, content, s.time + dt);
     _checkMilestones(s);
     s.time += dt;
   }
@@ -299,6 +304,8 @@ final class GameEngine {
                     .where((b) => b.defId == defId)
                     .length >=
                 count,
+          ContractsCompletedCondition(:final count) =>
+            f.contractsCompleted >= count,
         };
         if (met) f.reachedMilestones.add(m.id);
       }

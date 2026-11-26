@@ -1,0 +1,786 @@
+import 'dart:convert';
+
+import 'package:game_core/game_core.dart';
+import 'package:test/test.dart';
+
+import '../state/helpers.dart';
+
+BigNum n(num v) => BigNum.from(v);
+
+String encode(GameState s) => jsonEncode(s.toJson());
+
+/// The shipped content with [edit] applied to its decoded bundle.
+Content contentWith(void Function(Map<String, Object?> bundle) edit) {
+  final b = shippedBundle();
+  edit(b);
+  return switch (Content.fromBundle(b)) {
+    ContentOk(:final content) => content,
+    ContentInvalid(:final errors) => throw StateError('$errors'),
+  };
+}
+
+/// The errors loading the shipped content with [edit] applied gives.
+List<String> errorsWith(void Function(Map<String, Object?> bundle) edit) {
+  final b = shippedBundle();
+  edit(b);
+  return switch (Content.fromBundle(b)) {
+    ContentOk() => const [],
+    ContentInvalid(:final errors) => errors,
+  };
+}
+
+void main() {
+  final content = shippedContent();
+  final e = GameEngine(content);
+  final refill = content.rules.contractRefillSeconds;
+
+  FactionState player(GameState s) => s.faction('player');
+
+  String? ok(GameState s, Command cmd) {
+    final r = e.apply(s, cmd);
+    expect(r, isA<CommandOk>(), reason: r is CommandFailed ? r.message : '');
+    return (r as CommandOk).createdId;
+  }
+
+  void fails(GameState s, Command cmd, CommandError error) {
+    final before = encode(s);
+    final r = e.apply(s, cmd);
+    expect(r, isA<CommandFailed>().having((f) => f.error, 'error', error));
+    expect(encode(s), before);
+  }
+
+  /// A new game with a full board, every refill used.
+  GameState fullBoard([int seed = 1]) {
+    final s = e.newGame(seed);
+    e.advance(s, refill * 2 + 60);
+    expect(player(s).contracts, hasLength(RulesDef.contractSlots));
+    expect(player(s).contractRefillAt, isEmpty);
+    return s;
+  }
+
+  /// Puts a contract for [quantity] of [resourceId] on the player's board
+  /// in place of its last one, as if just posted.
+  ContractState postOn(
+    GameState s,
+    String resourceId,
+    num quantity, {
+    num reward = 1000,
+  }) {
+    final f = player(s);
+    if (f.contracts.length + f.contractRefillAt.length >=
+        RulesDef.contractSlots) {
+      if (f.contractRefillAt.isNotEmpty) {
+        f.contractRefillAt.removeLast();
+      } else {
+        f.contracts.removeLast();
+      }
+    }
+    final k = ContractState(
+      id: s.newId('c'),
+      templateId: content.contractTemplates.keys.first,
+      resourceId: resourceId,
+      quantity: n(quantity),
+      rewardCredits: n(reward),
+      postedAt: s.time,
+    );
+    f.contracts.add(k);
+    return k;
+  }
+
+  group('the shipped contract templates', () {
+    test('come from the Veyra Exchange, tiers 0 to 3 covered', () {
+      expect(content.contractTemplates, isNotEmpty);
+      final tiers = <int>{};
+      for (final t in content.contractTemplates.values) {
+        expect(t.issuer, 'Veyra Exchange');
+        expect(t.quantitySeconds, 14400);
+        expect(t.rewardMultiplier, 2.5);
+        for (var i = t.minTier; i <= t.maxTier; i++) {
+          tiers.add(i);
+        }
+      }
+      expect(tiers, containsAll([0, 1, 2, 3]));
+    });
+
+    test('refill after 4 hours', () {
+      expect(refill, 14400);
+    });
+  });
+
+  group('content validation', () {
+    Map<String, Object?> template(Map<String, Object?> b) =>
+        ((b['contracts']! as List).first as Map).cast<String, Object?>();
+
+    test('defaults apply when a template leaves them out', () {
+      final c = contentWith(
+        (b) => b['contracts'] = [
+          {
+            'id': 'plain',
+            'issuer': 'Veyra Exchange',
+            'minTier': 0,
+            'maxTier': 1,
+          },
+        ],
+      );
+      final t = c.contractTemplates['plain']!;
+      expect(t.quantitySeconds, ContractTemplateDef.defaultQuantitySeconds);
+      expect(t.quantitySeconds, 14400);
+      expect(t.rewardMultiplier, 2.5);
+      expect(t.minQuantity, n(ContractTemplateDef.defaultMinQuantity));
+    });
+
+    test('content without contracts posts none', () {
+      final c = contentWith((b) => b.remove('contracts'));
+      expect(c.contractTemplates, isEmpty);
+      final s = GameEngine(c).newGame(1);
+      GameEngine(c).advance(s, refill * 3);
+      expect(player(s).contracts, isEmpty);
+    });
+
+    test('the refill time defaults to 4 hours and must be above 0', () {
+      expect(
+        contentWith(
+          (b) => (b['rules']! as Map).remove('contractRefillSeconds'),
+        ).rules.contractRefillSeconds,
+        14400,
+      );
+      expect(
+        errorsWith((b) => (b['rules']! as Map)['contractRefillSeconds'] = 0),
+        ['rules.contractRefillSeconds: must be > 0'],
+      );
+    });
+
+    final bad = <String, (void Function(Map<String, Object?>), String)>{
+      'tiers out of order': (
+        (t) => t
+          ..['minTier'] = 2
+          ..['maxTier'] = 1,
+        'maxTier: must be >= minTier (2)',
+      ),
+      'a tier above 4': ((t) => t['maxTier'] = 5, 'maxTier: must be <= 4'),
+      'a negative tier': ((t) => t['minTier'] = -1, 'minTier: must be >= 0'),
+      'no issuer': ((t) => t.remove('issuer'), 'issuer: missing'),
+      'zero quantity seconds': (
+        (t) => t['quantitySeconds'] = 0,
+        'quantitySeconds: must be > 0',
+      ),
+      'zero reward multiplier': (
+        (t) => t['rewardMultiplier'] = 0,
+        'rewardMultiplier: must be > 0',
+      ),
+      'zero minimum quantity': (
+        (t) => t['minQuantity'] = '0',
+        'minQuantity: must be > 0',
+      ),
+      'an unknown field': (
+        (t) => t['expires'] = 3600,
+        'expires: unknown field',
+      ),
+    };
+    for (final MapEntry(key: name, value: (edit, message)) in bad.entries) {
+      test('rejects $name', () {
+        final errors = errorsWith((b) => edit(template(b)));
+        final id = template(shippedBundle())['id'];
+        expect(errors, ['contracts.$id.$message']);
+      });
+    }
+
+    test('a contractsCompleted milestone needs a count of at least 1', () {
+      expect(
+        errorsWith(
+          (b) => (b['milestones']! as List).add({
+            'id': 'orders',
+            'name': 'Orders',
+            'condition': {'type': 'contractsCompleted', 'count': 0},
+          }),
+        ),
+        ['milestones.orders.condition.count: must be >= 1'],
+      );
+    });
+  });
+
+  group('twoSignificantFigures', () {
+    test('rounds to two significant figures', () {
+      expect(twoSignificantFigures(n(2876)), n(2900));
+      expect(twoSignificantFigures(n(2824)), n(2800));
+      expect(twoSignificantFigures(n(9960)), n(10000));
+      expect(twoSignificantFigures(n(0.01234)), n(0.012));
+      expect(twoSignificantFigures(n(7)), n(7));
+      expect(twoSignificantFigures(n(100)), n(100));
+      expect(twoSignificantFigures(BigNum.parse('3.456e40')), n(3.5e40));
+    });
+  });
+
+  group('generation', () {
+    test('3 contracts appear after refills on a game with production', () {
+      final s = e.newGame(1);
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).contractRefillAt, [0, refill, refill * 2]);
+
+      e.advance(s, 60);
+      expect(player(s).contracts, hasLength(1));
+      expect(player(s).contractRefillAt, [refill, refill * 2]);
+
+      e.advance(s, refill - 120);
+      expect(player(s).contracts, hasLength(1));
+      e.advance(s, 60);
+      expect(player(s).contracts, hasLength(2));
+
+      e.advance(s, refill);
+      expect(player(s).contracts, hasLength(3));
+      expect(player(s).contractRefillAt, isEmpty);
+
+      e.advance(s, refill * 3);
+      expect(player(s).contracts, hasLength(3), reason: 'at most 3');
+      expect({for (final k in player(s).contracts) k.id}, hasLength(3));
+    });
+
+    test('each contract follows its template', () {
+      for (final seed in [1, 2, 3, 4, 5, 6]) {
+        final s = fullBoard(seed);
+        final f = player(s);
+        final resources = <String>{};
+        for (final k in f.contracts) {
+          final t = content.contractTemplates[k.templateId]!;
+          final r = content.resources[k.resourceId]!;
+          expect(r.tier, inInclusiveRange(t.minTier, t.maxTier));
+          expect(resources.add(r.id), isTrue, reason: 'one per resource');
+          final made = f.lifetimeProduced[r.id] ?? const BigNum.zero();
+          final inputsMade = content.buildings.values.any(
+            (b) =>
+                b.kind != BuildingKind.extractor &&
+                b.outputs.containsKey(r.id) &&
+                b.inputs.isNotEmpty &&
+                b.inputs.keys.every(
+                  (i) =>
+                      (f.lifetimeProduced[i] ?? const BigNum.zero()) >
+                      const BigNum.zero(),
+                ),
+          );
+          expect(made > const BigNum.zero() || inputsMade, isTrue);
+          expect(k.quantity, twoSignificantFigures(k.quantity));
+          expect(k.quantity >= t.minQuantity, isTrue);
+          expect(
+            k.rewardCredits,
+            k.quantity * r.basePrice.mulDouble(t.rewardMultiplier),
+          );
+          expect(k.delivered, const BigNum.zero());
+          expect(k.postedAt, lessThanOrEqualTo(s.time));
+        }
+      }
+    });
+
+    test('the quantity is about 4 h of net production, at least the '
+        'minimum', () {
+      final s = e.newGame(1);
+      final f = player(s);
+      // Only steel (and what is made from it) is eligible.
+      f.lifetimeProduced
+        ..clear()
+        ..['steel'] = n(1);
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
+      final rate = buildFlowReport(s, content, f.id).netProducedPerSec('steel');
+      expect(rate > const BigNum.zero(), isTrue);
+      stepContracts(s, content, 0);
+      final k = f.contracts.single;
+      final t = content.contractTemplates[k.templateId]!;
+      if (k.resourceId == 'steel') {
+        expect(k.quantity, twoSignificantFigures(rate.mulDouble(14400)));
+      } else {
+        // Hull plates: made from steel, not yet made at all.
+        expect(k.resourceId, 'hull_plate');
+        expect(k.quantity, t.minQuantity);
+      }
+    });
+
+    test('picks resources made, or whose inputs are made', () {
+      final picked = <String>{};
+      for (var seed = 1; seed <= 40; seed++) {
+        final s = e.newGame(seed);
+        final f = player(s);
+        f.lifetimeProduced
+          ..clear()
+          ..['copper_ore'] = n(1);
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        stepContracts(s, content, 0);
+        picked.add(f.contracts.single.resourceId);
+      }
+      // Copper ore is made; wire is made from it alone.
+      expect(picked, {'copper_ore', 'copper_wire'});
+    });
+
+    test('a refill waits while nothing is made, and RNG is not used', () {
+      final s = e.newGame(1);
+      for (final b in s.body('kora').buildings) {
+        b.crew = 0;
+      }
+      final rng = s.rngState;
+      e.advance(s, refill * 3);
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).contractRefillAt, hasLength(3));
+      expect(s.rngState, rng);
+
+      for (final b in s.body('kora').buildings) {
+        b.crew = 1;
+      }
+      e.advance(s, 120);
+      expect(
+        player(s).contracts,
+        hasLength(3),
+        reason: 'every banked refill is due',
+      );
+      expect(s.rngState, isNot(rng));
+    });
+
+    test('is deterministic for the same seed and state', () {
+      final a = e.newGame(7);
+      final b = e.newGame(7);
+      e.advance(a, refill * 2 + 60);
+      e.advance(b, refill * 2 + 60);
+      expect(encode(a), encode(b));
+      expect(player(a).contracts, hasLength(3));
+
+      final x = a.copy();
+      final y = a.copy();
+      player(x).contracts.clear();
+      player(x).contractRefillAt.addAll([0, 0, 0]);
+      player(y).contracts.clear();
+      player(y).contractRefillAt.addAll([0, 0, 0]);
+      stepContracts(x, content, x.time);
+      stepContracts(y, content, y.time);
+      expect(encode(x), encode(y));
+    });
+
+    test('draws the RNG only when posting a contract', () {
+      final s = fullBoard();
+      final rng = s.rngState;
+      e.advance(s, refill * 2);
+      expect(s.rngState, rng, reason: 'the board is full');
+    });
+
+    test('other factions have no board', () {
+      final s = e.newGame(1);
+      s.factions.add(
+        FactionState(
+          id: 'rival',
+          name: 'Rival',
+          isPlayer: false,
+          credits: n(0),
+          baseCrew: 0,
+        ),
+      );
+      e.advance(s, refill * 3);
+      expect(s.faction('rival').contracts, isEmpty);
+      expect(s.faction('rival').contractRefillAt, isEmpty);
+    });
+  });
+
+  group('delivery', () {
+    test('partial and full delivery; the reward is paid once', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100, reward: 5000);
+      final kora = s.body('kora');
+      kora.stock['steel'] = n(60);
+      final credits = player(s).credits;
+
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(40)));
+      expect(k.delivered, n(40));
+      expect(kora.stock['steel'], n(20));
+      expect(player(s).credits, credits, reason: 'not paid until complete');
+      expect(player(s).contracts, contains(k));
+
+      // More than the stock held: delivers what there is.
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1000)));
+      expect(k.delivered, n(60));
+      expect(kora.stock['steel'], n(0));
+      expect(player(s).credits, credits);
+
+      kora.stock['steel'] = n(500);
+      // More than is still wanted: delivers only that.
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1000)));
+      expect(kora.stock['steel'], n(460));
+      expect(player(s).credits, credits + n(5000));
+      expect(player(s).contracts, isNot(contains(k)));
+      expect(player(s).contractsCompleted, 1);
+      expect(player(s).contractRefillAt, [s.time + refill]);
+
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(10)),
+        CommandError.unknownContract,
+      );
+      expect(player(s).credits, credits + n(5000), reason: 'paid once');
+      expect(player(s).contractsCompleted, 1);
+    });
+
+    test('a delivery that completes it exactly pays it', () {
+      final s = fullBoard();
+      final k = postOn(s, 'iron_ore', 30, reward: 75);
+      s.body('kora').stock['iron_ore'] = n(30);
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(30)));
+      expect(player(s).credits, credits + n(75));
+      expect(player(s).contractsCompleted, 1);
+    });
+
+    test('reward credits are not market earnings', () {
+      final s = fullBoard();
+      final k = postOn(s, 'iron_ore', 30, reward: 75);
+      s.body('kora').stock['iron_ore'] = n(30);
+      final earned = player(s).lifetimeCredits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(30)));
+      expect(player(s).lifetimeCredits, earned);
+    });
+
+    test('invalid deliveries change nothing', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100);
+      s.body('kora').stock['steel'] = n(50);
+      fails(
+        s,
+        DeliverContractCommand('player', 'c999', 'kora', n(1)),
+        CommandError.unknownContract,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'nowhere', n(1)),
+        CommandError.unknownBody,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'brine', n(1)),
+        CommandError.notOwner,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(0)),
+        CommandError.invalidAmount,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(-5)),
+        CommandError.invalidAmount,
+      );
+      s.body('kora').stock['steel'] = n(0);
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(1)),
+        CommandError.invalidAmount,
+      );
+      fails(
+        s,
+        DeliverContractCommand('ghost', k.id, 'kora', n(1)),
+        CommandError.unknownFaction,
+      );
+    });
+
+    test("another faction cannot deliver to or discard the player's", () {
+      final s = fullBoard();
+      s.factions.add(
+        FactionState(
+          id: 'rival',
+          name: 'Rival',
+          isPlayer: false,
+          credits: n(0),
+          baseCrew: 0,
+        ),
+      );
+      s.body('brine').ownerId = 'rival';
+      s.body('brine').stock['steel'] = n(100);
+      final k = postOn(s, 'steel', 10);
+      fails(
+        s,
+        DeliverContractCommand('rival', k.id, 'brine', n(10)),
+        CommandError.unknownContract,
+      );
+      fails(
+        s,
+        DiscardContractCommand('rival', k.id),
+        CommandError.unknownContract,
+      );
+    });
+
+    test('commands round trip through JSON', () {
+      for (final cmd in <Command>[
+        DeliverContractCommand('player', 'c7', 'kora', n(12.5)),
+        const DiscardContractCommand('player', 'c7'),
+      ]) {
+        final back = Command.fromJson(cmd.toJson());
+        expect(back.toJson(), cmd.toJson());
+        expect(back.runtimeType, cmd.runtimeType);
+      }
+      expect(
+        DeliverContractCommand('p', 'c1', 'kora', n(1)).toJson()['cmd'],
+        'deliverContract',
+      );
+      expect(
+        const DiscardContractCommand('p', 'c1').toJson()['cmd'],
+        'discardContract',
+      );
+    });
+  });
+
+  group('discard and refills', () {
+    test('discard has no penalty and the slot refills after 4 h', () {
+      final s = fullBoard();
+      final f = player(s);
+      final k = f.contracts.first;
+      final credits = f.credits;
+      final stock = jsonEncode(s.body('kora').toJson());
+      final at = s.time;
+
+      ok(s, DiscardContractCommand('player', k.id));
+      expect(f.contracts, hasLength(2));
+      expect(f.contracts, isNot(contains(k)));
+      expect(f.credits, credits);
+      expect(jsonEncode(s.body('kora').toJson()), stock);
+      expect(f.contractsCompleted, 0);
+      expect(f.contractRefillAt, [at + refill]);
+
+      e.advance(s, refill - 60);
+      expect(f.contracts, hasLength(2));
+      e.advance(s, 60);
+      expect(f.contracts, hasLength(3));
+      expect(f.contracts.last.postedAt, at + refill);
+      expect(f.contractRefillAt, isEmpty);
+    });
+
+    test('refills bank while away: 3 empty slots after 12 h are all '
+        'refilled on return', () {
+      final s = fullBoard();
+      final f = player(s);
+      final at = s.time;
+      for (final k in List.of(f.contracts)) {
+        ok(s, DiscardContractCommand('player', k.id));
+      }
+      expect(f.contracts, isEmpty);
+      expect(f.contractRefillAt, [
+        at + refill,
+        at + refill * 2,
+        at + refill * 3,
+      ]);
+
+      final away = e.catchUpOffline(s, 12 * 3600);
+      expect(away.secondsSimulated, 43200);
+      expect(f.contracts, hasLength(3));
+      expect(f.contractRefillAt, isEmpty);
+      expect(
+        [for (final k in f.contracts) k.postedAt],
+        [at + refill, at + refill * 2, at + refill * 3],
+      );
+    });
+
+    test('a refill queued behind others waits its turn', () {
+      final s = fullBoard();
+      final f = player(s);
+      final at = s.time;
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      e.advance(s, 600);
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      // Banked after the first, not 4 h from now.
+      expect(f.contractRefillAt, [at + refill, at + refill * 2]);
+    });
+
+    test('never more than 3 refills banked', () {
+      final s = fullBoard();
+      final f = player(s);
+      f.contractRefillAt.addAll([1e9, 1e9, 1e9]);
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      expect(f.contractRefillAt, hasLength(3));
+    });
+
+    test('a contract on a resource no longer made blocks nothing and can '
+        'be discarded', () {
+      final s = fullBoard();
+      final f = player(s);
+      // Nobody makes reactor cores, and Kora holds none.
+      final k = postOn(s, 'reactor_core', 50);
+      final steel = f.lifetimeProduced['steel']!;
+
+      // Commands and time carry on around it.
+      ok(s, SetAutoSellCommand('player', 'kora', 'iron_ore', n(0)));
+      e.advance(s, refill * 2);
+      expect(f.contracts, contains(k));
+      expect(f.lifetimeProduced['steel']! > steel, isTrue);
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(1)),
+        CommandError.invalidAmount,
+      );
+
+      ok(s, DiscardContractCommand('player', k.id));
+      expect(f.contracts, isNot(contains(k)));
+      e.advance(s, refill + 60);
+      expect(f.contracts, hasLength(3), reason: 'its slot refilled');
+      expect(
+        f.contracts.where((x) => x.resourceId == 'reactor_core'),
+        isEmpty,
+        reason: 'reactor cores are neither made nor made from what is made',
+      );
+    });
+
+    test('a contract whose producers were demolished can be discarded', () {
+      final s = fullBoard();
+      final f = player(s);
+      final k = postOn(s, 'steel', 1e6);
+      final smelter = s
+          .body('kora')
+          .buildings
+          .firstWhere((b) => b.defId == 'smelter');
+      ok(s, DemolishCommand('player', smelter.id));
+      e.advance(s, refill);
+      expect(f.contracts, contains(k));
+      ok(s, DiscardContractCommand('player', k.id));
+      expect(f.contracts, isNot(contains(k)));
+    });
+  });
+
+  group('milestones', () {
+    test('contractsCompleted counts completed contracts', () {
+      final c = contentWith(
+        (b) => (b['milestones']! as List).add({
+          'id': 'first_order',
+          'name': 'First Order Filled',
+          'condition': {'type': 'contractsCompleted', 'count': 1},
+        }),
+      );
+      final ce = GameEngine(c);
+      final s = ce.newGame(1);
+      ce.advance(s, refill * 2 + 60);
+      final f = player(s);
+      expect(f.reachedMilestones, isNot(contains('first_order')));
+      final k = f.contracts.first;
+      ok(s, DiscardContractCommand('player', k.id));
+      ce.advance(s, 60);
+      expect(
+        f.reachedMilestones,
+        isNot(contains('first_order')),
+        reason: 'a discard is not a completion',
+      );
+      final next = f.contracts.first;
+      s.body('kora').stock[next.resourceId] = next.quantity;
+      ok(s, DeliverContractCommand('player', next.id, 'kora', next.quantity));
+      ce.advance(s, 60);
+      expect(f.reachedMilestones, contains('first_order'));
+    });
+  });
+
+  group('saves', () {
+    test('contracts survive save/load and copy()', () {
+      final s = fullBoard();
+      final f = player(s);
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      final k = f.contracts.first;
+      s.body('kora').stock[k.resourceId] = n(1);
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1)));
+      final text = SaveCodec.encode(s);
+      final back = (SaveCodec.decode(text, content) as SaveOk).state;
+      expect(SaveCodec.encode(back), text);
+      expect(SaveCodec.encode(s.copy()), text);
+      expect(player(back).contracts.first.delivered, n(1));
+      expect(player(back).contractRefillAt, f.contractRefillAt);
+
+      // A copy is independent.
+      final copy = s.copy();
+      player(copy).contracts.first.delivered = n(0);
+      player(copy).contractRefillAt.clear();
+      expect(SaveCodec.encode(s), text);
+    });
+
+    test('a save from before contracts loads with a board due to refill', () {
+      final m = jsonDecode(encode(fullBoard())) as Map<String, Object?>;
+      for (final f in (m['factions']! as List).cast<Map<String, Object?>>()) {
+        f
+          ..remove('contracts')
+          ..remove('contractRefillAt')
+          ..remove('contractsCompleted');
+      }
+      final r = SaveCodec.decode(jsonEncode(m), content);
+      expect(r, isA<SaveOk>());
+      final s = (r as SaveOk).state;
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).contractsCompleted, 0);
+      expect(player(s).contractRefillAt, [0, 0, 0]);
+      e.advance(s, 60);
+      expect(player(s).contracts, hasLength(3));
+    });
+
+    group('integrity:', () {
+      List<Map<String, Object?>> list(Object? v) =>
+          (v! as List).cast<Map<String, Object?>>();
+      Map<String, Object?> me(Map<String, Object?> m) =>
+          list(m['factions']).first;
+      Map<String, Object?> first(Map<String, Object?> m) =>
+          list(me(m)['contracts']).first;
+
+      Map<String, Object?> board() =>
+          jsonDecode(encode(fullBoard())) as Map<String, Object?>;
+
+      final unknown = <String, void Function(Map<String, Object?>)>{
+        'a contract for an unknown resource': (m) =>
+            first(m)['resourceId'] = 'unobtainium',
+        'a contract from an unknown template': (m) =>
+            first(m)['templateId'] = 'nope',
+      };
+      for (final MapEntry(key: name, value: corrupt) in unknown.entries) {
+        test(name, () {
+          final m = board();
+          corrupt(m);
+          final r = SaveCodec.decode(jsonEncode(m), content);
+          expect(r, isA<SaveError>());
+          expect((r as SaveError).kind, SaveErrorKind.unknownContentId);
+        });
+      }
+
+      final invalid = <String, void Function(Map<String, Object?>)>{
+        'a negative quantity': (m) => first(m)['quantity'] = '-1',
+        'a negative delivery': (m) => first(m)['delivered'] = '-1',
+        'more delivered than asked for': (m) => first(m)
+          ..['quantity'] = '10'
+          ..['delivered'] = '11',
+        'a negative reward': (m) => first(m)['rewardCredits'] = '-1',
+        'posted after the save time': (m) =>
+            first(m)['postedAt'] = (m['time']! as num) + 1,
+        'posted at a negative time': (m) => first(m)['postedAt'] = -1,
+        'four contracts': (m) {
+          final ks = list(me(m)['contracts']);
+          ks.add({...ks.first, 'id': 'c9000'});
+          m['nextId'] = 9001;
+        },
+        'four refills': (m) => me(m)['contractRefillAt'] = [1, 2, 3, 4],
+        'a negative refill time': (m) => me(m)['contractRefillAt'] = [-1],
+        'a duplicate contract id': (m) {
+          final ks = list(me(m)['contracts']);
+          ks[1]['id'] = ks[0]['id'];
+        },
+        'nextId not above a contract id': (m) =>
+            first(m)['id'] = 'c${m['nextId']}',
+        'contract id suffix too large for an int': (m) =>
+            first(m)['id'] = 'c99999999999999999999999',
+        'negative contracts completed': (m) => me(m)['contractsCompleted'] = -1,
+      };
+      for (final MapEntry(key: name, value: corrupt) in invalid.entries) {
+        test(name, () {
+          final m = board();
+          corrupt(m);
+          final r = SaveCodec.decode(jsonEncode(m), content);
+          expect(r, isA<SaveError>(), reason: name);
+          expect((r as SaveError).kind, SaveErrorKind.invalidValue);
+          expect(r.message, isNotEmpty);
+        });
+      }
+
+      test('a fully delivered quantity of exactly the ask loads', () {
+        final m = board();
+        first(m)
+          ..['quantity'] = '10'
+          ..['delivered'] = '10';
+        expect(SaveCodec.decode(jsonEncode(m), content), isA<SaveOk>());
+      });
+    });
+  });
+}
