@@ -104,6 +104,18 @@ Content _content({double baseStorageCap = 1000}) {
       housing: 10,
       buildCost: const {},
     ),
+    // Invalid for loaded content (validator wants slots >= 1), but inline
+    // content can hold it; production must skip it.
+    BuildingDef(
+      id: 'pod',
+      name: 'Pod',
+      kind: BuildingKind.habitat,
+      cycleSeconds: 10,
+      inputs: {'water': 1},
+      crewSlots: 0,
+      housing: 10,
+      buildCost: const {},
+    ),
     BuildingDef(
       id: 'depot',
       name: 'Depot',
@@ -398,6 +410,20 @@ void main() {
     expect(d.lastRunFraction, 0);
     expect(depot.lastRunFraction, 0);
     expect(depot.lastLimitReason, isNull);
+  });
+
+  test('zero-slot habitat is not run and provides no housing', () {
+    s.faction('p').baseCrew = 2;
+    final pod = add(home, 'pod', crew: 0);
+    add(home, 'works', crew: 4);
+    home.stock['water'] = n(100);
+    stepProduction(s, c, 10);
+    stepProduction(s, c, 10);
+    expect(stock(home, 'water'), near(100));
+    expect(pod.lastRunFraction, 0);
+    expect(pod.lastLimitReason, isNull);
+    expect(crewEfficiency(s, c, 'p'), 0.5);
+    expect(availableCrew(s, c, 'p'), -2);
   });
 
   test('no stock goes negative', () {

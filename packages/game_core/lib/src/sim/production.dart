@@ -53,8 +53,8 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// updated; habitat run fractions set next step's [crewEfficiency].
 ///
 /// Crew efficiency is read once per faction before any body runs, so the
-/// result does not depend on body order. Warehouses and unowned bodies run
-/// nothing.
+/// result does not depend on body order. Buildings with no crew slots
+/// (warehouses) and unowned bodies run nothing.
 void stepProduction(GameState s, Content c, double dt) {
   final crewEff = {
     for (final f in s.factions) f.id: crewEfficiency(s, c, f.id),
@@ -98,12 +98,12 @@ void _stepBody(
   final runs = <_Run>[];
   for (final b in body.buildings) {
     final def = c.buildings[b.defId]!;
-    if (def.kind == BuildingKind.warehouse) continue;
+    // Only warehouses have no slots in loaded content; a slot-less building
+    // of any other kind (inline content only) runs nothing either.
+    if (def.crewSlots == 0) continue;
     // Crew fraction uses base slots, so crew in capacity-upgrade slots pushes
-    // output above 100%. Buildings without slots need no crew.
-    final crewFrac = def.crewSlots == 0
-        ? 1.0
-        : b.crew / def.crewSlots * crewEff;
+    // output above 100%.
+    final crewFrac = b.crew / def.crewSlots * crewEff;
     final cycles =
         dt /
         def.cycleSeconds *
@@ -143,7 +143,7 @@ void _stepBody(
       }
     }
     final b = run.b;
-    if (run.def.crewSlots > 0 && b.crew == 0) {
+    if (b.crew == 0) {
       run.fraction = 0;
       b
         ..lastRunFraction = 0
