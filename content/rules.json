@@ -13,6 +13,8 @@
   "marketRecoverySeconds": 3600,
   "claimBaseCredits": "5e3",
   "claimGrowth": 70,
+  "slotBaseCredits": "2e4",
+  "slotGrowth": 2.5,
   "outpostKitResource": "outpost_kit",
   "shipCapacityPerSecond": 2,
   "cargoShipResource": "cargo_ship",

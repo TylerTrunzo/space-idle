@@ -257,6 +257,16 @@ void main() {
           building(m, 0)['id'] = 'b99999999999999999999999',
       'route id suffix too large for an int': (m) =>
           m['routes'] = [route(id: 'r99999999999999999999999')],
+      'negative extra slots': (m) => body(m, 'kora')['extraSlots'] = -1,
+      'extra slots above 1000': (m) => body(m, 'kora')['extraSlots'] = 1001,
+      'more buildings than build slots': (m) {
+        final b = body(m, 'cinder');
+        b['buildings'] = [
+          for (var i = 0; i < 7; i++)
+            {...building(m, 2), 'id': 'b${100 + i}', 'crew': 0},
+        ];
+        m['nextId'] = 200;
+      },
       'negative crew': (m) => building(m, 0)['crew'] = -1,
       'crew above the building slots': (m) => building(m, 0)['crew'] = 2,
       'negative upgrade level': (m) =>
@@ -355,6 +365,12 @@ void main() {
     );
     expect(
       err(SaveCodec.decode('{}', content)).kind,
+      SaveErrorKind.missingField,
+    );
+    final m3 = fresh();
+    ((m3['bodies']! as List).first as Map).remove('extraSlots');
+    expect(
+      err(SaveCodec.decode(jsonEncode(m3), content)).kind,
       SaveErrorKind.missingField,
     );
   });

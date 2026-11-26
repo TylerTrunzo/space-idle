@@ -20,6 +20,8 @@ Content economyContent() => Content(
     marketRecoverySeconds: 1800,
     claimBaseCredits: BigNum.zero(),
     claimGrowth: 1,
+    slotBaseCredits: BigNum.zero(),
+    slotGrowth: 1,
     outpostKitResource: 'kit',
     shipCapacityPerSecond: 2,
     cargoShipResource: 'ship',

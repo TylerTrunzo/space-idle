@@ -180,6 +180,8 @@ final class RulesDef {
     required this.marketRecoverySeconds,
     required this.claimBaseCredits,
     required this.claimGrowth,
+    required this.slotBaseCredits,
+    required this.slotGrowth,
     required this.outpostKitResource,
     required this.shipCapacityPerSecond,
     required this.cargoShipResource,
@@ -233,6 +235,13 @@ final class RulesDef {
 
   /// Claim credit multiplier per extra body already owned.
   final double claimGrowth;
+
+  /// Credits for a body's first extra build slot.
+  final BigNum slotBaseCredits;
+
+  /// Extra-slot credit multiplier per extra slot the body already has;
+  /// at least 1.
+  final double slotGrowth;
 
   /// Resource id spent as outpost kits on claims after the first.
   final String outpostKitResource;

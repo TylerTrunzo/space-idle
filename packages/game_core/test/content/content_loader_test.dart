@@ -22,6 +22,8 @@ const _minimal = {
     'marketRecoverySeconds': 3600,
     'claimBaseCredits': '5e3',
     'claimGrowth': 4,
+    'slotBaseCredits': '1e4',
+    'slotGrowth': 2,
     'outpostKitResource': 'kit',
     'shipCapacityPerSecond': 2,
     'cargoShipResource': 'ship',
@@ -366,6 +368,8 @@ void main() {
     _entry(b, 'resources', 'bar')['tier'] = 9;
     _entry(b, 'buildings', 'mine')['kind'] = 'mill';
     (b['rules'] as Map)['claimGrowth'] = 'four';
+    (b['rules'] as Map)['slotGrowth'] = 0.5;
+    (b['rules'] as Map)['slotBaseCredits'] = '0';
     final errors = _errors(b);
     expect(
       errors,
@@ -374,6 +378,8 @@ void main() {
         'resources.bar.tier: must be <= 4',
         "buildings.mine.kind: unknown kind 'mill'",
         'rules.claimGrowth: expected a number',
+        'rules.slotGrowth: must be >= 1',
+        'rules.slotBaseCredits: must be > 0',
       ]),
     );
   });

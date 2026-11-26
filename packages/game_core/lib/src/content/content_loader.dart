@@ -228,6 +228,8 @@ final class _Loader {
       'marketRecoverySeconds',
       'claimBaseCredits',
       'claimGrowth',
+      'slotBaseCredits',
+      'slotGrowth',
       'outpostKitResource',
       'shipCapacityPerSecond',
       'cargoShipResource',
@@ -253,6 +255,8 @@ final class _Loader {
     final marketRecoverySeconds = f.number('marketRecoverySeconds', gt: 0);
     final claimBaseCredits = f.bigNum('claimBaseCredits');
     final claimGrowth = f.number('claimGrowth', ge: 1);
+    final slotBaseCredits = f.bigNum('slotBaseCredits', positive: true);
+    final slotGrowth = f.number('slotGrowth', ge: 1);
     final outpostKitResource = f.string('outpostKitResource');
     final shipCapacityPerSecond = f.number('shipCapacityPerSecond', gt: 0);
     final cargoShipResource = f.string('cargoShipResource');
@@ -273,6 +277,8 @@ final class _Loader {
       marketRecoverySeconds: marketRecoverySeconds!,
       claimBaseCredits: claimBaseCredits!,
       claimGrowth: claimGrowth!,
+      slotBaseCredits: slotBaseCredits!,
+      slotGrowth: slotGrowth!,
       outpostKitResource: outpostKitResource!,
       shipCapacityPerSecond: shipCapacityPerSecond!,
       cargoShipResource: cargoShipResource!,

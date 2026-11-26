@@ -33,6 +33,7 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
     SellCommand() => _sell(s, c, faction, cmd),
     SetAutoSellCommand() => _setAutoSell(s, c, faction, cmd),
     ClaimBodyCommand() => _claim(s, c, faction, cmd),
+    ExpandSlotsCommand() => _expandSlots(s, c, faction, cmd),
   };
 }
 
@@ -65,6 +66,19 @@ Map<String, BigNum> claimCost(GameState s, Content c, String factionId) {
     if (extra > 0) r.outpostKitResource: BigNum.from(extra),
   };
 }
+
+/// Buildings [body] can hold: its type's build slots plus the extra
+/// slots bought for it.
+int buildSlots(Content c, BodyState body) =>
+    c.bodyTypes[body.typeId]!.buildSlots + body.extraSlots;
+
+/// Cost of [body]'s next extra build slot:
+/// `slotBaseCredits × slotGrowth^extraSlots` credits.
+Map<String, BigNum> slotCost(Content c, BodyState body) => {
+  _credits:
+      c.rules.slotBaseCredits *
+      BigNum.from(c.rules.slotGrowth).powInt(body.extraSlots),
+};
 
 /// Most crew [b], a building of type [def], can hold: base slots plus
 /// `capacityCrewPerLevel` per capacity level. Buildings with no base slots
@@ -184,7 +198,7 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
     );
   }
   if (body.ownerId != f.id) return _notOwner(body.name);
-  if (body.buildings.length >= c.bodyTypes[body.typeId]!.buildSlots) {
+  if (body.buildings.length >= buildSlots(c, body)) {
     return _fail(
       CommandError.noBuildSlot,
       '${body.name} has no free build slot',
@@ -462,5 +476,23 @@ CommandResult _claim(
 
   _pay(f, source, cost);
   target.ownerId = f.id;
+  return const CommandOk();
+}
+
+CommandResult _expandSlots(
+  GameState s,
+  Content c,
+  FactionState f,
+  ExpandSlotsCommand cmd,
+) {
+  final body = _findBody(s, cmd.bodyId);
+  if (body == null) return _unknownBody(cmd.bodyId);
+  if (body.ownerId != f.id) return _notOwner(body.name);
+  final cost = slotCost(c, body);
+  final short = _checkCost(c, f, body, cost);
+  if (short != null) return short;
+
+  _pay(f, body, cost);
+  body.extraSlots++;
   return const CommandOk();
 }

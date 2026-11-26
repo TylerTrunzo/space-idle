@@ -132,6 +132,9 @@ final class SaveCodec {
   /// the largest integer exact on every platform.
   static const int _maxIdNumber = 9007199254740991;
 
+  /// Most extra build slots a save may hold on one body.
+  static const int maxExtraSlots = 1000;
+
   /// Highest upgrade level a save may hold on any track.
   static const int maxLevel = 1000;
 
@@ -191,6 +194,14 @@ final class SaveCodec {
       }
       for (final MapEntry(key: id, value: v) in b.stock.entries) {
         if (v < zero) return 'body ${b.id}: negative stock of $id';
+      }
+      if (b.extraSlots < 0 || b.extraSlots > maxExtraSlots) {
+        return 'body ${b.id}: extra slots ${b.extraSlots} outside '
+            '[0, $maxExtraSlots]';
+      }
+      final slots = buildSlots(c, b);
+      if (b.buildings.length > slots) {
+        return 'body ${b.id}: ${b.buildings.length} buildings in $slots slots';
       }
       for (final bl in b.buildings) {
         final dup = checkId(buildingIds, 'building', bl.id);

@@ -25,6 +25,7 @@ const _gameCommands = {
   'sell',
   'setAutoSell',
   'claimBody',
+  'expandSlots',
 };
 
 /// A number as JSON: the raw `BigNum.toJson()` value and a display string.

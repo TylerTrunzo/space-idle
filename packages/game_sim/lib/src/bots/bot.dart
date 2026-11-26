@@ -214,7 +214,7 @@ final class _View {
   }
 
   bool hasFreeSlot(BodyState body) =>
-      body.buildings.length < c.bodyTypes[body.typeId]!.buildSlots;
+      body.buildings.length < buildSlots(c, body);
 
   /// Whether [b] makes [resourceId] when it runs.
   bool makes(BuildingState b, String resourceId) =>

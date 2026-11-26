@@ -168,6 +168,64 @@ void main() {
     });
   });
 
+  group('expandSlots', () {
+    test('adds a build slot to the body for growing credits', () {
+      final s = fresh()..faction('player').credits = n(1e9);
+      final kora = s.body('kora');
+      final r = content.rules;
+      expect(buildSlots(content, kora), 12);
+      expect(slotCost(content, kora), {'credits': r.slotBaseCredits});
+      expectOk(s, ExpandSlotsCommand('player', 'kora'));
+      expect(kora.extraSlots, 1);
+      expect(buildSlots(content, kora), 13);
+      expect(s.faction('player').credits, n(1e9) - r.slotBaseCredits);
+      expect(slotCost(content, kora), {
+        'credits': r.slotBaseCredits * BigNum.from(r.slotGrowth),
+      });
+      expectOk(s, ExpandSlotsCommand('player', 'kora'));
+      expect(buildSlots(content, kora), 14);
+      // Other bodies keep their own count.
+      expect(s.body('brine').extraSlots, 0);
+    });
+
+    test('the new slot takes a building', () {
+      final s = fresh()..faction('player').credits = n(1e9);
+      final kora = s.body('kora');
+      while (kora.buildings.length < 12) {
+        expectOk(s, BuildCommand('player', 'kora', 'smelter'));
+      }
+      expectFails(
+        s,
+        BuildCommand('player', 'kora', 'smelter'),
+        CommandError.noBuildSlot,
+      );
+      expectOk(s, ExpandSlotsCommand('player', 'kora'));
+      expectOk(s, BuildCommand('player', 'kora', 'smelter'));
+    });
+
+    test('validation', () {
+      final s = fresh()..faction('player').credits = n(10);
+      expectFails(
+        s,
+        ExpandSlotsCommand('player', 'nowhere'),
+        CommandError.unknownBody,
+      );
+      expectFails(
+        s,
+        ExpandSlotsCommand('player', 'brine'),
+        CommandError.notOwner,
+      );
+      expect(
+        expectFails(
+          s,
+          ExpandSlotsCommand('player', 'kora'),
+          CommandError.cannotAfford,
+        ),
+        startsWith('Needs '),
+      );
+    });
+  });
+
   test('demolish refunds half the credits and frees crew', () {
     final s = fresh();
     final smelter = s.body('kora').buildings.last;
@@ -519,6 +577,7 @@ void main() {
       SetAutoSellCommand('player', 'kora', 'steel', n(100)),
       SetAutoSellCommand('player', 'kora', 'steel', null),
       ClaimBodyCommand('player', 'brine', 'kora'),
+      ExpandSlotsCommand('player', 'kora'),
     ];
     for (final cmd in cmds) {
       final json = jsonDecode(jsonEncode(cmd.toJson())) as Map<String, Object?>;
@@ -661,6 +720,8 @@ Content withClaimGrowth(Content c, double growth) {
       marketRecoverySeconds: r.marketRecoverySeconds,
       claimBaseCredits: r.claimBaseCredits,
       claimGrowth: growth,
+      slotBaseCredits: r.slotBaseCredits,
+      slotGrowth: r.slotGrowth,
       outpostKitResource: r.outpostKitResource,
       shipCapacityPerSecond: r.shipCapacityPerSecond,
       cargoShipResource: r.cargoShipResource,

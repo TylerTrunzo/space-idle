@@ -99,6 +99,7 @@ sealed class Command {
         _str(j, 'bodyId'),
         _str(j, 'sourceBodyId'),
       ),
+      'expandSlots' => ExpandSlotsCommand(f, _str(j, 'bodyId')),
       final other => throw FormatException('unknown command "$other"', j),
     };
   }
@@ -320,6 +321,21 @@ final class ClaimBodyCommand extends Command {
     'bodyId': bodyId,
     'sourceBodyId': sourceBodyId,
   };
+}
+
+/// Buys one more build slot on an owned body for credits; see `slotCost`.
+final class ExpandSlotsCommand extends Command {
+  /// Creates an expand-slots command.
+  const ExpandSlotsCommand(super.factionId, this.bodyId);
+
+  /// Owned body to add a slot to.
+  final String bodyId;
+
+  @override
+  String get _cmd => 'expandSlots';
+
+  @override
+  Map<String, Object?> get _fields => {'bodyId': bodyId};
 }
 
 /// Why a command was rejected.

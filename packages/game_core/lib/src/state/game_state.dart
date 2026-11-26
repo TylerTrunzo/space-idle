@@ -207,6 +207,7 @@ final class BodyState {
     required this.orbit,
     required this.deposits,
     this.ownerId,
+    this.extraSlots = 0,
     Map<String, BigNum>? stock,
     List<BuildingState>? buildings,
   }) : stock = stock ?? {},
@@ -227,6 +228,7 @@ final class BodyState {
         ),
     ],
     ownerId: j['ownerId'] as String?,
+    extraSlots: j['extraSlots']! as int,
     stock: _bigMap(j['stock']),
     buildings: _list(j['buildings'], BuildingState.fromJson),
   );
@@ -252,6 +254,9 @@ final class BodyState {
   /// Owning faction id, or null if unclaimed.
   String? ownerId;
 
+  /// Build slots bought on top of its body type's (`ExpandSlotsCommand`).
+  int extraSlots;
+
   /// Resource id to units stored here.
   final Map<String, BigNum> stock;
 
@@ -276,6 +281,7 @@ final class BodyState {
         {'resourceId': d.resourceId, 'richness': d.richness},
     ],
     'ownerId': ownerId,
+    'extraSlots': extraSlots,
     'stock': {for (final e in stock.entries) e.key: e.value.toJson()},
     'buildings': [for (final b in buildings) b.toJson()],
   };
@@ -290,6 +296,7 @@ final class BodyState {
     orbit: orbit,
     deposits: List.of(deposits),
     ownerId: ownerId,
+    extraSlots: extraSlots,
     stock: Map.of(stock),
     buildings: [for (final b in buildings) b.copy()],
   );
