@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:game_core/game_core.dart';
@@ -124,16 +125,8 @@ void main() {
   test('raw goods sell for at most 40% of what refining them earns', () {
     // Value added per chain step: every recipe's raw inputs together, at
     // base price, are worth at most 40% of its outputs.
-    //
-    // Exempt: the hydrogen furnace (61%). Its 3 hydrogen a cycle is what
-    // keeps it from feeding itself with an electrolyzer: the electrolyzer
-    // makes 2 hydrogen from the 2 water of two furnace cycles, so at 1
-    // hydrogen a cycle the pair would turn iron ore into steel and oxygen
-    // with nothing else coming in. It is a water source away from ice,
-    // not a step that adds value.
-    const exempt = {'hydrogen_furnace'};
     for (final b in content.buildings.values) {
-      if (b.kind != BuildingKind.factory || exempt.contains(b.id)) continue;
+      if (b.kind != BuildingKind.factory) continue;
       double worth(String id, double n) =>
           n * content.resources[id]!.basePrice.toDouble();
       final out = b.outputs.entries.fold(
@@ -149,13 +142,168 @@ void main() {
         reason: '${b.id}: raw inputs worth $raw against outputs worth $out',
       );
     }
-    // The exemption is still needed: summed, the furnace is above 40%.
+  });
+
+  test('the hydrogen furnace cannot feed itself with an electrolyzer', () {
+    // The electrolyzer turns the furnace's water back into hydrogen; the
+    // furnace must use more hydrogen a cycle than that gives back, or the
+    // pair would make steel and oxygen from iron ore alone.
     final furnace = content.buildings['hydrogen_furnace']!;
-    double value(Map<String, double> m) => m.entries.fold(
-      0.0,
-      (t, e) => t + e.value * content.resources[e.key]!.basePrice.toDouble(),
-    );
-    expect(value(furnace.inputs), greaterThan(0.4 * value(furnace.outputs)));
+    final electrolyzer = content.buildings['electrolyzer']!;
+    final back =
+        furnace.outputs['water']! /
+        electrolyzer.inputs['water']! *
+        electrolyzer.outputs['hydrogen']!;
+    expect(furnace.inputs['hydrogen']!, greaterThan(back));
+  });
+
+  group('every building is the best choice somewhere', () {
+    // Per-crew and per-slot rates at level 0 and base crew.
+    double perSlot(String defId, String resourceId) {
+      final d = content.buildings[defId]!;
+      return d.outputs[resourceId]! / d.cycleSeconds;
+    }
+
+    double perCrew(String defId, String resourceId) =>
+        perSlot(defId, resourceId) / content.buildings[defId]!.crewSlots;
+
+    double perInput(String defId, String out, String input) {
+      final d = content.buildings[defId]!;
+      return d.outputs[out]! / d.inputs[input]!;
+    }
+
+    test('smelter: steel from iron ore alone, the cheapest to build', () {
+      final smelter = content.buildings['smelter']!;
+      final furnace = content.buildings['hydrogen_furnace']!;
+      expect(smelter.inputs.keys, ['iron_ore']);
+      expect(
+        smelter.buildCost['credits']!,
+        lessThan(furnace.buildCost['credits']!),
+      );
+    });
+
+    test('hydrogen furnace: more steel per iron ore, and water too', () {
+      // Best where iron ore is shipped in and hydrogen is local, such as a
+      // gas giant, and a water source on a body with no ice.
+      expect(
+        perInput('hydrogen_furnace', 'steel', 'iron_ore'),
+        greaterThan(perInput('smelter', 'steel', 'iron_ore')),
+      );
+      expect(content.buildings['hydrogen_furnace']!.outputs, contains('water'));
+    });
+
+    test('hydroponic farm: the most food per crew where ammonia is', () {
+      expect(
+        perCrew('farm', 'food'),
+        greaterThan(perCrew('protein_vat', 'food')),
+      );
+      expect(content.buildings['farm']!.inputs, contains('fertilizer'));
+    });
+
+    test('protein vat: food from water ice alone, with an electrolyzer', () {
+      // A body with ice but no ammonia can still keep habitats fed.
+      expect(_producible(content, ['water_ice']), contains('food'));
+      expect(
+        content.buildings.values
+            .where((b) => b.outputs.containsKey('food'))
+            .where((b) => !b.inputs.containsKey('fertilizer'))
+            .map((b) => b.id),
+        ['protein_vat'],
+      );
+    });
+
+    test('fuel: refinery per crew, fusion per slot, mixer on volcanic '
+        'worlds', () {
+      const makers = ['fuel_refinery', 'fusion_refinery', 'propellant_mixer'];
+      expect(
+        content.buildings.values
+            .where((b) => b.outputs.containsKey('fuel'))
+            .map((b) => b.id)
+            .toSet(),
+        makers.toSet(),
+      );
+      String best(double Function(String, String) rate) =>
+          makers.reduce((a, b) => rate(a, 'fuel') >= rate(b, 'fuel') ? a : b);
+      expect(best(perCrew), 'fuel_refinery');
+      expect(best(perSlot), 'fusion_refinery');
+      // Cinder's deposits alone make fuel only through the mixer.
+      final cinder = bodies['cinder']!;
+      expect(_producible(content, _depositsOf([cinder])), contains('fuel'));
+      expect(content.buildings['propellant_mixer']!.inputs.keys, ['sulfur']);
+    });
+
+    test('depot: Orbital Station stages outgrow a body without one', () {
+      // From the stage to level 4 on, a stage needs more of one good than
+      // the base storage cap holds; the depot is the one building that
+      // adds storage.
+      final station = content.megaprojects['orbital_station']!;
+      final toLevel4 = megaprojectCost(content, station, 3);
+      final most = toLevel4.entries
+          .where((e) => e.key != 'credits')
+          .map((e) => e.value.toDouble())
+          .reduce(math.max);
+      expect(most, greaterThan(content.rules.baseStorageCap));
+      expect(
+        content.buildings.values
+            .where((b) => b.kind == BuildingKind.warehouse)
+            .map((b) => b.id),
+        ['depot'],
+      );
+    });
+  });
+
+  test('kits, habitat modules and cargo ships come in tens, not hundreds', () {
+    // Their makers have no speed or capacity track: each makes a fixed
+    // trickle, at most 100 in 6 h, and more takes another building.
+    const items = ['outpost_kit', 'habitat_module', 'cargo_ship'];
+    for (final d in content.buildings.values) {
+      final made = items.where(d.outputs.containsKey).toList();
+      if (made.isEmpty) continue;
+      expect(d.upgrades.keys, [UpgradeTrack.efficiency], reason: d.id);
+      for (final id in made) {
+        expect(
+          21600 / d.cycleSeconds * d.outputs[id]!,
+          inInclusiveRange(10, 100),
+          reason: '${d.id} makes $id',
+        );
+      }
+    }
+  });
+
+  test('a capacity level never pays back over 2x faster than speed', () {
+    // One more crew adds `1 / crew` of a building's output, a speed level
+    // at least `speedPerLevel − 1` of it; the costs compared at the same
+    // speed level, full crew, any capacity level.
+    final r = content.rules;
+    for (final d in content.buildings.values) {
+      if (!d.upgrades.containsKey(UpgradeTrack.speed) ||
+          !d.upgrades.containsKey(UpgradeTrack.capacity)) {
+        continue;
+      }
+      for (final speed in [0, 1, 10, 24, 50, 100, 200]) {
+        for (final cap in [0, 1, 2, 5, 10]) {
+          final b = BuildingState(
+            id: 'x',
+            defId: d.id,
+            crew: d.crewSlots + cap,
+            levels: {UpgradeTrack.speed: speed, UpgradeTrack.capacity: cap},
+          );
+          double cost(UpgradeTrack t) =>
+              upgradeCost(content, b, t)['credits']!.toDouble();
+          final speedGain =
+              speedMultiplier(r, speed + 1) / speedMultiplier(r, speed) - 1;
+          final capGain = 1 / b.crew;
+          final ratio =
+              (cost(UpgradeTrack.speed) / speedGain) /
+              (cost(UpgradeTrack.capacity) / capGain);
+          expect(
+            ratio,
+            lessThanOrEqualTo(2),
+            reason: '${d.id} at speed $speed, capacity $cap',
+          );
+        }
+      }
+    }
   });
 
   test('cargo ships and habitat modules can be made at home', () {

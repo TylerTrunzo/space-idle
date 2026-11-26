@@ -209,7 +209,9 @@ void main() {
       expect(claimCost(s, content, 'player'), {
         'credits':
             content.rules.claimBaseCredits * n(content.rules.claimGrowth),
-        'outpost_kit': n(2),
+        'outpost_kit': n(
+          content.rules.claimKitsBase + content.rules.claimKitsPerOwned,
+        ),
       });
       fails(
         s,
@@ -233,7 +235,8 @@ void main() {
 
     test('and the kits too', () {
       final s = rich()..body('cinder').ownerId = 'player';
-      s.body('kora').stock['outpost_kit'] = n(2);
+      final kits = claimCost(s, content, 'player')['outpost_kit']!;
+      s.body('kora').stock['outpost_kit'] = kits;
       ok(s, claimBrine);
       expect(s.body('kora').stock['outpost_kit'], const BigNum.zero());
     });

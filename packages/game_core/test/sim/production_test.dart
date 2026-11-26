@@ -582,6 +582,27 @@ void main() {
     expect(crewTotals(s, c, 'p').supported, 21);
   });
 
+  test('habitat capacity raises life support as much as housing', () {
+    s.faction('p').baseCrew = 0;
+    final pod = add(home, 'pod', crew: 0, levels: {UpgradeTrack.capacity: 2});
+    expect(
+      fullRateFlow(c, home, pod, 10, 1).inputs['water'],
+      near(1.5),
+      reason: '1 water a cycle × (1 + 0.25 × 2)',
+    );
+    home.stock['water'] = n(100);
+    stepProduction(s, c, 10);
+    expect(stock(home, 'water'), near(98.5));
+    expect(pod.lastRunFraction, 1);
+    expect(crewTotals(s, c, 'p').supported, 15);
+
+    // Half of the raised need: half the raised housing.
+    home.stock['water'] = n(0.75);
+    stepProduction(s, c, 10);
+    expect(pod.lastRunFraction, closeTo(0.5, 1e-12));
+    expect(crewTotals(s, c, 'p').supported, 7);
+  });
+
   group('habitats get first claim on their inputs', () {
     final shipped = shippedContent();
     late GameState gs;
@@ -624,6 +645,23 @@ void main() {
       expect(refinery.lastRunFraction, 0);
       expect(stock(kora, 'oxygen').isZero, isTrue);
       expect(stock(kora, 'water'), near(1));
+    });
+
+    test('a habitat with capacity levels claims its raised need first', () {
+      // Capacity 2: 1.5 × the 6 each a level-0 habitat needs in 60 s.
+      final hab = put('habitat', crew: 0)..levels[UpgradeTrack.capacity] = 2;
+      final electrolyzer = put('electrolyzer');
+      kora.stock
+        ..clear()
+        ..['water'] = n(9)
+        ..['oxygen'] = n(4.5)
+        ..['food'] = n(100);
+      stepProduction(gs, shipped, 60);
+      expect(hab.lastRunFraction, closeTo(0.5, 1e-12));
+      expect(hab.lastLimitReason, 'input:oxygen');
+      // The habitat's full 9 water was held back from the electrolyzer.
+      expect(electrolyzer.lastRunFraction, 0);
+      expect(stock(kora, 'water'), near(4.5));
     });
 
     test('the habitat still uses what the body makes in the same step', () {

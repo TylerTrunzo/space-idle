@@ -412,7 +412,7 @@ void main() {
     });
 
     group('saturation is checked against each resource\'s own floor', () {
-      // Iron ore has its own floor of 0.01; steel uses the rules' 0.15.
+      // Iron ore has its own floor; circuits use the rules' floor.
       SaveResult load(String id, double v) {
         final m = jsonDecode(jsonEncode(fresh())) as Map<String, Object?>;
         m['market'] = {
@@ -422,17 +422,19 @@ void main() {
       }
 
       test('floors are as the shipped content sets them', () {
-        expect(marketFloorOf(content, 'iron_ore'), 0.01);
-        expect(marketFloorOf(content, 'steel'), 0.15);
+        expect(content.resources['iron_ore']!.marketFloor, 0.00001);
+        expect(content.resources['circuit']!.marketFloor, isNull);
+        expect(marketFloorOf(content, 'circuit'), content.rules.marketFloor);
+        expect(content.rules.marketFloor, 0.002);
       });
 
-      test('iron ore at 0.05 loads; steel at 0.1 does not', () {
-        expect(load('iron_ore', 0.05), isA<SaveOk>());
-        expect(err(load('steel', 0.1)).kind, SaveErrorKind.invalidValue);
+      test('iron ore at 0.001 loads; circuits at 0.001 do not', () {
+        expect(load('iron_ore', 0.001), isA<SaveOk>());
+        expect(err(load('circuit', 0.001)).kind, SaveErrorKind.invalidValue);
       });
 
       test('exactly at the floor loads; just below it does not', () {
-        for (final (id, floor) in [('iron_ore', 0.01), ('steel', 0.15)]) {
+        for (final (id, floor) in [('iron_ore', 0.00001), ('circuit', 0.002)]) {
           expect(load(id, floor), isA<SaveOk>(), reason: id);
           expect(load(id, 1), isA<SaveOk>(), reason: id);
           expect(

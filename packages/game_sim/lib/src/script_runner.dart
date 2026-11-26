@@ -546,9 +546,16 @@ final class ScriptRunner {
                 'defId': b.defId,
                 'tracks': {
                   for (final t in c.buildings[b.defId]!.upgrades.keys)
-                    t.name: {
-                      'level': b.levels[t],
-                      'cost': _nums(upgradeCost(c, b, t)),
+                    t.name: switch (upgradeMaxedReason(c, b, t)) {
+                      final why? => {
+                        'level': b.levels[t],
+                        'maxed': true,
+                        'reason': why,
+                      },
+                      null => {
+                        'level': b.levels[t],
+                        'cost': _nums(upgradeCost(c, b, t)),
+                      },
                     },
                 },
               },

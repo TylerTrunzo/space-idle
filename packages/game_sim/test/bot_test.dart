@@ -219,6 +219,35 @@ void main() {
     });
   });
 
+  test('bots never buy a maxed upgrade track', () {
+    // Smelter efficiency made nearly free, so it is the cheapest purchase,
+    // and taken to its floor, where it can no longer help.
+    final bundle = loadContentDir('../../content');
+    final smelter = (bundle['buildings']! as List)
+        .cast<Map<String, Object?>>()
+        .singleWhere((b) => b['id'] == 'smelter');
+    ((smelter['upgrades']! as Map)['efficiency']! as Map)['baseCredits'] =
+        '1e-9';
+    final e = GameEngine((Content.fromBundle(bundle) as ContentOk).content);
+    final s = e.newGame(1);
+    final b = s.body('kora').buildings.firstWhere((b) => b.defId == 'smelter');
+    b.levels[UpgradeTrack.efficiency] = 60;
+    expect(
+      upgradeMaxedReason(e.content, b, UpgradeTrack.efficiency),
+      isNotNull,
+    );
+    for (final bot in [GreedyBot(), BalancedBot()]) {
+      final cmds = bot.decide(e, s, 'player');
+      expect(
+        cmds.whereType<UpgradeCommand>().where(
+          (c) => c.buildingId == b.id && c.track == UpgradeTrack.efficiency,
+        ),
+        isEmpty,
+        reason: bot.name,
+      );
+    }
+  });
+
   test('bots name themselves', () {
     expect(GreedyBot().name, 'greedy');
     expect(BalancedBot().name, 'balanced');
@@ -369,7 +398,11 @@ void main() {
       for (final b in s.bodies.where((b) => b.surveyed)) {
         b.ownerId ??= 'player';
       }
-      s.body('kora').stock['outpost_kit'] = BigNum.from(20);
+      s.body('kora').stock['outpost_kit'] = claimCost(
+        s,
+        e.content,
+        'player',
+      )['outpost_kit']!;
       s.body('dusk_cairn').surveyed = true;
       final cmds = BalancedBot().decide(e, s, 'player');
       expect(

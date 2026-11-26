@@ -7,8 +7,7 @@
       "station_segment": "4",
       "survey_drone": "2",
       "reactor_core": "10",
-      "hull_plate": "60",
-      "habitat_module": "10"
+      "hull_plate": "60"
     },
     "costGrowth": 3,
     "stageSeconds": 7200,
@@ -16,7 +15,8 @@
     "bonusesPerLevel": [
       {"kind": "storagePercent", "amount": 10},
       {"kind": "housingPercent", "amount": 5},
-      {"kind": "offlineCapSeconds", "amount": 3600}
+      {"kind": "offlineCapSeconds", "amount": 3600},
+      {"kind": "marketDepthPercent", "amount": 25}
     ]
   }
 ]

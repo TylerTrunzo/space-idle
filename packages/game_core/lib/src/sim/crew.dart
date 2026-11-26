@@ -34,11 +34,18 @@ final class CrewTotals {
   int get overAssigned => math.max(0, assigned - supported);
 }
 
+/// How much habitat [b]'s capacity levels scale it:
+/// `1 + capacityHousingPerLevel × capacity level`.
+///
+/// Housing and life-support inputs both scale by it ([habitatHousing],
+/// `fullRateFlow`), so each crew housed costs the same upkeep at any level.
+double habitatCapacityScale(RulesDef r, BuildingState b) =>
+    1 + r.capacityHousingPerLevel * b.levels[UpgradeTrack.capacity]!;
+
 /// Crew habitat [b], of type [def], houses at full rate:
-/// `housing × (1 + capacityHousingPerLevel × capacity level)`.
+/// `housing × habitatCapacityScale`.
 double habitatHousing(RulesDef r, BuildingDef def, BuildingState b) =>
-    def.housing *
-    (1 + r.capacityHousingPerLevel * b.levels[UpgradeTrack.capacity]!);
+    def.housing * habitatCapacityScale(r, b);
 
 /// Base, supported, assigned and free crew of [factionId] over the bodies
 /// it owns; see [CrewTotals]. Throws if the faction does not exist.

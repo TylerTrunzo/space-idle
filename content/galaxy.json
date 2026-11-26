@@ -72,7 +72,7 @@
         {"defId": "mine", "depositResourceId": "copper_ore", "crew": 1},
         {"defId": "smelter", "crew": 1}
       ],
-      "stock": {"iron_ore": "40"}
+      "stock": {"iron_ore": "40", "cargo_ship": "2"}
     }
   ]
 }

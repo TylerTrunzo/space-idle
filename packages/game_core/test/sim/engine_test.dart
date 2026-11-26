@@ -559,12 +559,13 @@ void main() {
       final oxygen = <double>[];
       for (final s in [fine, coarse]) {
         final electrolyzer = s.body('kora').buildings.last;
-        // The furnace makes 1 water per 6 s; the electrolyzer wants 2.
-        expect(electrolyzer.lastRunFraction, closeTo(0.5, 1e-9));
+        // The furnace makes 1 water per 8 s; the electrolyzer wants 2 per
+        // 6 s.
+        expect(electrolyzer.lastRunFraction, closeTo(0.375, 1e-9));
         oxygen.add(s.faction('player').lifetimeProduced['oxygen']!.toDouble());
       }
       // The water lands one step late, so the runs differ by at most one
-      // coarse step of oxygen: 60 s at half of 1 per 6 s.
+      // coarse step of oxygen: 60 s at 0.375 of 1 per 6 s.
       expect((oxygen[0] - oxygen[1]).abs(), lessThanOrEqualTo(5 + 1e-6));
       final cf = fine.faction('player').credits.toDouble();
       final cc = coarse.faction('player').credits.toDouble();

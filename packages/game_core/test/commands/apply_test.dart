@@ -382,6 +382,45 @@ void main() {
       });
     });
 
+    test('capacity costs rise with the speed level too', () {
+      // A crew slot on a faster building adds more output, so its price
+      // follows the speed curve: capacity base × capacity growth^capacity
+      // level × speed growth^speed level.
+      final s = fresh();
+      final mine = s.body('kora').buildings.first;
+      final ups = content.buildings['mine']!.upgrades;
+      final cap = ups[UpgradeTrack.capacity]!;
+      final speed = ups[UpgradeTrack.speed]!;
+      expect(upgradeCost(content, mine, UpgradeTrack.capacity), {
+        'credits': cap.baseCredits,
+      });
+      mine.levels[UpgradeTrack.speed] = 3;
+      mine.levels[UpgradeTrack.capacity] = 2;
+      final want = cap.baseCredits
+          .mulDouble(math.pow(cap.growth, 2).toDouble())
+          .mulDouble(math.pow(speed.growth, 3).toDouble());
+      expect(
+        upgradeCost(
+          content,
+          mine,
+          UpgradeTrack.capacity,
+        )['credits']!.toDouble(),
+        closeTo(want.toDouble(), want.toDouble() * 1e-12),
+      );
+      // The speed track's own price ignores capacity levels.
+      expect(upgradeCost(content, mine, UpgradeTrack.speed), {
+        'credits': speed.baseCredits * BigNum.from(speed.growth).powInt(3),
+      });
+      // A habitat has no speed track: its capacity follows its own curve.
+      final hab = BuildingState(id: 'h', defId: 'habitat', crew: 0)
+        ..levels[UpgradeTrack.capacity] = 2;
+      final habCap =
+          content.buildings['habitat']!.upgrades[UpgradeTrack.capacity]!;
+      expect(upgradeCost(content, hab, UpgradeTrack.capacity), {
+        'credits': habCap.baseCredits * BigNum.from(habCap.growth).powInt(2),
+      });
+    });
+
     test('track the building lacks is unknownDef', () {
       final s = fresh();
       final mine = s.body('kora').buildings.first;
@@ -409,6 +448,119 @@ void main() {
         UpgradeCommand('player', 'b999', UpgradeTrack.speed),
         CommandError.unknownBuilding,
       );
+    });
+
+    test('efficiency at its floor is maxed and cannot be bought', () {
+      final s = fresh()..faction('player').credits = n(1e30);
+      // 0.95^27 is just above the 25% floor, so level 28 still helps.
+      final smelter = building(s, 'b3')..levels[UpgradeTrack.efficiency] = 27;
+      expect(
+        upgradeMaxedReason(content, smelter, UpgradeTrack.efficiency),
+        isNull,
+      );
+      expectOk(
+        s,
+        const UpgradeCommand('player', 'b3', UpgradeTrack.efficiency),
+      );
+      expect(
+        upgradeMaxedReason(content, smelter, UpgradeTrack.efficiency),
+        'its inputs are at the 25% floor',
+      );
+      expect(upgradeMaxedReason(content, smelter, UpgradeTrack.speed), isNull);
+      expect(
+        expectFails(
+          s,
+          const UpgradeCommand('player', 'b3', UpgradeTrack.efficiency),
+          CommandError.invalidAmount,
+        ),
+        'Smelter on Kora is already at its best efficiency: its inputs are '
+        'at the 25% floor',
+      );
+    });
+
+    test('a track at the highest level a save holds is maxed', () {
+      final smelter = building(fresh(), 'b3')
+        ..levels[UpgradeTrack.speed] = SaveCodec.maxLevel;
+      expect(
+        upgradeMaxedReason(content, smelter, UpgradeTrack.speed),
+        'it is at the highest level (${SaveCodec.maxLevel})',
+      );
+    });
+
+    test('a track that cannot help is maxed from level 0', () {
+      // Efficiency on a factory with no inputs; capacity where it adds no
+      // crew slot, housing or storage.
+      final c = withBuildings(
+        withClaims(content, base: 0, growth: 1, capacityStoragePerLevel: 0),
+        [
+          BuildingDef(
+            id: 'beacon',
+            name: 'Beacon',
+            kind: BuildingKind.factory,
+            cycleSeconds: 10,
+            outputs: const {'steel': 1},
+            crewSlots: 1,
+            buildCost: const {},
+            upgrades: {
+              UpgradeTrack.efficiency: UpgradeCostDef(
+                baseCredits: n(10),
+                growth: 1.2,
+              ),
+            },
+          ),
+          BuildingDef(
+            id: 'shed',
+            name: 'Shed',
+            kind: BuildingKind.warehouse,
+            cycleSeconds: 1,
+            crewSlots: 0,
+            storageBonus: 1,
+            buildCost: const {},
+            upgrades: {
+              UpgradeTrack.speed: UpgradeCostDef(
+                baseCredits: n(10),
+                growth: 1.2,
+              ),
+              UpgradeTrack.capacity: UpgradeCostDef(
+                baseCredits: n(10),
+                growth: 1.2,
+              ),
+            },
+          ),
+        ],
+      );
+      final s = newGameState(c, 1)..faction('player').credits = n(1e6);
+      final kora = s.body('kora');
+      final beacon = BuildingState(id: 'x1', defId: 'beacon', crew: 1);
+      final shed = BuildingState(id: 'x2', defId: 'shed', crew: 0);
+      kora.buildings.addAll([beacon, shed]);
+      expect(
+        upgradeMaxedReason(c, beacon, UpgradeTrack.efficiency),
+        'it uses no inputs',
+      );
+      expect(
+        upgradeMaxedReason(c, shed, UpgradeTrack.speed),
+        'it runs no recipe',
+      );
+      expect(
+        upgradeMaxedReason(c, shed, UpgradeTrack.capacity),
+        'it adds no crew slots, housing or storage here',
+      );
+      expectFails(
+        s,
+        const UpgradeCommand('player', 'x1', UpgradeTrack.efficiency),
+        CommandError.invalidAmount,
+        using: c,
+      );
+      // Where capacity adds storage, a warehouse's capacity helps.
+      final withStorage = withBuildings(content, [c.buildings['shed']!]);
+      expect(
+        upgradeMaxedReason(withStorage, shed, UpgradeTrack.capacity),
+        isNull,
+      );
+      // Habitats gain housing from capacity, crew slots or not.
+      final hab = BuildingState(id: 'x3', defId: 'habitat', crew: 0);
+      expect(upgradeMaxedReason(c, hab, UpgradeTrack.capacity), isNull);
     });
   });
 
@@ -498,7 +650,11 @@ void main() {
     test('a claim takes its last outpost kit to exactly zero', () {
       final s = fresh()..faction('player').credits = n(1e9);
       s.body('cinder').ownerId = 'player';
-      s.body('kora').stock['outpost_kit'] = BigNum.from(2 - 4.4e-16);
+      final kits = claimCost(s, content, 'player')['outpost_kit']!;
+      s.body('kora').stock['outpost_kit'] = kits.mulDouble(
+        1 - 2.220446049250313e-16,
+      );
+      expect(s.body('kora').stock['outpost_kit']! >= kits, isTrue);
       expectOk(s, const ClaimBodyCommand('player', 'brine', 'kora'));
       expect(s.body('kora').stock['outpost_kit']!.isNegative, isFalse);
     });
@@ -578,10 +734,16 @@ void main() {
   });
 
   group('claimBody', () {
-    test('the first claim costs credits only; later ones a kit per body '
-        'owned', () {
+    test('the first claim costs credits only; later ones 5 kits plus 5 per '
+        'extra body owned', () {
       // Shipped content with the claim numbers these tests assume.
-      final c4 = withClaims(content, base: 5000, growth: 4);
+      final c4 = withClaims(
+        content,
+        base: 5000,
+        growth: 4,
+        kitsBase: 5,
+        kitsPerOwned: 5,
+      );
       final s = fresh();
       s.faction('player').credits = n(1e6);
       expect(claimCost(s, c4, 'player'), {'credits': n(5000)});
@@ -590,19 +752,19 @@ void main() {
       expect(s.body('brine').ownerId, 'player');
       expect(s.faction('player').credits, n(1e6 - 5000));
 
-      // Two bodies owned: two kits.
+      // Two bodies owned: 5 + 5 × 1 kits.
       expect(claimCost(s, c4, 'player'), {
         'credits': n(20000),
-        'outpost_kit': n(2),
+        'outpost_kit': n(10),
       });
-      s.body('kora').stock['outpost_kit'] = n(1);
+      s.body('kora').stock['outpost_kit'] = n(9);
       expectFails(
         s,
         ClaimBodyCommand('player', 'hollow_reach', 'kora'),
         CommandError.cannotAfford,
         using: c4,
       );
-      s.body('kora').stock['outpost_kit'] = n(2);
+      s.body('kora').stock['outpost_kit'] = n(10);
       expectOk(
         s,
         ClaimBodyCommand('player', 'hollow_reach', 'kora'),
@@ -614,8 +776,13 @@ void main() {
       expect(s.body('kora').stock['outpost_kit'], n(0));
       expect(claimCost(s, c4, 'player'), {
         'credits': n(80000),
-        'outpost_kit': n(3),
+        'outpost_kit': n(15),
       });
+      // The kit numbers come from the rules.
+      expect(
+        claimCost(s, withClaims(c4, base: 1, growth: 1, kitsBase: 1), 'player'),
+        {'credits': n(1), 'outpost_kit': n(11)},
+      );
     });
 
     test('validation', () {
@@ -841,8 +1008,17 @@ void main() {
 }
 
 /// [c] with its rules' claim base credits set to [base] and claim growth
-/// to [growth].
-Content withClaims(Content c, {required double base, required double growth}) {
+/// to [growth], and [capacityStoragePerLevel], claim kits base
+/// [kitsBase] and kits per extra body [kitsPerOwned] when given; every
+/// other rule as it was.
+Content withClaims(
+  Content c, {
+  required double base,
+  required double growth,
+  double? capacityStoragePerLevel,
+  int? kitsBase,
+  int? kitsPerOwned,
+}) {
   final r = c.rules;
   return Content(
     rules: RulesDef(
@@ -852,24 +1028,50 @@ Content withClaims(Content c, {required double base, required double growth}) {
       efficiencyPerLevel: r.efficiencyPerLevel,
       efficiencyFloor: r.efficiencyFloor,
       capacityCrewPerLevel: r.capacityCrewPerLevel,
-      capacityStoragePerLevel: r.capacityStoragePerLevel,
+      capacityStoragePerLevel:
+          capacityStoragePerLevel ?? r.capacityStoragePerLevel,
+      capacityHousingPerLevel: r.capacityHousingPerLevel,
       baseStorageCap: r.baseStorageCap,
       offlineCapSeconds: r.offlineCapSeconds,
       marketFloor: r.marketFloor,
       marketRecoverySeconds: r.marketRecoverySeconds,
       claimBaseCredits: BigNum.from(base),
       claimGrowth: growth,
+      claimKitsBase: kitsBase ?? r.claimKitsBase,
+      claimKitsPerOwned: kitsPerOwned ?? r.claimKitsPerOwned,
       slotBaseCredits: r.slotBaseCredits,
       slotGrowth: r.slotGrowth,
       outpostKitResource: r.outpostKitResource,
       shipCapacityPerSecond: r.shipCapacityPerSecond,
       cargoShipResource: r.cargoShipResource,
       baseTravelSeconds: r.baseTravelSeconds,
+      claimSecondsBase: r.claimSecondsBase,
+      claimSecondsPerOwned: r.claimSecondsPerOwned,
+      expandSlotsSeconds: r.expandSlotsSeconds,
+      contractRefillSeconds: r.contractRefillSeconds,
+      surveyDrones: r.surveyDrones,
+      surveyCredits: r.surveyCredits,
+      surveySeconds: r.surveySeconds,
+      surveyDroneResource: r.surveyDroneResource,
     ),
     resources: c.resources,
     buildings: c.buildings,
     bodyTypes: c.bodyTypes,
     galaxy: c.galaxy,
     milestones: c.milestones,
+    megaprojects: c.megaprojects,
+    contractTemplates: c.contractTemplates,
   );
 }
+
+/// [c] with [extra] building types added after its own.
+Content withBuildings(Content c, List<BuildingDef> extra) => Content(
+  rules: c.rules,
+  resources: c.resources,
+  buildings: {...c.buildings, for (final d in extra) d.id: d},
+  bodyTypes: c.bodyTypes,
+  galaxy: c.galaxy,
+  milestones: c.milestones,
+  megaprojects: c.megaprojects,
+  contractTemplates: c.contractTemplates,
+);

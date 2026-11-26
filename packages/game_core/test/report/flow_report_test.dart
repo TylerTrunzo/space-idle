@@ -54,6 +54,7 @@ void main() {
   });
 
   test('building statuses report run, crew and slots', () {
+    s.faction('player').credits = n(1e6);
     engine.apply(
       s,
       const UpgradeCommand('player', 'b3', UpgradeTrack.capacity),
@@ -75,7 +76,9 @@ void main() {
   });
 
   test('building statuses give actual rates and effective fraction', () {
-    s.faction('player').baseCrew = 30;
+    s.faction('player')
+      ..baseCrew = 30
+      ..credits = n(1e6);
     engine
       ..apply(s, const UpgradeCommand('player', 'b3', UpgradeTrack.capacity))
       ..apply(s, const AssignCrewCommand('player', 'b3', 2))

@@ -65,7 +65,9 @@ commands:
   player's routes, its running projects soonest first (`kind`, `targetId`,
   `name`, `startedAt`, `finishAt`, `secondsLeft` and `timeLeft` such as
   `"1h 30m"`), and price and saturation of the goods the player holds
-- `{"cmd":"costs"}` upgrade costs of the player's buildings, the next claim
+- `{"cmd":"costs"}` upgrade costs of the player's buildings (a track that
+  can no longer help, such as efficiency at its floor, shows `"maxed": true`
+  and a `reason` instead of a cost, and `upgrade` refuses it), the next claim
   cost (or `"no bodies left to claim"` once every body is owned), each
   owned body's next extra build slot, and each megaproject's next stage
   (`megaprojects`: `nextLevel`, `cost`, `timeTaken`)

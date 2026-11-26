@@ -97,6 +97,7 @@ void main() {
           (BonusKind.storagePercent, 10),
           (BonusKind.housingPercent, 5),
           (BonusKind.offlineCapSeconds, 3600),
+          (BonusKind.marketDepthPercent, 25),
         ],
       );
     });
@@ -108,7 +109,6 @@ void main() {
         'survey_drone',
         'reactor_core',
         'hull_plate',
-        'habitat_module',
       ]);
       for (final id in station.baseCost.keys) {
         if (id == 'credits') continue;
@@ -376,23 +376,25 @@ void main() {
       final c = contentWithBonuses([
         {'kind': 'marketDepthPercent', 'amount': 100},
       ]);
+      final depth = c.resources['steel']!.marketDepth;
       double revenue(int level) {
         final s = GameEngine(c).newGame(1);
         s.faction('player').megaprojectLevels['boost'] = level;
-        s.body('kora').stock['steel'] = n(6700);
+        s.body('kora').stock['steel'] = n(depth);
         return sell(
           s,
           c,
           'player',
           'kora',
           'steel',
-          n(6700),
+          n(depth),
         ).revenue.toDouble();
       }
 
-      // depth × base × (1 − e^(−units / depth)), at depth 6700 and 13400.
-      expect(revenue(0), closeTo(6 * 6700 * (1 - math.exp(-1)), 1e-6));
-      expect(revenue(1), closeTo(6 * 13400 * (1 - math.exp(-0.5)), 1e-6));
+      // depth × base × (1 − e^(−units / depth)), at the depth and twice it.
+      final tol = 6 * depth * 1e-12;
+      expect(revenue(0), closeTo(6 * depth * (1 - math.exp(-1)), tol));
+      expect(revenue(1), closeTo(6 * 2 * depth * (1 - math.exp(-0.5)), tol));
     });
 
     test('market depth softens auto-sell too', () {

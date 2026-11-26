@@ -166,9 +166,10 @@ typedef BuildingFlow = ({
 /// `amount × lastRunFraction` is what the building actually moved. Inputs
 /// are listed for every recipe input (zero when unstaffed); an extractor's
 /// only output is its deposit's resource, scaled by richness, and it makes
-/// nothing when that deposit is missing. A habitat with no crew slots runs
-/// at full rate, ignoring [crewEff]; other buildings that do not
-/// [runsRecipe] (warehouses) take and make nothing.
+/// nothing when that deposit is missing. A habitat's inputs scale with its
+/// capacity levels as its housing does ([habitatCapacityScale]). A
+/// habitat with no crew slots runs at full rate, ignoring [crewEff]; other
+/// buildings that do not [runsRecipe] (warehouses) take and make nothing.
 BuildingFlow fullRateFlow(
   Content c,
   BodyState body,
@@ -191,7 +192,10 @@ BuildingFlow fullRateFlow(
       def.cycleSeconds *
       speedMultiplier(r, b.levels[UpgradeTrack.speed]!) *
       crewFrac;
-  final inputMult = efficiencyMultiplier(r, b.levels[UpgradeTrack.efficiency]!);
+  // A habitat's capacity levels raise its life support with its housing.
+  final inputMult =
+      efficiencyMultiplier(r, b.levels[UpgradeTrack.efficiency]!) *
+      (def.kind == BuildingKind.habitat ? habitatCapacityScale(r, b) : 1);
   final inputs = {
     for (final MapEntry(key: id, value: perCycle) in def.inputs.entries)
       id: BigNum.from(perCycle).mulDouble(inputMult * cycles),

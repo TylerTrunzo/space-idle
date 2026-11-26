@@ -362,6 +362,20 @@ void main() {
     expect(variants, greaterThan(500));
   });
 
+  test('claim kits default to 5 plus 5 per extra body owned', () {
+    final c = _ok(minimalBundle());
+    expect(c.rules.claimKitsBase, 5);
+    expect(c.rules.claimKitsPerOwned, 5);
+    final b = minimalBundle();
+    (b['rules'] as Map)['claimKitsBase'] = 2;
+    (b['rules'] as Map)['claimKitsPerOwned'] = 3;
+    final set = _ok(b);
+    expect(set.rules.claimKitsBase, 2);
+    expect(set.rules.claimKitsPerOwned, 3);
+    (b['rules'] as Map)['claimKitsBase'] = -1;
+    expect(_errors(b), contains('rules.claimKitsBase: must be >= 0'));
+  });
+
   test('bad values are reported with paths', () {
     final b = minimalBundle();
     _entry(b, 'resources', 'ore')['basePrice'] = 'lots';

@@ -272,6 +272,8 @@ final class _Loader {
       'marketRecoverySeconds',
       'claimBaseCredits',
       'claimGrowth',
+      'claimKitsBase',
+      'claimKitsPerOwned',
       'slotBaseCredits',
       'slotGrowth',
       'outpostKitResource',
@@ -311,6 +313,16 @@ final class _Loader {
     final marketRecoverySeconds = f.number('marketRecoverySeconds', gt: 0);
     final claimBaseCredits = f.bigNum('claimBaseCredits');
     final claimGrowth = f.number('claimGrowth', ge: 1);
+    final claimKitsBase = f.integer(
+      'claimKitsBase',
+      fallback: RulesDef.defaultClaimKitsBase,
+      min: 0,
+    );
+    final claimKitsPerOwned = f.integer(
+      'claimKitsPerOwned',
+      fallback: RulesDef.defaultClaimKitsPerOwned,
+      min: 0,
+    );
     final slotBaseCredits = f.bigNum('slotBaseCredits', positive: true);
     final slotGrowth = f.number('slotGrowth', gt: 1);
     final outpostKitResource = f.string('outpostKitResource');
@@ -369,6 +381,8 @@ final class _Loader {
       marketRecoverySeconds: marketRecoverySeconds!,
       claimBaseCredits: claimBaseCredits!,
       claimGrowth: claimGrowth!,
+      claimKitsBase: claimKitsBase!,
+      claimKitsPerOwned: claimKitsPerOwned!,
       slotBaseCredits: slotBaseCredits!,
       slotGrowth: slotGrowth!,
       outpostKitResource: outpostKitResource!,

@@ -175,6 +175,10 @@ const double _demandBufferSeconds = 60;
 /// Share of demand below which a route counts as too small.
 const double _routeSlack = 0.9;
 
+/// Free crew below which the balanced bot works toward more housing before
+/// saving for a goal, so crew is left to staff the life-support chain.
+const int _housingAheadCrew = 3;
+
 /// How deep [_View.ensureMade] follows a recipe chain.
 const int _maxChainDepth = 8;
 
@@ -296,6 +300,11 @@ final class _View {
   bool expanding(BodyState body) =>
       projectOn(s, ProjectKind.expandSlots, body.id) != null;
 
+  /// Whether [b]'s type has track [t] and its next level would help
+  /// ([upgradeMaxedReason]).
+  bool canUpgrade(BuildingState b, UpgradeTrack t) =>
+      def(b).upgrades.containsKey(t) && upgradeMaxedReason(c, b, t) == null;
+
   /// Whether [b] makes [resourceId] when it runs.
   bool makes(BuildingState b, String resourceId) =>
       def(b).kind == BuildingKind.extractor
@@ -316,9 +325,43 @@ final class _View {
   bool hasShip(BodyState body) =>
       stock(body, r.cargoShipResource) >= BigNum.from(1);
 
-  /// Credits per second of [flow]'s outputs less inputs, each at its
-  /// [marginalPrice].
-  double value(BuildingFlow flow) => _worth(flow.outputs) - _worth(flow.inputs);
+  /// Credits per second of [flow]'s outputs less inputs: the outputs at
+  /// what selling that much more would add ([extraRevenue]), the inputs at
+  /// their [marginalPrice].
+  double value(BuildingFlow flow) {
+    var made = 0.0;
+    for (final MapEntry(key: id, value: n) in flow.outputs.entries) {
+      made += extraRevenue(id, n.toDouble());
+    }
+    return made - _worth(flow.inputs);
+  }
+
+  /// Credits per second that selling [extra] more units a second of [id]
+  /// would add once the market settles, on top of what the faction makes
+  /// for sale now.
+  ///
+  /// Steady sales of `q` a second hold the saturation at
+  /// `1 / (1 + q × marketRecoverySeconds / depth)` (or the floor), so the
+  /// extra units earn the difference in income between `q` and
+  /// `q + extra`. `q` is the faction's surplus of [id] a second over its
+  /// owned bodies ([surplus]), or, without a flow report, the rate
+  /// today's saturation implies. Stock piling up unsold counts, so a good
+  /// held back for later is not valued as if every extra unit sold at
+  /// full price.
+  double extraRevenue(String id, double extra) {
+    final base = c.resources[id]!.basePrice.toDouble();
+    final floor = marketFloorOf(c, id);
+    final k = r.marketRecoverySeconds / marketDepthFor(s, c, factionId, id);
+    final double now;
+    if (report != null) {
+      now = owned.fold(0.0, (t, b) => t + math.max(0.0, surplus(b, id)));
+    } else {
+      final sat = s.market.saturation[id] ?? 1;
+      now = sat >= 1 ? 0.0 : (1 / math.max(sat, floor) - 1) / k;
+    }
+    double income(double q) => q * base * math.max(floor, 1 / (1 + k * q));
+    return income(now + extra) - income(now);
+  }
 
   double _worth(Map<String, BigNum> amounts) {
     var v = 0.0;
@@ -666,6 +709,7 @@ final class _View {
     for (final body in owned) {
       for (final b in body.buildings) {
         for (final t in def(b).upgrades.keys) {
+          if (!canUpgrade(b, t)) continue;
           offer(UpgradeCommand(factionId, b.id, t), body, upgradeCost(c, b, t));
         }
       }
@@ -758,7 +802,7 @@ final class _View {
     (Command, BigNum)? best;
     for (final b in body.buildings) {
       if (def(b).kind != BuildingKind.warehouse ||
-          !def(b).upgrades.containsKey(UpgradeTrack.capacity)) {
+          !canUpgrade(b, UpgradeTrack.capacity)) {
         continue;
       }
       final cost = upgradeCost(c, b, UpgradeTrack.capacity);
@@ -809,7 +853,7 @@ final class _View {
     for (final b in body.buildings) {
       if (b.crew == 0 || !makes(b, resourceId)) continue;
       final t = _runsFreely(b) ? UpgradeTrack.speed : UpgradeTrack.efficiency;
-      if (!def(b).upgrades.containsKey(t)) continue;
+      if (!canUpgrade(b, t)) continue;
       final cost = upgradeCost(c, b, t);
       if (!canPay(body, cost)) continue;
       if (upgrade == null || cost['credits']! < upgrade.$2) {
@@ -972,6 +1016,12 @@ final class _View {
         step,
       _ => null,
     };
+    // Nearly out of crew, a step toward housing comes before saving for a
+    // goal, while there is still crew to staff the chain it needs: every
+    // later goal needs crew too.
+    if (freeCrew < _housingAheadCrew) {
+      if (_ensureHousing() case final _Do step) return step;
+    }
     for (final m in c.milestones) {
       if (faction.reachedMilestones.contains(m.id) || _met(m.condition)) {
         continue;
@@ -1309,7 +1359,13 @@ final class _View {
       final from = owned
           .where((o) => o != body && hasShip(o) && stock(o, id) >= n)
           .firstOrNull;
-      if (from == null) return const _Waiting();
+      if (from == null) {
+        // The parts are made elsewhere but nothing can carry them: ships
+        // first.
+        if (owned.any(hasShip)) return const _Waiting();
+        final ships = ensureMade(r.cargoShipResource);
+        return _acts(ships) ? ships : const _Waiting();
+      }
       return _Do(
         CreateRouteCommand(
           factionId,
@@ -1362,7 +1418,7 @@ final class _View {
       final d = def(b);
       if (d.kind != BuildingKind.habitat ||
           b.lastRunFraction < 1 ||
-          !d.upgrades.containsKey(UpgradeTrack.capacity)) {
+          !canUpgrade(b, UpgradeTrack.capacity)) {
         continue;
       }
       final credits = upgradeCost(c, b, UpgradeTrack.capacity)['credits']!;
@@ -1443,8 +1499,7 @@ final class _View {
     for (final body in owned) {
       for (final b in body.buildings) {
         final d = def(b);
-        final ups = d.upgrades;
-        if (ups.containsKey(UpgradeTrack.capacity) &&
+        if (canUpgrade(b, UpgradeTrack.capacity) &&
             d.kind != BuildingKind.habitat &&
             freeCrew >= 1 &&
             b.crew > 0 &&
@@ -1463,7 +1518,7 @@ final class _View {
         if (b.crew == 0 || !_runsFreely(b)) continue;
         if (d.kind == BuildingKind.habitat) continue;
         final flow = flowOf(body, b);
-        if (ups.containsKey(UpgradeTrack.speed)) {
+        if (canUpgrade(b, UpgradeTrack.speed)) {
           final level = b.levels[UpgradeTrack.speed]!;
           final more =
               speedMultiplier(r, level + 1) / speedMultiplier(r, level) - 1;
@@ -1474,8 +1529,7 @@ final class _View {
             gain(body, _scaledFlow(flow, more)),
           );
         }
-        if (ups.containsKey(UpgradeTrack.efficiency) &&
-            flow.inputs.isNotEmpty) {
+        if (canUpgrade(b, UpgradeTrack.efficiency) && flow.inputs.isNotEmpty) {
           final level = b.levels[UpgradeTrack.efficiency]!;
           final saved =
               1 -

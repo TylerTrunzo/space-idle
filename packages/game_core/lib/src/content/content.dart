@@ -67,8 +67,10 @@ enum UpgradeTrack {
   /// Fewer inputs per cycle.
   efficiency,
 
-  /// More crew slots and body storage; on habitats, more housing instead
-  /// of crew slots (see [RulesDef.capacityHousingPerLevel]).
+  /// More crew slots and body storage; on habitats, more housing and the
+  /// life support to match instead of crew slots (see
+  /// [RulesDef.capacityHousingPerLevel]). On a building with a speed track
+  /// its price also rises with the speed level (see `upgradeCost`).
   capacity,
 }
 
@@ -189,6 +191,8 @@ final class RulesDef {
     required this.marketRecoverySeconds,
     required this.claimBaseCredits,
     required this.claimGrowth,
+    this.claimKitsBase = defaultClaimKitsBase,
+    this.claimKitsPerOwned = defaultClaimKitsPerOwned,
     required this.slotBaseCredits,
     required this.slotGrowth,
     required this.outpostKitResource,
@@ -231,8 +235,9 @@ final class RulesDef {
 
   /// Habitat housing fraction added per capacity level: a habitat houses
   /// `housing × (1 + capacityHousingPerLevel × capacity level)` at full
-  /// rate. On habitats the capacity track adds housing, not crew slots
-  /// (a habitat with no base slots never gets any).
+  /// rate, and uses its inputs scaled by the same factor. On habitats the
+  /// capacity track adds housing, not crew slots (a habitat with no base
+  /// slots never gets any).
   final double capacityHousingPerLevel;
 
   /// Units of each resource a body stores before warehouses and upgrades.
@@ -257,6 +262,22 @@ final class RulesDef {
 
   /// Claim credit multiplier per extra body already owned.
   final double claimGrowth;
+
+  /// [claimKitsBase] when the rules do not set it.
+  static const int defaultClaimKitsBase = 5;
+
+  /// [claimKitsPerOwned] when the rules do not set it.
+  static const int defaultClaimKitsPerOwned = 5;
+
+  /// Outpost kits every claim after the first costs, before
+  /// [claimKitsPerOwned]: with `n` bodies owned or being claimed, a claim
+  /// costs `claimKitsBase + claimKitsPerOwned × (n − 1)` kits; see
+  /// `claimCost`.
+  final int claimKitsBase;
+
+  /// Outpost kits each body owned or being claimed beyond the home body
+  /// adds to a claim.
+  final int claimKitsPerOwned;
 
   /// Credits for a body's first extra build slot.
   final BigNum slotBaseCredits;

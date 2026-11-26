@@ -8,6 +8,7 @@ import '../sim/contracts.dart';
 import '../sim/crew.dart';
 import '../sim/market.dart';
 import '../sim/megaprojects.dart';
+import '../sim/production.dart';
 import '../sim/projects.dart';
 import '../sim/survey.dart';
 import '../state/game_state.dart';
@@ -55,33 +56,84 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
 /// Cost of the next level of track [t] on [b]: `baseCredits × growth^level`
 /// credits.
 ///
+/// A capacity level on a building that also has a speed track costs
+/// `speed growth^speed level` times more: one more crew adds a share of
+/// output that every speed level has raised, so its price follows the
+/// speed curve and stays comparable to a speed level's at any speed.
+///
 /// Throws [ArgumentError] if the building's type has no such track.
 Map<String, BigNum> upgradeCost(Content c, BuildingState b, UpgradeTrack t) {
-  final curve = c.buildings[b.defId]!.upgrades[t];
+  final upgrades = c.buildings[b.defId]!.upgrades;
+  final curve = upgrades[t];
   if (curve == null) {
     throw ArgumentError.value(t, 't', 'building ${b.defId} has no such track');
   }
-  return {
-    _credits:
-        curve.baseCredits * BigNum.from(curve.growth).powInt(b.levels[t]!),
-  };
+  var credits =
+      curve.baseCredits * BigNum.from(curve.growth).powInt(b.levels[t]!);
+  final speed = upgrades[UpgradeTrack.speed];
+  if (t == UpgradeTrack.capacity && speed != null) {
+    credits =
+        credits *
+        BigNum.from(speed.growth).powInt(b.levels[UpgradeTrack.speed]!);
+  }
+  return {_credits: credits};
+}
+
+/// Why the next level of track [t] on [b] would do nothing, or null if it
+/// would help (or the building's type has no such track).
+///
+/// A short phrase for the player, such as "its inputs are at the 25%
+/// floor". A track is maxed at the highest level a save holds, and when
+/// it cannot help: speed on a building that runs no recipe, efficiency on
+/// one that uses no inputs or whose inputs are already at
+/// `efficiencyFloor`, and capacity where it adds no crew slot, housing or
+/// storage. `UpgradeCommand` refuses a maxed track.
+String? upgradeMaxedReason(Content c, BuildingState b, UpgradeTrack t) {
+  final def = c.buildings[b.defId]!;
+  if (!def.upgrades.containsKey(t)) return null;
+  final r = c.rules;
+  final level = b.levels[t]!;
+  if (level >= SaveCodec.maxLevel) {
+    return 'it is at the highest level (${SaveCodec.maxLevel})';
+  }
+  switch (t) {
+    case UpgradeTrack.speed:
+      if (!runsRecipe(def)) return 'it runs no recipe';
+    case UpgradeTrack.efficiency:
+      if (!runsRecipe(def) || def.inputs.isEmpty) return 'it uses no inputs';
+      if (efficiencyMultiplier(r, level + 1) >=
+          efficiencyMultiplier(r, level)) {
+        return 'its inputs are at the '
+            '${(r.efficiencyFloor * 100).round()}% floor';
+      }
+    case UpgradeTrack.capacity:
+      final addsCrew = def.crewSlots > 0 && r.capacityCrewPerLevel > 0;
+      final addsHousing =
+          def.kind == BuildingKind.habitat && r.capacityHousingPerLevel > 0;
+      if (!addsCrew && !addsHousing && r.capacityStoragePerLevel == 0) {
+        return 'it adds no crew slots, housing or storage here';
+      }
+  }
+  return null;
 }
 
 /// Cost for [factionId] to claim its next body.
 ///
 /// With `n` bodies owned or being claimed ([bodiesOwnedOrClaiming]):
-/// `claimBaseCredits × claimGrowth^(n−1)` credits, plus `n` outpost kits
-/// once more than the home body is owned, so the first claim costs credits
-/// only and each later one a kit more. Kits are listed only when needed.
-/// Claims under way count, so claims started side by side cost what they
-/// would one after another.
+/// `claimBaseCredits × claimGrowth^(n−1)` credits, plus
+/// `claimKitsBase + claimKitsPerOwned × (n − 1)` outpost kits once more
+/// than the home body is owned, so the first claim costs credits only and
+/// each later one [RulesDef.claimKitsPerOwned] kits more. Kits are listed
+/// only when needed. Claims under way count, so claims started side by
+/// side cost what they would one after another.
 Map<String, BigNum> claimCost(GameState s, Content c, String factionId) {
   final owned = bodiesOwnedOrClaiming(s, factionId);
   final extra = math.max(0, owned - 1);
   final r = c.rules;
+  final kits = r.claimKitsBase + r.claimKitsPerOwned * extra;
   return {
     _credits: r.claimBaseCredits * BigNum.from(r.claimGrowth).powInt(extra),
-    if (extra > 0) r.outpostKitResource: BigNum.from(owned),
+    if (extra > 0 && kits > 0) r.outpostKitResource: BigNum.from(kits),
   };
 }
 
@@ -336,6 +388,13 @@ CommandResult _upgrade(
       CommandError.invalidAmount,
       '${_buildingName(c, body, b)} is at the highest ${cmd.track.name} '
       'level (${SaveCodec.maxLevel})',
+    );
+  }
+  if (upgradeMaxedReason(c, b, cmd.track) case final why?) {
+    return _fail(
+      CommandError.invalidAmount,
+      '${_buildingName(c, body, b)} is already at its best '
+      '${cmd.track.name}: $why',
     );
   }
   final cost = upgradeCost(c, b, cmd.track);

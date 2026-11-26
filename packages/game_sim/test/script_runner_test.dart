@@ -127,7 +127,7 @@ void main() {
     ]);
     expect(kora['slots'], {'used': 3, 'total': 12});
     expect((kora['storageCap']! as Map)['display'], '1K');
-    expect((kora['stock']! as Map).keys, ['iron_ore']);
+    expect((kora['stock']! as Map).keys, ['iron_ore', 'cargo_ship']);
     final cinder = bodies.first;
     expect(cinder['owner'], isNull);
     expect(cinder['type'], 'Volcanic World');
@@ -330,7 +330,7 @@ void main() {
       out['message'],
       'Started Orbital Station level 1 on Kora for 200K credits and '
       '4 Station Segment and 2 Survey Drone and 10 Reactor Core and '
-      '60 Hull Plate and 10 Habitat Module; done in 2h',
+      '60 Hull Plate; done in 2h',
     );
     final projects = r.handle({'cmd': 'state'})['projects']! as List;
     expect((projects.single as Map)['name'], 'Orbital Station');
@@ -352,6 +352,31 @@ void main() {
     expect(r.handle({'cmd': 'state'})['megaprojects'], [
       {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 1},
     ]);
+  });
+
+  test('costs mark a track that cannot get better as maxed', () {
+    final r = _runner();
+    final smelter = r.state
+        .body('kora')
+        .buildings
+        .firstWhere((b) => b.defId == 'smelter');
+    smelter.levels[UpgradeTrack.efficiency] = 40;
+    Map<String, Object?> tracks() =>
+        ((r.handle({'cmd': 'costs'})['upgrades']! as List)
+                    .cast<Map<String, Object?>>()
+                    .singleWhere(
+                      (u) => u['buildingId'] == smelter.id,
+                    )['tracks']!
+                as Map)
+            .cast<String, Object?>();
+    expect(tracks()['efficiency'], {
+      'level': 40,
+      'maxed': true,
+      'reason': 'its inputs are at the 25% floor',
+    });
+    final speed = tracks()['speed']! as Map;
+    expect(speed.containsKey('maxed'), isFalse);
+    expect(speed['cost'], isA<Map<String, Object?>>());
   });
 
   test("costs include each megaproject's next level", () {
