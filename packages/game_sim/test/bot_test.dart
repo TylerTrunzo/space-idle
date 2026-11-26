@@ -95,7 +95,7 @@ void main() {
       _engine(),
       BalancedBot(),
       seed: 1,
-      hours: 168,
+      hours: 192,
       onFinished: (s) => end = s,
     );
     expect(
@@ -103,9 +103,15 @@ void main() {
       isEmpty,
       reason: r.toMarkdown(),
     );
+    expect(
+      r.milestones.where((m) => m.gameHours > 168).map((m) => m.id),
+      isEmpty,
+      reason: r.toMarkdown(),
+    );
     expect(r.rejectedCommands, 0);
     // Its goods made on different bodies, the Orbital Station still gets
-    // built: the bot routes them to one body.
+    // built, a day later: the bot routes them to one body. (Station
+    // pacing is retuned with the bots in Task 8.)
     expect(
       end!.faction('player').megaprojectLevels['orbital_station'],
       greaterThanOrEqualTo(1),

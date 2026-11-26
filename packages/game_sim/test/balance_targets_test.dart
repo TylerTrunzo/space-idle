@@ -14,15 +14,27 @@ final class _Tally implements Bot {
   /// Check-in index to the faction's lifetime production at its start.
   final Map<int, Map<String, BigNum>> made = {};
 
+  /// Check-in index to resource id to the buildings on the faction's
+  /// bodies that make it, at the check-in's start.
+  final Map<int, Map<String, int>> makers = {};
+
   @override
   String get name => inner.name;
 
   @override
   List<Command> decide(GameEngine e, GameState s, String factionId) {
-    made.putIfAbsent(
-      s.time ~/ 21600,
-      () => Map.of(s.faction(factionId).lifetimeProduced),
-    );
+    final i = s.time ~/ 21600;
+    if (!made.containsKey(i)) {
+      made[i] = Map.of(s.faction(factionId).lifetimeProduced);
+      final count = makers[i] = {};
+      for (final body in s.bodies.where((b) => b.ownerId == factionId)) {
+        for (final b in body.buildings) {
+          for (final id in e.content.buildings[b.defId]!.outputs.keys) {
+            count[id] = (count[id] ?? 0) + 1;
+          }
+        }
+      }
+    }
     return inner.decide(e, s, factionId);
   }
 
@@ -64,11 +76,17 @@ void main() {
       }
     });
 
-    test('makes kits, modules and ships by the tens per 6 h on day 2', () {
-      // Each maker makes a fixed trickle (see the shipped-content tests);
-      // later counts grow only with the number of makers built.
+    test('makes kits, modules and ships by the tens per 6 h on day 7', () {
+      // Check-in 28 starts day 8, so 168 h to 174 h: each maker makes a
+      // fixed trickle, and the bot builds no more makers than the market
+      // for what they make can take.
       for (final id in ['outpost_kit', 'habitat_module', 'cargo_ship']) {
-        expect(tally.between(4, id), lessThanOrEqualTo(100), reason: id);
+        final units = tally.between(28, id);
+        final makers = tally.makers[28]![id] ?? 0;
+        expect(units, lessThanOrEqualTo(200), reason: '$id: $units');
+        if (makers > 0) {
+          expect(units / makers, lessThanOrEqualTo(72), reason: id);
+        }
       }
     });
 

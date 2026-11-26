@@ -23,9 +23,9 @@
   {"id": "hull_plate", "name": "Hull Plate", "tier": 2, "basePrice": "30", "marketDepth": 2000000},
   {"id": "magnet", "name": "Magnet", "tier": 2, "basePrice": "28", "marketDepth": 2142857},
   {"id": "reactor_core", "name": "Reactor Core", "tier": 2, "basePrice": "150", "marketDepth": 400000},
-  {"id": "habitat_module", "name": "Habitat Module", "tier": 2, "basePrice": "320", "marketDepth": 30, "marketFloor": 0.00001},
-  {"id": "cargo_ship", "name": "Cargo Ship", "tier": 2, "basePrice": "230", "marketDepth": 30, "marketFloor": 0.00001},
-  {"id": "outpost_kit", "name": "Outpost Kit", "tier": 2, "basePrice": "600", "marketDepth": 30, "marketFloor": 0.00001},
+  {"id": "habitat_module", "name": "Habitat Module", "tier": 2, "basePrice": "320", "marketDepth": 1, "marketFloor": 0.00001},
+  {"id": "cargo_ship", "name": "Cargo Ship", "tier": 2, "basePrice": "230", "marketDepth": 1, "marketFloor": 0.00001},
+  {"id": "outpost_kit", "name": "Outpost Kit", "tier": 2, "basePrice": "600", "marketDepth": 1, "marketFloor": 0.00001},
 
   {"id": "station_segment", "name": "Station Segment", "tier": 3, "basePrice": "1000", "marketDepth": 150000},
   {"id": "survey_drone", "name": "Survey Drone", "tier": 3, "basePrice": "480", "marketDepth": 208333}

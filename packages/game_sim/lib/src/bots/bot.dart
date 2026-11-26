@@ -175,6 +175,10 @@ const double _demandBufferSeconds = 60;
 /// Share of demand below which a route counts as too small.
 const double _routeSlack = 0.9;
 
+/// Share of a market's most steady income above which the balanced bot
+/// builds no more makers of that good ([_View.marketFull]).
+const double _marketFullShare = 0.9;
+
 /// Free crew below which the balanced bot works toward more housing before
 /// saving for a goal, so crew is left to staff the life-support chain.
 const int _housingAheadCrew = 3;
@@ -349,18 +353,48 @@ final class _View {
   /// held back for later is not valued as if every extra unit sold at
   /// full price.
   double extraRevenue(String id, double extra) {
-    final base = c.resources[id]!.basePrice.toDouble();
-    final floor = marketFloorOf(c, id);
-    final k = r.marketRecoverySeconds / marketDepthFor(s, c, factionId, id);
-    final double now;
+    final now = _soldPerSec(id);
+    return _income(id, now + extra) - _income(id, now);
+  }
+
+  /// Units of [id] a second the faction makes for sale now: its surplus
+  /// over its owned bodies ([surplus]), or, without a flow report, the
+  /// rate today's saturation implies.
+  double _soldPerSec(String id) {
     if (report != null) {
-      now = owned.fold(0.0, (t, b) => t + math.max(0.0, surplus(b, id)));
-    } else {
-      final sat = s.market.saturation[id] ?? 1;
-      now = sat >= 1 ? 0.0 : (1 / math.max(sat, floor) - 1) / k;
+      return owned.fold(0.0, (t, b) => t + math.max(0.0, surplus(b, id)));
     }
-    double income(double q) => q * base * math.max(floor, 1 / (1 + k * q));
-    return income(now + extra) - income(now);
+    final sat = s.market.saturation[id] ?? 1;
+    final floor = marketFloorOf(c, id);
+    return sat >= 1 ? 0.0 : (1 / math.max(sat, floor) - 1) / _marketK(id);
+  }
+
+  /// `marketRecoverySeconds / depth` for the faction's sales of [id]: steady
+  /// sales of `q` a second hold the saturation at `1 / (1 + k q)`.
+  double _marketK(String id) =>
+      r.marketRecoverySeconds / marketDepthFor(s, c, factionId, id);
+
+  /// Credits a second that steady sales of [q] units a second of [id] earn.
+  double _income(String id, double q) =>
+      q *
+      c.resources[id]!.basePrice.toDouble() *
+      math.max(marketFloorOf(c, id), 1 / (1 + _marketK(id) * q));
+
+  /// Whether what the faction already makes of [id] earns at least
+  /// [_marketFullShare] of the most its market pays for steady sales,
+  /// `basePrice × depth / marketRecoverySeconds`.
+  bool marketFull(String id) {
+    final cap = c.resources[id]!.basePrice.toDouble() / _marketK(id);
+    return cap > 0 && _income(id, _soldPerSec(id)) >= _marketFullShare * cap;
+  }
+
+  /// Whether every good a new [d] on [deposit] would make already fills
+  /// its market ([marketFull]), so another one would earn next to nothing.
+  bool _onlyFullMarkets(BuildingDef d, String? deposit) {
+    final made = d.kind == BuildingKind.extractor
+        ? [?deposit]
+        : d.outputs.keys.toList();
+    return made.isNotEmpty && made.every(marketFull);
   }
 
   double _worth(Map<String, BigNum> amounts) {
@@ -1555,6 +1589,7 @@ final class _View {
             continue;
           }
           for (final dep in buildDeposits(d, body)) {
+            if (_onlyFullMarkets(d, dep)) continue;
             consider(ExpandSlotsCommand(factionId, body.id), body, {
               ...d.buildCost,
               'credits': slot + (d.buildCost['credits'] ?? const BigNum.zero()),
@@ -1571,6 +1606,7 @@ final class _View {
           case BuildingKind.extractor || BuildingKind.factory:
             if (freeCrew < 1) continue;
             for (final dep in buildDeposits(d, body)) {
+              if (_onlyFullMarkets(d, dep)) continue;
               consider(
                 BuildCommand(factionId, body.id, d.id, depositResourceId: dep),
                 body,

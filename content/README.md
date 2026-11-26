@@ -14,7 +14,7 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   Efficiency counts on its own (×1.2 a level) and stops at 25% of inputs, shown as maxed.
 - **Crew.** A habitat's capacity levels raise its housing and its food, water and oxygen use alike
   (+25% each a level), so every crew costs the same upkeep.
-- **Equipment.** Outpost kits, habitat modules and cargo ships are for use, not trade: tiny markets,
+- **Equipment.** Outpost kits, habitat modules and cargo ships are for use, not trade: markets one unit deep,
   and their makers have no speed or capacity track. Each maker makes a steady 36–72 every 6 h; more
   needs another building. Claims after the first cost 5 + 5 × (bodies owned − 1) kits.
 
