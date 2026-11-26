@@ -22,23 +22,36 @@ BigNum routeCapacity(Content c, RouteState r) =>
 /// this many seconds early.
 const double shipmentMergeSeconds = 10;
 
-/// Sends and delivers cargo for [dt] game seconds.
+/// Lands every shipment due by now (`arriveAt <= time`), in creation
+/// order, by [Shipment.toBodyId], whether or not its route still exists.
 ///
-/// Sending: each route whose source and destination are both still owned by
-/// the route owner moves `min(rate, capacity) × dt`, limited by source
-/// stock. The cargo joins the route's newest shipment if that one departed
-/// less than [mergeSeconds] ago and is still in flight; otherwise it leaves
-/// in a new [Shipment] arriving at `time + travelSeconds`. Other routes are
-/// skipped this step.
+/// The engine calls this at the start of a tick, before production, so
+/// goods that land are used in the same tick and a long tick needs no more
+/// storage for them than a short one. If the shipper no longer owns the
+/// destination, the goods return to [Shipment.fromBodyId] when the shipper
+/// still owns it, else they are lost and counted in the destination's
+/// `wastedThisStep`. Landed goods may push stock past the storage cap; the
+/// engine clamps it at the end of the tick (see `clampStorage`).
+void deliverShipments(GameState s) {
+  final arrived = [
+    for (final sh in s.shipments)
+      if (sh.arriveAt <= s.time) sh,
+  ];
+  s.shipments.removeWhere((sh) => sh.arriveAt <= s.time);
+  for (final sh in arrived) {
+    _deliver(s, sh);
+  }
+}
+
+/// Sends cargo along every route for [dt] game seconds.
 ///
-/// Delivery: shipments with `arriveAt <= time` land in creation order, by
-/// [Shipment.toBodyId], whether or not the route still exists. If the
-/// shipper no longer owns the destination, the goods return to
-/// [Shipment.fromBodyId] when the shipper still owns it, else they are lost
-/// and counted in the destination's `wastedThisStep`. Landed goods may push
-/// stock past the storage cap; the engine clamps it at the end of the tick
-/// (see `clampStorage`).
-void stepLogistics(
+/// Each route whose source and destination are both still owned by the
+/// route owner moves `min(rate, capacity) × dt`, limited by source stock.
+/// The cargo joins the route's newest shipment if that one departed less
+/// than [mergeSeconds] ago and is still in flight; otherwise it leaves in
+/// a new [Shipment] arriving at `time + travelSeconds`. Other routes are
+/// skipped this step. Nothing lands here; see [deliverShipments].
+void sendCargo(
   GameState s,
   Content c,
   double dt, {
@@ -72,15 +85,6 @@ void stepLogistics(
         arriveAt: s.time + travelSeconds(s, c, from, to),
       ),
     );
-  }
-
-  final arrived = [
-    for (final sh in s.shipments)
-      if (sh.arriveAt <= s.time) sh,
-  ];
-  s.shipments.removeWhere((sh) => sh.arriveAt <= s.time);
-  for (final sh in arrived) {
-    _deliver(s, sh);
   }
 }
 

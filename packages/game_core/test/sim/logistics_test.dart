@@ -3,6 +3,17 @@ import 'package:test/test.dart';
 
 import 'economy_fixture.dart';
 
+/// One logistics step in the engine's order: land what is due, then send.
+void stepLogistics(
+  GameState s,
+  Content c,
+  double dt, {
+  double mergeSeconds = shipmentMergeSeconds,
+}) {
+  deliverShipments(s);
+  sendCargo(s, c, dt, mergeSeconds: mergeSeconds);
+}
+
 void main() {
   late Content c;
   late GameState s;

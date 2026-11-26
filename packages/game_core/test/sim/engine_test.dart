@@ -115,6 +115,24 @@ String extractorFor(Content c, String resourceId) => c.buildings.values
   return (e, s);
 }
 
+/// [fullEmpire] at speed level 50, with Kora's smelters and Hollow Reach's
+/// iron mine idle so that Hollow Reach's smelters run on iron ore shipped
+/// from Kora, and 50 cargo ships on Kora for the route.
+(GameEngine, GameState) routeFedEmpire() {
+  final (e, s) = fullEmpire();
+  for (final b in s.bodies.expand((b) => b.buildings)) {
+    b.levels[UpgradeTrack.speed] = 50;
+  }
+  for (final b in s.body('kora').buildings) {
+    if (b.defId == 'smelter') b.crew = 0;
+  }
+  for (final b in s.body('hollow_reach').buildings) {
+    if (b.depositResourceId == 'iron_ore') b.crew = 0;
+  }
+  s.body('kora').stock['cargo_ship'] = n(50);
+  return (e, s);
+}
+
 void main() {
   late Content c;
   late GameEngine engine;
@@ -583,33 +601,68 @@ void main() {
       expect(offline, closeTo(live, live * 0.02));
     });
 
-    test('catch-up shortens its step so fast factories do not starve', () {
-      // So fast that a minute of a factory's input is more than storage
-      // holds: inputs made in one tick are used in the next, so 60 s ticks
-      // would cap each chain at a sixtieth of its live rate.
-      final (e, s) = fullEmpire();
-      for (final b in s.bodies.expand((b) => b.buildings)) {
-        b.levels[UpgradeTrack.speed] = 50;
-      }
+    test('a fast chain fed by a route earns the same at 60 s steps', () {
+      // Kora ships iron ore to Hollow Reach's smelters at 100 a second:
+      // 6000 a minute, far more than Hollow Reach stores. Cargo that lands
+      // is used in the tick it lands, so long steps lose nothing to it.
+      final (e, s) = routeFedEmpire();
+      e.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(100),
+          50,
+        ),
+      );
       e.advance(s, 600, maxStep: 1);
-      final step = e.offlineStepSeconds(s);
-      expect(step, inInclusiveRange(1, 59));
-      BigNum earned(void Function(GameState t) run) {
+      BigNum earned(double step) {
         final t = s.copy();
-        run(t);
+        e.advance(t, 6 * 3600, maxStep: step);
         return t.faction('player').credits - s.faction('player').credits;
       }
 
-      final live = earned((t) => e.advance(t, 6 * 3600, maxStep: 1)).toDouble();
-      final away = earned((t) => e.catchUpOffline(t, 6 * 3600)).toDouble();
-      final coarse = earned((t) => e.advance(t, 6 * 3600)).toDouble();
-      expect(away, closeTo(live, live * 0.02));
-      expect(coarse, lessThan(live * 0.9));
+      final live = earned(1).toDouble();
+      final coarse = earned(60).toDouble();
+      expect(live, greaterThan(0));
+      expect(coarse, closeTo(live, live * 0.02));
     });
 
-    test('catch-up keeps 60 s steps when storage holds a minute of input', () {
-      final s = engine.newGame(1);
-      expect(engine.offlineStepSeconds(s), 60);
+    test('catch-up ticks like advance', () {
+      final (e, s) = fullEmpire();
+      final away = s.copy();
+      e.catchUpOffline(away, 3600);
+      final live = s.copy();
+      e.advance(live, 3600);
+      expect(encode(away), encode(live));
+    });
+
+    test('performance: 12 h of a fast 40-building empire under 300 ms', () {
+      // A late-game worst case: every slot filled, speed level 50, and a
+      // route moving 100 units a second.
+      final (e, s) = routeFedEmpire();
+      e
+        ..apply(
+          s,
+          CreateRouteCommand(
+            'player',
+            'kora',
+            'hollow_reach',
+            'iron_ore',
+            n(100),
+            50,
+          ),
+        )
+        ..advance(s, 600);
+      // Warm up the VM before timing.
+      e.catchUpOffline(s.copy(), 3600);
+      final watch = Stopwatch()..start();
+      final sum = e.catchUpOffline(s, 43200);
+      watch.stop();
+      expect(sum.secondsSimulated, 43200);
+      expect(watch.elapsedMilliseconds, lessThan(300));
     });
 
     test('performance: 24 h of a 40-building empire in under 1 s', () {

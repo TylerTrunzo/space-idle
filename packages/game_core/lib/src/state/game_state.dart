@@ -412,7 +412,7 @@ final class Shipment {
   final String resourceId;
 
   /// Units carried; grows while later sends merge into it (see
-  /// `stepLogistics`).
+  /// `sendCargo`).
   BigNum amount;
 
   /// Game time in seconds at which it left; later sends within

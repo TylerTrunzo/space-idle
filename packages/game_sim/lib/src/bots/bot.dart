@@ -97,11 +97,9 @@ const int _shipsSent = 2;
 /// Seconds of its buildings' input demand a body keeps back from
 /// auto-sell ([_View.keep]).
 ///
-/// Inputs made in a tick are used in the next, so a body holding less than
-/// a tick's demand starves its own buildings; [GameEngine.catchUpOffline]
-/// then shortens its ticks (see [GameEngine.offlineStepSeconds]), which
-/// is slower. Holding a minute of demand, its longest tick, keeps both
-/// production and catch-up at full speed.
+/// The engine's auto-sell already keeps one tick's demand; a minute of it,
+/// the engine's longest tick, is a cushion for inputs that arrive in
+/// shipments rather than steadily.
 const double _demandBufferSeconds = 60;
 
 /// Share of demand below which a route counts as too small.

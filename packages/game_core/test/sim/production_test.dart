@@ -254,12 +254,72 @@ void main() {
     expect(stock(home, 'iron_ore').isZero, isTrue);
   });
 
-  test('outputs made this step are not consumed in the same step', () {
-    add(home, 'smelter');
+  test('a chain on one body runs within one step, in recipe order', () {
+    // Listed consumer first: the drill still runs first, and the smelter
+    // uses its 3 ore of the 4 it wants in the same step.
+    final sm = add(home, 'smelter');
     add(home, 'drill', crew: 2, deposit: 'iron_ore');
     stepProduction(s, c, 10);
-    expect(stock(home, 'iron_ore'), near(3));
-    expect(stock(home, 'steel').isZero, isTrue);
+    expect(stock(home, 'iron_ore').isZero, isTrue);
+    expect(stock(home, 'steel'), near(0.75));
+    expect(sm.lastRunFraction, closeTo(0.75, 1e-12));
+    expect(sm.lastLimitReason, 'input:iron_ore');
+  });
+
+  test('consumers at one depth share the same step\'s output', () {
+    final sm = add(home, 'smelter'); // wants 4 ore
+    final ca = add(home, 'caster'); // wants 2 ore
+    add(home, 'drill', crew: 2, deposit: 'iron_ore'); // makes 3
+    stepProduction(s, c, 10);
+    expect(sm.lastRunFraction, closeTo(0.5, 1e-12));
+    expect(ca.lastRunFraction, closeTo(0.5, 1e-12));
+    expect(stock(home, 'iron_ore').isZero, isTrue);
+  });
+
+  test('recipe depth: extractors 0, then each consumer past its inputs', () {
+    expect(recipeDepth(c), {
+      'drill': 0,
+      'smelter': 1,
+      'caster': 1,
+      'works': 1,
+      'habitat': 1,
+      'pod': 1,
+      'depot': 0,
+    });
+    expect(recipeDepth(c), same(recipeDepth(c)));
+  });
+
+  test('recipe depth breaks a cycle by list order', () {
+    BuildingDef f(String id, String from, String to) => BuildingDef(
+      id: id,
+      name: id,
+      kind: BuildingKind.factory,
+      cycleSeconds: 1,
+      inputs: {from: 1},
+      outputs: {to: 1},
+      crewSlots: 1,
+      buildCost: const {},
+    );
+    final cyc = Content(
+      rules: c.rules,
+      resources: {
+        for (final id in ['r1', 'r2', 'r3']) id: _res(id),
+      },
+      buildings: {
+        for (final b in [
+          f('x', 'r1', 'r2'),
+          f('y', 'r2', 'r1'),
+          f('z', 'r2', 'r3'),
+        ])
+          b.id: b,
+      },
+      bodyTypes: c.bodyTypes,
+      galaxy: c.galaxy,
+      milestones: const [],
+    );
+    // x is listed first, so its input from y is the edge that is dropped:
+    // y runs before x, and z after x.
+    expect(recipeDepth(cyc), {'x': 2, 'y': 1, 'z': 3});
   });
 
   test('production may pass the storage cap within a tick', () {

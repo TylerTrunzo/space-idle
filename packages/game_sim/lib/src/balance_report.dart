@@ -208,7 +208,8 @@ String _hours(double h) => h.toStringAsFixed(1);
 /// [GameEngine.apply]; then [GameEngine.catchUpOffline] covers the time to
 /// the next check-in, up to the engine's offline cap. Hours in the report
 /// are session time, which runs ahead of game time if the cap cuts a gap.
-/// Deterministic for a deterministic bot.
+/// Deterministic for a deterministic bot. [onFinished], if given, gets
+/// the final state, for tools that study it further.
 BalanceReport runBotSession(
   GameEngine e,
   Bot bot, {
@@ -216,6 +217,7 @@ BalanceReport runBotSession(
   required double hours,
   double checkInEverySeconds = 21600,
   double activeSecondsPerCheckIn = 180,
+  void Function(GameState s)? onFinished,
 }) {
   if (!hours.isFinite || hours <= 0) {
     throw ArgumentError.value(hours, 'hours', 'must be finite and > 0');
@@ -296,6 +298,7 @@ BalanceReport runBotSession(
     noteMilestones(checkIn);
   }
 
+  onFinished?.call(s);
   final stock = tracker.stock();
   return BalanceReport(
     botName: bot.name,

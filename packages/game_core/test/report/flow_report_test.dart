@@ -58,12 +58,16 @@ void main() {
       s,
       const UpgradeCommand('player', 'b3', UpgradeTrack.capacity),
     );
+    // With the iron mine idle, the smelter has only the stock to use.
+    engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
     kora.stock['iron_ore'] = n(0.2);
     final st = koraFlow(buildFlowReport(s, c, 'player')).buildings;
     expect(st.map((b) => b.buildingId), ['b1', 'b2', 'b3']);
     expect(st.map((b) => b.defId), ['mine', 'mine', 'smelter']);
-    expect(st[0].runFraction, 1);
-    expect(st[0].limitReason, isNull);
+    expect(st[0].runFraction, 0);
+    expect(st[0].limitReason, 'noCrew');
+    expect(st[1].runFraction, 1);
+    expect(st[1].limitReason, isNull);
     expect(st[2].runFraction, closeTo(0.5, 1e-12));
     expect(st[2].limitReason, 'input:iron_ore');
     expect(st[2].crew, 1);
@@ -76,7 +80,8 @@ void main() {
       ..apply(s, const UpgradeCommand('player', 'b3', UpgradeTrack.capacity))
       ..apply(s, const AssignCrewCommand('player', 'b3', 2))
       ..apply(s, const AssignCrewCommand('player', 'b2', 0));
-    // Two crew on one base slot want 0.8 ore a second; 0.2 is there.
+    // Two crew on one base slot want 0.8 ore a second: 0.2 in stock plus
+    // the 0.4 the iron mine makes in the same tick.
     kora.stock['iron_ore'] = n(0.2);
     final st = koraFlow(buildFlowReport(s, c, 'player')).buildings;
     final (mine, idle, smelter) = (st[0], st[1], st[2]);
@@ -85,11 +90,11 @@ void main() {
     expect(mine.effectiveFraction, 1);
     expect(idle.outputsPerSec, isEmpty);
     expect(idle.effectiveFraction, 0);
-    expect(smelter.runFraction, closeTo(0.25, 1e-12));
-    // Run fraction 0.25 × crew fraction 2 × crew efficiency 1.
-    expect(smelter.effectiveFraction, closeTo(0.5, 1e-12));
-    expect(plain(smelter.inputsPerSec), rates({'iron_ore': 0.2}));
-    expect(plain(smelter.outputsPerSec), rates({'steel': 0.1}));
+    expect(smelter.runFraction, closeTo(0.75, 1e-12));
+    // Run fraction 0.75 × crew fraction 2 × crew efficiency 1.
+    expect(smelter.effectiveFraction, closeTo(1.5, 1e-12));
+    expect(plain(smelter.inputsPerSec), rates({'iron_ore': 0.6}));
+    expect(plain(smelter.outputsPerSec), rates({'steel': 0.3}));
   });
 
   test('effective fraction includes crew efficiency', () {
@@ -204,8 +209,13 @@ void main() {
   });
 
   test('bottleneck message names the building, body, and resource', () {
+    engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
     kora.stock['iron_ore'] = n(0.2);
-    final b = buildFlowReport(s, c, 'player').bottlenecks.single;
+    final b = buildFlowReport(
+      s,
+      c,
+      'player',
+    ).bottlenecks.singleWhere((b) => b.kind == BottleneckKind.input);
     expect(b.message, 'Smelter on Kora is running at 50%: not enough Iron Ore');
     expect(b.kind, BottleneckKind.input);
     expect(b.bodyId, 'kora');
@@ -216,7 +226,7 @@ void main() {
 
   test('bottlenecks sort by run fraction, then body and building order', () {
     kora.stock['iron_ore'] = n(0.2);
-    engine.apply(s, const AssignCrewCommand('player', 'b2', 0));
+    engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
     final hollow = s.body('hollow_reach')..ownerId = 'player';
     hollow.buildings.add(BuildingState(id: 'x1', defId: 'smelter', crew: 0));
     final list = buildFlowReport(s, c, 'player').bottlenecks;
@@ -247,20 +257,24 @@ void main() {
   });
 
   test('crew shortage sorts with the other bottlenecks by run fraction', () {
-    s.faction('player').baseCrew = 2;
-    // At 2/3 crew efficiency the smelter wants 0.2667 ore and gets 0.2.
-    kora.stock['iron_ore'] = n(0.2);
+    // Two crew assigned, one supported. At crew efficiency 0.5 the smelter
+    // wants 0.2 ore and gets 0.15; the iron mine is idle.
+    s.faction('player').baseCrew = 1;
+    engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+    kora.stock['iron_ore'] = n(0.15);
     final hollow = s.body('hollow_reach')..ownerId = 'player';
     hollow.buildings.add(BuildingState(id: 'x1', defId: 'smelter', crew: 0));
     final list = buildFlowReport(s, c, 'player').bottlenecks;
     expect(list.map((b) => b.kind), [
+      BottleneckKind.noCrew,
       BottleneckKind.noCrew,
       BottleneckKind.crewShortage,
       BottleneckKind.input,
     ]);
     expect(list.map((b) => b.runFraction), [
       0,
-      closeTo(2 / 3, 1e-12),
+      0,
+      closeTo(0.5, 1e-12),
       closeTo(0.75, 1e-12),
     ]);
   });

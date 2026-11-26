@@ -55,13 +55,16 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 
 /// Runs every building on every owned body for [dt] game seconds.
 ///
-/// Bodies and their buildings run in list order. On each body, input demand
-/// is summed per resource and shared out in proportion, so no stock goes
-/// negative; inputs are taken before any output is added, so this step's
-/// outputs are not consumed until the next step. Outputs are added in full,
-/// even past the body's [storageCap]: the engine ships and auto-sells first
-/// and clamps to the cap at the end of the tick ([clampStorage]), so a long
-/// step loses no more to the cap than many short ones. Each building's
+/// Bodies run in list order. On each body, buildings run in groups by
+/// [recipeDepth], lowest first, list order within a group: each group's
+/// input demand is summed per resource and shared out in proportion from
+/// the body's stock, so no stock goes negative, and its outputs are added
+/// before the next group plans its inputs. So a chain on one body moves
+/// its goods from extractor to final product within a step, whatever the
+/// step's length. Outputs are added in full, even past the body's
+/// [storageCap]: the engine ships and auto-sells first and clamps to the
+/// cap at the end of the tick ([clampStorage]), so a long step loses no
+/// more to the cap than many short ones. Each building's
 /// [BuildingState.lastRunFraction] and [BuildingState.lastLimitReason] are
 /// updated; habitat run fractions set next step's [crewEfficiency].
 ///
@@ -193,12 +196,36 @@ final class _Run {
 }
 
 void _stepBody(Content c, BodyState body, double dt, double crewEff) {
+  final depth = recipeDepth(c);
   final runs = [
     for (final b in body.buildings)
       if (runsRecipe(c.buildings[b.defId]!))
         _Run(b, fullRateFlow(c, body, b, dt, crewEff)),
   ];
+  // A stable sort: ties keep list order.
+  final order = [for (var i = 0; i < runs.length; i++) i]
+    ..sort((x, y) {
+      final byDepth = depth[runs[x].b.defId]!.compareTo(
+        depth[runs[y].b.defId]!,
+      );
+      return byDepth != 0 ? byDepth : x.compareTo(y);
+    });
+  var start = 0;
+  while (start < order.length) {
+    final d = depth[runs[order[start]].b.defId]!;
+    var end = start;
+    while (end < order.length && depth[runs[order[end]].b.defId]! == d) {
+      end++;
+    }
+    _runGroup(c, body, [for (final i in order.sublist(start, end)) runs[i]]);
+    start = end;
+  }
+}
 
+/// Runs [runs], buildings of one recipe depth on [body], on the stock the
+/// body holds now: shares each input in proportion to demand, takes the
+/// inputs, then adds the outputs.
+void _runGroup(Content c, BodyState body, List<_Run> runs) {
   final demand = <String, BigNum>{};
   for (final run in runs) {
     for (final MapEntry(key: id, value: d) in run.flow.inputs.entries) {
@@ -260,4 +287,56 @@ void _stepBody(Content c, BodyState body, double dt, double crewEff) {
       body.stock[id] = (body.stock[id] ?? _zero) + amount;
     }
   }
+}
+
+/// Building id to its recipe depth in [c]: the order in which
+/// [stepProduction] runs buildings on a body.
+///
+/// Extractors and warehouses are 0; any other building is one more than
+/// the deepest of its inputs, where an input is as deep as the deepest
+/// building that makes it (0 if none does). So every building runs after
+/// everything that can make its inputs. A cycle in the recipe graph is
+/// broken by list order: buildings are visited in content order, inputs
+/// and their makers too, and an edge back to a building still being
+/// visited is left out. Computed once per [Content] and cached.
+Map<String, int> recipeDepth(Content c) => _depthCache[c] ??= _depths(c);
+
+final _depthCache = Expando<Map<String, int>>('recipeDepth');
+
+Map<String, int> _depths(Content c) {
+  final makers = <String, List<BuildingDef>>{};
+  for (final d in c.buildings.values) {
+    if (d.kind == BuildingKind.extractor) {
+      for (final r in d.extracts) {
+        (makers[r] ??= []).add(d);
+      }
+    } else {
+      for (final r in d.outputs.keys) {
+        (makers[r] ??= []).add(d);
+      }
+    }
+  }
+  final depth = <String, int>{};
+  final visiting = <String>{};
+  int visit(BuildingDef d) {
+    if (depth[d.id] case final known?) return known;
+    if (d.kind == BuildingKind.extractor || d.kind == BuildingKind.warehouse) {
+      return depth[d.id] = 0;
+    }
+    visiting.add(d.id);
+    var deepest = 0;
+    for (final input in d.inputs.keys) {
+      for (final m in makers[input] ?? const <BuildingDef>[]) {
+        if (visiting.contains(m.id)) continue;
+        deepest = math.max(deepest, visit(m));
+      }
+    }
+    visiting.remove(d.id);
+    return depth[d.id] = deepest + 1;
+  }
+
+  for (final d in c.buildings.values) {
+    visit(d);
+  }
+  return {for (final id in c.buildings.keys) id: depth[id]!};
 }
