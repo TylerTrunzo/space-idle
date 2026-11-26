@@ -1,0 +1,19 @@
+{
+  "speedPerLevel": 1.1,
+  "speedMilestoneEvery": 25,
+  "speedMilestoneMult": 2,
+  "efficiencyPerLevel": 0.95,
+  "efficiencyFloor": 0.25,
+  "capacityCrewPerLevel": 1,
+  "capacityStoragePerLevel": 0.2,
+  "baseStorageCap": 1000,
+  "offlineCapSeconds": 43200,
+  "marketFloor": 0.2,
+  "marketRecoverySeconds": 3600,
+  "claimBaseCredits": "5e3",
+  "claimGrowth": 4,
+  "outpostKitResource": "outpost_kit",
+  "shipCapacityPerSecond": 2,
+  "cargoShipResource": "cargo_ship",
+  "baseTravelSeconds": 120
+}

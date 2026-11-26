@@ -1,0 +1,10 @@
+[
+  {"id": "first_steel", "name": "First Foundry", "condition": {"type": "stock", "resource": "steel", "amount": "100"}},
+  {"id": "credits_10k", "name": "Ten Thousand Credits", "condition": {"type": "credits", "amount": "1e4"}},
+  {"id": "own_2_bodies", "name": "First Claim", "condition": {"type": "bodiesOwned", "count": 2}},
+  {"id": "first_circuits", "name": "Circuit Board", "condition": {"type": "stock", "resource": "circuit", "amount": "100"}},
+  {"id": "first_habitat_module", "name": "Room to Grow", "condition": {"type": "stock", "resource": "habitat_module", "amount": "1"}},
+  {"id": "credits_1m", "name": "Millionaire", "condition": {"type": "credits", "amount": "1e6"}},
+  {"id": "own_4_bodies", "name": "Spreading Out", "condition": {"type": "bodiesOwned", "count": 4}},
+  {"id": "credits_1b", "name": "Billionaire", "condition": {"type": "credits", "amount": "1e9"}}
+]

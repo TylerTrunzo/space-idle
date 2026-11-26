@@ -1,0 +1,28 @@
+[
+  {"id": "iron_ore", "name": "Iron Ore", "tier": 0, "basePrice": "1"},
+  {"id": "copper_ore", "name": "Copper Ore", "tier": 0, "basePrice": "1.5"},
+  {"id": "silicon", "name": "Silicon", "tier": 0, "basePrice": "1.2"},
+  {"id": "water_ice", "name": "Water Ice", "tier": 0, "basePrice": "0.8"},
+  {"id": "nickel", "name": "Nickel", "tier": 0, "basePrice": "2.5"},
+  {"id": "ammonia", "name": "Ammonia", "tier": 0, "basePrice": "1.5"},
+  {"id": "hydrogen", "name": "Hydrogen", "tier": 0, "basePrice": "1"},
+  {"id": "helium_3", "name": "Helium-3", "tier": 0, "basePrice": "12"},
+  {"id": "sulfur", "name": "Sulfur", "tier": 0, "basePrice": "1.5"},
+  {"id": "rare_earths", "name": "Rare Earths", "tier": 0, "basePrice": "6"},
+
+  {"id": "steel", "name": "Steel", "tier": 1, "basePrice": "4"},
+  {"id": "copper_wire", "name": "Copper Wire", "tier": 1, "basePrice": "1.6"},
+  {"id": "silicon_wafer", "name": "Silicon Wafer", "tier": 1, "basePrice": "5"},
+  {"id": "water", "name": "Water", "tier": 1, "basePrice": "1.5"},
+  {"id": "oxygen", "name": "Oxygen", "tier": 1, "basePrice": "2"},
+  {"id": "fuel", "name": "Fuel", "tier": 1, "basePrice": "6"},
+  {"id": "fertilizer", "name": "Fertilizer", "tier": 1, "basePrice": "5"},
+  {"id": "food", "name": "Food", "tier": 1, "basePrice": "7"},
+
+  {"id": "circuit", "name": "Circuit", "tier": 2, "basePrice": "16", "marketDepth": 2000},
+  {"id": "hull_plate", "name": "Hull Plate", "tier": 2, "basePrice": "20", "marketDepth": 2000},
+  {"id": "magnet", "name": "Magnet", "tier": 2, "basePrice": "28", "marketDepth": 2000},
+  {"id": "habitat_module", "name": "Habitat Module", "tier": 2, "basePrice": "120", "marketDepth": 500},
+  {"id": "cargo_ship", "name": "Cargo Ship", "tier": 2, "basePrice": "80", "marketDepth": 500},
+  {"id": "outpost_kit", "name": "Outpost Kit", "tier": 2, "basePrice": "160", "marketDepth": 500}
+]
