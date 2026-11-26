@@ -18,8 +18,9 @@ abstract interface class Bot {
   List<Command> decide(GameEngine e, GameState s, String factionId);
 }
 
-/// Buys the cheapest affordable upgrade or building each decision, after
-/// filling free crew slots and setting auto-sell on surplus.
+/// Buys the cheapest affordable upgrade, building, extra build slot or
+/// claim each decision, after filling free crew slots and setting
+/// auto-sell on surplus.
 final class GreedyBot implements Bot {
   @override
   String get name => 'greedy';
@@ -74,6 +75,43 @@ final class BalancedBot implements Bot {
         _ => v.grow(reserve: const BigNum.zero()),
       };
     });
+  }
+}
+
+/// Plays like [BalancedBot] on a budget: at most [commandsPerCheckIn]
+/// commands per check-in, the way a player with a few minutes to spare
+/// acts on the most pressing things and leaves the rest.
+///
+/// A decision more than a minute of game time after the last one starts a
+/// new check-in. The commands kept are the first of the balanced plan, so
+/// they are still valid in order.
+final class CasualBot implements Bot {
+  /// Creates a casual bot.
+  CasualBot({this.commandsPerCheckIn = defaultCommandsPerCheckIn});
+
+  /// Commands a casual check-in allows by default.
+  static const int defaultCommandsPerCheckIn = 15;
+
+  /// Most commands it issues per check-in.
+  final int commandsPerCheckIn;
+
+  final _inner = BalancedBot();
+  double? _lastDecision;
+  int _used = 0;
+
+  @override
+  String get name => 'casual';
+
+  @override
+  List<Command> decide(GameEngine e, GameState s, String factionId) {
+    final last = _lastDecision;
+    if (last == null || s.time - last > 60) _used = 0;
+    _lastDecision = s.time;
+    final left = commandsPerCheckIn - _used;
+    if (left <= 0) return const [];
+    final cmds = _inner.decide(e, s, factionId).take(left).toList();
+    _used += cmds.length;
+    return cmds;
   }
 }
 
@@ -375,8 +413,9 @@ final class _View {
     return null;
   }
 
-  /// The affordable upgrade or build with the lowest credit cost; the first
-  /// in body, building and content order wins a tie.
+  /// The affordable upgrade, build, extra slot or claim with the lowest
+  /// credit cost; the first in body, building and content order wins a
+  /// tie, and a claim comes last.
   Command? cheapestPurchase() {
     (Command, BigNum)? best;
     void offer(Command cmd, BodyState payer, Map<String, BigNum> cost) {
@@ -391,7 +430,10 @@ final class _View {
           offer(UpgradeCommand(factionId, b.id, t), body, upgradeCost(c, b, t));
         }
       }
-      if (!hasFreeSlot(body)) continue;
+      if (!hasFreeSlot(body)) {
+        offer(ExpandSlotsCommand(factionId, body.id), body, slotCost(c, body));
+        continue;
+      }
       for (final d in c.buildings.values) {
         for (final dep in buildDeposits(d, body)) {
           offer(
@@ -401,6 +443,9 @@ final class _View {
           );
         }
       }
+    }
+    if (claim() case final ClaimBodyCommand cmd?) {
+      offer(cmd, s.body(cmd.sourceBodyId), claimCost(s, c, factionId));
     }
     return best?.$1;
   }
@@ -424,10 +469,19 @@ final class _View {
     for (final neck in report!.bottlenecks.take(
       BalancedBot.bottlenecksConsidered,
     )) {
+      if (neck.kind == BottleneckKind.storageFull) {
+        final key = '${neck.bodyId}:store';
+        if (tried.contains(key)) continue;
+        final fix = _addStorage(s.body(neck.bodyId!));
+        if (fix != null) {
+          tried.add(key);
+          return fix;
+        }
+        continue;
+      }
       if (neck.kind != BottleneckKind.input) {
         // Free crew is assigned first and a crew shortage is shed
-        // ([shedCrew]); an idle building waits for crew to free up; auto-sell
-        // keeps stores from filling.
+        // ([shedCrew]); an idle building waits for crew to free up.
         continue;
       }
       final key = '${neck.bodyId}:${neck.resourceId}';
@@ -439,6 +493,35 @@ final class _View {
       }
     }
     return null;
+  }
+
+  /// More storage on [body], whose store of something is full and wasting
+  /// output: a warehouse if there is a free slot and it can be paid, else
+  /// a capacity level on the warehouse there with the cheapest one.
+  Command? _addStorage(BodyState body) {
+    final depot = c.buildings.values
+        .where((d) => d.kind == BuildingKind.warehouse)
+        .firstOrNull;
+    if (depot == null) return null;
+    if (hasFreeSlot(body) && canPay(body, depot.buildCost)) {
+      return BuildCommand(factionId, body.id, depot.id);
+    }
+    (Command, BigNum)? best;
+    for (final b in body.buildings) {
+      if (def(b).kind != BuildingKind.warehouse ||
+          !def(b).upgrades.containsKey(UpgradeTrack.capacity)) {
+        continue;
+      }
+      final cost = upgradeCost(c, b, UpgradeTrack.capacity);
+      if (!canPay(body, cost)) continue;
+      if (best == null || cost['credits']! < best.$2) {
+        best = (
+          UpgradeCommand(factionId, b.id, UpgradeTrack.capacity),
+          cost['credits']!,
+        );
+      }
+    }
+    return best?.$1;
   }
 
   Command? _fixInput(BodyState body, String resourceId) {
@@ -864,6 +947,15 @@ final class _View {
         )) {
       return const _Waiting();
     }
+    // A capacity level on a fed habitat adds housing more cheaply than a
+    // new habitat, until its price passes a new one's credits.
+    final more = _habitatCapacity();
+    final newCredits = hab.buildCost['credits'] ?? const BigNum.zero();
+    if (more != null && more.$2 <= newCredits) {
+      return canPay(more.$3, {'credits': more.$2})
+          ? _Do(more.$1)
+          : _Save(more.$2);
+    }
     final parts = {
       for (final MapEntry(key: id, value: n) in hab.buildCost.entries)
         if (id != 'credits') id: n,
@@ -883,7 +975,13 @@ final class _View {
           (b) => hasFreeSlot(b) && hab.inputs.keys.every((i) => madeAt(b, i)),
         )
         .firstOrNull;
-    if (body == null) return const _Stuck();
+    if (body == null) {
+      // No room for a new one: grow the ones there are.
+      if (more == null) return const _Stuck();
+      return canPay(more.$3, {'credits': more.$2})
+          ? _Do(more.$1)
+          : _Save(more.$2);
+    }
     for (final MapEntry(key: id, value: n) in parts.entries) {
       if (stock(body, id) >= n) continue;
       if (routeInto(body, id)) return const _Waiting();
@@ -903,6 +1001,29 @@ final class _View {
       );
     }
     return _buildAt(hab, body, null);
+  }
+
+  /// The cheapest capacity level on a habitat that runs at full rate, its
+  /// credit cost and its body; null if there is none.
+  (Command, BigNum, BodyState)? _habitatCapacity() {
+    (Command, BigNum, BodyState)? best;
+    for (final (body, b) in buildings) {
+      final d = def(b);
+      if (d.kind != BuildingKind.habitat ||
+          b.lastRunFraction < 1 ||
+          !d.upgrades.containsKey(UpgradeTrack.capacity)) {
+        continue;
+      }
+      final credits = upgradeCost(c, b, UpgradeTrack.capacity)['credits']!;
+      if (best == null || credits < best.$2) {
+        best = (
+          UpgradeCommand(factionId, b.id, UpgradeTrack.capacity),
+          credits,
+          body,
+        );
+      }
+    }
+    return best;
   }
 
   // -------------------------------------------------------------------------
@@ -941,9 +1062,10 @@ final class _View {
 
   /// The purchase adding the most credits per second per credit that the
   /// faction can pay while keeping [reserve] credits: speed, efficiency and
-  /// capacity upgrades (for their extra crew slot) and new extractors and
-  /// factories. See [gain]. Storage is not bought: auto-sell keeps stock
-  /// under the cap.
+  /// capacity upgrades (for their extra crew slot), new extractors and
+  /// factories, and an extra build slot on a full body (valued as the best
+  /// building it would take, priced with it). See [gain]. Storage is
+  /// bought only when a store fills up ([fixBottleneck]).
   Command? grow({required BigNum reserve}) {
     final budget = faction.credits - reserve;
     if (budget <= const BigNum.zero()) return null;
@@ -1014,7 +1136,25 @@ final class _View {
         }
       }
 
-      if (!hasFreeSlot(body)) continue;
+      if (!hasFreeSlot(body)) {
+        // An extra slot is worth what the best new building there would
+        // add, for the slot and the building together.
+        if (freeCrew < 1) continue;
+        final slot = slotCost(c, body)['credits']!;
+        for (final d in c.buildings.values) {
+          if (d.kind != BuildingKind.extractor &&
+              d.kind != BuildingKind.factory) {
+            continue;
+          }
+          for (final dep in buildDeposits(d, body)) {
+            consider(ExpandSlotsCommand(factionId, body.id), body, {
+              ...d.buildCost,
+              'credits': slot + (d.buildCost['credits'] ?? const BigNum.zero()),
+            }, gain(body, probe(d, body, dep)));
+          }
+        }
+        continue;
+      }
       for (final d in c.buildings.values) {
         switch (d.kind) {
           case BuildingKind.warehouse:

@@ -49,6 +49,25 @@ final class _Spy implements Bot {
   }
 }
 
+/// Counts [inner]'s commands per 6 h check-in.
+final class _Counter implements Bot {
+  _Counter(this.inner);
+
+  final Bot inner;
+  final Map<int, int> perCheckIn = {};
+
+  @override
+  String get name => inner.name;
+
+  @override
+  List<Command> decide(GameEngine e, GameState s, String factionId) {
+    final cmds = inner.decide(e, s, factionId);
+    final i = s.time ~/ 21600;
+    perCheckIn[i] = (perCheckIn[i] ?? 0) + cmds.length;
+    return cmds;
+  }
+}
+
 void main() {
   test('greedy bot makes progress in 24h', () {
     final e = _engine();
@@ -106,6 +125,17 @@ void main() {
   test('bots name themselves', () {
     expect(GreedyBot().name, 'greedy');
     expect(BalancedBot().name, 'balanced');
+    expect(CasualBot().name, 'casual');
+  });
+
+  test('casual bot plays like balanced on a command budget per check-in', () {
+    final counter = _Counter(CasualBot(commandsPerCheckIn: 5));
+    final r = runBotSession(_engine(), counter, seed: 1, hours: 24);
+    expect(r.rejectedCommands, 0);
+    expect(counter.perCheckIn.keys, [0, 1, 2, 3]);
+    for (final n in counter.perCheckIn.values) {
+      expect(n, inInclusiveRange(1, 5));
+    }
   });
 
   test('a command rejected while planning ends the plan and is returned', () {

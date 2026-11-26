@@ -12,13 +12,14 @@ const _usage =
     'Usage: game_sim [--content content] [--seed 1] [--load save.json] '
     '[--script file.jsonl]\n'
     '       game_sim check [--content content]\n'
-    '       game_sim bot [--bot greedy|balanced] [--hours 168] [--seed 1] '
+    '       game_sim bot [--bot greedy|balanced|casual] [--hours 168] [--seed 1] '
     '[--format json|md] [--content content]';
 
 /// Bots the `bot` subcommand can run, by name.
 final Map<String, Bot Function()> _bots = {
   'greedy': GreedyBot.new,
   'balanced': BalancedBot.new,
+  'casual': CasualBot.new,
 };
 
 Never _usageError(String message) {
