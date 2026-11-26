@@ -394,6 +394,56 @@ void main() {
       });
     }
 
+    test('an expanded body may hold a building past its type\'s slots', () {
+      final m = jsonDecode(jsonEncode(fresh())) as Map<String, Object?>;
+      final kora = body(m, 'kora');
+      final slots = content.bodyTypes[kora['typeId']]!.buildSlots;
+      kora
+        ..['extraSlots'] = 1
+        ..['buildings'] = [
+          for (var i = 0; i <= slots; i++)
+            {...building(m, 2), 'id': 'b${100 + i}', 'crew': 0},
+        ];
+      m['nextId'] = 200;
+      final r = SaveCodec.decode(jsonEncode(m), content);
+      expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+      expect((r as SaveOk).state.body('kora').buildings, hasLength(slots + 1));
+      expect(SaveCodec.encode(r.state), jsonEncode(m));
+    });
+
+    group('saturation is checked against each resource\'s own floor', () {
+      // Iron ore has its own floor of 0.01; steel uses the rules' 0.15.
+      SaveResult load(String id, double v) {
+        final m = jsonDecode(jsonEncode(fresh())) as Map<String, Object?>;
+        m['market'] = {
+          'saturation': {id: v},
+        };
+        return SaveCodec.decode(jsonEncode(m), content);
+      }
+
+      test('floors are as the shipped content sets them', () {
+        expect(marketFloorOf(content, 'iron_ore'), 0.01);
+        expect(marketFloorOf(content, 'steel'), 0.15);
+      });
+
+      test('iron ore at 0.05 loads; steel at 0.1 does not', () {
+        expect(load('iron_ore', 0.05), isA<SaveOk>());
+        expect(err(load('steel', 0.1)).kind, SaveErrorKind.invalidValue);
+      });
+
+      test('exactly at the floor loads; just below it does not', () {
+        for (final (id, floor) in [('iron_ore', 0.01), ('steel', 0.15)]) {
+          expect(load(id, floor), isA<SaveOk>(), reason: id);
+          expect(load(id, 1), isA<SaveOk>(), reason: id);
+          expect(
+            err(load(id, floor - 1e-9)).kind,
+            SaveErrorKind.invalidValue,
+            reason: id,
+          );
+        }
+      });
+    });
+
     test('a body in an unknown system is an unknown content id', () {
       final m = fresh();
       body(m, 'brine')['systemId'] = 'nowhere';
