@@ -3,3 +3,4 @@ library;
 
 export 'src/num/big_num.dart';
 export 'src/num/format.dart';
+export 'src/rng.dart';
