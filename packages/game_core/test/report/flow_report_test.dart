@@ -109,9 +109,9 @@ void main() {
     expect(buildFlowReport(s, c, 'player').creditsPerSec.isZero, isTrue);
     engine.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
     final r = buildFlowReport(s, c, 'player');
-    // 0.2 steel a second sold at about 4.
-    expect(r.creditsPerSec.toDouble(), closeTo(0.8, 1e-3));
-    expect(r.creditsPerSec.toDouble(), lessThan(0.8));
+    // 0.2 steel a second sold at 4: the market absorbs that rate at full
+    // price.
+    expect(r.creditsPerSec.toDouble(), closeTo(0.8, 1e-9));
   });
 
   test('net includes route outflow; empire net counts cargo in flight', () {

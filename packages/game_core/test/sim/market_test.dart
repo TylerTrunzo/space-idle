@@ -104,7 +104,12 @@ void main() {
         .add(AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(450)));
     stepMarket(s, c, 1);
     expect(stock(), n(450));
-    expect(s.faction('p').credits, n(375));
+    // 50 sold over the second: the saturation falls from 1 at
+    // 0.5 − 1/1800 a second, so they average 1 − (0.5 − 1/1800) / 2.
+    expect(
+      s.faction('p').credits.toDouble(),
+      closeTo(500 * (1 - (0.5 - 1 / 1800) / 2), 1e-9),
+    );
     stepMarket(s, c, 1); // nothing above the minimum
     expect(stock(), n(450));
   });
@@ -153,6 +158,32 @@ void main() {
     s.body('a').buildings.single.crew = 0;
     stepMarket(s, c, 10);
     expect(stock(), n(100));
+  });
+
+  group('auto-sell earns the same in long steps as in short ones', () {
+    // Ore arrives at a steady rate and is auto-sold; the market (depth 100,
+    // recovery 1800 s) absorbs 0.0556 a second before it saturates.
+    for (final rate in [0.03, 0.05, 0.08, 0.5]) {
+      test('$rate a second', () {
+        double earned(double dt) {
+          final t = newGameState(c, 1);
+          t
+              .faction('p')
+              .autoSell
+              .add(
+                AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(0)),
+              );
+          for (var time = 0.0; time < 7200; time += dt) {
+            t.body('a').stock['ore'] = n(rate * dt);
+            stepMarket(t, c, dt);
+          }
+          return t.faction('p').credits.toDouble();
+        }
+
+        final fine = earned(1);
+        expect(earned(60), closeTo(fine, fine * 0.002));
+      });
+    }
   });
 
   test('auto-sell skips bodies the faction no longer owns', () {
