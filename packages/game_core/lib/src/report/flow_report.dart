@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
 import '../commands/apply.dart';
@@ -161,9 +160,7 @@ const double _sampleSeconds = 1;
 /// content order and leave out zero rates. Throws if the faction does not
 /// exist.
 FlowReport buildFlowReport(GameState s, Content c, String factionId) {
-  final copy = GameState.fromJson(
-    jsonDecode(jsonEncode(s.toJson())) as Map<String, Object?>,
-  );
+  final copy = s.copy();
   final owned = [
     for (final b in copy.bodies)
       if (b.ownerId == factionId) b,

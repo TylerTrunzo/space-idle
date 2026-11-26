@@ -43,6 +43,13 @@ final class AutoSellRule {
     'resourceId': resourceId,
     'keepAtLeast': keepAtLeast.toJson(),
   };
+
+  /// An independent copy of this rule.
+  AutoSellRule copy() => AutoSellRule(
+    bodyId: bodyId,
+    resourceId: resourceId,
+    keepAtLeast: keepAtLeast,
+  );
 }
 
 /// A faction's mutable state: the player or an AI rival.
@@ -103,6 +110,17 @@ final class FactionState {
     'autoSell': [for (final r in autoSell) r.toJson()],
     'reachedMilestones': reachedMilestones.toList()..sort(),
   };
+
+  /// An independent deep copy of this faction.
+  FactionState copy() => FactionState(
+    id: id,
+    name: name,
+    isPlayer: isPlayer,
+    credits: credits,
+    baseCrew: baseCrew,
+    autoSell: [for (final r in autoSell) r.copy()],
+    reachedMilestones: Set.of(reachedMilestones),
+  );
 }
 
 /// One constructed building and its upgrade levels.
@@ -165,6 +183,17 @@ final class BuildingState {
     'lastRunFraction': lastRunFraction,
     'lastLimitReason': lastLimitReason,
   };
+
+  /// An independent deep copy of this building.
+  BuildingState copy() => BuildingState(
+    id: id,
+    defId: defId,
+    depositResourceId: depositResourceId,
+    crew: crew,
+    levels: levels,
+    lastRunFraction: lastRunFraction,
+    lastLimitReason: lastLimitReason,
+  );
 }
 
 /// A planet, moon, or belt and what is built on it.
@@ -250,6 +279,20 @@ final class BodyState {
     'stock': {for (final e in stock.entries) e.key: e.value.toJson()},
     'buildings': [for (final b in buildings) b.toJson()],
   };
+
+  /// An independent deep copy of this body; [wastedThisStep] starts empty,
+  /// as after a save round trip.
+  BodyState copy() => BodyState(
+    id: id,
+    name: name,
+    systemId: systemId,
+    typeId: typeId,
+    orbit: orbit,
+    deposits: List.of(deposits),
+    ownerId: ownerId,
+    stock: Map.of(stock),
+    buildings: [for (final b in buildings) b.copy()],
+  );
 }
 
 /// A standing transport order between two bodies.
@@ -307,6 +350,17 @@ final class RouteState {
     'ratePerSecond': ratePerSecond.toJson(),
     'cargoShips': cargoShips,
   };
+
+  /// An independent copy of this route.
+  RouteState copy() => RouteState(
+    id: id,
+    ownerId: ownerId,
+    fromBodyId: fromBodyId,
+    toBodyId: toBodyId,
+    resourceId: resourceId,
+    ratePerSecond: ratePerSecond,
+    cargoShips: cargoShips,
+  );
 }
 
 /// Cargo in flight along a route.
@@ -372,6 +426,18 @@ final class Shipment {
     'departAt': departAt,
     'arriveAt': arriveAt,
   };
+
+  /// An independent copy of this shipment.
+  Shipment copy() => Shipment(
+    routeId: routeId,
+    fromBodyId: fromBodyId,
+    toBodyId: toBodyId,
+    ownerId: ownerId,
+    resourceId: resourceId,
+    amount: amount,
+    departAt: departAt,
+    arriveAt: arriveAt,
+  );
 }
 
 /// Market saturation per resource.
@@ -393,6 +459,9 @@ final class MarketState {
 
   /// Serializes this market.
   Map<String, Object?> toJson() => {'saturation': saturation};
+
+  /// An independent copy of this market.
+  MarketState copy() => MarketState(saturation: Map.of(saturation));
 }
 
 /// The whole mutable game world.
@@ -476,6 +545,21 @@ final class GameState {
     'market': market.toJson(),
     'nextId': nextId,
   };
+
+  /// An independent deep copy of the whole state, equal to a save round
+  /// trip (`GameState.fromJson(toJson())`) but without the JSON; transient
+  /// [BodyState.wastedThisStep] starts empty.
+  GameState copy() => GameState(
+    saveVersion: saveVersion,
+    time: time,
+    rngState: rngState,
+    factions: [for (final f in factions) f.copy()],
+    bodies: [for (final b in bodies) b.copy()],
+    routes: [for (final r in routes) r.copy()],
+    shipments: [for (final sh in shipments) sh.copy()],
+    market: market.copy(),
+    nextId: nextId,
+  );
 }
 
 /// Builds the starting world from [content], seeding the game [Rng] with

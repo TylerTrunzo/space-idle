@@ -502,9 +502,7 @@ void main() {
         rule.keepAtLeast = storageCap(s, c, s.body(rule.bodyId)).mulDouble(0.9);
       }
       BigNum earned(double step) {
-        final t = GameState.fromJson(
-          jsonDecode(encode(s)) as Map<String, Object?>,
-        );
+        final t = s.copy();
         e.advance(t, 6 * 3600, maxStep: step);
         return t.faction('player').credits - s.faction('player').credits;
       }

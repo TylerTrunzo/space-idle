@@ -83,6 +83,80 @@ void main() {
     expect(back.body('kora').buildings.first.levels[UpgradeTrack.speed], 3);
   });
 
+  test('copy is a deep copy equal to a save round trip', () {
+    final s = newGameState(content, 3)
+      ..routes.add(
+        RouteState(
+          id: 'r1',
+          ownerId: 'player',
+          fromBodyId: 'kora',
+          toBodyId: 'brine',
+          resourceId: 'iron_ore',
+          ratePerSecond: BigNum.parse('2.5'),
+          cargoShips: 2,
+        ),
+      )
+      ..shipments.add(
+        Shipment(
+          routeId: 'r1',
+          fromBodyId: 'kora',
+          toBodyId: 'brine',
+          ownerId: 'player',
+          resourceId: 'iron_ore',
+          amount: BigNum.parse('5'),
+          departAt: 1,
+          arriveAt: 20,
+        ),
+      )
+      ..time = 12.5;
+    s.market.saturation['iron_ore'] = 0.75;
+    s.faction('player')
+      ..reachedMilestones.add('a')
+      ..autoSell.add(
+        AutoSellRule(
+          bodyId: 'kora',
+          resourceId: 'iron_ore',
+          keepAtLeast: BigNum.parse('10'),
+        ),
+      );
+    s.body('kora').buildings.first
+      ..lastRunFraction = 0.5
+      ..lastLimitReason = 'input:iron_ore';
+    final once = jsonEncode(s.toJson());
+
+    final t = s.copy();
+    expect(jsonEncode(t.toJson()), once);
+
+    // Changing every mutable part of the copy leaves the original alone.
+    t
+      ..time = 99
+      ..rngState = 1
+      ..nextId = 999;
+    t.newId('x');
+    t.market.saturation['iron_ore'] = 0.2;
+    t.faction('player')
+      ..credits = BigNum.zero()
+      ..baseCrew = 0
+      ..reachedMilestones.add('b')
+      ..autoSell.first.keepAtLeast = BigNum.zero();
+    final kora = t.body('kora')
+      ..ownerId = null
+      ..stock['iron_ore'] = BigNum.zero();
+    kora.buildings.first
+      ..crew = 0
+      ..levels[UpgradeTrack.speed] = 7;
+    kora.buildings.removeLast();
+    kora.deposits.clear();
+    t.routes.first
+      ..ratePerSecond = BigNum.zero()
+      ..cargoShips = 9;
+    t.shipments.first.amount = BigNum.zero();
+    t.routes.clear();
+    t.shipments.clear();
+    t.factions.first.autoSell.clear();
+    expect(jsonEncode(s.toJson()), once);
+  });
+
   test('newId is deterministic', () {
     final a = newGameState(content, 42);
     final b = newGameState(content, 42);

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
@@ -120,9 +119,7 @@ List<Command> planCommands(
   GameState s,
   Command? Function(GameState w) next,
 ) {
-  final w = GameState.fromJson(
-    jsonDecode(jsonEncode(s.toJson())) as Map<String, Object?>,
-  );
+  final w = s.copy();
   final out = <Command>[];
   for (var i = 0; i < _maxCommandsPerDecision; i++) {
     final cmd = next(w);
