@@ -382,7 +382,9 @@ final class ScriptRunner {
     final p = _player;
     return {
       'ok': true,
-      'claim': _nums(claimCost(state, c, p.id)),
+      'claim': state.bodies.any((b) => b.ownerId == null)
+          ? _nums(claimCost(state, c, p.id))
+          : 'no bodies left to claim',
       'extraSlot': {
         for (final b in state.bodies)
           if (b.ownerId == p.id) b.id: _nums(slotCost(c, b)),

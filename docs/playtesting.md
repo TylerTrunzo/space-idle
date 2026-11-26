@@ -36,7 +36,7 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 |---|---|
 | `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
 | `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what selling one second's net output earns, not a stockpile being sold down), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
-| `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost, and the next extra build slot on each body you own |
+| `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), and the next extra build slot on each body you own |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
 | `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h) and shows the away summary, with credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |

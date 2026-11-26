@@ -27,7 +27,8 @@ credits"`. Meta commands:
   (type, deposits, owner, slots, storage cap, and stock if owned), the
   player's routes, and price and saturation of the goods the player holds
 - `{"cmd":"costs"}` upgrade costs of the player's buildings, the next claim
-  cost and each owned body's next extra build slot
+  cost (or `"no bodies left to claim"` once every body is owned) and each
+  owned body's next extra build slot
 - `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}`
 
 `advance` and `away` tick the engine the same way, in 60 s steps; within a

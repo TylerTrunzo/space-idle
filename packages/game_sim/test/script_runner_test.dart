@@ -214,6 +214,15 @@ void main() {
     );
   });
 
+  test('costs show no claim once every body is owned', () {
+    final r = _runner();
+    expect((r.handle({'cmd': 'costs'})['claim']! as Map).keys, ['credits']);
+    for (final b in r.state.bodies) {
+      b.ownerId = 'player';
+    }
+    expect(r.handle({'cmd': 'costs'})['claim'], 'no bodies left to claim');
+  });
+
   test('costs include the next extra build slot of each owned body', () {
     final costs = _runner().handle({'cmd': 'costs'});
     expect((costs['extraSlot']! as Map).keys, ['kora']);
