@@ -94,12 +94,15 @@ const double _trickleRate = 0.01;
 /// Cargo ships the balanced bot sends to a body that has goods to ship.
 const int _shipsSent = 2;
 
-/// Game seconds per step of [GameEngine.catchUpOffline] (the default step
-/// of [GameEngine.advance]). Inputs made in a step are not used until the
-/// next, so a body must hold a full step of its buildings' demand or they
-/// starve while the player is away; [_View.keep] holds that much back from
-/// auto-sell.
-const double _offlineStepSeconds = 60;
+/// Seconds of its buildings' input demand a body keeps back from
+/// auto-sell ([_View.keep]).
+///
+/// Inputs made in a tick are used in the next, so a body holding less than
+/// a tick's demand starves its own buildings; [GameEngine.catchUpOffline]
+/// then shortens its ticks (see [GameEngine.offlineStepSeconds]), which
+/// is slower. Holding a minute of demand, its longest tick, keeps both
+/// production and catch-up at full speed.
+const double _demandBufferSeconds = 60;
 
 /// Share of demand below which a route counts as too small.
 const double _routeSlack = 0.9;
@@ -331,8 +334,8 @@ final class _View {
   /// route ships it, or it pays for builds, routes or claims; otherwise
   /// none.
   ///
-  /// The larger of a share of storage and one offline step of what the
-  /// body's buildings use, at most the storage cap.
+  /// The larger of a share of storage and [_demandBufferSeconds] of what
+  /// the body's buildings use, at most the storage cap.
   BigNum keep(BodyState body, String resourceId) {
     final used =
         resourceId == r.cargoShipResource ||
@@ -351,7 +354,7 @@ final class _View {
     }
     return cap
         .mulDouble(_keepShareOfCap)
-        .max(demand.mulDouble(_offlineStepSeconds))
+        .max(demand.mulDouble(_demandBufferSeconds))
         .min(cap);
   }
 

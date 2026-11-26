@@ -78,7 +78,7 @@ void main() {
     );
   });
 
-  test('auto-sell keeps a full offline step of what a body uses', () {
+  test('auto-sell keeps a minute of what a body uses', () {
     final e = _engine();
     final s = e.newGame(1);
     final kora = s.body('kora');
