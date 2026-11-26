@@ -482,6 +482,37 @@ void main() {
       expect(sum.totalWasted.toDouble(), closeTo(0.32 * 3600, 1e-6));
     });
 
+    test('stock moved between owned bodies leaves no float residue', () {
+      final s = engine.newGame(1);
+      final kora = s.body('kora');
+      for (final b in kora.buildings) {
+        b.crew = 0;
+      }
+      kora.stock
+        ..clear()
+        ..['iron_ore'] = n(3 * 0.37)
+        ..['cargo_ship'] = n(1);
+      s.body('hollow_reach')
+        ..ownerId = 'player'
+        ..stock['iron_ore'] = n(3 * 0.11);
+      engine.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(0.0021),
+          1,
+        ),
+      );
+      final sum = engine.catchUpOffline(s, 3600);
+      // Every unit landed; the totals before and after differ only in the
+      // last bits of a double.
+      expect(s.shipments, isEmpty);
+      expect(sum.stockGained, isEmpty);
+    });
+
     test('lists milestones reached while away, in content order', () {
       final s = engine.newGame(1);
       s.faction('player').reachedMilestones.add('own_2_bodies');

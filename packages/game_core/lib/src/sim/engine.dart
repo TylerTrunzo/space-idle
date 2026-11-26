@@ -4,6 +4,7 @@ import '../commands/apply.dart';
 import '../commands/command.dart';
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../num/change.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
 import 'logistics.dart';
@@ -33,7 +34,8 @@ final class OfflineSummary {
 
   /// Resource id to the change in the player's stock summed over the bodies
   /// it owns, in content order; negative for resources used up. Resources
-  /// whose total did not change are left out.
+  /// whose total did not change, or changed only by float residue (within
+  /// a relative 1e-12), are left out.
   final Map<String, BigNum> stockGained;
 
   /// Change in the player's credits; negative if it fell.
@@ -168,9 +170,10 @@ final class GameEngine {
     final stockAfter = _empireStock(s, player.id);
     final gained = <String, BigNum>{};
     for (final id in content.resources.keys) {
-      final delta =
-          (stockAfter[id] ?? const BigNum.zero()) -
-          (stockBefore[id] ?? const BigNum.zero());
+      final delta = changeBetween(
+        stockAfter[id] ?? const BigNum.zero(),
+        stockBefore[id] ?? const BigNum.zero(),
+      );
       if (!delta.isZero) gained[id] = delta;
     }
     return OfflineSummary(
