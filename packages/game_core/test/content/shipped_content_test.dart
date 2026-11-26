@@ -113,25 +113,40 @@ void main() {
   });
 
   test('raw goods sell for at most 40% of what refining them earns', () {
-    // Value added per chain step: every recipe's raw inputs at base price
-    // are worth at most 40% of its outputs.
+    // Value added per chain step: every recipe's raw inputs together, at
+    // base price, are worth at most 40% of its outputs.
+    //
+    // Exempt: the hydrogen furnace (61%). Its 3 hydrogen a cycle is what
+    // keeps it from feeding itself with an electrolyzer: the electrolyzer
+    // makes 2 hydrogen from the 2 water of two furnace cycles, so at 1
+    // hydrogen a cycle the pair would turn iron ore into steel and oxygen
+    // with nothing else coming in. It is a water source away from ice,
+    // not a step that adds value.
+    const exempt = {'hydrogen_furnace'};
     for (final b in content.buildings.values) {
-      if (b.kind != BuildingKind.factory) continue;
+      if (b.kind != BuildingKind.factory || exempt.contains(b.id)) continue;
       double worth(String id, double n) =>
           n * content.resources[id]!.basePrice.toDouble();
       final out = b.outputs.entries.fold(
         0.0,
         (t, e) => t + worth(e.key, e.value),
       );
-      for (final MapEntry(key: id, value: n) in b.inputs.entries) {
-        if (content.resources[id]!.tier != 0) continue;
-        expect(
-          worth(id, n),
-          lessThanOrEqualTo(0.4 * out),
-          reason: '${b.id}: $n $id against outputs worth $out',
-        );
-      }
+      final raw = b.inputs.entries
+          .where((e) => content.resources[e.key]!.tier == 0)
+          .fold(0.0, (t, e) => t + worth(e.key, e.value));
+      expect(
+        raw,
+        lessThanOrEqualTo(0.4 * out),
+        reason: '${b.id}: raw inputs worth $raw against outputs worth $out',
+      );
     }
+    // The exemption is still needed: summed, the furnace is above 40%.
+    final furnace = content.buildings['hydrogen_furnace']!;
+    double value(Map<String, double> m) => m.entries.fold(
+      0.0,
+      (t, e) => t + e.value * content.resources[e.key]!.basePrice.toDouble(),
+    );
+    expect(value(furnace.inputs), greaterThan(0.4 * value(furnace.outputs)));
   });
 
   test('cargo ships and habitat modules can be made at home', () {
