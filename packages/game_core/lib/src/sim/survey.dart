@@ -31,3 +31,23 @@ double surveySeconds(Content c) => c.rules.surveySeconds.clamp(
   RulesDef.minProjectSeconds,
   RulesDef.maxProjectSeconds,
 );
+
+/// Unsurveyed signals [factionId] picks up in system [systemId]: the
+/// hidden bodies there that nothing has surveyed yet, counting any under
+/// survey, if the faction owns a body in the system; else 0.
+///
+/// It tells the player there is something to find without naming it; a
+/// `SurveyCommand` without a body id surveys the next one.
+int unsurveyedSignals(
+  GameState s,
+  Content c,
+  String factionId,
+  String systemId,
+) {
+  final inSystem = [
+    for (final b in s.bodies)
+      if (b.systemId == systemId) b,
+  ];
+  if (!inSystem.any((b) => b.ownerId == factionId)) return 0;
+  return inSystem.where((b) => !b.surveyed).length;
+}

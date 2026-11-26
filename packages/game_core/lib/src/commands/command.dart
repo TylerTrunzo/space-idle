@@ -132,7 +132,11 @@ sealed class Command {
         _str(j, 'bodyId'),
         _str(j, 'sourceBodyId'),
       ),
-      'survey' => SurveyCommand(f, _str(j, 'bodyId'), _str(j, 'sourceBodyId')),
+      'survey' => SurveyCommand(
+        f,
+        _optStr(j, 'bodyId'),
+        _str(j, 'sourceBodyId'),
+      ),
       'expandSlots' => ExpandSlotsCommand(f, _str(j, 'bodyId')),
       'startMegaprojectStage' => StartMegaprojectStageCommand(
         f,
@@ -473,11 +477,14 @@ final class ClaimBodyCommand extends Command {
 /// completes (see `surveyCost`, `surveySeconds`). It runs beside claims and
 /// other surveys without affecting them.
 final class SurveyCommand extends Command {
-  /// Creates a survey command.
+  /// Creates a survey command; a null [bodyId] surveys the next hidden body
+  /// of [sourceBodyId]'s system.
   const SurveyCommand(super.factionId, this.bodyId, this.sourceBodyId);
 
-  /// Hidden body to reveal.
-  final String bodyId;
+  /// Hidden body to reveal; null for the first one in content order in the
+  /// source body's system that is neither surveyed nor under survey (see
+  /// `unsurveyedSignals`).
+  final String? bodyId;
 
   /// Owned body whose stock supplies the survey drones.
   final String sourceBodyId;

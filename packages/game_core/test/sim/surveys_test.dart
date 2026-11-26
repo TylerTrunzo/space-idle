@@ -251,6 +251,88 @@ void main() {
     });
   });
 
+  group('signals', () {
+    test(
+      'count the unsurveyed bodies of systems the faction owns a body in',
+      () {
+        final s = rich();
+        expect(unsurveyedSignals(s, content, 'player', 'veyra'), 2);
+        expect(unsurveyedSignals(s, content, 'player', 'nowhere'), 0);
+        // A faction with no body in the system picks up nothing there.
+        s.body('kora').ownerId = null;
+        expect(unsurveyedSignals(s, content, 'player', 'veyra'), 0);
+        s.body('brine').ownerId = 'player';
+        expect(unsurveyedSignals(s, content, 'player', 'veyra'), 2);
+      },
+    );
+
+    test('still count a body under survey, and drop it once surveyed', () {
+      final s = rich();
+      ok(s, surveyTessaly);
+      expect(unsurveyedSignals(s, content, 'player', 'veyra'), 2);
+      e.advance(s, 10800);
+      e.tick(s, 1);
+      expect(s.body('tessaly').surveyed, isTrue);
+      expect(unsurveyedSignals(s, content, 'player', 'veyra'), 1);
+    });
+  });
+
+  group('a survey without a body id', () {
+    const next = SurveyCommand('player', null, 'kora');
+
+    test('round trips through JSON with the id left out', () {
+      final json = next.toJson();
+      expect(json['bodyId'], isNull);
+      final back = Command.fromJson({...json}..remove('bodyId'));
+      expect((back as SurveyCommand).bodyId, isNull);
+      expect(back.toJson(), json);
+    });
+
+    test("targets the source system's next hidden body in content order", () {
+      final s = rich();
+      s.body('kora').stock['survey_drone'] = n(9);
+      ok(s, next);
+      ok(s, next);
+      expect(
+        [for (final p in e.projectsFor(s, 'player')) p.targetId],
+        ['tessaly', 'dusk_cairn'],
+      );
+      expect(
+        fails(s, next, CommandError.projectInProgress),
+        'Every unsurveyed signal in Veyra is already being surveyed',
+      );
+      e.advance(s, 10800);
+      e.tick(s, 1);
+      expect(
+        fails(s, next, CommandError.alreadySurveyed),
+        'There is nothing left to survey in Veyra',
+      );
+    });
+
+    test('skips a body already surveyed', () {
+      final s = rich();
+      s.body('tessaly').surveyed = true;
+      ok(s, next);
+      expect(e.projectsFor(s, 'player').single.targetId, 'dusk_cairn');
+    });
+
+    test('checks the source like the explicit form', () {
+      final s = rich();
+      fails(
+        s,
+        const SurveyCommand('player', null, 'nowhere'),
+        CommandError.unknownBody,
+      );
+      fails(
+        s,
+        const SurveyCommand('player', null, 'brine'),
+        CommandError.notOwner,
+      );
+      s.body('kora').stock['survey_drone'] = n(0);
+      fails(s, next, CommandError.cannotAfford);
+    });
+  });
+
   group('a survey', () {
     test('reveals the body on completion, and not before', () {
       final s = rich();

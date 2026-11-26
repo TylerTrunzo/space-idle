@@ -794,19 +794,56 @@ CommandResult _claim(
   return CommandOk(createdId: p.id);
 }
 
+/// The next body to survey in [source]'s system: the first in content
+/// order neither surveyed nor under survey, or the failure if none is.
+(BodyState?, CommandFailed?) _nextToSurvey(
+  GameState s,
+  Content c,
+  BodyState source,
+) {
+  var underWay = false;
+  for (final b in s.bodies) {
+    if (b.systemId != source.systemId || b.surveyed) continue;
+    if (projectOn(s, ProjectKind.survey, b.id) == null) return (b, null);
+    underWay = true;
+  }
+  final system = c.galaxy.systems
+      .firstWhere((x) => x.id == source.systemId)
+      .name;
+  return (
+    null,
+    underWay
+        ? _fail(
+            CommandError.projectInProgress,
+            'Every unsurveyed signal in $system is already being surveyed',
+          )
+        : _fail(
+            CommandError.alreadySurveyed,
+            'There is nothing left to survey in $system',
+          ),
+  );
+}
+
 CommandResult _survey(
   GameState s,
   Content c,
   FactionState f,
   SurveyCommand cmd,
 ) {
+  final id = cmd.bodyId;
   BodyState? hidden;
   for (final b in s.bodies) {
-    if (b.id == cmd.bodyId) hidden = b;
+    if (b.id == id) hidden = b;
   }
-  if (hidden == null) return _unknownBody(cmd.bodyId);
+  if (id != null && hidden == null) return _unknownBody(id);
   final source = _findBody(s, f, cmd.sourceBodyId);
   if (source == null) return _unknownBody(cmd.sourceBodyId);
+  if (hidden == null) {
+    if (source.ownerId != f.id) return _notOwner(source.name);
+    final (next, none) = _nextToSurvey(s, c, source);
+    if (next == null) return none!;
+    hidden = next;
+  }
   if (hidden.surveyed) {
     return _fail(
       CommandError.alreadySurveyed,

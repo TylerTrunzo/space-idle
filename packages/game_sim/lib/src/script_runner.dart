@@ -508,6 +508,17 @@ final class ScriptRunner {
               }),
           },
       ],
+      'unsurveyedSignals': [
+        for (final sys in c.galaxy.systems)
+          if (state.bodies.any(
+            (b) => b.systemId == sys.id && b.ownerId == p.id,
+          ))
+            {
+              'systemId': sys.id,
+              'name': sys.name,
+              'count': unsurveyedSignals(state, c, p.id, sys.id),
+            },
+      ],
       'routes': [
         for (final r in state.routes)
           if (r.ownerId == p.id)

@@ -48,12 +48,17 @@ of the source's stock before auto-sell sells there, so a rule with `keepAtLeast`
 0 sells only what the route leaves.
 
 Some bodies are hidden until surveyed. A hidden body is not in `state` or
-`costs`, and every command but `survey` treats it as `unknownBody`.
-`{"cmd":"survey","bodyId":"tessaly","sourceBodyId":"kora"}` pays
-`costs.survey` (survey drones from the source body, plus credits) and starts a
-survey project of a few hours; it runs beside claims and other surveys.
-When it ends the body shows up and can be claimed. Ids of hidden bodies are
-in `content/galaxy.json` (`"hidden": true`); an unknown id fails with
+`costs`, and every command but `survey` treats it as `unknownBody`. `state`
+counts them as `unsurveyedSignals` (`systemId`, `name`, `count`) in each system
+where the player owns a body, a survey under way included.
+`{"cmd":"survey","sourceBodyId":"kora"}` pays `costs.survey` (survey drones
+from the source body, plus credits) and starts a survey project of a few hours
+on the next signal in the source body's system (in content order, skipping one
+already under survey); it runs beside claims and other surveys. When it ends
+the body shows up and can be claimed. With none left it fails with
+`alreadySurveyed`, and with every one already under survey with
+`projectInProgress`. A `bodyId` names the body instead (ids of hidden bodies
+are in `content/galaxy.json`, `"hidden": true`); an unknown id fails with
 `unknownBody`, a surveyed one with `alreadySurveyed`.
 
 The Veyra Exchange posts up to 3 contracts on the player's board. They never
@@ -81,7 +86,8 @@ commands:
   every megaproject (`megaprojects`: `id`, `name`, `level`), the contracts
   board (`contracts`: `id`, `issuer`, `resourceId`, `resource` name,
   `quantity`, `delivered`, `reward` in credits) and when its empty slots
-  refill (`contractRefills`: `at` and `timeLeft`), every body
+  refill (`contractRefills`: `at` and `timeLeft`), the unsurveyed signals of
+  each system the player has a body in (`unsurveyedSignals`), every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
   player's routes (`stopAtDestination`, null for none, and `paused`, true
   while the destination plus the route's cargo in flight hold at least that

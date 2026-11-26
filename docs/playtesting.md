@@ -75,6 +75,7 @@ counts are plain integers.
 | `{"cmd":"removeRoute","routeId":"r1"}` | Close a route; its ships return to the source |
 | `{"cmd":"claimBody","bodyId":"brine","sourceBodyId":"kora"}` | Claim an unowned body; after the first claim it also takes outpost kits from the source body |
 | `{"cmd":"demolish","buildingId":"b4"}` | Remove a building for half its credit cost back |
+| `{"cmd":"survey","sourceBodyId":"kora"}` | Survey the next unsurveyed signal in Kora's system (`state` shows `unsurveyedSignals`), paying credits and survey drones from Kora; the body shows up when the survey ends, a few hours later. Add `"bodyId"` to pick one by id |
 | `{"cmd":"expandSlots","bodyId":"kora"}` | Buy one more build slot on a body you own; each one costs more (see `costs`) |
 
 A successful command reply lists what it `spent` and `gained` (credits, and

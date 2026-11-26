@@ -749,6 +749,22 @@ void main() {
       expect(claim['error'], 'unknownBody');
     });
 
+    test('state counts unsurveyed signals; a survey needs no body id', () {
+      final r = rich();
+      expect(r.handle({'cmd': 'state'})['unsurveyedSignals'], [
+        {'systemId': 'veyra', 'name': 'Veyra', 'count': 2},
+      ]);
+      final started = r.handle({'cmd': 'survey', 'sourceBodyId': 'kora'});
+      expect(started['ok'], isTrue, reason: '$started');
+      expect(started['message'], endsWith('done in 3h'));
+      r.handle({'cmd': 'advance', 'seconds': 10860});
+      final after = r.handle({'cmd': 'state'});
+      expect(bodyIds(after), contains('tessaly'));
+      expect(after['unsurveyedSignals'], [
+        {'systemId': 'veyra', 'name': 'Veyra', 'count': 1},
+      ]);
+    });
+
     test('costs list the survey price and time', () {
       final costs = rich().handle({'cmd': 'costs'});
       final survey = costs['survey']! as Map<String, Object?>;
