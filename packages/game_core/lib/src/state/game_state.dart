@@ -80,7 +80,8 @@ final class FactionState {
     reachedMilestones: {
       for (final e in j['reachedMilestones']! as List) e as String,
     },
-    salesRevenue: _bigMap(j['salesRevenue']),
+    // Absent in saves from before sales were tracked.
+    salesRevenue: j['salesRevenue'] == null ? null : _bigMap(j['salesRevenue']),
   );
 
   /// Unique id.

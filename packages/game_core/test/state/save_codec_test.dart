@@ -160,6 +160,10 @@ void main() {
       );
     });
 
+    test('market saturation resource', () {
+      expectUnknown((s) => s.market.saturation['nope'] = 0.5);
+    });
+
     test('auto-sell body', () {
       expectUnknown(
         (s) => s.faction('player').autoSell.add(rule(body: 'nope')),
@@ -388,6 +392,16 @@ void main() {
       final r = SaveCodec.decode(jsonEncode(withCinderShips('-1e-3')), content);
       expect(err(r).kind, SaveErrorKind.invalidValue);
     });
+  });
+
+  test('a save without sales revenue loads with none', () {
+    final m = fresh();
+    (m['factions']! as List).cast<Map<String, Object?>>().first.remove(
+      'salesRevenue',
+    );
+    final r = SaveCodec.decode(jsonEncode(m), content);
+    expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+    expect((r as SaveOk).state.faction('player').salesRevenue, isEmpty);
   });
 
   test('decode rejects missing fields', () {

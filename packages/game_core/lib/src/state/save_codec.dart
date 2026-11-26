@@ -333,6 +333,9 @@ final class SaveCodec {
         }
       }
     }
+    for (final id in s.market.saturation.keys) {
+      if (!resource(id)) return 'market: saturation of unknown resource $id';
+    }
     for (final r in s.routes) {
       if (!resource(r.resourceId)) {
         return 'route ${r.id}: unknown resource ${r.resourceId}';
