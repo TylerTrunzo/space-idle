@@ -133,7 +133,7 @@ final class _Loader {
           )
         : <String, ContractTemplateDef>{};
 
-    if (rules != null) _checkRules(rules);
+    if (rules != null) _checkRules(rules, galaxy);
     _checkBuildings(buildings);
     _checkBodyTypes(bodyTypes);
     if (galaxy != null) _checkGalaxy(galaxy, buildings, bodyTypes);
@@ -282,6 +282,10 @@ final class _Loader {
       'claimSecondsPerOwned',
       'expandSlotsSeconds',
       'contractRefillSeconds',
+      'surveyDrones',
+      'surveyCredits',
+      'surveySeconds',
+      'surveyDroneResource',
     });
     if (f == null) return null;
     final before = _errors.length;
@@ -334,6 +338,21 @@ final class _Loader {
       fallback: RulesDef.defaultContractRefillSeconds,
       gt: 0,
     );
+    final surveyDrones = f.integer(
+      'surveyDrones',
+      fallback: RulesDef.defaultSurveyDrones,
+      min: 0,
+    );
+    final surveyCredits = f.bigNum('surveyCredits', optional: true);
+    final surveySeconds = f.number(
+      'surveySeconds',
+      fallback: RulesDef.defaultSurveySeconds,
+      ge: RulesDef.minProjectSeconds,
+      le: RulesDef.maxProjectSeconds,
+    );
+    final surveyDroneResource =
+        f.string('surveyDroneResource', optional: true) ??
+        RulesDef.defaultSurveyDroneResource;
     if (_errors.length > before) return null;
     return RulesDef(
       speedPerLevel: speedPerLevel!,
@@ -360,6 +379,10 @@ final class _Loader {
       claimSecondsPerOwned: claimSecondsPerOwned!,
       expandSlotsSeconds: expandSlotsSeconds!,
       contractRefillSeconds: contractRefillSeconds!,
+      surveyDrones: surveyDrones!,
+      surveyCredits: surveyCredits,
+      surveySeconds: surveySeconds!,
+      surveyDroneResource: surveyDroneResource,
     );
   }
 
@@ -543,7 +566,7 @@ final class _Loader {
       '${f.path}.bodies',
       f.list('bodies'),
       _bodyIds,
-      const {'id', 'name', 'typeId', 'orbit', 'deposits'},
+      const {'id', 'name', 'typeId', 'orbit', 'deposits', 'hidden'},
       _body,
     );
     if (_errors.length > before) return null;
@@ -555,6 +578,7 @@ final class _Loader {
     final name = f.string('name');
     final typeId = f.string('typeId');
     final orbit = f.integer('orbit', min: 0);
+    final hidden = f.boolean('hidden', fallback: false);
     final rawDeposits = f.list('deposits');
     final deposits = <DepositDef>[];
     if (rawDeposits != null) {
@@ -583,6 +607,7 @@ final class _Loader {
       typeId: typeId!,
       orbit: orbit!,
       deposits: deposits,
+      hidden: hidden!,
     );
   }
 
@@ -783,9 +808,16 @@ final class _Loader {
     if (!_resourceIds.contains(id)) err(path, "unknown resource '$id'");
   }
 
-  void _checkRules(RulesDef r) {
+  /// Whether any body of [g] is hidden, so that surveys have a use.
+  static bool _hasHidden(GalaxyDef? g) =>
+      g != null && g.systems.any((s) => s.bodies.any((b) => b.hidden));
+
+  void _checkRules(RulesDef r, GalaxyDef? galaxy) {
     _needResource('rules.outpostKitResource', r.outpostKitResource);
     _needResource('rules.cargoShipResource', r.cargoShipResource);
+    if (_hasHidden(galaxy)) {
+      _needResource('rules.surveyDroneResource', r.surveyDroneResource);
+    }
   }
 
   void _checkBuildings(Map<String, BuildingDef> buildings) {
@@ -859,6 +891,12 @@ final class _Loader {
         );
       }
       final home = bodies[f.homeBodyId];
+      if (home != null && home.hidden) {
+        err(
+          '$path.homeBodyId',
+          "'${home.id}' is hidden, so it can't be a home",
+        );
+      }
       var crew = 0;
       for (final (i, sb) in f.buildings.indexed) {
         final at = '$path.buildings[$i]';
@@ -990,6 +1028,8 @@ final class _Loader {
       for (final m in megaprojects.values) ...m.baseCost.keys,
       rules.outpostKitResource,
       rules.cargoShipResource,
+      if (_hasHidden(galaxy) && rules.surveyDrones > 0)
+        rules.surveyDroneResource,
     };
 
     for (final r in resources.values) {
@@ -1036,9 +1076,10 @@ final class _Fields {
     return null;
   }
 
-  bool? boolean(String key) {
-    final v = _get(key, optional: false);
-    if (v == null || v is bool) return v as bool?;
+  bool? boolean(String key, {bool? fallback}) {
+    final v = _get(key, optional: fallback != null);
+    if (v == null) return fallback;
+    if (v is bool) return v;
     err(key, 'expected true or false');
     return null;
   }
@@ -1078,8 +1119,8 @@ final class _Fields {
     return null;
   }
 
-  BigNum? bigNum(String key, {bool positive = false}) {
-    final v = _get(key, optional: false);
+  BigNum? bigNum(String key, {bool positive = false, bool optional = false}) {
+    final v = _get(key, optional: optional);
     if (v == null) return null;
     return _l.bigNum('$path.$key', v, positive: positive);
   }

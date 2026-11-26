@@ -11,11 +11,11 @@ dart run game_sim:game_sim bot --bot balanced|casual|greedy --hours 168 --seed 1
 
 Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`,
 `upgrade`, `createRoute`, `removeRoute`, `sell`, `setAutoSell`, `claimBody`,
-`expandSlots`, `startMegaprojectStage`, `deliverContract`, `discardContract`);
+`survey`, `expandSlots`, `startMegaprojectStage`, `deliverContract`, `discardContract`);
 `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts that
 changed), `createdId` for a new building, route or project, and for
-`claimBody`, `expandSlots`, `startMegaprojectStage`, `demolish`,
+`claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`, `demolish`,
 `createRoute`, `deliverContract` and `discardContract` a `message` such as
 `"Started claiming Brine for 5K credits; done in 30m"`. Claims, extra build
 slots and megaproject stages are projects: they are paid for at once and take
@@ -25,6 +25,15 @@ a second stage of a megaproject, already under way fails with
 "orbital_station","bodyId":"kora"}` pays the next level's cost from the body's
 stock and credits; each completed stage raises the megaproject's level, a
 permanent bonus.
+
+Some bodies are hidden until surveyed. A hidden body is not in `state` or
+`costs`, and every command but `survey` treats it as `unknownBody`.
+`{"cmd":"survey","bodyId":"tessaly","sourceBodyId":"kora"}` pays
+`costs.survey` (survey drones from the source body, plus credits) and starts a
+survey project of a few hours; it runs beside claims and other surveys.
+When it ends the body shows up and can be claimed. Ids of hidden bodies are
+in `content/galaxy.json` (`"hidden": true`); an unknown id fails with
+`unknownBody`, a surveyed one with `alreadySurveyed`.
 
 The Veyra Exchange posts up to 3 contracts on the player's board. They never
 expire. `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",

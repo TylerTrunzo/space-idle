@@ -63,6 +63,8 @@ List<ProjectState> runningProjects(GameState s, String factionId) => [
 /// Display name of what [p] acts on: its body's or its megaproject's.
 String projectTargetName(GameState s, Content c, ProjectState p) =>
     switch (p.kind) {
+      ProjectKind.survey when !s.body(p.targetId).surveyed =>
+        'an unsurveyed body',
       ProjectKind.claim ||
       ProjectKind.expandSlots ||
       ProjectKind.survey => s.body(p.targetId).name,
@@ -93,8 +95,7 @@ void stepProjects(GameState s, Content c) {
       case ProjectKind.megaprojectStage:
         _completeMegaprojectStage(s, p);
       case ProjectKind.survey:
-        // No command starts these yet; they complete with no effect.
-        break;
+        _completeSurvey(s, p);
     }
   }
 }
@@ -122,6 +123,11 @@ int? _idNumber(String id) {
 void _completeClaim(GameState s, ProjectState p) {
   final body = s.body(p.targetId);
   body.ownerId ??= p.factionId;
+}
+
+/// Reveals the hidden body [p] surveyed.
+void _completeSurvey(GameState s, ProjectState p) {
+  s.body(p.targetId).surveyed = true;
 }
 
 /// Adds the extra build slot [p] paid for to its body.

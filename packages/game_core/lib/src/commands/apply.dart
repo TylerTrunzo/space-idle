@@ -9,6 +9,7 @@ import '../sim/crew.dart';
 import '../sim/market.dart';
 import '../sim/megaprojects.dart';
 import '../sim/projects.dart';
+import '../sim/survey.dart';
 import '../state/game_state.dart';
 import '../state/save_codec.dart';
 import 'command.dart';
@@ -38,6 +39,7 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
     SellCommand() => _sell(s, c, faction, cmd),
     SetAutoSellCommand() => _setAutoSell(s, c, faction, cmd),
     ClaimBodyCommand() => _claim(s, c, faction, cmd),
+    SurveyCommand() => _survey(s, c, faction, cmd),
     ExpandSlotsCommand() => _expandSlots(s, c, faction, cmd),
     StartMegaprojectStageCommand() => _startMegaprojectStage(
       s,
@@ -134,9 +136,11 @@ FactionState? _findFaction(GameState s, String id) {
   return null;
 }
 
-BodyState? _findBody(GameState s, String id) {
+/// Body [id] if it is in sight of [f] ([isVisible]), else null: a hidden
+/// body nothing has surveyed is `unknownBody`.
+BodyState? _findBody(GameState s, FactionState f, String id) {
   for (final b in s.bodies) {
-    if (b.id == id) return b;
+    if (b.id == id) return isVisible(s, b, f.id) ? b : null;
   }
   return null;
 }
@@ -205,7 +209,7 @@ void _pay(FactionState f, BodyState stockBody, Map<String, BigNum> cost) {
 }
 
 CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
-  final body = _findBody(s, cmd.bodyId);
+  final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   final def = c.buildings[cmd.defId];
   if (def == null) {
@@ -349,9 +353,9 @@ CommandResult _createRoute(
   FactionState f,
   CreateRouteCommand cmd,
 ) {
-  final from = _findBody(s, cmd.fromBodyId);
+  final from = _findBody(s, f, cmd.fromBodyId);
   if (from == null) return _unknownBody(cmd.fromBodyId);
-  final to = _findBody(s, cmd.toBodyId);
+  final to = _findBody(s, f, cmd.toBodyId);
   if (to == null) return _unknownBody(cmd.toBodyId);
   if (!c.resources.containsKey(cmd.resourceId)) {
     return _unknownResource(cmd.resourceId);
@@ -424,7 +428,7 @@ CommandResult _removeRoute(
 }
 
 CommandResult _sell(GameState s, Content c, FactionState f, SellCommand cmd) {
-  final body = _findBody(s, cmd.bodyId);
+  final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (!c.resources.containsKey(cmd.resourceId)) {
     return _unknownResource(cmd.resourceId);
@@ -451,7 +455,7 @@ CommandResult _setAutoSell(
   FactionState f,
   SetAutoSellCommand cmd,
 ) {
-  final body = _findBody(s, cmd.bodyId);
+  final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (!c.resources.containsKey(cmd.resourceId)) {
     return _unknownResource(cmd.resourceId);
@@ -490,9 +494,9 @@ CommandResult _claim(
   FactionState f,
   ClaimBodyCommand cmd,
 ) {
-  final target = _findBody(s, cmd.bodyId);
+  final target = _findBody(s, f, cmd.bodyId);
   if (target == null) return _unknownBody(cmd.bodyId);
-  final source = _findBody(s, cmd.sourceBodyId);
+  final source = _findBody(s, f, cmd.sourceBodyId);
   if (source == null) return _unknownBody(cmd.sourceBodyId);
   final owner = target.ownerId;
   if (owner != null) {
@@ -525,13 +529,54 @@ CommandResult _claim(
   return CommandOk(createdId: p.id);
 }
 
+CommandResult _survey(
+  GameState s,
+  Content c,
+  FactionState f,
+  SurveyCommand cmd,
+) {
+  BodyState? hidden;
+  for (final b in s.bodies) {
+    if (b.id == cmd.bodyId) hidden = b;
+  }
+  if (hidden == null) return _unknownBody(cmd.bodyId);
+  final source = _findBody(s, f, cmd.sourceBodyId);
+  if (source == null) return _unknownBody(cmd.sourceBodyId);
+  if (hidden.surveyed) {
+    return _fail(
+      CommandError.alreadySurveyed,
+      '${hidden.name} is already surveyed',
+    );
+  }
+  if (projectOn(s, ProjectKind.survey, hidden.id) != null) {
+    return _fail(
+      CommandError.projectInProgress,
+      'A survey of that body is already under way',
+    );
+  }
+  if (source.ownerId != f.id) return _notOwner(source.name);
+  final cost = surveyCost(c);
+  final short = _checkCost(c, f, source, cost);
+  if (short != null) return short;
+
+  _pay(f, source, cost);
+  final p = startProject(
+    s,
+    f.id,
+    ProjectKind.survey,
+    hidden.id,
+    surveySeconds(c),
+  );
+  return CommandOk(createdId: p.id);
+}
+
 CommandResult _expandSlots(
   GameState s,
   Content c,
   FactionState f,
   ExpandSlotsCommand cmd,
 ) {
-  final body = _findBody(s, cmd.bodyId);
+  final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (body.ownerId != f.id) return _notOwner(body.name);
   final running = projectOn(s, ProjectKind.expandSlots, body.id);
@@ -577,7 +622,7 @@ CommandResult _startMegaprojectStage(
       'There is no megaproject ${cmd.megaprojectId}',
     );
   }
-  final body = _findBody(s, cmd.bodyId);
+  final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (body.ownerId != f.id) return _notOwner(body.name);
   final host = def.hostBodyType;
@@ -637,7 +682,7 @@ CommandResult _deliverContract(
 ) {
   final k = _findContract(f, cmd.contractId);
   if (k == null) return _unknownContract(cmd.contractId);
-  final body = _findBody(s, cmd.bodyId);
+  final body = _findBody(s, f, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (body.ownerId != f.id) return _notOwner(body.name);
   if (cmd.amount <= const BigNum.zero()) {

@@ -462,6 +462,7 @@ final class BodyState {
     required this.deposits,
     this.ownerId,
     this.extraSlots = 0,
+    this.surveyed = true,
     Map<String, BigNum>? stock,
     List<BuildingState>? buildings,
   }) : stock = stock ?? {},
@@ -483,6 +484,7 @@ final class BodyState {
     ],
     ownerId: j['ownerId'] as String?,
     extraSlots: j['extraSlots']! as int,
+    surveyed: j['surveyed'] as bool? ?? true,
     stock: _bigMap(j['stock']),
     buildings: _list(j['buildings'], BuildingState.fromJson),
   );
@@ -510,6 +512,11 @@ final class BodyState {
 
   /// Build slots bought on top of its body type's (`ExpandSlotsCommand`).
   int extraSlots;
+
+  /// Whether it is known to the factions: false for a hidden body until a
+  /// survey completes, true for every other body. A body that is not
+  /// surveyed is invisible and out of reach (see `isVisible`).
+  bool surveyed;
 
   /// Resource id to units stored here.
   final Map<String, BigNum> stock;
@@ -543,6 +550,7 @@ final class BodyState {
     ],
     'ownerId': ownerId,
     'extraSlots': extraSlots,
+    'surveyed': surveyed,
     'stock': {for (final e in stock.entries) e.key: e.value.toJson()},
     'buildings': [for (final b in buildings) b.toJson()],
   };
@@ -558,6 +566,7 @@ final class BodyState {
     deposits: List.of(deposits),
     ownerId: ownerId,
     extraSlots: extraSlots,
+    surveyed: surveyed,
     stock: Map.of(stock),
     buildings: [for (final b in buildings) b.copy()],
   );
@@ -740,7 +749,7 @@ enum ProjectKind {
   /// Adds one extra build slot to its target body.
   expandSlots,
 
-  /// Surveys its target body.
+  /// Reveals its hidden target body (`SurveyCommand`).
   survey,
 
   /// Finishes a stage of its target megaproject.
@@ -953,6 +962,7 @@ GameState newGameState(Content content, int seed) {
             typeId: b.typeId,
             orbit: b.orbit,
             deposits: List.of(b.deposits),
+            surveyed: !b.hidden,
           ),
     ],
   );

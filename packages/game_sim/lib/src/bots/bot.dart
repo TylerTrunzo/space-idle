@@ -33,6 +33,7 @@ final class GreedyBot implements Bot {
       final v = _View(e.content, w, factionId);
       final housekeeping =
           v.assignFreeCrew() ??
+          v.survey() ??
           v.startMegaproject() ??
           v.workContracts() ??
           v.autoSell();
@@ -48,7 +49,8 @@ final class GreedyBot implements Bot {
 /// Each planning step takes the first of: staff idle buildings; fix one of
 /// the worst bottlenecks (assign crew, then an efficiency or speed upgrade
 /// on the starving supplier, then build another supplier, then open a
-/// route); claim a body when affordable; start a megaproject stage when
+/// route); survey a hidden body when it has the drones and credits, one
+/// survey at a time; claim a body when affordable, surveyed ones included; start a megaproject stage when
 /// affordable, else route its goods to one body; deliver to or discard
 /// contracts ([_View.workContracts]); auto-sell surplus; work
 /// toward the next milestone or more housing when crew runs out, saving
@@ -73,6 +75,7 @@ final class BalancedBot implements Bot {
           v.shedCrew() ??
           v.closeShipTransfers() ??
           v.fixBottleneck(tried) ??
+          v.survey() ??
           v.claim() ??
           v.startMegaproject() ??
           v.gatherMegaproject() ??
@@ -885,6 +888,27 @@ final class _View {
   // -------------------------------------------------------------------------
   // Balanced bot: claims.
 
+  /// Starts surveying the first hidden body not yet surveyed, in body
+  /// order, paid from the first owned body that holds the drones; null
+  /// while a survey of its own is under way, when it cannot pay, or when
+  /// nothing is left to survey.
+  Command? survey() {
+    if (s.projects.any(
+      (p) => p.factionId == factionId && p.kind == ProjectKind.survey,
+    )) {
+      return null;
+    }
+    final target = s.bodies
+        .where(
+          (b) => !b.surveyed && projectOn(s, ProjectKind.survey, b.id) == null,
+        )
+        .firstOrNull;
+    final cost = surveyCost(c);
+    final source = owned.where((b) => canPay(b, cost)).firstOrNull;
+    if (target == null || source == null) return null;
+    return SurveyCommand(factionId, target.id, source.id);
+  }
+
   /// Claims the best unowned body when the faction can pay, kits taken from
   /// the first owned body that holds enough.
   ///
@@ -910,7 +934,9 @@ final class _View {
     var bestCount = -1;
     var bestRichness = 0.0;
     for (final b in s.bodies) {
-      if (b.ownerId != null || projectOn(s, ProjectKind.claim, b.id) != null) {
+      if (!isVisible(s, b, factionId) ||
+          b.ownerId != null ||
+          projectOn(s, ProjectKind.claim, b.id) != null) {
         continue;
       }
       final fresh = b.deposits.where((d) => !have.contains(d.resourceId));

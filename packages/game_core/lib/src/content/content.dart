@@ -199,7 +199,11 @@ final class RulesDef {
     this.claimSecondsPerOwned = defaultClaimSecondsPerOwned,
     this.expandSlotsSeconds = defaultExpandSlotsSeconds,
     this.contractRefillSeconds = defaultContractRefillSeconds,
-  });
+    this.surveyDrones = defaultSurveyDrones,
+    BigNum? surveyCredits,
+    this.surveySeconds = defaultSurveySeconds,
+    this.surveyDroneResource = defaultSurveyDroneResource,
+  }) : _surveyCredits = surveyCredits;
 
   /// Speed multiplier per speed level.
   final double speedPerLevel;
@@ -313,6 +317,32 @@ final class RulesDef {
   /// zero. Refills bank one after another (see `freeContractSlot`), so a
   /// board emptied while the player is away is full again when they return.
   final double contractRefillSeconds;
+
+  /// [surveyDrones] when the rules do not set it.
+  static const int defaultSurveyDrones = 3;
+
+  /// [surveySeconds] when the rules do not set it: 3 hours.
+  static const double defaultSurveySeconds = 10800;
+
+  /// [surveyDroneResource] when the rules do not set it.
+  static const String defaultSurveyDroneResource = 'survey_drone';
+
+  /// [surveyCredits] when the rules do not set it.
+  static final BigNum defaultSurveyCredits = BigNum.parse('2e4');
+
+  /// Survey drones a survey uses up, from the stock of the body that pays.
+  final int surveyDrones;
+
+  final BigNum? _surveyCredits;
+
+  /// Credits a survey costs, on top of its drones.
+  BigNum get surveyCredits => _surveyCredits ?? defaultSurveyCredits;
+
+  /// Seconds a survey takes, in [[minProjectSeconds], [maxProjectSeconds]].
+  final double surveySeconds;
+
+  /// Resource id of the drones a survey uses up.
+  final String surveyDroneResource;
 }
 
 /// A deposit of one raw resource on a body.
@@ -336,6 +366,7 @@ final class BodyDef {
     required this.typeId,
     required this.orbit,
     required List<DepositDef> deposits,
+    this.hidden = false,
   }) : deposits = List.unmodifiable(deposits);
 
   /// Unique id across the galaxy.
@@ -352,6 +383,10 @@ final class BodyDef {
 
   /// Its deposits, 1 to 4, each from the type's pool.
   final List<DepositDef> deposits;
+
+  /// Whether it stays out of sight, and out of reach, until a survey
+  /// reveals it (`SurveyCommand`). A faction's home body is never hidden.
+  final bool hidden;
 }
 
 /// A star system.

@@ -327,4 +327,59 @@ void main() {
       expect(steelRule(s)!.keepAtLeast, base + BigNum.from(300));
     });
   });
+
+  group('surveys', () {
+    GameState withDrones(GameEngine e) {
+      final s = e.newGame(1);
+      s.faction('player').credits = BigNum.from(1e9);
+      s.body('kora').stock['survey_drone'] = BigNum.from(3);
+      return s;
+    }
+
+    for (final bot in [GreedyBot(), BalancedBot()]) {
+      test('the ${bot.name} bot surveys a hidden body once it has drones', () {
+        final e = _engine();
+        final s = withDrones(e);
+        final cmds = bot.decide(e, s, 'player');
+        expect(
+          cmds.whereType<SurveyCommand>().single.bodyId,
+          'tessaly',
+          reason: '$cmds',
+        );
+      });
+
+      test('the ${bot.name} bot does not survey without drones', () {
+        final e = _engine();
+        final s = withDrones(e)..body('kora').stock.remove('survey_drone');
+        expect(bot.decide(e, s, 'player').whereType<SurveyCommand>(), isEmpty);
+      });
+    }
+
+    test('the balanced bot surveys one body at a time', () {
+      final e = _engine();
+      final s = withDrones(e)
+        ..body('kora').stock['survey_drone'] = BigNum.from(9);
+      final cmds = BalancedBot().decide(e, s, 'player');
+      expect(cmds.whereType<SurveyCommand>(), hasLength(1));
+    });
+
+    test('the balanced bot claims a body once it is surveyed', () {
+      final e = _engine();
+      final s = withDrones(e);
+      for (final b in s.bodies.where((b) => b.surveyed)) {
+        b.ownerId ??= 'player';
+      }
+      s.body('kora').stock['outpost_kit'] = BigNum.from(20);
+      s.body('dusk_cairn').surveyed = true;
+      final cmds = BalancedBot().decide(e, s, 'player');
+      expect(
+        cmds.whereType<ClaimBodyCommand>().map((c) => c.bodyId),
+        contains('dusk_cairn'),
+      );
+      expect(
+        cmds.whereType<ClaimBodyCommand>().map((c) => c.bodyId),
+        isNot(contains('tessaly')),
+      );
+    });
+  });
 }

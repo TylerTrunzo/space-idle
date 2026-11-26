@@ -560,4 +560,67 @@ void main() {
       );
     });
   });
+
+  group('surveys', () {
+    ScriptRunner rich() {
+      final r = _runner();
+      r.state.faction('player').credits = BigNum.from(1e9);
+      r.state.body('kora').stock['survey_drone'] = BigNum.from(3);
+      return r;
+    }
+
+    List<String> bodyIds(Map<String, Object?> state) => [
+      for (final b in (state['bodies']! as List).cast<Map<String, Object?>>())
+        b['id']! as String,
+    ];
+
+    test('a hidden body is absent from state, costs and reports', () {
+      final r = rich();
+      expect(bodyIds(r.handle({'cmd': 'state'})), isNot(contains('tessaly')));
+      expect(bodyIds(r.handle({'cmd': 'state'})), hasLength(5));
+      final text = jsonEncode([
+        r.handle({'cmd': 'state'}),
+        r.handle({'cmd': 'costs'}),
+        r.handle({'cmd': 'report'}),
+      ]);
+      for (final secret in ['tessaly', 'Tessaly', 'dusk_cairn', 'Dusk Cairn']) {
+        expect(text, isNot(contains(secret)));
+      }
+      final claim = r.handle({
+        'cmd': 'claimBody',
+        'bodyId': 'tessaly',
+        'sourceBodyId': 'kora',
+      });
+      expect(claim['error'], 'unknownBody');
+    });
+
+    test('costs list the survey price and time', () {
+      final costs = rich().handle({'cmd': 'costs'});
+      final survey = costs['survey']! as Map<String, Object?>;
+      expect(survey['timeTaken'], '3h');
+      expect((survey['cost']! as Map).keys, ['credits', 'survey_drone']);
+    });
+
+    test('a survey is a project that reveals the body when it ends', () {
+      final r = rich();
+      final started = r.handle({
+        'cmd': 'survey',
+        'bodyId': 'tessaly',
+        'sourceBodyId': 'kora',
+      });
+      expect(started['ok'], isTrue, reason: '$started');
+      expect(started['message'], startsWith('Started a survey for '));
+      expect(started['message'], endsWith('done in 3h'));
+      final shown = r.handle({'cmd': 'state'});
+      final project = (shown['projects']! as List).single as Map;
+      expect(project['kind'], 'survey');
+      expect(project['name'], 'an unsurveyed body');
+      expect(bodyIds(shown), hasLength(5));
+
+      r.handle({'cmd': 'advance', 'seconds': 10860});
+      final after = r.handle({'cmd': 'state'});
+      expect(bodyIds(after), contains('tessaly'));
+      expect(bodyIds(after), isNot(contains('dusk_cairn')));
+    });
+  });
 }

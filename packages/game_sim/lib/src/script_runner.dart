@@ -25,6 +25,7 @@ const _gameCommands = {
   'sell',
   'setAutoSell',
   'claimBody',
+  'survey',
   'expandSlots',
   'startMegaprojectStage',
   'deliverContract',
@@ -217,6 +218,8 @@ final class ScriptRunner {
       ClaimBodyCommand(:final bodyId) =>
         'Started claiming ${state.body(bodyId).name} for ${list(spent)}; '
             'done in ${done()}',
+      SurveyCommand() =>
+        'Started a survey for ${list(spent)}; done in ${done()}',
       ExpandSlotsCommand(:final bodyId) =>
         'Started an extra build slot on ${state.body(bodyId).name} for '
             '${list(spent)}; done in ${done()}',
@@ -440,7 +443,7 @@ final class ScriptRunner {
           {'at': t, 'timeLeft': formatDuration(t - state.time)},
       ],
       'bodies': [
-        for (final b in state.bodies)
+        for (final b in visibleBodies(state, p.id))
           {
             'id': b.id,
             'name': b.name,
@@ -510,9 +513,13 @@ final class ScriptRunner {
     final p = _player;
     return {
       'ok': true,
-      'claim': state.bodies.any((b) => b.ownerId == null)
+      'claim': visibleBodies(state, p.id).any((b) => b.ownerId == null)
           ? _nums(claimCost(state, c, p.id))
           : 'no bodies left to claim',
+      'survey': {
+        'cost': _nums(surveyCost(c)),
+        'timeTaken': formatDuration(surveySeconds(c)),
+      },
       'extraSlot': {
         for (final b in state.bodies)
           if (b.ownerId == p.id) b.id: _nums(slotCost(c, b)),

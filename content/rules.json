@@ -22,5 +22,8 @@
   "claimSecondsBase": 1800,
   "claimSecondsPerOwned": 1800,
   "expandSlotsSeconds": 3600,
-  "contractRefillSeconds": 14400
+  "contractRefillSeconds": 14400,
+  "surveyDrones": 3,
+  "surveyCredits": "2e4",
+  "surveySeconds": 10800
 }

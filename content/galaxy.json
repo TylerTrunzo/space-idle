@@ -40,6 +40,21 @@
             {"resourceId": "water_ice", "richness": 1.5},
             {"resourceId": "ammonia", "richness": 1.0}
           ]
+        },
+        {
+          "id": "tessaly", "name": "Tessaly", "typeId": "ice_moon", "orbit": 8, "hidden": true,
+          "deposits": [
+            {"resourceId": "water_ice", "richness": 2.2},
+            {"resourceId": "ammonia", "richness": 1.8}
+          ]
+        },
+        {
+          "id": "dusk_cairn", "name": "Dusk Cairn", "typeId": "kuiper", "orbit": 9, "hidden": true,
+          "deposits": [
+            {"resourceId": "rare_earths", "richness": 1.8},
+            {"resourceId": "nickel", "richness": 1.5},
+            {"resourceId": "helium_3", "richness": 1.4}
+          ]
         }
       ]
     }

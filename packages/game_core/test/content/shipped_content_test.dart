@@ -56,7 +56,12 @@ void main() {
 
   final content = (result as ContentOk).content;
   final system = content.galaxy.systems.single;
-  final bodies = {for (final b in system.bodies) b.id: b};
+  // The five bodies in sight from the start. The hidden ones are surveyed
+  // later, so the early-game reachability tests below leave them out.
+  final bodies = {
+    for (final b in system.bodies)
+      if (!b.hidden) b.id: b,
+  };
   final player = content.galaxy.factions.singleWhere((f) => f.isPlayer);
   final home = bodies[player.homeBodyId]!;
   final kit = content.rules.outpostKitResource;
@@ -198,13 +203,15 @@ void main() {
   });
 
   test('stage-1 galaxy and starting setup', () {
-    expect(system.bodies.map((b) => b.name), {
+    expect(bodies.values.map((b) => b.name), {
       'Kora',
       'Hollow Reach',
       'Brine',
       'Vastmere',
       'Cinder',
     });
+    // Seven bodies in all since stage 1.5: two more hidden until surveyed.
+    expect(system.bodies, hasLength(7));
     expect(home.name, 'Kora');
     expect(content.galaxy.factions, [player]);
     expect(player.baseCrew, 20);
@@ -215,5 +222,52 @@ void main() {
     ]);
     expect(content.rules.claimBaseCredits, BigNum.from(5000));
     expect(content.milestones, hasLength(19));
+  });
+
+  group('hidden bodies', () {
+    final hidden = system.bodies.where((b) => b.hidden).toList();
+
+    test('there are two: an outer ice moon and a Kuiper rock', () {
+      expect(hidden.map((b) => (b.name, b.typeId)), [
+        ('Tessaly', 'ice_moon'),
+        ('Dusk Cairn', 'kuiper'),
+      ]);
+      expect(hidden.any((b) => b.id == home.id), isFalse);
+    });
+
+    test('their deposits are richer than any visible body\'s of the same '
+        'resource', () {
+      double best(Iterable<BodyDef> bs, String r) => bs
+          .expand((b) => b.deposits)
+          .where((d) => d.resourceId == r)
+          .fold(0.0, (m, d) => d.richness > m ? d.richness : m);
+      for (final b in hidden) {
+        for (final d in b.deposits) {
+          expect(
+            d.richness,
+            greaterThan(best(bodies.values, d.resourceId)),
+            reason: '${b.name} ${d.resourceId}',
+          );
+        }
+      }
+    });
+
+    test('the Kuiper rock mines what magnets and reactors need', () {
+      final rock = hidden.singleWhere((b) => b.typeId == 'kuiper');
+      expect(rock.deposits.map((d) => d.resourceId), [
+        'rare_earths',
+        'nickel',
+        'helium_3',
+      ]);
+    });
+
+    test('survey drones are made, and used up by surveys', () {
+      final drone = content.rules.surveyDroneResource;
+      expect(drone, 'survey_drone');
+      expect(content.rules.surveyDrones, 3);
+      expect(_producible(content, _depositsOf(bodies.values)), contains(drone));
+      expect(surveyCost(content)[drone], BigNum.from(3));
+      expect(surveySeconds(content), inInclusiveRange(7200, 14400));
+    });
   });
 }

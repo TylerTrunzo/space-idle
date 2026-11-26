@@ -99,6 +99,7 @@ sealed class Command {
         _str(j, 'bodyId'),
         _str(j, 'sourceBodyId'),
       ),
+      'survey' => SurveyCommand(f, _str(j, 'bodyId'), _str(j, 'sourceBodyId')),
       'expandSlots' => ExpandSlotsCommand(f, _str(j, 'bodyId')),
       'startMegaprojectStage' => StartMegaprojectStageCommand(
         f,
@@ -337,6 +338,30 @@ final class ClaimBodyCommand extends Command {
   };
 }
 
+/// Starts surveying a hidden body, paying credits and survey drones now;
+/// the body becomes visible to every faction when the survey project
+/// completes (see `surveyCost`, `surveySeconds`). It runs beside claims and
+/// other surveys without affecting them.
+final class SurveyCommand extends Command {
+  /// Creates a survey command.
+  const SurveyCommand(super.factionId, this.bodyId, this.sourceBodyId);
+
+  /// Hidden body to reveal.
+  final String bodyId;
+
+  /// Owned body whose stock supplies the survey drones.
+  final String sourceBodyId;
+
+  @override
+  String get _cmd => 'survey';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'bodyId': bodyId,
+    'sourceBodyId': sourceBodyId,
+  };
+}
+
 /// Buys one more build slot on an owned body for credits, paid now; the
 /// slot arrives when the project completes, after `expandSlotsSeconds`.
 /// See `slotCost`.
@@ -471,6 +496,9 @@ enum CommandError {
 
   /// The body to claim already has an owner.
   alreadyOwned,
+
+  /// The body to survey is already surveyed.
+  alreadySurveyed,
 
   /// The route does not exist, or its endpoints are not a valid pair.
   routeInvalid,

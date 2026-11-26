@@ -289,6 +289,12 @@ final class SaveCodec {
       for (final MapEntry(key: id, value: v) in b.stock.entries) {
         if (v < zero) return 'body ${b.id}: negative stock of $id';
       }
+      if (!b.surveyed &&
+          (owner != null ||
+              b.buildings.isNotEmpty ||
+              b.stock.values.any((v) => !v.isZero))) {
+        return 'body ${b.id}: unsurveyed, yet owned or built on';
+      }
       if (b.extraSlots < 0 || b.extraSlots > maxExtraSlots) {
         return 'body ${b.id}: extra slots ${b.extraSlots} outside '
             '[0, $maxExtraSlots]';
@@ -333,8 +339,8 @@ final class SaveCodec {
       }
     }
     final projectIds = <String>{};
-    // A body has at most one claim and one slot expansion under way, and a
-    // faction at most one stage of each megaproject.
+    // A body has at most one claim, one survey and one slot expansion under
+    // way, and a faction at most one stage of each megaproject.
     final underWay = <(ProjectKind, String, String?)>{};
     for (final p in s.projects) {
       final dup = checkId(projectIds, 'project', p.id);
@@ -345,9 +351,9 @@ final class SaveCodec {
         ProjectKind.claim ||
         ProjectKind.expandSlots => (p.kind, p.targetId, null),
         ProjectKind.megaprojectStage => (p.kind, p.targetId, p.factionId),
-        ProjectKind.survey => null,
+        ProjectKind.survey => (p.kind, p.targetId, null),
       };
-      if (key != null && !underWay.add(key)) {
+      if (!underWay.add(key)) {
         return 'project ${p.id}: a second ${p.kind.name} of ${p.targetId}';
       }
     }
@@ -382,8 +388,11 @@ final class SaveCodec {
     }
     switch (p.kind) {
       case ProjectKind.claim:
-        final owner = s.body(p.targetId).ownerId;
-        if (owner != null) return 'claims ${p.targetId}, owned by $owner';
+        final target = s.body(p.targetId);
+        if (target.ownerId != null) {
+          return 'claims ${p.targetId}, owned by ${target.ownerId}';
+        }
+        if (!target.surveyed) return 'claims ${p.targetId}, unsurveyed';
       case ProjectKind.expandSlots:
         final body = s.body(p.targetId);
         if (body.ownerId != p.factionId) {
@@ -398,7 +407,9 @@ final class SaveCodec {
           return 'builds ${p.targetId} past level $maxMegaprojectLevel';
         }
       case ProjectKind.survey:
-        break;
+        if (s.body(p.targetId).surveyed) {
+          return 'surveys ${p.targetId}, which is surveyed already';
+        }
     }
     return null;
   }

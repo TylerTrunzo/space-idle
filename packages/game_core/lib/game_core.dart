@@ -17,5 +17,6 @@ export 'src/sim/market.dart';
 export 'src/sim/megaprojects.dart';
 export 'src/sim/production.dart';
 export 'src/sim/projects.dart';
+export 'src/sim/survey.dart';
 export 'src/state/game_state.dart';
 export 'src/state/save_codec.dart';
