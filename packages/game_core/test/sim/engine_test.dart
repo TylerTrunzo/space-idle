@@ -192,9 +192,13 @@ void main() {
       expect(sh.amount.toDouble(), closeTo(3.2, 1e-9));
       // Sent at time 0; Kora (orbit 2) to Hollow Reach (orbit 3): 120 × 2.
       expect(sh.arriveAt, 240);
-      // Production made 2 steel before the market sold all of it.
+      // Production made 2 steel before the market sold all of it, at an
+      // average price of 4 × 0.9999.
       expect(kora.stock['steel']!.isZero, isTrue);
-      expect(s.faction('player').credits.toDouble(), closeTo(258, 1e-9));
+      expect(
+        s.faction('player').credits.toDouble(),
+        closeTo(250 + 2 * 4 * 0.9999, 1e-9),
+      );
     });
 
     test('a shipment due at time + dt lands on the next tick', () {

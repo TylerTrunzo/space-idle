@@ -364,7 +364,8 @@ void main() {
     test('happy path pays credits and saturates the market', () {
       final s = fresh();
       expectOk(s, SellCommand('player', 'kora', 'iron_ore', n(10)));
-      expect(s.faction('player').credits, n(260));
+      // 10 units at an average price of 0.9995 as saturation falls to 0.999.
+      expect(s.faction('player').credits, n(250 + 10 * 0.9995));
       expect(s.body('kora').stock['iron_ore'], n(30));
       expect(s.market.saturation['iron_ore'], closeTo(0.999, 1e-12));
     });

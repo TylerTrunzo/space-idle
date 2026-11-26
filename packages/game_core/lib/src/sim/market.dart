@@ -23,8 +23,15 @@ BigNum price(GameState s, Content c, String resourceId) => c
     .mulDouble(s.market.saturation[resourceId] ?? 1);
 
 /// Sells up to [amount] of [resourceId] from [bodyId]'s stock for
-/// [factionId], at the price before the sale, then lowers the saturation by
-/// `sold / marketDepth`, down to the market floor.
+/// [factionId].
+///
+/// Each unit sold lowers the saturation by `1 / marketDepth`, down to the
+/// market floor, and earns the price at the saturation it sold at. Revenue
+/// is that price integrated over the sale: while the saturation falls from
+/// `s0` to `s1` above the floor, `basePrice × marketDepth × (s0² − s1²) / 2`
+/// (the units sold times the average of the two prices), and every unit
+/// past the floor earns `basePrice × marketFloor`. So one large sale earns
+/// what the same units sold in many small lots would.
 ///
 /// Sells only what the body holds. Does no ownership checks; callers
 /// validate first (see `SellCommand`). The ids must exist.
@@ -42,16 +49,28 @@ SaleResult sell(
   if (sold.isZero) {
     return const SaleResult(sold: BigNum.zero(), revenue: BigNum.zero());
   }
-  final revenue = sold * price(s, c, resourceId);
+  final res = c.resources[resourceId]!;
+  final floor = c.rules.marketFloor;
+  final s0 = s.market.saturation[resourceId] ?? 1;
+  final depth = res.marketDepth;
+  // Units that take the saturation from s0 down to the floor.
+  final toFloor = depth * math.max(0.0, s0 - floor);
+  final BigNum revenue;
+  final double s1;
+  if (sold.toDouble() <= toFloor) {
+    s1 = s0 - sold.toDouble() / depth;
+    revenue = (sold * res.basePrice).mulDouble((s0 + s1) / 2);
+  } else {
+    s1 = math.min(s0, floor);
+    final above = BigNum.from(toFloor);
+    revenue =
+        (above * res.basePrice).mulDouble((s0 + s1) / 2) +
+        ((sold - above) * res.basePrice).mulDouble(floor);
+  }
   final faction = s.faction(factionId);
   faction.credits = faction.credits + revenue;
   body.stock[resourceId] = held - sold;
-  final saturation = s.market.saturation[resourceId] ?? 1;
-  final depth = c.resources[resourceId]!.marketDepth;
-  s.market.saturation[resourceId] = math.max(
-    c.rules.marketFloor,
-    saturation - sold.toDouble() / depth,
-  );
+  s.market.saturation[resourceId] = math.max(floor, s1);
   return SaleResult(sold: sold, revenue: revenue);
 }
 
