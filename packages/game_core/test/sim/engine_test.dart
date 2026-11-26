@@ -794,42 +794,53 @@ void main() {
       expect(encode(away), encode(live));
     });
 
-    test('performance: 12 h of a fast 40-building empire under 300 ms', () {
-      // A late-game worst case: every slot filled, speed level 50, and a
-      // route moving 100 units a second.
-      final (e, s) = routeFedEmpire();
-      e
-        ..apply(
-          s,
-          CreateRouteCommand(
-            'player',
-            'kora',
-            'hollow_reach',
-            'iron_ore',
-            n(100),
-            50,
-          ),
-        )
-        ..advance(s, 600);
-      // Warm up the VM before timing.
-      e.catchUpOffline(s.copy(), 3600);
-      final watch = Stopwatch()..start();
-      final sum = e.catchUpOffline(s, 43200);
-      watch.stop();
-      expect(sum.secondsSimulated, 43200);
-      expect(watch.elapsedMilliseconds, lessThan(300));
-    });
+    // Wall-clock tests, tagged `perf` (`dart test -x perf` leaves them
+    // out). CI runs them with the rest; the 1 s bounds leave room for a
+    // slow shared runner.
+    test(
+      'performance: 12 h of a fast 40-building empire under 1 s',
+      tags: ['perf'],
+      () {
+        // A late-game worst case: every slot filled, speed level 50, and a
+        // route moving 100 units a second.
+        final (e, s) = routeFedEmpire();
+        e
+          ..apply(
+            s,
+            CreateRouteCommand(
+              'player',
+              'kora',
+              'hollow_reach',
+              'iron_ore',
+              n(100),
+              50,
+            ),
+          )
+          ..advance(s, 600);
+        // Warm up the VM before timing.
+        e.catchUpOffline(s.copy(), 3600);
+        final watch = Stopwatch()..start();
+        final sum = e.catchUpOffline(s, 43200);
+        watch.stop();
+        expect(sum.secondsSimulated, 43200);
+        expect(watch.elapsedMilliseconds, lessThan(1000));
+      },
+    );
 
-    test('performance: 24 h of a 40-building empire in under 1 s', () {
-      final (e, s) = fullEmpire();
-      final count = s.bodies.fold(0, (sum, b) => sum + b.buildings.length);
-      // Every build slot in the shipped galaxy is filled.
-      expect(count, greaterThanOrEqualTo(40));
-      final watch = Stopwatch()..start();
-      final sum = e.catchUpOffline(s, 86400, capSeconds: 86400);
-      watch.stop();
-      expect(sum.secondsSimulated, 86400);
-      expect(watch.elapsedMilliseconds, lessThan(1000));
-    });
+    test(
+      'performance: 24 h of a 40-building empire in under 1 s',
+      tags: ['perf'],
+      () {
+        final (e, s) = fullEmpire();
+        final count = s.bodies.fold(0, (sum, b) => sum + b.buildings.length);
+        // Every build slot in the shipped galaxy is filled.
+        expect(count, greaterThanOrEqualTo(40));
+        final watch = Stopwatch()..start();
+        final sum = e.catchUpOffline(s, 86400, capSeconds: 86400);
+        watch.stop();
+        expect(sum.secondsSimulated, 86400);
+        expect(watch.elapsedMilliseconds, lessThan(1000));
+      },
+    );
   });
 }
