@@ -46,9 +46,10 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// Bodies and their buildings run in list order. On each body, input demand
 /// is summed per resource and shared out in proportion, so no stock goes
 /// negative; inputs are taken before any output is added, so this step's
-/// outputs are not consumed until the next step. Outputs are clamped to the
-/// body's [storageCap] and the excess recorded in
-/// [BodyState.wastedThisStep]. Each building's
+/// outputs are not consumed until the next step. Outputs are added in full,
+/// even past the body's [storageCap]: the engine ships and auto-sells first
+/// and clamps to the cap at the end of the tick ([clampStorage]), so a long
+/// step loses no more to the cap than many short ones. Each building's
 /// [BuildingState.lastRunFraction] and [BuildingState.lastLimitReason] are
 /// updated; habitat run fractions set next step's [crewEfficiency].
 ///
@@ -60,10 +61,50 @@ void stepProduction(GameState s, Content c, double dt) {
     for (final f in s.factions) f.id: crewEfficiency(s, c, f.id),
   };
   for (final body in s.bodies) {
-    body.wastedThisStep.clear();
     final owner = body.ownerId;
     if (owner == null) continue;
-    _stepBody(c, body, dt, crewEff[owner]!, storageCap(s, c, body));
+    _stepBody(c, body, dt, crewEff[owner]!);
+  }
+}
+
+/// Stock already above its body's [storageCap], by body id then resource
+/// id; [clampStorage] keeps it.
+///
+/// Taken at the start of a tick, before anything is made, so stock left
+/// above a lowered cap (a demolished warehouse) is not cut, only new
+/// additions to it.
+Map<String, Map<String, BigNum>> stockOverCap(GameState s, Content c) {
+  final over = <String, Map<String, BigNum>>{};
+  for (final body in s.bodies) {
+    final cap = storageCap(s, c, body);
+    for (final MapEntry(key: id, value: v) in body.stock.entries) {
+      if (v > cap) (over[body.id] ??= {})[id] = v;
+    }
+  }
+  return over;
+}
+
+/// Cuts every body's stock down to its [storageCap], adding what is cut to
+/// [BodyState.wastedThisStep]; stock listed in [kept] (see [stockOverCap])
+/// is cut no lower than its listed amount.
+///
+/// The engine calls this at the end of each tick, after production,
+/// logistics and auto-sell, so it is the one place stock meets the cap.
+void clampStorage(
+  GameState s,
+  Content c,
+  Map<String, Map<String, BigNum>> kept,
+) {
+  for (final body in s.bodies) {
+    final cap = storageCap(s, c, body);
+    final keep = kept[body.id];
+    for (final MapEntry(key: id, value: v) in body.stock.entries) {
+      final limit = keep?[id]?.max(cap) ?? cap;
+      if (v <= limit) continue;
+      body.stock[id] = limit;
+      body.wastedThisStep[id] =
+          (body.wastedThisStep[id] ?? _zero) + (v - limit);
+    }
   }
 }
 
@@ -136,13 +177,7 @@ final class _Run {
   double fraction = 0;
 }
 
-void _stepBody(
-  Content c,
-  BodyState body,
-  double dt,
-  double crewEff,
-  BigNum cap,
-) {
+void _stepBody(Content c, BodyState body, double dt, double crewEff) {
   final runs = [
     for (final b in body.buildings)
       if (c.buildings[b.defId]!.crewSlots > 0)
@@ -205,22 +240,9 @@ void _stepBody(
   for (final run in runs) {
     if (run.fraction == 0) continue;
     for (final MapEntry(key: id, value: made) in run.flow.outputs.entries) {
-      _store(body, id, made.mulDouble(run.fraction), cap);
+      final amount = made.mulDouble(run.fraction);
+      if (amount.isZero) continue;
+      body.stock[id] = (body.stock[id] ?? _zero) + amount;
     }
   }
-}
-
-/// Adds [amount] of [id] to [body]'s stock up to [cap], recording the excess
-/// as waste. Stock already above the cap is kept, not cut.
-void _store(BodyState body, String id, BigNum amount, BigNum cap) {
-  if (amount <= _zero) return;
-  final have = body.stock[id] ?? _zero;
-  final total = have + amount;
-  if (total <= cap) {
-    body.stock[id] = total;
-    return;
-  }
-  final kept = have.max(cap);
-  body.stock[id] = kept;
-  body.wastedThisStep[id] = (body.wastedThisStep[id] ?? _zero) + (total - kept);
 }

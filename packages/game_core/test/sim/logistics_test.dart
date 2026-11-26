@@ -144,14 +144,14 @@ void main() {
     expect(at(a), n(1000));
   });
 
-  test('delivery clamps to storage cap and wastes the overflow', () {
+  test('delivery may pass the storage cap; the tick clamps it', () {
     b.stock['ore'] = n(995);
     route();
     run(10);
     s.time = 1000;
     stepLogistics(s, c, 0);
-    expect(at(b), n(1000));
-    expect(b.wastedThisStep['ore']!.toDouble(), closeTo(5, 1e-9));
+    expect(at(b).toDouble(), closeTo(1005, 1e-9));
+    expect(b.wastedThisStep, isEmpty);
   });
 
   test('shipment outlives its route and still delivers', () {

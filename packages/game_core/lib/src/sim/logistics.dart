@@ -1,7 +1,6 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
-import 'production.dart';
 
 /// Seconds a shipment takes between [a] and [b]:
 /// `baseTravelSeconds × (1 + |orbit difference|)`.
@@ -36,12 +35,9 @@ const double shipmentMergeSeconds = 10;
 /// [Shipment.toBodyId], whether or not the route still exists. If the
 /// shipper no longer owns the destination, the goods return to
 /// [Shipment.fromBodyId] when the shipper still owns it, else they are lost
-/// and counted as waste on the destination. Goods are clamped to the
-/// receiving body's [storageCap], the overflow added to its
-/// `wastedThisStep`.
-///
-/// Call after production, which resets `wastedThisStep`, so delivery waste
-/// accumulates onto the production waste.
+/// and counted in the destination's `wastedThisStep`. Landed goods may push
+/// stock past the storage cap; the engine clamps it at the end of the tick
+/// (see `clampStorage`).
 void stepLogistics(
   GameState s,
   Content c,
@@ -84,7 +80,7 @@ void stepLogistics(
   ];
   s.shipments.removeWhere((sh) => sh.arriveAt <= s.time);
   for (final sh in arrived) {
-    _deliver(s, c, sh);
+    _deliver(s, sh);
   }
 }
 
@@ -96,26 +92,23 @@ Shipment? _newestOf(GameState s, String routeId) {
   return null;
 }
 
-void _deliver(GameState s, Content c, Shipment sh) {
+void _deliver(GameState s, Shipment sh) {
   final dest = s.body(sh.toBodyId);
   if (dest.ownerId == sh.ownerId) {
-    _land(s, c, dest, sh);
+    _land(dest, sh);
     return;
   }
   final src = s.body(sh.fromBodyId);
   if (src.ownerId == sh.ownerId) {
-    _land(s, c, src, sh);
+    _land(src, sh);
   } else {
     _waste(dest, sh.resourceId, sh.amount);
   }
 }
 
-void _land(GameState s, Content c, BodyState body, Shipment sh) {
-  final held = body.stock[sh.resourceId] ?? const BigNum.zero();
-  final room = (storageCap(s, c, body) - held).max(const BigNum.zero());
-  final taken = sh.amount.min(room);
-  body.stock[sh.resourceId] = held + taken;
-  _waste(body, sh.resourceId, sh.amount - taken);
+void _land(BodyState body, Shipment sh) {
+  body.stock[sh.resourceId] =
+      (body.stock[sh.resourceId] ?? const BigNum.zero()) + sh.amount;
 }
 
 void _waste(BodyState body, String resourceId, BigNum amount) {

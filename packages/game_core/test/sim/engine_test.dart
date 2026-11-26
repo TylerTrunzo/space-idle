@@ -201,6 +201,53 @@ void main() {
       );
     });
 
+    test('sends cargo before the market sells what is left', () {
+      final s = engine.newGame(1);
+      final kora = s.body('kora');
+      s.body('hollow_reach').ownerId = 'player';
+      kora.stock['cargo_ship'] = n(1);
+      kora.stock['silicon'] = n(100);
+      engine.apply(s, SetAutoSellCommand('player', 'kora', 'silicon', n(0)));
+      engine.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'silicon',
+          n(1),
+          1,
+        ),
+      );
+      engine.tick(s, 10);
+      // Logistics took 10 s of cargo first; the market sold the other 90.
+      expect(s.shipments.single.amount, n(10));
+      expect(kora.stock['silicon'] ?? const BigNum.zero(), const BigNum.zero());
+    });
+
+    test('output past the storage cap is auto-sold, not wasted', () {
+      final s = engine.newGame(1);
+      final kora = s.body('kora');
+      final cap = storageCap(s, c, kora);
+      kora.stock['copper_ore'] = cap;
+      engine.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', cap));
+      final before = s.faction('player').credits;
+      engine.tick(s, 60);
+      expect(kora.wastedThisStep, isEmpty);
+      expect(kora.stock['copper_ore'], cap);
+      expect(s.faction('player').credits, greaterThan(before));
+    });
+
+    test('output past the storage cap with no buyer is wasted at the end', () {
+      final s = engine.newGame(1);
+      final kora = s.body('kora');
+      final cap = storageCap(s, c, kora);
+      kora.stock['copper_ore'] = cap;
+      engine.tick(s, 60);
+      expect(kora.stock['copper_ore'], cap);
+      expect(kora.wastedThisStep['copper_ore']!.toDouble(), greaterThan(0));
+    });
+
     test('a shipment due at time + dt lands on the next tick', () {
       final s = engine.newGame(1);
       s.body('hollow_reach').ownerId = 'player';
@@ -432,6 +479,31 @@ void main() {
       }
       final sum = e.catchUpOffline(s, 60);
       expect(sum.topBottlenecks, hasLength(3));
+    });
+
+    test('one-minute steps earn what one-second steps do', () {
+      // A running empire whose auto-sell keeps stock just under the cap, so
+      // a 60 s step makes far more than the room left before selling.
+      final (e, s) = fullEmpire();
+      for (final b in s.bodies.expand((b) => b.buildings)) {
+        b.levels[UpgradeTrack.speed] = 25; // 1.1^25 × 2: about 22× output
+      }
+      e.advance(s, 3600);
+      for (final rule in s.faction('player').autoSell) {
+        rule.keepAtLeast = storageCap(s, c, s.body(rule.bodyId)).mulDouble(0.9);
+      }
+      BigNum earned(double step) {
+        final t = GameState.fromJson(
+          jsonDecode(encode(s)) as Map<String, Object?>,
+        );
+        e.advance(t, 6 * 3600, maxStep: step);
+        return t.faction('player').credits - s.faction('player').credits;
+      }
+
+      final live = earned(1).toDouble();
+      final offline = earned(60).toDouble();
+      expect(live, greaterThan(0));
+      expect(offline, closeTo(live, live * 0.02));
     });
 
     test('performance: 24 h of a 40-building empire in under 1 s', () {

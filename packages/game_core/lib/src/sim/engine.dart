@@ -65,13 +65,21 @@ final class GameEngine {
 
   /// Moves [s] forward by one step of [dt] game seconds.
   ///
-  /// In order: production, logistics (after production, which resets
-  /// waste), market, milestone check, then `time += dt`. Because time moves
-  /// last, a shipment due at exactly `time + dt` lands on the next tick.
+  /// In order: reset each body's [BodyState.wastedThisStep], production,
+  /// logistics, market (recovery and auto-sell), [clampStorage], milestone
+  /// check, then `time += dt`. Stock may pass the storage cap during the
+  /// tick; cargo and auto-sell take from it before the clamp, so long steps
+  /// lose no more to the cap than short ones. Because time moves last, a
+  /// shipment due at exactly `time + dt` lands on the next tick.
   void tick(GameState s, double dt) {
+    for (final b in s.bodies) {
+      b.wastedThisStep.clear();
+    }
+    final kept = stockOverCap(s, content);
     stepProduction(s, content, dt);
     stepLogistics(s, content, dt);
     stepMarket(s, content, dt);
+    clampStorage(s, content, kept);
     _checkMilestones(s);
     s.time += dt;
   }

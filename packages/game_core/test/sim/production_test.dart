@@ -259,24 +259,32 @@ void main() {
     expect(stock(home, 'steel').isZero, isTrue);
   });
 
-  test('storage cap clamps and records waste', () {
+  test('production may pass the storage cap within a tick', () {
     c = _content(baseStorageCap: 10);
     s = newGameState(c, 1);
     home = s.body('home');
     add(home, 'drill', crew: 2, deposit: 'iron_ore');
     home.stock['iron_ore'] = n(9);
     stepProduction(s, c, 10);
-    expect(stock(home, 'iron_ore'), near(10));
-    expect(home.wastedThisStep['iron_ore'], near(2));
+    expect(stock(home, 'iron_ore'), near(12));
+    expect(home.wastedThisStep, isEmpty);
+  });
 
-    stepProduction(s, c, 10);
+  test('clampStorage cuts stock to the cap and records waste', () {
+    c = _content(baseStorageCap: 10);
+    s = newGameState(c, 1);
+    home = s.body('home');
+    home.stock['iron_ore'] = n(12);
+    home.stock['steel'] = n(4);
+    clampStorage(s, c, const {});
     expect(stock(home, 'iron_ore'), near(10));
-    expect(home.wastedThisStep['iron_ore'], near(3));
+    expect(stock(home, 'steel'), near(4));
+    expect(home.wastedThisStep, {'iron_ore': near(2)});
     expect(jsonEncode(home.toJson()), isNot(contains('wasted')));
 
-    home.buildings.clear();
-    stepProduction(s, c, 10);
-    expect(home.wastedThisStep, isEmpty);
+    home.stock['iron_ore'] = n(13);
+    clampStorage(s, c, const {});
+    expect(home.wastedThisStep['iron_ore'], near(5));
   });
 
   test('stock already above the cap is kept, new output wasted', () {
@@ -285,9 +293,26 @@ void main() {
     home = s.body('home');
     add(home, 'drill', crew: 2, deposit: 'iron_ore');
     home.stock['iron_ore'] = n(50);
+    final kept = stockOverCap(s, c);
+    expect(kept, {
+      'home': {'iron_ore': near(50)},
+    });
     stepProduction(s, c, 10);
+    clampStorage(s, c, kept);
     expect(stock(home, 'iron_ore'), near(50));
     expect(home.wastedThisStep['iron_ore'], near(3));
+  });
+
+  test('stock above the cap that falls is clamped no lower than the cap', () {
+    c = _content(baseStorageCap: 10);
+    s = newGameState(c, 1);
+    home = s.body('home');
+    home.stock['iron_ore'] = n(50);
+    final kept = stockOverCap(s, c);
+    home.stock['iron_ore'] = n(5);
+    clampStorage(s, c, kept);
+    expect(stock(home, 'iron_ore'), near(5));
+    expect(home.wastedThisStep, isEmpty);
   });
 
   test('storageCap adds warehouse bonus and capacity levels', () {

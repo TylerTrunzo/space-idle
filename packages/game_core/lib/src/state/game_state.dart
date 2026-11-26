@@ -229,10 +229,10 @@ final class BodyState {
   /// Buildings on this body.
   final List<BuildingState> buildings;
 
-  /// Resource id to output lost to the storage cap in the last production
-  /// step.
+  /// Resource id to units lost in the last engine tick: cut by the storage
+  /// cap at the end of the tick, or cargo lost with both its ends.
   ///
-  /// Transient: reset at the start of every step, never serialized.
+  /// Transient: reset at the start of every tick, never serialized.
   final Map<String, BigNum> wastedThisStep = {};
 
   /// Serializes this body; [wastedThisStep] is left out.
