@@ -368,3 +368,55 @@ order: research folded into region unlocks, then fewer ship classes, then fewer 
 - Whether research is a separate tree or folded into region unlocks.
 - Final game name and package ID: proposed by the builder, decided by the owner before the first Play
   upload.
+
+## 13. Ships, customization, and pirates **[Owner idea, 2026-11-26; details are Claude's call]**
+
+The owner wants ship customization for moving between planets, pirate risk on routes, and several ship roles
+(large cargo, small exploration, fighting). These build on the economy, logistics and war already planned.
+
+### 13.1 Ship classes and modules
+- Ships are **designs** made from a **hull** plus **modules**, and every part is a produced item. That way ship
+  building is another production chain to optimize.
+  - Hulls (size sets module slots, speed, upkeep): small, medium, large, capital.
+  - Modules:
+    - cargo hold (capacity)
+    - engine (speed, shorter travel)
+    - armor (survive raids)
+    - weapons (attack/defense)
+    - shields
+    - scanner (exploration range, spots pirates earlier)
+    - crew quarters (needed for larger hulls)
+- The player saves designs (e.g. "Hauler Mk II: large hull, 4 holds, 1 engine, 1 armor"). A shipyard builds a design
+  from its parts.
+- Starting roles (presets the player can edit):
+  - **Large cargo hauler:** high capacity, slow.
+  - **Courier:** small and fast, low capacity, good for urgent goods.
+  - **Explorer:** small, with scanners and long range. It surveys unknown bodies and systems: reveals deposits and
+    richness, and finds new systems to unlock.
+  - **Escort/fighter:** weapons and armor, protects routes, and later forms war fleets.
+- Routes are assigned ships of a design instead of generic "cargo ships". Route capacity and travel time come from
+  the assigned ships' stats.
+
+### 13.2 Exploration
+- Bodies and systems start **unsurveyed**: you see a body's type, but not its deposits or richness. Sending an
+  explorer reveals them, which also fixes the playtest "first-claim trap" (you learn what a body offers before
+  claiming it).
+- Exploration is how the galaxy grows (spec 6.6): explorers find neighboring systems, which then unlock for claiming.
+
+### 13.3 Pirates
+- Pirates are a non-diplomatic threat that **raids cargo routes**, scaling with how far out and how valuable a route
+  is. They are not a faction you negotiate with, though trade allies may share patrol coverage.
+- Each shipment on a risky route has a raid chance from the seeded RNG, so it stays deterministic. Escorts, armor,
+  scanners and route patrols lower that chance and the loss.
+- A raid steals part of the cargo and may damage ships. It never destroys a whole route's fleet in one event.
+- Anti-devastation (same spirit as 8): while offline, raid losses per hour are capped at a small share of shipped
+  value, and the away summary lists raids clearly. Pirate risk is visible on the map (route shading) before you
+  commit ships.
+- Optional active play: hunt pirate bases with fighting ships for rewards (rare items, credits).
+
+### 13.4 Where this lands in the build stages
+- **Stage 3 (factions):** ship designs + hulls/modules + design-based routes (cargo haulers, couriers). Pirates on
+  outer routes in a simple form (raid chance, escorts reduce it).
+- **Stage 4 (war):** fighting ships use the same design system. Fleets are groups of designed ships, and pirate bases
+  can be attacked.
+- **Stage 5 (galaxy content):** explorers, unsurveyed bodies, and system discovery.
