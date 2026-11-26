@@ -6,6 +6,7 @@ import '../num/change.dart';
 import '../num/format.dart';
 import '../sim/crew.dart';
 import '../sim/market.dart';
+import '../sim/projects.dart';
 import '../state/game_state.dart';
 import '../state/save_codec.dart';
 import 'command.dart';
@@ -56,12 +57,14 @@ Map<String, BigNum> upgradeCost(Content c, BuildingState b, UpgradeTrack t) {
 
 /// Cost for [factionId] to claim its next body.
 ///
-/// With `n` bodies owned: `claimBaseCredits × claimGrowth^(n−1)` credits,
-/// plus `n` outpost kits once more than the home body is owned, so the
-/// first claim costs credits only and each later one a kit more. Kits are
-/// listed only when needed.
+/// With `n` bodies owned or being claimed ([bodiesOwnedOrClaiming]):
+/// `claimBaseCredits × claimGrowth^(n−1)` credits, plus `n` outpost kits
+/// once more than the home body is owned, so the first claim costs credits
+/// only and each later one a kit more. Kits are listed only when needed.
+/// Claims under way count, so claims started side by side cost what they
+/// would one after another.
 Map<String, BigNum> claimCost(GameState s, Content c, String factionId) {
-  final owned = s.bodies.where((b) => b.ownerId == factionId).length;
+  final owned = bodiesOwnedOrClaiming(s, factionId);
   final extra = math.max(0, owned - 1);
   final r = c.rules;
   return {
@@ -490,14 +493,26 @@ CommandResult _claim(
           : '${target.name} is already owned by ${_factionName(s, owner)}',
     );
   }
+  final running = projectOn(s, ProjectKind.claim, target.id);
+  if (running != null) {
+    return _fail(
+      CommandError.projectInProgress,
+      running.factionId == f.id
+          ? 'You are already claiming ${target.name} '
+                '(${_left(s, running)} left)'
+          : '${_factionName(s, running.factionId)} is already claiming '
+                '${target.name}',
+    );
+  }
   if (source.ownerId != f.id) return _notOwner(source.name);
   final cost = claimCost(s, c, f.id);
   final short = _checkCost(c, f, source, cost);
   if (short != null) return short;
 
+  final seconds = claimSeconds(s, c, f.id);
   _pay(f, source, cost);
-  target.ownerId = f.id;
-  return const CommandOk();
+  final p = startProject(s, f.id, ProjectKind.claim, target.id, seconds);
+  return CommandOk(createdId: p.id);
 }
 
 CommandResult _expandSlots(
@@ -509,6 +524,14 @@ CommandResult _expandSlots(
   final body = _findBody(s, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (body.ownerId != f.id) return _notOwner(body.name);
+  final running = projectOn(s, ProjectKind.expandSlots, body.id);
+  if (running != null) {
+    return _fail(
+      CommandError.projectInProgress,
+      '${body.name} is already getting an extra build slot '
+      '(${_left(s, running)} left)',
+    );
+  }
   if (body.extraSlots >= SaveCodec.maxExtraSlots) {
     return _fail(
       CommandError.invalidAmount,
@@ -521,6 +544,16 @@ CommandResult _expandSlots(
   if (short != null) return short;
 
   _pay(f, body, cost);
-  body.extraSlots++;
-  return const CommandOk();
+  final p = startProject(
+    s,
+    f.id,
+    ProjectKind.expandSlots,
+    body.id,
+    c.rules.expandSlotsSeconds,
+  );
+  return CommandOk(createdId: p.id);
 }
+
+/// Time left on project [p], such as `25m`.
+String _left(GameState s, ProjectState p) =>
+    formatDuration(p.finishAt - s.time);

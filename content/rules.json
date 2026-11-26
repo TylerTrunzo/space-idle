@@ -18,5 +18,8 @@
   "outpostKitResource": "outpost_kit",
   "shipCapacityPerSecond": 2,
   "cargoShipResource": "cargo_ship",
-  "baseTravelSeconds": 60
+  "baseTravelSeconds": 60,
+  "claimSecondsBase": 1800,
+  "claimSecondsPerOwned": 1800,
+  "expandSlotsSeconds": 3600
 }

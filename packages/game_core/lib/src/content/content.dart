@@ -195,6 +195,9 @@ final class RulesDef {
     required this.shipCapacityPerSecond,
     required this.cargoShipResource,
     required this.baseTravelSeconds,
+    this.claimSecondsBase = defaultClaimSecondsBase,
+    this.claimSecondsPerOwned = defaultClaimSecondsPerOwned,
+    this.expandSlotsSeconds = defaultExpandSlotsSeconds,
   });
 
   /// Speed multiplier per speed level.
@@ -264,6 +267,36 @@ final class RulesDef {
 
   /// Travel seconds between bodies at the same orbit in one system.
   final double baseTravelSeconds;
+
+  /// Shortest a timed project (a claim or a slot expansion) takes, in
+  /// seconds: 10 minutes.
+  static const double minProjectSeconds = 600;
+
+  /// Longest a timed project takes, in seconds: 6 hours.
+  static const double maxProjectSeconds = 21600;
+
+  /// [claimSecondsBase] when the rules do not set it.
+  static const double defaultClaimSecondsBase = 1800;
+
+  /// [claimSecondsPerOwned] when the rules do not set it.
+  static const double defaultClaimSecondsPerOwned = 1800;
+
+  /// [expandSlotsSeconds] when the rules do not set it.
+  static const double defaultExpandSlotsSeconds = 3600;
+
+  /// Seconds a faction's first claim takes, while it owns only its home.
+  ///
+  /// With `n` bodies owned or being claimed, a claim takes
+  /// `claimSecondsBase + claimSecondsPerOwned × (n − 1)` seconds, clamped
+  /// to [[minProjectSeconds], [maxProjectSeconds]]; see `claimSeconds`.
+  final double claimSecondsBase;
+
+  /// Seconds each further body owned or being claimed adds to a claim.
+  final double claimSecondsPerOwned;
+
+  /// Seconds an extra build slot takes, in
+  /// [[minProjectSeconds], [maxProjectSeconds]].
+  final double expandSlotsSeconds;
 }
 
 /// A deposit of one raw resource on a body.

@@ -302,7 +302,9 @@ final class SetAutoSellCommand extends Command {
   };
 }
 
-/// Claims an unowned body, paying credits and outpost kits.
+/// Starts claiming an unowned body, paying credits and outpost kits now;
+/// the body becomes the faction's when the claim project completes (see
+/// `claimSeconds`).
 final class ClaimBodyCommand extends Command {
   /// Creates a claim command.
   const ClaimBodyCommand(super.factionId, this.bodyId, this.sourceBodyId);
@@ -323,7 +325,9 @@ final class ClaimBodyCommand extends Command {
   };
 }
 
-/// Buys one more build slot on an owned body for credits; see `slotCost`.
+/// Buys one more build slot on an owned body for credits, paid now; the
+/// slot arrives when the project completes, after `expandSlotsSeconds`.
+/// See `slotCost`.
 final class ExpandSlotsCommand extends Command {
   /// Creates an expand-slots command.
   const ExpandSlotsCommand(super.factionId, this.bodyId);
@@ -378,6 +382,10 @@ enum CommandError {
 
   /// The route does not exist, or its endpoints are not a valid pair.
   routeInvalid,
+
+  /// The same timed work is already under way: a claim of the body, or an
+  /// extra build slot on it.
+  projectInProgress,
 }
 
 /// Outcome of applying a command.
@@ -390,7 +398,7 @@ final class CommandOk extends CommandResult {
   /// Creates a success result.
   const CommandOk({this.createdId});
 
-  /// Id of the building or route the command created, if any.
+  /// Id of the building, route or project the command created, if any.
   final String? createdId;
 }
 

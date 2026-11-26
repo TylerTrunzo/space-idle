@@ -282,6 +282,19 @@ final class SaveCodec {
         return 'shipment on ${sh.routeId}: time not finite';
       }
     }
+    final projectIds = <String>{};
+    // A body has at most one claim and one slot expansion under way.
+    final underWay = <(ProjectKind, String)>{};
+    for (final p in s.projects) {
+      final dup = checkId(projectIds, 'project', p.id);
+      if (dup != null) return dup;
+      final problem = _invalidProject(s, factionIds, p);
+      if (problem != null) return 'project ${p.id}: $problem';
+      if (p.kind case ProjectKind.claim || ProjectKind.expandSlots
+          when !underWay.add((p.kind, p.targetId))) {
+        return 'project ${p.id}: a second ${p.kind.name} of ${p.targetId}';
+      }
+    }
     if (s.nextId <= highestSuffix) {
       return 'nextId ${s.nextId} is not above id suffix $highestSuffix';
     }
@@ -291,6 +304,41 @@ final class SaveCodec {
       if (!(v >= floor && v <= 1)) {
         return 'market: saturation of $id is $v, outside [$floor, 1]';
       }
+    }
+    return null;
+  }
+
+  /// What is wrong with project [p] in [s], whose faction ids are
+  /// [factionIds], or null if nothing is. Its target is known to exist.
+  static String? _invalidProject(
+    GameState s,
+    Set<String> factionIds,
+    ProjectState p,
+  ) {
+    if (!factionIds.contains(p.factionId)) {
+      return 'owner ${p.factionId} is not a faction';
+    }
+    if (!(p.startedAt >= 0 && p.startedAt <= s.time)) {
+      return 'started at ${p.startedAt}, outside [0, ${s.time}]';
+    }
+    if (!(p.finishAt.isFinite && p.finishAt >= p.startedAt)) {
+      return 'finishes at ${p.finishAt}, not at or after its start';
+    }
+    switch (p.kind) {
+      case ProjectKind.claim:
+        final owner = s.body(p.targetId).ownerId;
+        if (owner != null) return 'claims ${p.targetId}, owned by $owner';
+      case ProjectKind.expandSlots:
+        final body = s.body(p.targetId);
+        if (body.ownerId != p.factionId) {
+          return 'expands ${body.id}, which ${p.factionId} does not own';
+        }
+        if (body.extraSlots >= maxExtraSlots) {
+          return 'expands ${body.id} past $maxExtraSlots extra slots';
+        }
+      case ProjectKind.survey:
+      case ProjectKind.megaprojectStage:
+        break;
     }
     return null;
   }
@@ -386,6 +434,18 @@ final class SaveCodec {
       }
       for (final id in [r.fromBodyId, r.toBodyId]) {
         if (!bodyIds.contains(id)) return 'route ${r.id}: unknown body $id';
+      }
+    }
+    for (final p in s.projects) {
+      final known = switch (p.kind) {
+        ProjectKind.claim ||
+        ProjectKind.expandSlots ||
+        ProjectKind.survey => bodyIds.contains(p.targetId),
+        // No megaproject has content yet.
+        ProjectKind.megaprojectStage => false,
+      };
+      if (!known) {
+        return 'project ${p.id}: unknown ${p.kind.name} target ${p.targetId}';
       }
     }
     for (final sh in s.shipments) {

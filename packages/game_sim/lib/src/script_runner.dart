@@ -180,8 +180,8 @@ final class ScriptRunner {
     return null;
   }
 
-  /// A sentence on what a claim, demolish or new route did; null for other
-  /// commands.
+  /// A sentence on what a claim, extra slot, demolish or new route did;
+  /// null for other commands.
   String? _message(
     Command cmd,
     String? createdId,
@@ -196,9 +196,16 @@ final class ScriptRunner {
             ? '${formatNumber(v)} credits'
             : '${formatNumber(v)} ${c.resources[k.split('/').last]!.name}',
     ].join(' and ');
+    String done() => formatDuration(
+      state.projects.firstWhere((p) => p.id == createdId).finishAt - state.time,
+    );
     return switch (cmd) {
       ClaimBodyCommand(:final bodyId) =>
-        'Claimed ${state.body(bodyId).name} for ${list(spent)}',
+        'Started claiming ${state.body(bodyId).name} for ${list(spent)}; '
+            'done in ${done()}',
+      ExpandSlotsCommand(:final bodyId) =>
+        'Started an extra build slot on ${state.body(bodyId).name} for '
+            '${list(spent)}; done in ${done()}',
       DemolishCommand() =>
         'Demolished $demolished'
             '${gained.isEmpty ? '' : '; got back ${list(gained)}'}',
@@ -273,6 +280,10 @@ final class ScriptRunner {
       'topBottlenecks': [
         for (final n in sum.topBottlenecks)
           _bottleneck(n, awayFrom: sum.awayFrom),
+      ],
+      'projectsCompleted': [
+        for (final p in sum.projectsCompleted)
+          {'kind': p.kind.name, 'targetId': p.targetId, 'name': p.name},
       ],
     };
   }
@@ -372,6 +383,19 @@ final class ScriptRunner {
               'ratePerSecond': _num(r.ratePerSecond),
               'cargoShips': r.cargoShips,
             },
+      ],
+      'projects': [
+        for (final pr in engine.projectsFor(state, p.id))
+          {
+            'id': pr.id,
+            'kind': pr.kind.name,
+            'targetId': pr.targetId,
+            'name': projectTargetName(state, pr),
+            'startedAt': pr.startedAt,
+            'finishAt': pr.finishAt,
+            'secondsLeft': pr.finishAt - state.time,
+            'timeLeft': formatDuration(pr.finishAt - state.time),
+          },
       ],
       'market': {
         for (final id in c.resources.keys)

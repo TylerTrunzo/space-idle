@@ -234,6 +234,9 @@ final class _Loader {
       'shipCapacityPerSecond',
       'cargoShipResource',
       'baseTravelSeconds',
+      'claimSecondsBase',
+      'claimSecondsPerOwned',
+      'expandSlotsSeconds',
     });
     if (f == null) return null;
     final before = _errors.length;
@@ -261,6 +264,22 @@ final class _Loader {
     final shipCapacityPerSecond = f.number('shipCapacityPerSecond', gt: 0);
     final cargoShipResource = f.string('cargoShipResource');
     final baseTravelSeconds = f.number('baseTravelSeconds', gt: 0);
+    final claimSecondsBase = f.number(
+      'claimSecondsBase',
+      fallback: RulesDef.defaultClaimSecondsBase,
+      ge: 0,
+    );
+    final claimSecondsPerOwned = f.number(
+      'claimSecondsPerOwned',
+      fallback: RulesDef.defaultClaimSecondsPerOwned,
+      ge: 0,
+    );
+    final expandSlotsSeconds = f.number(
+      'expandSlotsSeconds',
+      fallback: RulesDef.defaultExpandSlotsSeconds,
+      ge: RulesDef.minProjectSeconds,
+      le: RulesDef.maxProjectSeconds,
+    );
     if (_errors.length > before) return null;
     return RulesDef(
       speedPerLevel: speedPerLevel!,
@@ -283,6 +302,9 @@ final class _Loader {
       shipCapacityPerSecond: shipCapacityPerSecond!,
       cargoShipResource: cargoShipResource!,
       baseTravelSeconds: baseTravelSeconds!,
+      claimSecondsBase: claimSecondsBase!,
+      claimSecondsPerOwned: claimSecondsPerOwned!,
+      expandSlotsSeconds: expandSlotsSeconds!,
     );
   }
 

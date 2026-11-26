@@ -275,6 +275,10 @@ final class _View {
   bool hasFreeSlot(BodyState body) =>
       body.buildings.length < buildSlots(c, body);
 
+  /// Whether an extra build slot for [body] is under way.
+  bool expanding(BodyState body) =>
+      projectOn(s, ProjectKind.expandSlots, body.id) != null;
+
   /// Whether [b] makes [resourceId] when it runs.
   bool makes(BuildingState b, String resourceId) =>
       def(b).kind == BuildingKind.extractor
@@ -465,7 +469,13 @@ final class _View {
         }
       }
       if (!hasFreeSlot(body)) {
-        offer(ExpandSlotsCommand(factionId, body.id), body, slotCost(c, body));
+        if (!expanding(body)) {
+          offer(
+            ExpandSlotsCommand(factionId, body.id),
+            body,
+            slotCost(c, body),
+          );
+        }
         continue;
       }
       for (final d in c.buildings.values) {
@@ -679,6 +689,9 @@ final class _View {
 
   /// Claims the best unowned body when the faction can pay, kits taken from
   /// the first owned body that holds enough.
+  ///
+  /// Claims take time, so one is started as soon as it can be paid for,
+  /// even while another is under way.
   Command? claim() {
     final cost = claimCost(s, c, factionId);
     final source = owned.where((b) => canPay(b, cost)).firstOrNull;
@@ -687,8 +700,9 @@ final class _View {
     return ClaimBodyCommand(factionId, target.id, source.id);
   }
 
-  /// The unowned body adding the most deposit types the faction lacks, then
-  /// the most richness in them; body order breaks a tie.
+  /// The unowned body no one is claiming that adds the most deposit types
+  /// the faction lacks, then the most richness in them; body order breaks
+  /// a tie.
   BodyState? _claimTarget() {
     final have = {
       for (final b in owned)
@@ -698,7 +712,9 @@ final class _View {
     var bestCount = -1;
     var bestRichness = 0.0;
     for (final b in s.bodies) {
-      if (b.ownerId != null) continue;
+      if (b.ownerId != null || projectOn(s, ProjectKind.claim, b.id) != null) {
+        continue;
+      }
       final fresh = b.deposits.where((d) => !have.contains(d.resourceId));
       final richness = fresh.fold(0.0, (sum, d) => sum + d.richness);
       if (fresh.length > bestCount ||
@@ -754,7 +770,8 @@ final class _View {
   }
 
   /// Whether [cond] holds in this (possibly planned-ahead) state, which the
-  /// engine has not yet checked for milestones.
+  /// engine has not yet checked for milestones, or will once the faction's
+  /// claims under way complete.
   bool _met(MilestoneCondition cond) => switch (cond) {
     StockCondition(:final resourceId, :final amount) =>
       owned.fold(const BigNum.zero(), (t, b) => t + stock(b, resourceId)) >=
@@ -763,7 +780,8 @@ final class _View {
       (faction.lifetimeProduced[resourceId] ?? const BigNum.zero()) >= amount,
     CreditsCondition(:final amount) => faction.credits >= amount,
     CreditsEarnedCondition(:final amount) => faction.lifetimeCredits >= amount,
-    BodiesOwnedCondition(:final count) => owned.length >= count,
+    BodiesOwnedCondition(:final count) =>
+      bodiesOwnedOrClaiming(s, factionId) >= count,
     BuildingCountCondition(:final defId, :final count) =>
       buildings.where((x) => x.$2.defId == defId).length >= count,
   };
@@ -937,9 +955,10 @@ final class _View {
     return null;
   }
 
-  /// One more build slot on full [body]: bought now, saved for, or
-  /// [_Stuck] at the most a save holds.
+  /// One more build slot on full [body]: bought now, saved for, waited for
+  /// while one is under way, or [_Stuck] at the most a save holds.
   _Step _expand(BodyState body) {
+    if (expanding(body)) return const _Waiting();
     if (body.extraSlots >= SaveCodec.maxExtraSlots) return const _Stuck();
     final cost = slotCost(c, body);
     return canPay(body, cost)
@@ -1246,7 +1265,7 @@ final class _View {
       if (!hasFreeSlot(body)) {
         // An extra slot is worth what the best new building there would
         // add, for the slot and the building together.
-        if (freeCrew < 1) continue;
+        if (freeCrew < 1 || expanding(body)) continue;
         final slot = slotCost(c, body)['credits']!;
         for (final d in c.buildings.values) {
           if (d.kind != BuildingKind.extractor &&

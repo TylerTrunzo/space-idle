@@ -186,8 +186,14 @@ void main() {
       'sourceBodyId': 'kora',
     });
     expect(claim['ok'], isTrue);
-    expect(claim['message'], 'Claimed Brine for 5K credits');
+    expect(
+      claim['message'],
+      'Started claiming Brine for 5K credits; done in 30m',
+    );
+    expect(claim['createdId'], startsWith('p'));
     expect((claim['spent']! as Map).keys, ['credits']);
+    // A route needs Brine owned: the claim has to complete first.
+    r.handle({'cmd': 'advance', 'seconds': 1860});
     final demolish = r.handle({'cmd': 'demolish', 'buildingId': 'b3'});
     expect(
       demolish['message'],
@@ -212,6 +218,64 @@ void main() {
       ((route['spent']! as Map)['kora/cargo_ship']! as Map)['display'],
       '1',
     );
+  });
+
+  test('an extra slot reply says when it arrives', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    final out = r.handle({'cmd': 'expandSlots', 'bodyId': 'kora'});
+    expect(
+      out['message'],
+      'Started an extra build slot on Kora for 50K credits; done in 1h',
+    );
+    final again = r.handle({'cmd': 'expandSlots', 'bodyId': 'kora'});
+    expect(again['error'], 'projectInProgress');
+  });
+
+  test('state lists running projects with time left, soonest first', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    final slot = r.handle({'cmd': 'expandSlots', 'bodyId': 'kora'});
+    final claim = r.handle({
+      'cmd': 'claimBody',
+      'bodyId': 'brine',
+      'sourceBodyId': 'kora',
+    });
+    r.handle({'cmd': 'advance', 'seconds': 600});
+    expect(r.handle({'cmd': 'state'})['projects'], [
+      {
+        'id': claim['createdId'],
+        'kind': 'claim',
+        'targetId': 'brine',
+        'name': 'Brine',
+        'startedAt': 0.0,
+        'finishAt': 1800.0,
+        'secondsLeft': 1200.0,
+        'timeLeft': '20m',
+      },
+      {
+        'id': slot['createdId'],
+        'kind': 'expandSlots',
+        'targetId': 'kora',
+        'name': 'Kora',
+        'startedAt': 0.0,
+        'finishAt': 3600.0,
+        'secondsLeft': 3000.0,
+        'timeLeft': '50m',
+      },
+    ]);
+    r.handle({'cmd': 'advance', 'seconds': 3600});
+    expect(r.handle({'cmd': 'state'})['projects'], isEmpty);
+  });
+
+  test('away lists the projects that completed', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    r.handle({'cmd': 'claimBody', 'bodyId': 'brine', 'sourceBodyId': 'kora'});
+    final out = r.handle({'cmd': 'away', 'seconds': 3600});
+    expect(out['projectsCompleted'], [
+      {'kind': 'claim', 'targetId': 'brine', 'name': 'Brine'},
+    ]);
   });
 
   test('costs show no claim once every body is owned', () {

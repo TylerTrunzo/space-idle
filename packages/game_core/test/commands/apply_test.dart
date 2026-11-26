@@ -40,6 +40,15 @@ void main() {
     return (r as CommandFailed).message;
   }
 
+  /// Completes every project under way, moving time to the last one's
+  /// finish.
+  void finishProjects(GameState s) {
+    for (final p in s.projects) {
+      if (p.finishAt > s.time) s.time = p.finishAt;
+    }
+    stepProjects(s, content);
+  }
+
   BuildingState building(GameState s, String id) =>
       s.bodies.expand((b) => b.buildings).firstWhere((b) => b.id == id);
 
@@ -170,13 +179,16 @@ void main() {
   });
 
   group('expandSlots', () {
-    test('adds a build slot to the body for growing credits', () {
+    test('adds a build slot to the body for growing credits once its project '
+        'completes', () {
       final s = fresh()..faction('player').credits = n(1e9);
       final kora = s.body('kora');
       final r = content.rules;
       expect(buildSlots(content, kora), 12);
       expect(slotCost(content, kora), {'credits': r.slotBaseCredits});
       expectOk(s, ExpandSlotsCommand('player', 'kora'));
+      expect(kora.extraSlots, 0);
+      finishProjects(s);
       expect(kora.extraSlots, 1);
       expect(buildSlots(content, kora), 13);
       expect(s.faction('player').credits, n(1e9) - r.slotBaseCredits);
@@ -184,6 +196,7 @@ void main() {
         'credits': r.slotBaseCredits * BigNum.from(r.slotGrowth),
       });
       expectOk(s, ExpandSlotsCommand('player', 'kora'));
+      finishProjects(s);
       expect(buildSlots(content, kora), 14);
       // Other bodies keep their own count.
       expect(s.body('brine').extraSlots, 0);
@@ -201,6 +214,7 @@ void main() {
         CommandError.noBuildSlot,
       );
       expectOk(s, ExpandSlotsCommand('player', 'kora'));
+      finishProjects(s);
       expectOk(s, BuildCommand('player', 'kora', 'smelter'));
     });
 
@@ -572,6 +586,7 @@ void main() {
       s.faction('player').credits = n(1e6);
       expect(claimCost(s, c4, 'player'), {'credits': n(5000)});
       expectOk(s, ClaimBodyCommand('player', 'brine', 'kora'), using: c4);
+      finishProjects(s);
       expect(s.body('brine').ownerId, 'player');
       expect(s.faction('player').credits, n(1e6 - 5000));
 
@@ -593,6 +608,7 @@ void main() {
         ClaimBodyCommand('player', 'hollow_reach', 'kora'),
         using: c4,
       );
+      finishProjects(s);
       expect(s.body('hollow_reach').ownerId, 'player');
       expect(s.faction('player').credits, n(1e6 - 25000));
       expect(s.body('kora').stock['outpost_kit'], n(0));

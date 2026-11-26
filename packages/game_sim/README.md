@@ -13,9 +13,12 @@ Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`
 `upgrade`, `createRoute`, `removeRoute`, `sell`, `setAutoSell`, `claimBody`,
 `expandSlots`); `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts that
-changed), `createdId` for a new building or route, and for `claimBody`,
-`demolish` and `createRoute` a `message` such as `"Claimed Brine for 5K
-credits"`. Meta commands:
+changed), `createdId` for a new building, route or project, and for
+`claimBody`, `expandSlots`, `demolish` and `createRoute` a `message` such as
+`"Started claiming Brine for 5K credits; done in 30m"`. Claims and extra build
+slots are projects: they are paid for at once and take effect when their timer
+runs out (a claim of a body, or a second slot on one, already under way fails
+with `projectInProgress`). Meta commands:
 
 - `{"cmd":"advance","seconds":N}` run the simulation for N seconds, no cap
 - `{"cmd":"away","seconds":N}` simulate the player being away for N seconds
@@ -23,11 +26,14 @@ credits"`. Meta commands:
   seconds away and simulated, credits and stock gained, units wasted to
   storage caps, milestones reached and the top bottlenecks, those losing the
   most credits an hour first; one that was there before the absence says
-  `"ongoing": "ongoing since 12.0h"` (game hours)
+  `"ongoing": "ongoing since 12.0h"` (game hours); and the projects that
+  completed (`projectsCompleted`: `kind`, `targetId`, `name`)
 - `{"cmd":"report"}` per-second flows and bottlenecks
 - `{"cmd":"state"}` time, credits, crew, reached milestones, every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
-  player's routes, and price and saturation of the goods the player holds
+  player's routes, its running projects soonest first (`kind`, `targetId`,
+  `name`, `startedAt`, `finishAt`, `secondsLeft` and `timeLeft` such as
+  `"1h 30m"`), and price and saturation of the goods the player holds
 - `{"cmd":"costs"}` upgrade costs of the player's buildings, the next claim
   cost (or `"no bodies left to claim"` once every body is owned) and each
   owned body's next extra build slot

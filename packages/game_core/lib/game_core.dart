@@ -14,5 +14,6 @@ export 'src/sim/engine.dart';
 export 'src/sim/logistics.dart';
 export 'src/sim/market.dart';
 export 'src/sim/production.dart';
+export 'src/sim/projects.dart';
 export 'src/state/game_state.dart';
 export 'src/state/save_codec.dart';

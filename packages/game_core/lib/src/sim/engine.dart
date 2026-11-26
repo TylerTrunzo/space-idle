@@ -10,6 +10,26 @@ import '../state/game_state.dart';
 import 'logistics.dart';
 import 'market.dart';
 import 'production.dart';
+import 'projects.dart';
+
+/// A project that completed while the player was away.
+final class CompletedProject {
+  /// Creates a record.
+  const CompletedProject({
+    required this.kind,
+    required this.targetId,
+    required this.name,
+  });
+
+  /// What the project did.
+  final ProjectKind kind;
+
+  /// Body or megaproject it acted on.
+  final String targetId;
+
+  /// Display name of [targetId].
+  final String name;
+}
 
 /// What happened to the player while the game was closed.
 final class OfflineSummary {
@@ -23,9 +43,11 @@ final class OfflineSummary {
     required this.totalWasted,
     required List<String> milestonesReached,
     required List<Bottleneck> topBottlenecks,
+    required List<CompletedProject> projectsCompleted,
   }) : stockGained = Map.unmodifiable(stockGained),
        milestonesReached = List.unmodifiable(milestonesReached),
-       topBottlenecks = List.unmodifiable(topBottlenecks);
+       topBottlenecks = List.unmodifiable(topBottlenecks),
+       projectsCompleted = List.unmodifiable(projectsCompleted);
 
   /// Game time in seconds at which the absence began; a bottleneck in
   /// [topBottlenecks] first seen before it was there all along.
@@ -60,6 +82,10 @@ final class OfflineSummary {
   /// with an estimate of the credits they lose an hour first, most first
   /// ([Bottleneck.lostCreditsPerHour]), then the rest in report order.
   final List<Bottleneck> topBottlenecks;
+
+  /// The player's projects that completed while away, in the order they
+  /// completed (`finishAt`, then id).
+  final List<CompletedProject> projectsCompleted;
 }
 
 /// Step of [GameEngine.catchUpOffline] and default step of
@@ -84,19 +110,25 @@ final class GameEngine {
   CommandResult apply(GameState s, Command cmd) =>
       applyCommand(s, content, cmd);
 
+  /// [factionId]'s projects under way, soonest to finish first; see
+  /// [runningProjects].
+  List<ProjectState> projectsFor(GameState s, String factionId) =>
+      runningProjects(s, factionId);
+
   /// Moves [s] forward by one step of [dt] game seconds.
   ///
   /// In order: reset each body's [BodyState.wastedThisStep], land the
   /// shipments due ([deliverShipments]), production, send cargo
-  /// ([sendCargo]), market (recovery and auto-sell), [clampStorage],
-  /// [noteBottlenecks], milestone check, then `time += dt`. Stock may pass the storage cap
+  /// ([sendCargo]), market (recovery and auto-sell), complete the projects
+  /// due ([stepProjects]), [clampStorage], [noteBottlenecks], milestone
+  /// check, then `time += dt`. Stock may pass the storage cap
   /// during the tick; production uses landed cargo, and cargo and
   /// auto-sell take from what is made, before the clamp, so long steps
   /// lose no more to the cap than short ones. Routes take their share
   /// before auto-sell does: a rule selling a body's whole surplus never
   /// starves a route out of it. Because time moves last, a
-  /// shipment due at exactly `time + dt` lands at the start of the next
-  /// tick.
+  /// shipment or project due at exactly `time + dt` lands or completes at
+  /// the start of the next tick.
   ///
   /// Throws [ArgumentError], changing nothing, if [dt] is not finite and
   /// above zero.
@@ -112,6 +144,7 @@ final class GameEngine {
     stepProduction(s, content, dt);
     sendCargo(s, content, dt);
     stepMarket(s, content, dt);
+    stepProjects(s, content);
     clampStorage(s, content, kept);
     noteBottlenecks(s, content, s.time);
     _checkMilestones(s);
@@ -175,6 +208,7 @@ final class GameEngine {
     final stockBefore = _empireStock(s, player.id);
     final creditsBefore = player.credits;
     final reachedBefore = Set.of(player.reachedMilestones);
+    final projectsBefore = runningProjects(s, player.id);
     final awayFrom = s.time;
 
     var wasted = const BigNum.zero();
@@ -222,6 +256,17 @@ final class GameEngine {
             m.id,
       ],
       topBottlenecks: [for (final (_, b) in necks.take(topBottleneckCount)) b],
+      // Nothing starts a project while away, so those gone have completed,
+      // and in this order.
+      projectsCompleted: [
+        for (final p in projectsBefore)
+          if (!s.projects.contains(p))
+            CompletedProject(
+              kind: p.kind,
+              targetId: p.targetId,
+              name: projectTargetName(s, p),
+            ),
+      ],
     );
   }
 

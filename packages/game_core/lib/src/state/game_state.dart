@@ -599,6 +599,102 @@ final class MarketState {
   MarketState copy() => MarketState(saturation: Map.of(saturation));
 }
 
+/// What a [ProjectState] does when it completes.
+enum ProjectKind {
+  /// Makes its target body the faction's.
+  claim,
+
+  /// Adds one extra build slot to its target body.
+  expandSlots,
+
+  /// Surveys its target body.
+  survey,
+
+  /// Finishes a stage of its target megaproject.
+  megaprojectStage,
+}
+
+/// Timed work a faction has paid for, which takes effect at [finishAt]
+/// (see `stepProjects`).
+final class ProjectState {
+  /// Creates a project; [data] defaults to empty.
+  ProjectState({
+    required this.id,
+    required this.factionId,
+    required this.kind,
+    required this.targetId,
+    required this.startedAt,
+    required this.finishAt,
+    Map<String, Object?>? data,
+  }) : data = data ?? {};
+
+  /// Restores a project written by [toJson]; an unknown [kind] throws.
+  factory ProjectState.fromJson(Map<String, Object?> j) => ProjectState(
+    id: j['id']! as String,
+    factionId: j['factionId']! as String,
+    kind: ProjectKind.values.byName(j['kind']! as String),
+    targetId: j['targetId']! as String,
+    startedAt: (j['startedAt']! as num).toDouble(),
+    finishAt: (j['finishAt']! as num).toDouble(),
+    // A copy, so the project's data stays mutable; absent means empty.
+    data: j['data'] == null ? null : _asMap(_jsonCopy(j['data'])),
+  );
+
+  /// Unique id, such as `p7`.
+  final String id;
+
+  /// Faction that started it and gets its effect.
+  final String factionId;
+
+  /// What it does on completion.
+  final ProjectKind kind;
+
+  /// What it acts on: a body id, or a megaproject id for
+  /// [ProjectKind.megaprojectStage].
+  final String targetId;
+
+  /// Game time in seconds at which it was started and paid for.
+  final double startedAt;
+
+  /// Game time in seconds from which it is complete.
+  final double finishAt;
+
+  /// Extra details its kind needs, as JSON values.
+  final Map<String, Object?> data;
+
+  /// Serializes this project.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'factionId': factionId,
+    'kind': kind.name,
+    'targetId': targetId,
+    'startedAt': startedAt,
+    'finishAt': finishAt,
+    'data': _jsonCopy(data),
+  };
+
+  /// An independent deep copy of this project, [data] included.
+  ProjectState copy() => ProjectState(
+    id: id,
+    factionId: factionId,
+    kind: kind,
+    targetId: targetId,
+    startedAt: startedAt,
+    finishAt: finishAt,
+    data: _asMap(_jsonCopy(data)),
+  );
+}
+
+/// A deep copy of JSON value [v]: maps and lists are copied, other values
+/// (numbers, strings, booleans, null) are immutable and shared.
+Object? _jsonCopy(Object? v) => switch (v) {
+  final Map<Object?, Object?> m => <String, Object?>{
+    for (final e in m.entries) e.key! as String: _jsonCopy(e.value),
+  },
+  final List<Object?> l => <Object?>[for (final e in l) _jsonCopy(e)],
+  _ => v,
+};
+
 /// The whole mutable game world.
 final class GameState {
   /// Creates a game state.
@@ -611,10 +707,12 @@ final class GameState {
     List<RouteState>? routes,
     List<Shipment>? shipments,
     MarketState? market,
+    List<ProjectState>? projects,
     this.nextId = 1,
   }) : routes = routes ?? [],
        shipments = shipments ?? [],
-       market = market ?? MarketState();
+       market = market ?? MarketState(),
+       projects = projects ?? [];
 
   /// Restores a state written by [toJson].
   factory GameState.fromJson(Map<String, Object?> j) => GameState(
@@ -626,6 +724,10 @@ final class GameState {
     routes: _list(j['routes'], RouteState.fromJson),
     shipments: _list(j['shipments'], Shipment.fromJson),
     market: MarketState.fromJson(_asMap(j['market'])),
+    // Absent in saves from before projects existed.
+    projects: j['projects'] == null
+        ? null
+        : _list(j['projects'], ProjectState.fromJson),
     nextId: j['nextId']! as int,
   );
 
@@ -656,6 +758,9 @@ final class GameState {
   /// Market saturation.
   final MarketState market;
 
+  /// Projects under way, every faction's, in the order they were started.
+  final List<ProjectState> projects;
+
   /// Counter behind [newId].
   int nextId;
 
@@ -678,6 +783,7 @@ final class GameState {
     'routes': [for (final r in routes) r.toJson()],
     'shipments': [for (final s in shipments) s.toJson()],
     'market': market.toJson(),
+    'projects': [for (final p in projects) p.toJson()],
     'nextId': nextId,
   };
 
@@ -693,6 +799,7 @@ final class GameState {
     routes: [for (final r in routes) r.copy()],
     shipments: [for (final sh in shipments) sh.copy()],
     market: market.copy(),
+    projects: [for (final p in projects) p.copy()],
     nextId: nextId,
   );
 }

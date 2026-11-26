@@ -84,3 +84,19 @@ String formatNumber(BigNum v) {
 }
 
 double _pow10(int n) => n == 0 ? 1 : (n == 1 ? 10 : 100);
+
+/// [seconds] of game time for display, rounded up: `45s` and `30m 30s`
+/// under an hour, whole minutes such as `1h 30m` from an hour up. Zero,
+/// negative or non-finite input shows as `0s`.
+String formatDuration(double seconds) {
+  if (!seconds.isFinite || seconds <= 0) return '0s';
+  final whole = seconds.ceil();
+  if (whole < 3600) {
+    final (m, s) = (whole ~/ 60, whole % 60);
+    if (m == 0) return '${s}s';
+    return s == 0 ? '${m}m' : '${m}m ${s}s';
+  }
+  final minutes = (whole / 60).ceil();
+  final (h, m) = (minutes ~/ 60, minutes % 60);
+  return m == 0 ? '${h}h' : '${h}h ${m}m';
+}
