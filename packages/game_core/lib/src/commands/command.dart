@@ -256,7 +256,8 @@ final class SellCommand extends Command {
   /// Resource to sell.
   final String resourceId;
 
-  /// Units to sell; above zero, clamped to the stock held.
+  /// Units to sell; above zero, clamped to the stock held, which must not
+  /// be empty.
   final BigNum amount;
 
   @override
@@ -385,6 +386,8 @@ final class CommandFailed extends CommandResult {
   /// Category of the failure.
   final CommandError error;
 
-  /// Human-readable detail.
+  /// A sentence for the player, using display names and formatted
+  /// numbers, such as "Needs 1.5K credits (you have 250)". Ids appear only
+  /// for things that do not exist.
   final String message;
 }

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../num/format.dart';
 import '../sim/crew.dart';
 import '../sim/market.dart';
 import '../state/game_state.dart';
@@ -17,7 +18,10 @@ const _credits = 'credits';
 CommandResult applyCommand(GameState s, Content c, Command cmd) {
   final faction = _findFaction(s, cmd.factionId);
   if (faction == null) {
-    return _fail(CommandError.unknownFaction, 'no faction ${cmd.factionId}');
+    return _fail(
+      CommandError.unknownFaction,
+      'There is no faction ${cmd.factionId}',
+    );
   }
   return switch (cmd) {
     BuildCommand() => _build(s, c, faction, cmd),
@@ -73,10 +77,25 @@ CommandFailed _fail(CommandError e, String message) =>
     CommandFailed(e, message);
 
 CommandFailed _unknownBody(String id) =>
-    _fail(CommandError.unknownBody, 'no body $id');
+    _fail(CommandError.unknownBody, 'There is no body $id');
 
-CommandFailed _notOwner(FactionState f, String what) =>
-    _fail(CommandError.notOwner, '${f.id} does not own $what');
+/// The acting faction does not own [what], a display phrase such as a
+/// body's name.
+CommandFailed _notOwner(String what) =>
+    _fail(CommandError.notOwner, "You don't own $what");
+
+CommandFailed _unknownResource(String id) =>
+    _fail(CommandError.unknownDef, 'There is no resource $id');
+
+/// Display name of faction [id], or the id itself if there is none.
+String _factionName(GameState s, String id) => _findFaction(s, id)?.name ?? id;
+
+/// Display name of resource [id], or the id itself if there is none.
+String _resourceName(Content c, String id) => c.resources[id]?.name ?? id;
+
+/// "Smelter on Kora": building [b] by its type's display name, on [body].
+String _buildingName(Content c, BodyState body, BuildingState b) =>
+    '${c.buildings[b.defId]!.name} on ${body.name}';
 
 FactionState? _findFaction(GameState s, String id) {
   for (final f in s.factions) {
@@ -104,19 +123,24 @@ BodyState? _findBody(GameState s, String id) {
 /// The failure if building [id], as [found] by [_findBuilding], is missing or
 /// stands on a body [f] does not own, else null.
 CommandFailed? _checkOwnedBuilding(
+  Content c,
   FactionState f,
   String id,
   (BodyState, BuildingState)? found,
 ) {
   if (found == null) {
-    return _fail(CommandError.unknownBuilding, 'no building $id');
+    return _fail(CommandError.unknownBuilding, 'There is no building $id');
   }
-  if (found.$1.ownerId != f.id) return _notOwner(f, 'building $id');
+  final (body, b) = found;
+  if (body.ownerId != f.id) {
+    return _notOwner('the ${_buildingName(c, body, b)}');
+  }
   return null;
 }
 
 /// The failure if [f] and [stockBody] cannot cover [cost], else null.
 CommandFailed? _checkCost(
+  Content c,
   FactionState f,
   BodyState stockBody,
   Map<String, BigNum> cost,
@@ -126,10 +150,12 @@ CommandFailed? _checkCost(
         ? f.credits
         : stockBody.stock[id] ?? const BigNum.zero();
     if (have < need) {
-      final where = id == _credits ? '' : ' on ${stockBody.id}';
+      final what = id == _credits
+          ? 'credits'
+          : '${_resourceName(c, id)} on ${stockBody.name}';
       return _fail(
         CommandError.cannotAfford,
-        'needs $need $id$where, has $have',
+        'Needs ${formatNumber(need)} $what (you have ${formatNumber(have)})',
       );
     }
   }
@@ -152,11 +178,17 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
   if (body == null) return _unknownBody(cmd.bodyId);
   final def = c.buildings[cmd.defId];
   if (def == null) {
-    return _fail(CommandError.unknownDef, 'no building type ${cmd.defId}');
+    return _fail(
+      CommandError.unknownDef,
+      'There is no building type ${cmd.defId}',
+    );
   }
-  if (body.ownerId != f.id) return _notOwner(f, 'body ${body.id}');
+  if (body.ownerId != f.id) return _notOwner(body.name);
   if (body.buildings.length >= c.bodyTypes[body.typeId]!.buildSlots) {
-    return _fail(CommandError.noBuildSlot, '${body.id} has no free slot');
+    return _fail(
+      CommandError.noBuildSlot,
+      '${body.name} has no free build slot',
+    );
   }
   String? deposit;
   if (def.kind == BuildingKind.extractor) {
@@ -166,11 +198,14 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
         !body.deposits.any((d) => d.resourceId == deposit)) {
       return _fail(
         CommandError.depositMissing,
-        '${def.id} cannot mine ${deposit ?? 'nothing'} on ${body.id}',
+        deposit == null
+            ? '${def.name} needs a deposit to mine'
+            : "${def.name} can't mine ${_resourceName(c, deposit)} "
+                  'on ${body.name}',
       );
     }
   }
-  final short = _checkCost(f, body, def.buildCost);
+  final short = _checkCost(c, f, body, def.buildCost);
   if (short != null) return short;
 
   _pay(f, body, def.buildCost);
@@ -191,7 +226,7 @@ CommandResult _demolish(
   DemolishCommand cmd,
 ) {
   final found = _findBuilding(s, cmd.buildingId);
-  final missing = _checkOwnedBuilding(f, cmd.buildingId, found);
+  final missing = _checkOwnedBuilding(c, f, cmd.buildingId, found);
   if (missing != null) return missing;
   final (body, b) = found!;
 
@@ -208,17 +243,17 @@ CommandResult _assignCrew(
   AssignCrewCommand cmd,
 ) {
   final found = _findBuilding(s, cmd.buildingId);
-  final missing = _checkOwnedBuilding(f, cmd.buildingId, found);
+  final missing = _checkOwnedBuilding(c, f, cmd.buildingId, found);
   if (missing != null) return missing;
-  final (_, b) = found!;
+  final (body, b) = found!;
   if (cmd.crew < 0) {
-    return _fail(CommandError.invalidAmount, 'crew must be at least 0');
+    return _fail(CommandError.invalidAmount, "Crew can't be negative");
   }
   final max = maxCrew(c.rules, c.buildings[b.defId]!, b);
   if (cmd.crew > max) {
     return _fail(
       CommandError.crewSlotsExceeded,
-      '${b.id} holds at most $max crew',
+      '${_buildingName(c, body, b)} holds at most $max crew',
     );
   }
   final delta = cmd.crew - b.crew;
@@ -226,7 +261,7 @@ CommandResult _assignCrew(
   if (delta > 0 && free < delta) {
     return _fail(
       CommandError.crewUnavailable,
-      'needs $delta more crew, $free available',
+      'Needs $delta more crew (you have ${math.max(0, free)} free)',
     );
   }
 
@@ -241,17 +276,18 @@ CommandResult _upgrade(
   UpgradeCommand cmd,
 ) {
   final found = _findBuilding(s, cmd.buildingId);
-  final missing = _checkOwnedBuilding(f, cmd.buildingId, found);
+  final missing = _checkOwnedBuilding(c, f, cmd.buildingId, found);
   if (missing != null) return missing;
   final (body, b) = found!;
-  if (!c.buildings[b.defId]!.upgrades.containsKey(cmd.track)) {
+  final def = c.buildings[b.defId]!;
+  if (!def.upgrades.containsKey(cmd.track)) {
     return _fail(
       CommandError.unknownDef,
-      '${b.defId} has no ${cmd.track.name} upgrade',
+      '${def.name} has no ${cmd.track.name} upgrade',
     );
   }
   final cost = upgradeCost(c, b, cmd.track);
-  final short = _checkCost(f, body, cost);
+  final short = _checkCost(c, f, body, cost);
   if (short != null) return short;
 
   _pay(f, body, cost);
@@ -270,27 +306,33 @@ CommandResult _createRoute(
   final to = _findBody(s, cmd.toBodyId);
   if (to == null) return _unknownBody(cmd.toBodyId);
   if (!c.resources.containsKey(cmd.resourceId)) {
-    return _fail(CommandError.unknownDef, 'no resource ${cmd.resourceId}');
+    return _unknownResource(cmd.resourceId);
   }
-  if (from.ownerId != f.id) return _notOwner(f, 'body ${from.id}');
-  if (to.ownerId != f.id) return _notOwner(f, 'body ${to.id}');
+  if (from.ownerId != f.id) return _notOwner(from.name);
+  if (to.ownerId != f.id) return _notOwner(to.name);
   if (from.id == to.id) {
-    return _fail(CommandError.routeInvalid, 'route needs two bodies');
+    return _fail(
+      CommandError.routeInvalid,
+      'A route needs two different bodies',
+    );
   }
   if (from.systemId != to.systemId) {
     return _fail(
       CommandError.routeInvalid,
-      '${from.id} and ${to.id} are in different systems',
+      '${from.name} and ${to.name} are in different systems',
     );
   }
   if (cmd.cargoShips < 1) {
-    return _fail(CommandError.invalidAmount, 'route needs a cargo ship');
+    return _fail(
+      CommandError.invalidAmount,
+      'A route needs at least one cargo ship',
+    );
   }
   if (cmd.ratePerSecond <= const BigNum.zero()) {
-    return _fail(CommandError.invalidAmount, 'rate must be above 0');
+    return _fail(CommandError.invalidAmount, 'Rate must be above 0');
   }
   final ships = {c.rules.cargoShipResource: BigNum.from(cmd.cargoShips)};
-  final short = _checkCost(f, from, ships);
+  final short = _checkCost(c, f, from, ships);
   if (short != null) return short;
 
   _pay(f, from, ships);
@@ -314,9 +356,16 @@ CommandResult _removeRoute(
   RemoveRouteCommand cmd,
 ) {
   final i = s.routes.indexWhere((r) => r.id == cmd.routeId);
-  if (i < 0) return _fail(CommandError.routeInvalid, 'no route ${cmd.routeId}');
+  if (i < 0) {
+    return _fail(CommandError.routeInvalid, 'There is no route ${cmd.routeId}');
+  }
   final r = s.routes[i];
-  if (r.ownerId != f.id) return _notOwner(f, 'route ${r.id}');
+  if (r.ownerId != f.id) {
+    return _notOwner(
+      'the route from ${s.body(r.fromBodyId).name} '
+      'to ${s.body(r.toBodyId).name}',
+    );
+  }
 
   final from = s.body(r.fromBodyId);
   final ships = c.rules.cargoShipResource;
@@ -330,11 +379,18 @@ CommandResult _sell(GameState s, Content c, FactionState f, SellCommand cmd) {
   final body = _findBody(s, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (!c.resources.containsKey(cmd.resourceId)) {
-    return _fail(CommandError.unknownDef, 'no resource ${cmd.resourceId}');
+    return _unknownResource(cmd.resourceId);
   }
-  if (body.ownerId != f.id) return _notOwner(f, 'body ${body.id}');
+  if (body.ownerId != f.id) return _notOwner(body.name);
   if (cmd.amount <= const BigNum.zero()) {
-    return _fail(CommandError.invalidAmount, 'amount must be above 0');
+    return _fail(CommandError.invalidAmount, 'Amount must be above 0');
+  }
+  final held = body.stock[cmd.resourceId] ?? const BigNum.zero();
+  if (held <= const BigNum.zero()) {
+    return _fail(
+      CommandError.invalidAmount,
+      '${body.name} has no ${_resourceName(c, cmd.resourceId)} to sell',
+    );
   }
 
   sell(s, c, f.id, body.id, cmd.resourceId, cmd.amount);
@@ -350,12 +406,15 @@ CommandResult _setAutoSell(
   final body = _findBody(s, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (!c.resources.containsKey(cmd.resourceId)) {
-    return _fail(CommandError.unknownDef, 'no resource ${cmd.resourceId}');
+    return _unknownResource(cmd.resourceId);
   }
-  if (body.ownerId != f.id) return _notOwner(f, 'body ${body.id}');
+  if (body.ownerId != f.id) return _notOwner(body.name);
   final keep = cmd.keepAtLeast;
   if (keep != null && keep.isNegative) {
-    return _fail(CommandError.invalidAmount, 'keepAtLeast must be at least 0');
+    return _fail(
+      CommandError.invalidAmount,
+      "The amount to keep can't be negative",
+    );
   }
 
   final i = f.autoSell.indexWhere(
@@ -387,15 +446,18 @@ CommandResult _claim(
   if (target == null) return _unknownBody(cmd.bodyId);
   final source = _findBody(s, cmd.sourceBodyId);
   if (source == null) return _unknownBody(cmd.sourceBodyId);
-  if (target.ownerId != null) {
+  final owner = target.ownerId;
+  if (owner != null) {
     return _fail(
       CommandError.alreadyOwned,
-      '${target.id} is owned by ${target.ownerId}',
+      owner == f.id
+          ? 'You already own ${target.name}'
+          : '${target.name} is already owned by ${_factionName(s, owner)}',
     );
   }
-  if (source.ownerId != f.id) return _notOwner(f, 'body ${source.id}');
+  if (source.ownerId != f.id) return _notOwner(source.name);
   final cost = claimCost(s, c, f.id);
-  final short = _checkCost(f, source, cost);
+  final short = _checkCost(c, f, source, cost);
   if (short != null) return short;
 
   _pay(f, source, cost);

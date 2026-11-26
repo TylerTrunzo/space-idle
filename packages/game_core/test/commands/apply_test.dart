@@ -24,7 +24,9 @@ void main() {
 
   /// Applies [cmd] under [using] (default the shipped content), expects
   /// [error], and checks the state did not change.
-  void expectFails(
+  ///
+  /// Returns the failure's message.
+  String expectFails(
     GameState s,
     Command cmd,
     CommandError error, {
@@ -34,6 +36,7 @@ void main() {
     final r = applyCommand(s, using ?? content, cmd);
     expect(r, isA<CommandFailed>().having((f) => f.error, 'error', error));
     expect(jsonEncode(s.toJson()), before);
+    return (r as CommandFailed).message;
   }
 
   BuildingState building(GameState s, String id) =>
@@ -370,6 +373,18 @@ void main() {
       expect(s.market.saturation['iron_ore'], closeTo(0.999, 1e-12));
     });
 
+    test('selling what the body does not hold fails', () {
+      final s = fresh();
+      expect(
+        expectFails(
+          s,
+          SellCommand('player', 'kora', 'steel', n(5)),
+          CommandError.invalidAmount,
+        ),
+        'Kora has no Steel to sell',
+      );
+    });
+
     test('amount must be positive', () {
       final s = fresh();
       expectFails(
@@ -521,6 +536,110 @@ void main() {
       () => Command.fromJson({'cmd': 'demolish', 'factionId': 'p'}),
       throwsFormatException,
     );
+  });
+
+  group('failure messages use display names and formatted numbers', () {
+    test('short of credits', () {
+      final s = fresh()..faction('player').credits = n(250);
+      expect(
+        expectFails(
+          s,
+          BuildCommand('player', 'kora', 'habitat'),
+          CommandError.cannotAfford,
+        ),
+        'Needs 1.5K credits (you have 250)',
+      );
+    });
+
+    test('short of a resource', () {
+      final s = fresh()..faction('player').credits = n(1e6);
+      expect(
+        expectFails(
+          s,
+          BuildCommand('player', 'kora', 'habitat'),
+          CommandError.cannotAfford,
+        ),
+        'Needs 1 Habitat Module on Kora (you have 0)',
+      );
+    });
+
+    test('not the owner', () {
+      final s = withRival();
+      expect(
+        expectFails(
+          s,
+          BuildCommand('player', 'brine', 'smelter'),
+          CommandError.notOwner,
+        ),
+        "You don't own Brine",
+      );
+      expect(
+        expectFails(
+          s,
+          const AssignCrewCommand('player', 'rb1', 1),
+          CommandError.notOwner,
+        ),
+        "You don't own the Ice Drill on Brine",
+      );
+    });
+
+    test('already owned', () {
+      expect(
+        expectFails(
+          withRival(),
+          const ClaimBodyCommand('player', 'brine', 'kora'),
+          CommandError.alreadyOwned,
+        ),
+        'Brine is already owned by Rival',
+      );
+    });
+
+    test('no deposit', () {
+      expect(
+        expectFails(
+          fresh(),
+          BuildCommand('player', 'kora', 'mine', depositResourceId: 'nickel'),
+          CommandError.depositMissing,
+        ),
+        "Mine can't mine Nickel on Kora",
+      );
+    });
+
+    test('crew limits', () {
+      final s = fresh();
+      expect(
+        expectFails(
+          s,
+          const AssignCrewCommand('player', 'b3', 5),
+          CommandError.crewSlotsExceeded,
+        ),
+        'Smelter on Kora holds at most 1 crew',
+      );
+      s.faction('player').baseCrew = 3;
+      final id = expectOk(
+        s,
+        BuildCommand('player', 'kora', 'mine', depositResourceId: 'silicon'),
+      )!;
+      expect(
+        expectFails(
+          s,
+          AssignCrewCommand('player', id, 1),
+          CommandError.crewUnavailable,
+        ),
+        'Needs 1 more crew (you have 0 free)',
+      );
+    });
+
+    test('no such upgrade', () {
+      expect(
+        expectFails(
+          fresh(),
+          const UpgradeCommand('player', 'b1', UpgradeTrack.efficiency),
+          CommandError.unknownDef,
+        ),
+        'Mine has no efficiency upgrade',
+      );
+    });
   });
 }
 
