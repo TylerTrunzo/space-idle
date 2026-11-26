@@ -6,6 +6,7 @@ import '../num/change.dart';
 import '../num/format.dart';
 import '../sim/crew.dart';
 import '../sim/market.dart';
+import '../sim/megaprojects.dart';
 import '../sim/projects.dart';
 import '../state/game_state.dart';
 import '../state/save_codec.dart';
@@ -37,6 +38,12 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
     SetAutoSellCommand() => _setAutoSell(s, c, faction, cmd),
     ClaimBodyCommand() => _claim(s, c, faction, cmd),
     ExpandSlotsCommand() => _expandSlots(s, c, faction, cmd),
+    StartMegaprojectStageCommand() => _startMegaprojectStage(
+      s,
+      c,
+      faction,
+      cmd,
+    ),
   };
 }
 
@@ -550,6 +557,60 @@ CommandResult _expandSlots(
     ProjectKind.expandSlots,
     body.id,
     c.rules.expandSlotsSeconds,
+  );
+  return CommandOk(createdId: p.id);
+}
+
+CommandResult _startMegaprojectStage(
+  GameState s,
+  Content c,
+  FactionState f,
+  StartMegaprojectStageCommand cmd,
+) {
+  final def = c.megaprojects[cmd.megaprojectId];
+  if (def == null) {
+    return _fail(
+      CommandError.unknownDef,
+      'There is no megaproject ${cmd.megaprojectId}',
+    );
+  }
+  final body = _findBody(s, cmd.bodyId);
+  if (body == null) return _unknownBody(cmd.bodyId);
+  if (body.ownerId != f.id) return _notOwner(body.name);
+  final host = def.hostBodyType;
+  if (host != null && body.typeId != host) {
+    return _fail(
+      CommandError.wrongBodyType,
+      '${def.name} is built on ${c.bodyTypes[host]!.name} bodies, and '
+      '${body.name} is not one',
+    );
+  }
+  final running = megaprojectStageOf(s, f.id, def.id);
+  if (running != null) {
+    return _fail(
+      CommandError.projectInProgress,
+      'A stage of ${def.name} is already under way '
+      '(${_left(s, running)} left)',
+    );
+  }
+  final level = f.megaprojectLevels[def.id] ?? 0;
+  if (level >= SaveCodec.maxMegaprojectLevel) {
+    return _fail(
+      CommandError.invalidAmount,
+      '${def.name} is at its highest level (${SaveCodec.maxMegaprojectLevel})',
+    );
+  }
+  final cost = megaprojectCost(c, def, level);
+  final short = _checkCost(c, f, body, cost);
+  if (short != null) return short;
+
+  _pay(f, body, cost);
+  final p = startProject(
+    s,
+    f.id,
+    ProjectKind.megaprojectStage,
+    def.id,
+    megaprojectStageSeconds(def, level),
   );
   return CommandOk(createdId: p.id);
 }

@@ -4,6 +4,7 @@ import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
 import 'crew.dart';
+import 'megaprojects.dart';
 import 'production.dart';
 
 /// What a sale moved and earned.
@@ -23,6 +24,18 @@ final class SaleResult {
 double marketFloorOf(Content c, String resourceId) =>
     c.resources[resourceId]!.marketFloor ?? c.rules.marketFloor;
 
+/// Market depth of [resourceId] for sales by [factionId]: its
+/// [ResourceDef.marketDepth] times the faction's
+/// [EmpireBonuses.marketDepthMultiplier].
+double marketDepthFor(
+  GameState s,
+  Content c,
+  String factionId,
+  String resourceId,
+) =>
+    c.resources[resourceId]!.marketDepth *
+    bonusesFor(s, c, factionId).marketDepthMultiplier;
+
 /// Current price per unit of [resourceId]: base price × saturation.
 BigNum price(GameState s, Content c, String resourceId) => c
     .resources[resourceId]!
@@ -32,10 +45,11 @@ BigNum price(GameState s, Content c, String resourceId) => c
 /// Sells up to [amount] of [resourceId] from [bodyId]'s stock for
 /// [factionId], all at once.
 ///
-/// Each unit sold cuts the saturation by `1 / marketDepth` of itself, down
-/// to the floor ([marketFloorOf]), and earns the price at the saturation it sold at.
+/// Each unit sold cuts the saturation by `1 / depth` of itself, down to
+/// the floor ([marketFloorOf]), and earns the price at the saturation it
+/// sold at; `depth` is the seller's [marketDepthFor].
 /// So `n` units take the saturation from `s0` to `s0 × e^(−n / depth)` and
-/// earn `basePrice × marketDepth × (s0 − s1)`; every unit past the floor
+/// earn `basePrice × depth × (s0 − s1)`; every unit past the floor
 /// earns `basePrice × marketFloor`. One large sale earns what the same
 /// units sold in many small lots would.
 ///
@@ -58,7 +72,7 @@ SaleResult sell(
   final res = c.resources[resourceId]!;
   final floor = marketFloorOf(c, resourceId);
   final s0 = s.market.saturation[resourceId] ?? 1;
-  final depth = res.marketDepth;
+  final depth = marketDepthFor(s, c, factionId, resourceId);
   // Units that take the saturation from s0 down to the floor.
   final toFloor = s0 <= floor ? 0.0 : depth * math.log(s0 / floor);
   final BigNum revenue;
@@ -94,15 +108,15 @@ SaleResult sell(
 /// Saturation recovers toward 1: its gap to full price shrinks by a
 /// factor e every `marketRecoverySeconds`. What is auto-sold of a resource
 /// counts as sold at a steady rate over the step while it recovers, each
-/// unit cutting the saturation by `1 / marketDepth` of itself as in
-/// [sell]; the units earn the base price times the saturation's average
-/// over the step ([_sellOverStep]). So a long step earns what many short
-/// ones do, and steady selling settles at `1 / (1 + rate ×
-/// marketRecoverySeconds / marketDepth)` (or the floor): selling more
-/// always earns more, ever less per unit. Every seller of a resource gets
-/// the same price per unit. Factions and their rules
-/// run in list order; resources are settled in sorted-id order so the
-/// result does not depend on map insertion order.
+/// unit cutting the saturation by `1 / depth` of itself, `depth` being its
+/// seller's [marketDepthFor], as in [sell]; the units earn the base price
+/// times the saturation's average over the step ([_sellOverStep]). So a
+/// long step earns what many short ones do, and steady selling settles at
+/// `1 / (1 + rate × marketRecoverySeconds / depth)` (or the floor):
+/// selling more always earns more, ever less per unit. Every seller of a
+/// resource gets the same price per unit. Factions and their rules run in
+/// list order; resources are settled in sorted-id order so the result does
+/// not depend on map insertion order.
 ///
 /// [limits], when given, caps what auto-sell may sell this step: body id
 /// to resource id to units, a missing entry meaning nothing. The flow
@@ -159,12 +173,18 @@ void stepMarket(
           1 - (1 - sat[id]!) * math.exp(-dt / c.rules.marketRecoverySeconds);
       continue;
     }
-    final total = lots.fold(_zero, (t, lot) => t + lot.$3);
+    // Share of the saturation the step's sales cut a second: each seller's
+    // units a second over its market depth, summed.
+    final cut = lots.fold(
+      0.0,
+      (t, lot) =>
+          t + lot.$3.toDouble() / dt / marketDepthFor(s, c, lot.$1.id, id),
+    );
     final (:priceShare, :end) = _sellOverStep(
       c,
       c.resources[id]!,
       sat[id] ?? 1,
-      total.toDouble(),
+      cut,
       dt,
     );
     final unitPrice = c.resources[id]!.basePrice.mulDouble(priceShare);
@@ -176,24 +196,26 @@ void stepMarket(
   }
 }
 
-/// Selling [units] of [res] at a steady rate over [dt] seconds from
-/// saturation [s0] while the market recovers: the average saturation the
-/// units sell at ([priceShare]) and the saturation at the end.
+/// Selling at a steady rate over [dt] seconds from saturation [s0] while
+/// the market for [res] recovers: the average saturation the units sell at
+/// ([priceShare]) and the saturation at the end. The sales cut [cut] of
+/// the saturation a second: each seller's units a second over its market
+/// depth, summed.
 ///
 /// With recovery rate `r = 1 / marketRecoverySeconds` and sales cutting
-/// `b = rate / marketDepth` of the saturation a second, `ds/dt = r(1 − s)
+/// `b = cut` of the saturation a second, `ds/dt = r(1 − s)
 /// − b s`: the saturation moves exponentially, at rate `r + b`, toward
 /// `r / (r + b)`, and stops at the floor if that lies below it.
 ({double priceShare, double end}) _sellOverStep(
   Content c,
   ResourceDef res,
   double s0,
-  double units,
+  double cut,
   double dt,
 ) {
   final floor = marketFloorOf(c, res.id);
   final r = 1 / c.rules.marketRecoverySeconds;
-  final k = r + units / dt / res.marketDepth;
+  final k = r + cut;
   final eq = r / k;
   // Average saturation over the first t seconds, and the value at t.
   double average(double t) => eq + (s0 - eq) * (1 - math.exp(-k * t)) / (k * t);

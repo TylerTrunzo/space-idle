@@ -355,9 +355,10 @@ BalanceReport runBotSession(
     }
     final next = math.min((checkIn + 1) * checkInEverySeconds, end);
     if (next > clock) {
-      // The offline catch-up, capped, runs right after the player leaves;
-      // it is split at day boundaries so each day's income is its own.
-      final simulated = math.min(next - clock, c.rules.offlineCapSeconds);
+      // The offline catch-up, capped as the player's megaproject levels
+      // allow when it leaves, runs right after the player leaves; it is
+      // split at day boundaries so each day's income is its own.
+      final simulated = math.min(next - clock, offlineCapFor(s, c, faction.id));
       var t = clock;
       while (t < clock + simulated) {
         final boundary = revenueAt.length * _daySeconds;

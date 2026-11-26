@@ -19,8 +19,8 @@ abstract interface class Bot {
 }
 
 /// Buys the cheapest affordable upgrade, building, extra build slot or
-/// claim each decision, after filling free crew slots and setting
-/// auto-sell on surplus.
+/// claim each decision, after filling free crew slots, starting any
+/// megaproject stage it can afford and setting auto-sell on surplus.
 final class GreedyBot implements Bot {
   @override
   String get name => 'greedy';
@@ -30,7 +30,8 @@ final class GreedyBot implements Bot {
     var bought = false;
     return planCommands(e, s, (w) {
       final v = _View(e.content, w, factionId);
-      final housekeeping = v.assignFreeCrew() ?? v.autoSell();
+      final housekeeping =
+          v.assignFreeCrew() ?? v.startMegaproject() ?? v.autoSell();
       if (housekeeping != null || bought) return housekeeping;
       bought = true;
       return v.cheapestPurchase();
@@ -43,10 +44,11 @@ final class GreedyBot implements Bot {
 /// Each planning step takes the first of: staff idle buildings; fix one of
 /// the worst bottlenecks (assign crew, then an efficiency or speed upgrade
 /// on the starving supplier, then build another supplier, then open a
-/// route); claim a body when affordable; auto-sell surplus; work toward
-/// the next milestone or more housing when crew runs out, saving credits
-/// for it; and with what is left, buy whatever adds the most credits per
-/// second for its price.
+/// route); claim a body when affordable; start a megaproject stage when
+/// affordable, else route its goods to one body; auto-sell surplus; work
+/// toward the next milestone or more housing when crew runs out, saving
+/// credits for it; and with what is left, buy whatever adds the most
+/// credits per second for its price.
 final class BalancedBot implements Bot {
   /// Bottlenecks, worst first, the bot tries to fix per planning step.
   static const int bottlenecksConsidered = 3;
@@ -67,6 +69,8 @@ final class BalancedBot implements Bot {
           v.closeShipTransfers() ??
           v.fixBottleneck(tried) ??
           v.claim() ??
+          v.startMegaproject() ??
+          v.gatherMegaproject() ??
           v.autoSell();
       if (quick != null) return quick;
       return switch (v.pursueGoals()) {
@@ -143,6 +147,10 @@ const double _saveWithinSeconds = 21600;
 /// Units per second of a route moving build parts or cargo ships: a slow
 /// trickle, one every 100 s.
 const double _trickleRate = 0.01;
+
+/// Seconds in which a route gathering a megaproject stage's goods should
+/// bring what its host body lacks ([_View.gatherMegaproject]).
+const double _gatherSeconds = 3600;
 
 /// Cargo ships the balanced bot sends to a body that has goods to ship.
 const int _shipsSent = 2;
@@ -405,15 +413,18 @@ final class _View {
       lifeSupport.any((id) => makes(b, id));
 
   /// Units of [resourceId] kept on [body] when a building there uses it, a
-  /// route ships it, or it pays for builds, routes or claims; otherwise
-  /// none.
+  /// route ships it, or it pays for builds, routes, claims or megaproject
+  /// stages; otherwise none.
   ///
-  /// The larger of a share of storage and [_demandBufferSeconds] of what
-  /// the body's buildings use, at most the storage cap.
+  /// The largest of a share of storage, [_demandBufferSeconds] of what the
+  /// body's buildings use and what the next stages of the megaprojects
+  /// cost ([stageNeed]), at most the storage cap.
   BigNum keep(BodyState body, String resourceId) {
+    final stage = stageNeed(resourceId);
     final used =
         resourceId == r.cargoShipResource ||
         resourceId == r.outpostKitResource ||
+        !stage.isZero ||
         body.buildings.any((b) => def(b).inputs.containsKey(resourceId)) ||
         s.routes.any(
           (rt) => rt.fromBodyId == body.id && rt.resourceId == resourceId,
@@ -429,7 +440,141 @@ final class _View {
     return cap
         .mulDouble(_keepShareOfCap)
         .max(demand.mulDouble(_demandBufferSeconds))
+        .max(stage)
         .min(cap);
+  }
+
+  /// Units of [resourceId] the next stage of every megaproject costs,
+  /// summed; zero when none uses it.
+  BigNum stageNeed(String resourceId) {
+    var total = const BigNum.zero();
+    for (final m in c.megaprojects.values) {
+      if (!m.baseCost.containsKey(resourceId)) continue;
+      final level = faction.megaprojectLevels[m.id] ?? 0;
+      total = total + megaprojectCost(c, m, level)[resourceId]!;
+    }
+    return total;
+  }
+
+  /// Starts the next stage of the first megaproject, in content order, that
+  /// has none under way and that an owned body (of its host type, if it has
+  /// one) can pay for, on the first such body; null if there is none.
+  Command? startMegaproject() {
+    for (final m in c.megaprojects.values) {
+      if (megaprojectStageOf(s, factionId, m.id) != null) continue;
+      final level = faction.megaprojectLevels[m.id] ?? 0;
+      if (level >= SaveCodec.maxMegaprojectLevel) continue;
+      final cost = megaprojectCost(c, m, level);
+      for (final body in owned) {
+        final host = m.hostBodyType;
+        if (host != null && body.typeId != host) continue;
+        if (canPay(body, cost)) {
+          return StartMegaprojectStageCommand(factionId, m.id, body.id);
+        }
+      }
+    }
+    return null;
+  }
+
+  /// A route bringing a good the next stage of a megaproject lacks to the
+  /// body that best hosts it, from another owned body in its system that
+  /// holds some; or, when no such body has a cargo ship, a route sending
+  /// one there. Null if no route is wanted.
+  ///
+  /// The host is the owned body (of the host type, if any) that has the
+  /// most of the stage's goods in hand or routed in, body order breaking a
+  /// tie, so routes once opened keep it the host. A route asks for what the
+  /// host's buildings use of the good plus the shortfall over
+  /// [_gatherSeconds], so local use does not eat it all, and stays open
+  /// for later stages.
+  Command? gatherMegaproject() {
+    for (final m in c.megaprojects.values) {
+      if (megaprojectStageOf(s, factionId, m.id) != null) continue;
+      final level = faction.megaprojectLevels[m.id] ?? 0;
+      if (level >= SaveCodec.maxMegaprojectLevel) continue;
+      final goods = {
+        for (final MapEntry(:key, :value) in megaprojectCost(
+          c,
+          m,
+          level,
+        ).entries)
+          if (key != 'credits') key: value,
+      };
+      bool covered(BodyState b, String id) =>
+          stock(b, id) >= goods[id]! || routeInto(b, id);
+      BodyState? host;
+      var best = -1;
+      for (final b in owned) {
+        if (m.hostBodyType case final t? when b.typeId != t) continue;
+        final score = goods.keys.where((id) => covered(b, id)).length;
+        if (score > best) {
+          host = b;
+          best = score;
+        }
+      }
+      if (host == null) continue;
+      for (final MapEntry(key: id, value: need) in goods.entries) {
+        if (covered(host, id)) continue;
+        final sources = [
+          for (final o in owned)
+            if (o != host &&
+                o.systemId == host.systemId &&
+                stock(o, id) > const BigNum.zero())
+              o,
+        ];
+        if (sources.isEmpty) continue;
+        final from = sources.where(hasShip).firstOrNull;
+        if (from == null) {
+          final send = _sendShips(sources.first);
+          if (send != null) return send;
+          continue;
+        }
+        var used = const BigNum.zero();
+        for (final b in host.buildings) {
+          used = used + (flowOf(host, b).inputs[id] ?? const BigNum.zero());
+        }
+        final rate =
+            used + (need - stock(host, id)).mulDouble(1 / _gatherSeconds);
+        final ships = math.min(
+          stock(from, r.cargoShipResource).toDouble().floor(),
+          (rate.toDouble() / r.shipCapacityPerSecond).ceil(),
+        );
+        return CreateRouteCommand(
+          factionId,
+          from.id,
+          host.id,
+          id,
+          rate,
+          math.max(1, ships),
+        );
+      }
+    }
+    return null;
+  }
+
+  /// A route sending cargo ships to [to], from the first other owned body
+  /// in its system holding more than [_shipsSent]; null if none does or a
+  /// route already brings them. [closeShipTransfers] ends it.
+  Command? _sendShips(BodyState to) {
+    final ship = r.cargoShipResource;
+    if (routeInto(to, ship)) return null;
+    final from = owned
+        .where(
+          (o) =>
+              o != to &&
+              o.systemId == to.systemId &&
+              stock(o, ship) >= BigNum.from(_shipsSent + 1),
+        )
+        .firstOrNull;
+    if (from == null) return null;
+    return CreateRouteCommand(
+      factionId,
+      from.id,
+      to.id,
+      ship,
+      BigNum.from(_trickleRate),
+      1,
+    );
   }
 
   /// Adds or updates one auto-sell rule so every sellable resource in stock

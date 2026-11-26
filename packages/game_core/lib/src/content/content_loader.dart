@@ -18,6 +18,7 @@ const _sections = {
   'body_types',
   'galaxy',
   'milestones',
+  'megaprojects',
 };
 
 const _credits = 'credits';
@@ -40,6 +41,7 @@ final class _Loader {
   final _bodyIds = <String>{};
   final _factionIds = <String>{};
   final _milestoneIds = <String>{};
+  final _megaprojectIds = <String>{};
 
   void err(String path, String message) => _errors.add('$path: $message');
 
@@ -91,15 +93,35 @@ final class _Loader {
       const {'id', 'name', 'condition'},
       _milestone,
     );
+    // Optional: content without the file has no megaprojects.
+    final megaprojects = bundle.containsKey('megaprojects')
+        ? _entries(
+            'megaprojects',
+            _listAt('megaprojects', bundle['megaprojects']),
+            _megaprojectIds,
+            const {
+              'id',
+              'name',
+              'hostBodyType',
+              'baseCost',
+              'costGrowth',
+              'stageSeconds',
+              'stageSecondsGrowth',
+              'bonusesPerLevel',
+            },
+            _megaproject,
+          )
+        : <String, MegaprojectDef>{};
 
     if (rules != null) _checkRules(rules);
     _checkBuildings(buildings);
     _checkBodyTypes(bodyTypes);
     if (galaxy != null) _checkGalaxy(galaxy, buildings, bodyTypes);
     _checkMilestones(milestones);
+    _checkMegaprojects(megaprojects);
 
     if (_errors.isEmpty) {
-      _checkGraph(rules!, resources, buildings, galaxy!);
+      _checkGraph(rules!, resources, buildings, galaxy!, megaprojects);
     }
     if (_errors.isNotEmpty) return ContentInvalid(_errors);
     return ContentOk(
@@ -110,6 +132,7 @@ final class _Loader {
         bodyTypes: bodyTypes,
         galaxy: galaxy!,
         milestones: milestones.values.toList(),
+        megaprojects: megaprojects,
       ),
     );
   }
@@ -253,7 +276,11 @@ final class _Loader {
       ge: 0,
     );
     final baseStorageCap = f.number('baseStorageCap', gt: 0);
-    final offlineCapSeconds = f.number('offlineCapSeconds', gt: 0);
+    final offlineCapSeconds = f.number(
+      'offlineCapSeconds',
+      gt: 0,
+      le: RulesDef.maxOfflineCapSeconds,
+    );
     final marketFloor = f.number('marketFloor', ge: 0, le: 1);
     final marketRecoverySeconds = f.number('marketRecoverySeconds', gt: 0);
     final claimBaseCredits = f.bigNum('claimBaseCredits');
@@ -636,6 +663,52 @@ final class _Loader {
     return MilestoneDef(id: id, name: name!, condition: condition!);
   }
 
+  MegaprojectDef? _megaproject(_Fields f, String id) {
+    final before = _errors.length;
+    final name = f.string('name');
+    final hostBodyType = f.string('hostBodyType', optional: true);
+    final baseCost = f.amounts('baseCost', positive: true);
+    if (f.map['baseCost'] case final Map<String, Object?> raw
+        when raw.isEmpty) {
+      f.err('baseCost', 'must list at least one');
+    }
+    final costGrowth = f.number('costGrowth', ge: 1);
+    final stageSeconds = f.number(
+      'stageSeconds',
+      ge: RulesDef.minProjectSeconds,
+      le: RulesDef.maxProjectSeconds,
+    );
+    final stageSecondsGrowth = f.number('stageSecondsGrowth', ge: 1);
+    final rawBonuses = f.list('bonusesPerLevel');
+    final bonuses = <BonusDef>[];
+    if (rawBonuses != null && rawBonuses.isEmpty) {
+      f.err('bonusesPerLevel', 'must list at least one');
+    }
+    for (final (i, raw) in (rawBonuses ?? const []).indexed) {
+      final b = _objectAt('${f.path}.bonusesPerLevel[$i]', raw, const {
+        'kind',
+        'amount',
+      });
+      if (b == null) continue;
+      final kind = b.choice('kind', BonusKind.values, 'bonus kind');
+      final amount = b.number('amount', gt: 0);
+      if (kind != null && amount != null) {
+        bonuses.add(BonusDef(kind: kind, amount: amount));
+      }
+    }
+    if (_errors.length > before) return null;
+    return MegaprojectDef(
+      id: id,
+      name: name!,
+      hostBodyType: hostBodyType,
+      baseCost: baseCost!,
+      costGrowth: costGrowth!,
+      stageSeconds: stageSeconds!,
+      stageSecondsGrowth: stageSecondsGrowth!,
+      bonusesPerLevel: bonuses,
+    );
+  }
+
   // ----------------------------------------------------------- references
 
   void _needResource(String path, String id) {
@@ -786,6 +859,19 @@ final class _Loader {
     }
   }
 
+  void _checkMegaprojects(Map<String, MegaprojectDef> megaprojects) {
+    for (final m in megaprojects.values) {
+      final path = 'megaprojects.${m.id}';
+      final host = m.hostBodyType;
+      if (host != null && !_bodyTypeIds.contains(host)) {
+        err('$path.hostBodyType', "unknown body type '$host'");
+      }
+      for (final r in m.baseCost.keys) {
+        if (r != _credits) _needResource('$path.baseCost', r);
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- graph
 
   void _checkGraph(
@@ -793,6 +879,7 @@ final class _Loader {
     Map<String, ResourceDef> resources,
     Map<String, BuildingDef> buildings,
     GalaxyDef galaxy,
+    Map<String, MegaprojectDef> megaprojects,
   ) {
     final deposits = {
       for (final s in galaxy.systems)
@@ -831,6 +918,7 @@ final class _Loader {
     final consumed = {
       for (final b in buildings.values) ...b.inputs.keys,
       for (final b in buildings.values) ...b.buildCost.keys,
+      for (final m in megaprojects.values) ...m.baseCost.keys,
       rules.outpostKitResource,
       rules.cargoShipResource,
     };

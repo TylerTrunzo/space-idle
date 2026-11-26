@@ -9,6 +9,7 @@ import '../report/flow_report.dart';
 import '../state/game_state.dart';
 import 'logistics.dart';
 import 'market.dart';
+import 'megaprojects.dart';
 import 'production.dart';
 import 'projects.dart';
 
@@ -84,7 +85,7 @@ final class OfflineSummary {
   final List<Bottleneck> topBottlenecks;
 
   /// The player's projects that completed while away, in the order they
-  /// completed (`finishAt`, then id).
+  /// completed (`finishAt`, then the order they were started).
   final List<CompletedProject> projectsCompleted;
 }
 
@@ -190,8 +191,9 @@ final class GameEngine {
   }
 
   /// Simulates the [secondsAway] the player was gone, up to [capSeconds]
-  /// (default `rules.offlineCapSeconds`), and summarizes what changed for
-  /// the player faction.
+  /// (default the player's [offlineCapFor] when it left: the rules' cap plus
+  /// its megaproject bonuses, at most 48 h), and summarizes what changed
+  /// for the player faction.
   ///
   /// Ticks exactly as [advance] does by default, in 60 s steps; within a
   /// tick every chain on a body runs through and landed cargo is used (see
@@ -202,9 +204,9 @@ final class GameEngine {
     double secondsAway, {
     double? capSeconds,
   }) {
-    final cap = capSeconds ?? content.rules.offlineCapSeconds;
-    final simulated = math.max(0.0, math.min(secondsAway, cap));
     final player = s.factions.firstWhere((f) => f.isPlayer);
+    final cap = capSeconds ?? offlineCapFor(s, content, player.id);
+    final simulated = math.max(0.0, math.min(secondsAway, cap));
     final stockBefore = _empireStock(s, player.id);
     final creditsBefore = player.credits;
     final reachedBefore = Set.of(player.reachedMilestones);
@@ -264,7 +266,7 @@ final class GameEngine {
             CompletedProject(
               kind: p.kind,
               targetId: p.targetId,
-              name: projectTargetName(s, p),
+              name: projectTargetName(s, content, p),
             ),
       ],
     );

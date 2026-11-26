@@ -53,24 +53,25 @@ ProjectState startProject(
   return p;
 }
 
-/// [factionId]'s projects under way, soonest to finish first, then by id.
+/// [factionId]'s projects under way, soonest to finish first, then in the
+/// order they were started.
 List<ProjectState> runningProjects(GameState s, String factionId) => [
   for (final p in s.projects)
     if (p.factionId == factionId) p,
 ]..sort(_byFinish);
 
-/// Display name of what [p] acts on: its body's name, or the megaproject
-/// id until megaprojects have content.
-String projectTargetName(GameState s, ProjectState p) => switch (p.kind) {
-  ProjectKind.claim ||
-  ProjectKind.expandSlots ||
-  ProjectKind.survey => s.body(p.targetId).name,
-  ProjectKind.megaprojectStage => p.targetId,
-};
+/// Display name of what [p] acts on: its body's or its megaproject's.
+String projectTargetName(GameState s, Content c, ProjectState p) =>
+    switch (p.kind) {
+      ProjectKind.claim ||
+      ProjectKind.expandSlots ||
+      ProjectKind.survey => s.body(p.targetId).name,
+      ProjectKind.megaprojectStage => c.megaprojects[p.targetId]!.name,
+    };
 
-/// Completes every project with `finishAt <= s.time`, in `finishAt`-then-id
-/// order, and applies its effect once: it leaves [GameState.projects]
-/// before the effect.
+/// Completes every project with `finishAt <= s.time`, in `finishAt` order,
+/// ties in the order they were started, and applies its effect once: it
+/// leaves [GameState.projects] before the effect.
 ///
 /// The engine runs it in every tick, before time moves on, so a project
 /// due at exactly the end of a tick completes at the start of the next,
@@ -89,17 +90,32 @@ void stepProjects(GameState s, Content c) {
         _completeClaim(s, p);
       case ProjectKind.expandSlots:
         _completeExpandSlots(s, p);
-      case ProjectKind.survey:
       case ProjectKind.megaprojectStage:
+        _completeMegaprojectStage(s, p);
+      case ProjectKind.survey:
         // No command starts these yet; they complete with no effect.
         break;
     }
   }
 }
 
+/// Orders by `finishAt`, then by creation: the number an id such as `p9`
+/// ends in ([GameState.newId] counts up), so `p9` comes before `p10`.
+/// Ids with the same number, or none, fall back to comparing the ids.
 int _byFinish(ProjectState a, ProjectState b) {
   final byTime = a.finishAt.compareTo(b.finishAt);
-  return byTime != 0 ? byTime : a.id.compareTo(b.id);
+  if (byTime != 0) return byTime;
+  final (x, y) = (_idNumber(a.id), _idNumber(b.id));
+  if (x != null && y != null && x != y) return x.compareTo(y);
+  return a.id.compareTo(b.id);
+}
+
+final _trailingDigits = RegExp(r'(\d+)$');
+
+/// The number [id] ends in, or null if it ends in none.
+int? _idNumber(String id) {
+  final m = _trailingDigits.firstMatch(id);
+  return m == null ? null : int.tryParse(m.group(1)!);
 }
 
 /// Makes the claimed body [p]'s faction's, unless someone owns it by now.
@@ -111,4 +127,10 @@ void _completeClaim(GameState s, ProjectState p) {
 /// Adds the extra build slot [p] paid for to its body.
 void _completeExpandSlots(GameState s, ProjectState p) {
   s.body(p.targetId).extraSlots++;
+}
+
+/// Raises [p]'s faction's level of its megaproject by one.
+void _completeMegaprojectStage(GameState s, ProjectState p) {
+  final levels = s.faction(p.factionId).megaprojectLevels;
+  levels[p.targetId] = (levels[p.targetId] ?? 0) + 1;
 }

@@ -4,6 +4,7 @@ import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
 import 'crew.dart';
+import 'megaprojects.dart';
 
 const _zero = BigNum.zero();
 
@@ -35,8 +36,10 @@ bool runsRecipe(BuildingDef def) =>
 /// Units of each resource body [b] can store.
 ///
 /// `baseStorageCap × (1 + Σ warehouse storageBonus)
-/// × (1 + capacityStoragePerLevel × Σ capacity levels)`, both sums over the
-/// buildings on [b]. Warehouse `storageBonus` is a fraction of the base cap.
+/// × (1 + capacityStoragePerLevel × Σ capacity levels)
+/// × storageMultiplier`, both sums over the buildings on [b]; the last is
+/// its owner's megaproject bonus ([bonusesFor]), 1 for an unowned body.
+/// Warehouse `storageBonus` is a fraction of the base cap.
 BigNum storageCap(GameState s, Content c, BodyState b) {
   final r = c.rules;
   var bonus = 0.0;
@@ -49,7 +52,8 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
   return BigNum.from(
     r.baseStorageCap *
         (1 + bonus) *
-        (1 + r.capacityStoragePerLevel * capacityLevels),
+        (1 + r.capacityStoragePerLevel * capacityLevels) *
+        bonusesFor(s, c, b.ownerId).storageMultiplier,
   );
 }
 
@@ -79,18 +83,30 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// each body makes is added to its owner's
 /// [FactionState.lifetimeProduced].
 ///
-/// Crew efficiency is read once per faction before any body runs, so the
-/// result does not depend on body order. Habitats with no crew slots run
-/// at full rate whatever the crew ([runsWithoutCrew]); other buildings
-/// with no crew slots (warehouses) and unowned bodies run nothing.
+/// Every building's output is scaled by its owner's
+/// [EmpireBonuses.outputMultiplier].
+///
+/// Crew efficiency and bonuses are read once per faction before any body
+/// runs, so the result does not depend on body order. Habitats with no
+/// crew slots run at full rate whatever the crew ([runsWithoutCrew]);
+/// other buildings with no crew slots (warehouses) and unowned bodies run
+/// nothing.
 void stepProduction(GameState s, Content c, double dt) {
   final crewEff = {
     for (final f in s.factions) f.id: crewEfficiency(s, c, f.id),
   };
+  final bonuses = {for (final f in s.factions) f.id: bonusesFor(s, c, f.id)};
   for (final body in s.bodies) {
     final owner = body.ownerId;
     if (owner == null) continue;
-    _stepBody(c, body, dt, crewEff[owner]!, s.faction(owner).lifetimeProduced);
+    _stepBody(
+      c,
+      body,
+      dt,
+      crewEff[owner]!,
+      bonuses[owner]!,
+      s.faction(owner).lifetimeProduced,
+    );
   }
 }
 
@@ -142,7 +158,9 @@ typedef BuildingFlow = ({
 });
 
 /// What building [b] on [body] would take and make in [dt] game seconds if
-/// every input were fully supplied, with its faction working at [crewEff].
+/// every input were fully supplied, with its faction working at [crewEff]
+/// and its outputs scaled by [bonuses]' [EmpireBonuses.outputMultiplier]
+/// (pass the owner's [bonusesFor]; none by default).
 ///
 /// [stepProduction] scales both maps by the run fraction it settles on, so
 /// `amount × lastRunFraction` is what the building actually moved. Inputs
@@ -156,8 +174,9 @@ BuildingFlow fullRateFlow(
   BodyState body,
   BuildingState b,
   double dt,
-  double crewEff,
-) {
+  double crewEff, {
+  EmpireBonuses bonuses = EmpireBonuses.none,
+}) {
   final r = c.rules;
   final def = c.buildings[b.defId]!;
   if (!runsRecipe(def)) return (inputs: const {}, outputs: const {});
@@ -178,16 +197,17 @@ BuildingFlow fullRateFlow(
       id: BigNum.from(perCycle).mulDouble(inputMult * cycles),
   };
   final outputs = <String, BigNum>{};
+  final made = cycles * bonuses.outputMultiplier;
   if (def.kind == BuildingKind.extractor) {
     final id = b.depositResourceId;
     final perCycle = def.outputs[id];
     final deposit = body.deposits.where((d) => d.resourceId == id).firstOrNull;
     if (id != null && perCycle != null && deposit != null) {
-      outputs[id] = BigNum.from(perCycle).mulDouble(deposit.richness * cycles);
+      outputs[id] = BigNum.from(perCycle).mulDouble(deposit.richness * made);
     }
   } else {
     for (final MapEntry(key: id, value: perCycle) in def.outputs.entries) {
-      outputs[id] = BigNum.from(perCycle).mulDouble(cycles);
+      outputs[id] = BigNum.from(perCycle).mulDouble(made);
     }
   }
   return (inputs: inputs, outputs: outputs);
@@ -212,6 +232,7 @@ void _stepBody(
   BodyState body,
   double dt,
   double crewEff,
+  EmpireBonuses bonuses,
   Map<String, BigNum> produced,
 ) {
   final depth = recipeDepth(c);
@@ -220,7 +241,10 @@ void _stepBody(
   for (final b in body.buildings) {
     final def = c.buildings[b.defId]!;
     if (!runsRecipe(def)) continue;
-    final run = _Run(b, fullRateFlow(c, body, b, dt, crewEff));
+    final run = _Run(
+      b,
+      fullRateFlow(c, body, b, dt, crewEff, bonuses: bonuses),
+    );
     (def.kind == BuildingKind.habitat ? habitats : others).add(run);
   }
   // What the habitats need, claimed first from the stock as it comes in.

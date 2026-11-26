@@ -7,6 +7,7 @@ import '../num/change.dart';
 import '../sim/crew.dart';
 import '../sim/logistics.dart';
 import '../sim/market.dart';
+import '../sim/megaprojects.dart';
 import '../sim/production.dart';
 import '../state/game_state.dart';
 
@@ -267,6 +268,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   // The tick computes crew efficiency from the state it starts in, so the
   // crew shortage is read from that state too.
   final crewEff = crewEfficiency(copy, c, factionId);
+  final bonuses = bonusesFor(copy, c, factionId);
   final crewNeck = _crewShortage(copy, c, factionId, crewEff);
 
   final kept = stockOverCap(copy, c);
@@ -313,7 +315,14 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     final statuses = <BuildingStatus>[];
     for (final b in body.buildings) {
       final def = c.buildings[b.defId]!;
-      final flow = fullRateFlow(c, body, b, _sampleSeconds, crewEff);
+      final flow = fullRateFlow(
+        c,
+        body,
+        b,
+        _sampleSeconds,
+        crewEff,
+        bonuses: bonuses,
+      );
       final inputs = _scaled(flow.inputs, b.lastRunFraction);
       final outputs = _scaled(flow.outputs, b.lastRunFraction);
       _addAll(produced, outputs);

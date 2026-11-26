@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../content/content.dart';
 import '../state/game_state.dart';
+import 'megaprojects.dart';
 
 /// A faction's crew over the bodies it owns.
 final class CrewTotals {
@@ -17,7 +18,8 @@ final class CrewTotals {
 
   /// Crew the faction can support: [base] plus each habitat's
   /// [habitatHousing] scaled by its last run fraction, the housing total
-  /// rounded down.
+  /// scaled by the faction's [EmpireBonuses.housingMultiplier] and rounded
+  /// down.
   final int supported;
 
   /// Crew assigned to buildings on its bodies.
@@ -54,6 +56,7 @@ CrewTotals crewTotals(GameState s, Content c, String factionId) {
     }
   }
   final base = s.faction(factionId).baseCrew;
+  housing *= bonusesFor(s, c, factionId).housingMultiplier;
   // The small epsilon keeps products such as 0.29 × 100 from flooring to 28.
   return CrewTotals(
     base: base,
@@ -63,8 +66,9 @@ CrewTotals crewTotals(GameState s, Content c, String factionId) {
 }
 
 /// Crew [factionId] can still assign: base crew plus habitat housing scaled
-/// by each habitat's last run fraction (the total rounded down), minus crew
-/// already assigned on its bodies, never below 0 ([CrewTotals.free]).
+/// by each habitat's last run fraction and the housing bonus (the total
+/// rounded down), minus crew already assigned on its bodies, never below 0
+/// ([CrewTotals.free]).
 ///
 /// Throws if the faction does not exist.
 int availableCrew(GameState s, Content c, String factionId) =>

@@ -143,6 +143,10 @@ final class SaveCodec {
   /// Highest upgrade level a save may hold on any track.
   static const int maxLevel = 1000;
 
+  /// Highest level a save may hold of any megaproject; no stage starts
+  /// from it.
+  static const int maxMegaprojectLevel = 1000;
+
   /// Names a [SeenBottleneck.kind] may take.
   static final Set<String> bottleneckKinds = {
     for (final k in BottleneckKind.values) k.name,
@@ -195,6 +199,13 @@ final class SaveCodec {
         if (!(b.firstSeenAt >= 0 && b.firstSeenAt <= s.time)) {
           return 'faction ${f.id}: bottleneck ${b.key} first seen at '
               '${b.firstSeenAt}, outside [0, ${s.time}]';
+        }
+      }
+      for (final MapEntry(key: id, value: level)
+          in f.megaprojectLevels.entries) {
+        if (level < 0 || level > maxMegaprojectLevel) {
+          return 'faction ${f.id}: $id level $level outside '
+              '[0, $maxMegaprojectLevel]';
         }
       }
       final rules = <(String, String)>{};
@@ -283,15 +294,21 @@ final class SaveCodec {
       }
     }
     final projectIds = <String>{};
-    // A body has at most one claim and one slot expansion under way.
-    final underWay = <(ProjectKind, String)>{};
+    // A body has at most one claim and one slot expansion under way, and a
+    // faction at most one stage of each megaproject.
+    final underWay = <(ProjectKind, String, String?)>{};
     for (final p in s.projects) {
       final dup = checkId(projectIds, 'project', p.id);
       if (dup != null) return dup;
       final problem = _invalidProject(s, factionIds, p);
       if (problem != null) return 'project ${p.id}: $problem';
-      if (p.kind case ProjectKind.claim || ProjectKind.expandSlots
-          when !underWay.add((p.kind, p.targetId))) {
+      final key = switch (p.kind) {
+        ProjectKind.claim ||
+        ProjectKind.expandSlots => (p.kind, p.targetId, null),
+        ProjectKind.megaprojectStage => (p.kind, p.targetId, p.factionId),
+        ProjectKind.survey => null,
+      };
+      if (key != null && !underWay.add(key)) {
         return 'project ${p.id}: a second ${p.kind.name} of ${p.targetId}';
       }
     }
@@ -336,8 +353,12 @@ final class SaveCodec {
         if (body.extraSlots >= maxExtraSlots) {
           return 'expands ${body.id} past $maxExtraSlots extra slots';
         }
-      case ProjectKind.survey:
       case ProjectKind.megaprojectStage:
+        final level = s.faction(p.factionId).megaprojectLevels[p.targetId] ?? 0;
+        if (level >= maxMegaprojectLevel) {
+          return 'builds ${p.targetId} past level $maxMegaprojectLevel';
+        }
+      case ProjectKind.survey:
         break;
     }
     return null;
@@ -415,6 +436,11 @@ final class SaveCodec {
           return 'faction ${f.id}: bottleneck on unknown body $id';
         }
       }
+      for (final id in f.megaprojectLevels.keys) {
+        if (!c.megaprojects.containsKey(id)) {
+          return 'faction ${f.id}: level of unknown megaproject $id';
+        }
+      }
       for (final r in f.autoSell) {
         if (!bodyIds.contains(r.bodyId)) {
           return 'faction ${f.id}: auto-sell on unknown body ${r.bodyId}';
@@ -441,8 +467,7 @@ final class SaveCodec {
         ProjectKind.claim ||
         ProjectKind.expandSlots ||
         ProjectKind.survey => bodyIds.contains(p.targetId),
-        // No megaproject has content yet.
-        ProjectKind.megaprojectStage => false,
+        ProjectKind.megaprojectStage => c.megaprojects.containsKey(p.targetId),
       };
       if (!known) {
         return 'project ${p.id}: unknown ${p.kind.name} target ${p.targetId}';

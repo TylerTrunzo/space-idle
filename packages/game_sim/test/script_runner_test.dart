@@ -297,6 +297,81 @@ void main() {
     );
   });
 
+  /// Puts the goods for the next Orbital Station stage on Kora and enough
+  /// credits in hand.
+  void stockStation(ScriptRunner r) {
+    final c = r.engine.content;
+    final station = c.megaprojects['orbital_station']!;
+    final level =
+        r.state.faction('player').megaprojectLevels['orbital_station'] ?? 0;
+    for (final MapEntry(:key, :value) in megaprojectCost(
+      c,
+      station,
+      level,
+    ).entries) {
+      if (key != 'credits') r.state.body('kora').stock[key] = value;
+    }
+    r.state.faction('player').credits = BigNum.from(1e9);
+  }
+
+  test('a megaproject stage starts, shows in state and raises the level', () {
+    final r = _runner();
+    expect(r.handle({'cmd': 'state'})['megaprojects'], [
+      {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 0},
+    ]);
+    stockStation(r);
+    final out = r.handle({
+      'cmd': 'startMegaprojectStage',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+    });
+    expect(out['ok'], isTrue, reason: '$out');
+    expect(
+      out['message'],
+      'Started Orbital Station level 1 on Kora for 200K credits and '
+      '4 Station Segment and 2 Survey Drone and 10 Reactor Core and '
+      '60 Hull Plate and 10 Habitat Module; done in 2h',
+    );
+    final projects = r.handle({'cmd': 'state'})['projects']! as List;
+    expect((projects.single as Map)['name'], 'Orbital Station');
+    final again = r.handle({
+      'cmd': 'startMegaprojectStage',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+    });
+    expect(again['error'], 'projectInProgress');
+
+    final away = r.handle({'cmd': 'away', 'seconds': 7300});
+    expect(away['projectsCompleted'], [
+      {
+        'kind': 'megaprojectStage',
+        'targetId': 'orbital_station',
+        'name': 'Orbital Station',
+      },
+    ]);
+    expect(r.handle({'cmd': 'state'})['megaprojects'], [
+      {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 1},
+    ]);
+  });
+
+  test("costs include each megaproject's next level", () {
+    final r = _runner();
+    final next =
+        ((r.handle({'cmd': 'costs'})['megaprojects']!
+                as Map)['orbital_station']!
+            as Map);
+    expect(next['nextLevel'], 1);
+    expect(next['timeTaken'], '2h');
+    expect(((next['cost']! as Map)['hull_plate']! as Map)['display'], '60');
+    r.state.faction('player').megaprojectLevels['orbital_station'] = 1;
+    final later =
+        ((r.handle({'cmd': 'costs'})['megaprojects']!
+                as Map)['orbital_station']!
+            as Map);
+    expect(later['nextLevel'], 2);
+    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '180');
+  });
+
   test('away catches up offline and summarizes it', () {
     final r = _runner();
     r.handle({

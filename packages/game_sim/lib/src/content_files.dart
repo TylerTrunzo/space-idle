@@ -10,12 +10,14 @@ const List<String> contentStems = [
   'body_types',
   'galaxy',
   'milestones',
+  'megaprojects',
 ];
 
 /// Reads the known content files from directory [path] into a bundle keyed
 /// by file stem, for `Content.fromBundle`.
 ///
-/// A missing file is left out of the bundle so the validator reports it.
+/// A missing file is left out of the bundle so the validator reports it
+/// (`megaprojects` is optional: without it there are none).
 /// Throws [FormatException] if a present file is not valid JSON.
 Map<String, Object?> loadContentDir(String path) {
   final bundle = <String, Object?>{};

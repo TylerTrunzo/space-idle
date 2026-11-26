@@ -26,6 +26,7 @@ const _gameCommands = {
   'setAutoSell',
   'claimBody',
   'expandSlots',
+  'startMegaprojectStage',
 };
 
 /// Lowest resource tier whose stock `state` shows in whole units.
@@ -180,8 +181,8 @@ final class ScriptRunner {
     return null;
   }
 
-  /// A sentence on what a claim, extra slot, demolish or new route did;
-  /// null for other commands.
+  /// A sentence on what a claim, extra slot, megaproject stage, demolish or
+  /// new route did; null for other commands.
   String? _message(
     Command cmd,
     String? createdId,
@@ -206,6 +207,15 @@ final class ScriptRunner {
       ExpandSlotsCommand(:final bodyId) =>
         'Started an extra build slot on ${state.body(bodyId).name} for '
             '${list(spent)}; done in ${done()}',
+      StartMegaprojectStageCommand(
+        :final factionId,
+        :final megaprojectId,
+        :final bodyId,
+      ) =>
+        'Started ${c.megaprojects[megaprojectId]!.name} level '
+            '${_level(factionId, megaprojectId) + 1} on '
+            '${state.body(bodyId).name} for ${list(spent)}; '
+            'done in ${done()}',
       DemolishCommand() =>
         'Demolished $demolished'
             '${gained.isEmpty ? '' : '; got back ${list(gained)}'}',
@@ -224,6 +234,10 @@ final class ScriptRunner {
       _ => null,
     };
   }
+
+  /// [factionId]'s level of megaproject [id]; 0 before its first stage.
+  int _level(String factionId, String id) =>
+      state.faction(factionId).megaprojectLevels[id] ?? 0;
 
   Map<String, Object?> _meta(String cmd, Map<String, Object?> line) =>
       switch (cmd) {
@@ -347,6 +361,10 @@ final class ScriptRunner {
         for (final m in c.milestones)
           if (p.reachedMilestones.contains(m.id)) {'id': m.id, 'name': m.name},
       ],
+      'megaprojects': [
+        for (final m in c.megaprojects.values)
+          {'id': m.id, 'name': m.name, 'level': _level(p.id, m.id)},
+      ],
       'bodies': [
         for (final b in state.bodies)
           {
@@ -390,7 +408,7 @@ final class ScriptRunner {
             'id': pr.id,
             'kind': pr.kind.name,
             'targetId': pr.targetId,
-            'name': projectTargetName(state, pr),
+            'name': projectTargetName(state, c, pr),
             'startedAt': pr.startedAt,
             'finishAt': pr.finishAt,
             'secondsLeft': pr.finishAt - state.time,
@@ -424,6 +442,18 @@ final class ScriptRunner {
       'extraSlot': {
         for (final b in state.bodies)
           if (b.ownerId == p.id) b.id: _nums(slotCost(c, b)),
+      },
+      'megaprojects': {
+        for (final m in c.megaprojects.values)
+          m.id: switch (_level(p.id, m.id)) {
+            final level when level >= SaveCodec.maxMegaprojectLevel =>
+              'at its highest level',
+            final level => {
+              'nextLevel': level + 1,
+              'cost': _nums(megaprojectCost(c, m, level)),
+              'timeTaken': formatDuration(megaprojectStageSeconds(m, level)),
+            },
+          },
       },
       'upgrades': [
         for (final body in state.bodies)

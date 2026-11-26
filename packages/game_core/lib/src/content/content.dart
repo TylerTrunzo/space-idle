@@ -233,8 +233,12 @@ final class RulesDef {
   /// Units of each resource a body stores before warehouses and upgrades.
   final double baseStorageCap;
 
-  /// Longest offline catch-up in seconds before upgrades.
+  /// Longest offline catch-up in seconds before megaproject bonuses; see
+  /// `offlineCapFor`.
   final double offlineCapSeconds;
+
+  /// Longest offline catch-up in seconds whatever the bonuses: 48 hours.
+  static const double maxOfflineCapSeconds = 172800;
 
   /// Lowest market saturation, in `[0, 1]`.
   final double marketFloor;
@@ -522,6 +526,85 @@ final class MilestoneDef {
   final MilestoneCondition condition;
 }
 
+/// What a megaproject level adds to its faction's whole empire.
+enum BonusKind {
+  /// Percent added to every body's storage cap.
+  storagePercent,
+
+  /// Percent added to the crew habitats house.
+  housingPercent,
+
+  /// Seconds added to the offline catch-up cap, up to
+  /// [RulesDef.maxOfflineCapSeconds] in all.
+  offlineCapSeconds,
+
+  /// Percent added to what every building makes.
+  outputPercent,
+
+  /// Percent added to the market depth of the faction's sales.
+  marketDepthPercent,
+}
+
+/// One permanent bonus a megaproject grants per level.
+final class BonusDef {
+  /// Creates a bonus.
+  const BonusDef({required this.kind, required this.amount});
+
+  /// What it raises.
+  final BonusKind kind;
+
+  /// How much per level, above zero: percent for the `…Percent` kinds,
+  /// seconds for [BonusKind.offlineCapSeconds].
+  final double amount;
+}
+
+/// A repeatable megaproject: each completed stage raises its level by one
+/// and grants [bonusesPerLevel] again, for good; the next stage costs
+/// more and takes longer.
+final class MegaprojectDef {
+  /// Creates a megaproject; the collections are copied unmodifiable.
+  MegaprojectDef({
+    required this.id,
+    required this.name,
+    this.hostBodyType,
+    required Map<String, BigNum> baseCost,
+    required this.costGrowth,
+    required this.stageSeconds,
+    required this.stageSecondsGrowth,
+    required List<BonusDef> bonusesPerLevel,
+  }) : baseCost = Map.unmodifiable(baseCost),
+       bonusesPerLevel = List.unmodifiable(bonusesPerLevel);
+
+  /// Unique id.
+  final String id;
+
+  /// Display name.
+  final String name;
+
+  /// Id of the [BodyTypeDef] a stage must be built on, or null for any
+  /// owned body.
+  final String? hostBodyType;
+
+  /// Cost of the first stage, level 0: the key `credits` or a resource id,
+  /// to an amount above zero. Goods come from the host body's stock.
+  final Map<String, BigNum> baseCost;
+
+  /// Cost multiplier per level already reached; at least 1. See
+  /// `megaprojectCost`.
+  final double costGrowth;
+
+  /// Seconds the first stage takes, in
+  /// [[RulesDef.minProjectSeconds], [RulesDef.maxProjectSeconds]].
+  final double stageSeconds;
+
+  /// Stage time multiplier per level already reached; at least 1. See
+  /// `megaprojectStageSeconds`.
+  final double stageSecondsGrowth;
+
+  /// Bonuses each level grants, in content order; at least one.
+  final List<BonusDef> bonusesPerLevel;
+}
+
 /// All game content, validated.
 final class Content {
   /// Creates content without validation; prefer [fromBundle].
@@ -534,10 +617,12 @@ final class Content {
     required Map<String, BodyTypeDef> bodyTypes,
     required this.galaxy,
     required List<MilestoneDef> milestones,
+    Map<String, MegaprojectDef> megaprojects = const {},
   }) : resources = Map.unmodifiable(resources),
        buildings = Map.unmodifiable(buildings),
        bodyTypes = Map.unmodifiable(bodyTypes),
-       milestones = List.unmodifiable(milestones);
+       milestones = List.unmodifiable(milestones),
+       megaprojects = Map.unmodifiable(megaprojects);
 
   /// Global tuning numbers.
   final RulesDef rules;
@@ -557,10 +642,14 @@ final class Content {
   /// Milestones in content order.
   final List<MilestoneDef> milestones;
 
+  /// Megaprojects by id, in content order.
+  final Map<String, MegaprojectDef> megaprojects;
+
   /// Parses and validates decoded content JSON without throwing.
   ///
   /// [bundle] maps each content file stem (`rules`, `resources`,
-  /// `buildings`, `body_types`, `galaxy`, `milestones`) to its decoded JSON.
+  /// `buildings`, `body_types`, `galaxy`, `milestones`, and the optional
+  /// `megaprojects`, absent meaning none) to its decoded JSON.
   static ContentResult fromBundle(Map<String, Object?> bundle) =>
       loadContentBundle(bundle);
 }

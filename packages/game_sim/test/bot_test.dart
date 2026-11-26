@@ -90,13 +90,26 @@ void main() {
   test('balanced bot reaches every milestone within a week', () {
     // The magnet chain needs a slot on a body that is full by then; the
     // bot buys one rather than giving up on the magnet works.
-    final r = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 168);
+    GameState? end;
+    final r = runBotSession(
+      _engine(),
+      BalancedBot(),
+      seed: 1,
+      hours: 168,
+      onFinished: (s) => end = s,
+    );
     expect(
       r.milestonesNotReached.map((m) => m.id),
       isEmpty,
       reason: r.toMarkdown(),
     );
     expect(r.rejectedCommands, 0);
+    // Its goods made on different bodies, the Orbital Station still gets
+    // built: the bot routes them to one body.
+    expect(
+      end!.faction('player').megaprojectLevels['orbital_station'],
+      greaterThanOrEqualTo(1),
+    );
   });
 
   test('bot commands are valid and sessions are deterministic', () {
@@ -134,6 +147,76 @@ void main() {
         .whereType<SetAutoSellCommand>()
         .firstWhere((c) => c.bodyId == 'kora' && c.resourceId == 'iron_ore');
     expect(rule.keepAtLeast!.toDouble(), closeTo(perSec.toDouble() * 60, 1e-6));
+  });
+
+  group('a megaproject stage', () {
+    /// A new game with the goods and credits for the next Orbital Station
+    /// stage on Kora.
+    GameState stocked(GameEngine e) {
+      final s = e.newGame(1)..faction('player').credits = BigNum.from(1e9);
+      final station = e.content.megaprojects['orbital_station']!;
+      for (final MapEntry(:key, :value) in megaprojectCost(
+        e.content,
+        station,
+        0,
+      ).entries) {
+        if (key != 'credits') s.body('kora').stock[key] = value;
+      }
+      return s;
+    }
+
+    for (final bot in [BalancedBot(), CasualBot(), GreedyBot()]) {
+      test('is started by the ${bot.name} bot when it can afford one', () {
+        final e = _engine();
+        final s = stocked(e);
+        final cmds = bot.decide(e, s, 'player');
+        expect(
+          cmds.whereType<StartMegaprojectStageCommand>().single.toJson(),
+          const StartMegaprojectStageCommand(
+            'player',
+            'orbital_station',
+            'kora',
+          ).toJson(),
+        );
+        for (final cmd in cmds) {
+          expect(e.apply(s, cmd), isA<CommandOk>());
+        }
+      });
+    }
+
+    test('is not started when the goods are short', () {
+      final e = _engine();
+      final s = stocked(e)..body('kora').stock['reactor_core'] = BigNum.from(1);
+      expect(
+        BalancedBot()
+            .decide(e, s, 'player')
+            .whereType<StartMegaprojectStageCommand>(),
+        isEmpty,
+      );
+    });
+
+    test("auto-sell keeps the next stage's goods", () {
+      final e = _engine();
+      final s = e.newGame(1)
+        ..body('kora').stock['station_segment'] = BigNum.from(1);
+      // At level 5 a stage needs more than a quarter of Kora's storage.
+      s.faction('player').megaprojectLevels['orbital_station'] = 5;
+      final need = megaprojectCost(
+        e.content,
+        e.content.megaprojects['orbital_station']!,
+        5,
+      )['station_segment']!;
+      final cap = storageCap(s, e.content, s.body('kora'));
+      expect(need, greaterThan(cap.mulDouble(0.25)));
+      expect(need, lessThan(cap));
+      final rule = GreedyBot()
+          .decide(e, s, 'player')
+          .whereType<SetAutoSellCommand>()
+          .firstWhere(
+            (c) => c.bodyId == 'kora' && c.resourceId == 'station_segment',
+          );
+      expect(rule.keepAtLeast, need);
+    });
   });
 
   test('bots name themselves', () {

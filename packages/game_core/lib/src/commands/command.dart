@@ -100,6 +100,11 @@ sealed class Command {
         _str(j, 'sourceBodyId'),
       ),
       'expandSlots' => ExpandSlotsCommand(f, _str(j, 'bodyId')),
+      'startMegaprojectStage' => StartMegaprojectStageCommand(
+        f,
+        _str(j, 'megaprojectId'),
+        _str(j, 'bodyId'),
+      ),
       final other => throw FormatException('unknown command "$other"', j),
     };
   }
@@ -342,6 +347,35 @@ final class ExpandSlotsCommand extends Command {
   Map<String, Object?> get _fields => {'bodyId': bodyId};
 }
 
+/// Starts the next stage of a megaproject on an owned body, paying the
+/// level's cost now (`megaprojectCost`: credits from the faction, goods
+/// from the body's stock); the faction's level rises by one when the stage
+/// completes, after `megaprojectStageSeconds`.
+final class StartMegaprojectStageCommand extends Command {
+  /// Creates a start-megaproject-stage command.
+  const StartMegaprojectStageCommand(
+    super.factionId,
+    this.megaprojectId,
+    this.bodyId,
+  );
+
+  /// Megaproject whose next stage to start.
+  final String megaprojectId;
+
+  /// Owned body that hosts the stage and supplies its goods; of the
+  /// megaproject's host body type, if it has one.
+  final String bodyId;
+
+  @override
+  String get _cmd => 'startMegaprojectStage';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'megaprojectId': megaprojectId,
+    'bodyId': bodyId,
+  };
+}
+
 /// Why a command was rejected.
 enum CommandError {
   /// The acting faction does not exist.
@@ -353,7 +387,8 @@ enum CommandError {
   /// The named building does not exist.
   unknownBuilding,
 
-  /// A named building type, resource or upgrade track does not exist.
+  /// A named building type, resource, upgrade track or megaproject does
+  /// not exist.
   unknownDef,
 
   /// The faction does not own what the command touches.
@@ -383,9 +418,12 @@ enum CommandError {
   /// The route does not exist, or its endpoints are not a valid pair.
   routeInvalid,
 
-  /// The same timed work is already under way: a claim of the body, or an
-  /// extra build slot on it.
+  /// The same timed work is already under way: a claim of the body, an
+  /// extra build slot on it, or a stage of the faction's megaproject.
   projectInProgress,
+
+  /// The body is not of the type the megaproject must be built on.
+  wrongBodyType,
 }
 
 /// Outcome of applying a command.

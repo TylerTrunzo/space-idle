@@ -129,7 +129,9 @@ final class FactionState {
     BigNum? lifetimeCredits,
     Map<String, BigNum>? lifetimeProduced,
     List<SeenBottleneck>? seenBottlenecks,
+    Map<String, int>? megaprojectLevels,
   }) : autoSell = autoSell ?? [],
+       megaprojectLevels = megaprojectLevels ?? {},
        seenBottlenecks = seenBottlenecks ?? [],
        reachedMilestones = reachedMilestones ?? {},
        salesRevenue = salesRevenue ?? {},
@@ -166,6 +168,13 @@ final class FactionState {
     seenBottlenecks: j['seenBottlenecks'] == null
         ? null
         : _list(j['seenBottlenecks'], SeenBottleneck.fromJson),
+    // Absent in saves from before megaprojects existed.
+    megaprojectLevels: j['megaprojectLevels'] == null
+        ? null
+        : {
+            for (final e in _asMap(j['megaprojectLevels']).entries)
+              e.key: e.value! as int,
+          },
   );
 
   /// Unique id.
@@ -207,6 +216,11 @@ final class FactionState {
   /// was first seen, in report order; see `noteBottlenecks`.
   final List<SeenBottleneck> seenBottlenecks;
 
+  /// Megaproject id to the stages of it the faction has completed, in
+  /// first-completed order; absent means level 0. Each level grants the
+  /// megaproject's bonuses for good (see `bonusesFor`).
+  final Map<String, int> megaprojectLevels;
+
   /// Serializes this faction; milestones are written sorted.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -224,6 +238,7 @@ final class FactionState {
       for (final e in lifetimeProduced.entries) e.key: e.value.toJson(),
     },
     'seenBottlenecks': [for (final b in seenBottlenecks) b.toJson()],
+    'megaprojectLevels': Map.of(megaprojectLevels),
   };
 
   /// An independent deep copy of this faction.
@@ -240,6 +255,7 @@ final class FactionState {
     lifetimeProduced: Map.of(lifetimeProduced),
     // Records are immutable, so a new list is a deep copy.
     seenBottlenecks: List.of(seenBottlenecks),
+    megaprojectLevels: Map.of(megaprojectLevels),
   );
 }
 

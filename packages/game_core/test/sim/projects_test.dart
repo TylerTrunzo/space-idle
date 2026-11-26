@@ -323,6 +323,26 @@ void main() {
       expect(e.projectsFor(s, 'player').single.targetId, 'cinder');
     });
 
+    test('breaks a finishAt tie by creation order, so p9 before p10', () {
+      final s = rich();
+      for (final (id, target) in [('p10', 'brine'), ('p9', 'cinder')]) {
+        s.projects.add(
+          ProjectState(
+            id: id,
+            factionId: 'player',
+            kind: ProjectKind.claim,
+            targetId: target,
+            startedAt: 0,
+            finishAt: 600,
+          ),
+        );
+      }
+      expect(e.projectsFor(s, 'player').map((p) => p.id), ['p9', 'p10']);
+      s.nextId = 11;
+      final sum = e.catchUpOffline(s, 700);
+      expect(sum.projectsCompleted.map((p) => p.targetId), ['cinder', 'brine']);
+    });
+
     test('leaves projects not yet due', () {
       final s = rich();
       ok(s, claimBrine);

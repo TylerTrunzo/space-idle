@@ -11,32 +11,40 @@ dart run game_sim:game_sim bot --bot balanced|casual|greedy --hours 168 --seed 1
 
 Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`,
 `upgrade`, `createRoute`, `removeRoute`, `sell`, `setAutoSell`, `claimBody`,
-`expandSlots`); `factionId` defaults to the player. A successful game command
+`expandSlots`, `startMegaprojectStage`); `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts that
 changed), `createdId` for a new building, route or project, and for
-`claimBody`, `expandSlots`, `demolish` and `createRoute` a `message` such as
-`"Started claiming Brine for 5K credits; done in 30m"`. Claims and extra build
-slots are projects: they are paid for at once and take effect when their timer
-runs out (a claim of a body, or a second slot on one, already under way fails
-with `projectInProgress`). Meta commands:
+`claimBody`, `expandSlots`, `startMegaprojectStage`, `demolish` and
+`createRoute` a `message` such as
+`"Started claiming Brine for 5K credits; done in 30m"`. Claims, extra build
+slots and megaproject stages are projects: they are paid for at once and take
+effect when their timer runs out (a claim of a body, a second slot on one, or
+a second stage of a megaproject, already under way fails with
+`projectInProgress`). `{"cmd":"startMegaprojectStage","megaprojectId":
+"orbital_station","bodyId":"kora"}` pays the next level's cost from the body's
+stock and credits; each completed stage raises the megaproject's level, a
+permanent bonus. Meta commands:
 
 - `{"cmd":"advance","seconds":N}` run the simulation for N seconds, no cap
 - `{"cmd":"away","seconds":N}` simulate the player being away for N seconds
-  (offline catch-up, capped at the offline limit) and print the away summary:
+  (offline catch-up, capped at the offline limit: 12 h plus the player's
+  megaproject bonuses, at most 48 h) and print the away summary:
   seconds away and simulated, credits and stock gained, units wasted to
   storage caps, milestones reached and the top bottlenecks, those losing the
   most credits an hour first; one that was there before the absence says
   `"ongoing": "ongoing since 12.0h"` (game hours); and the projects that
   completed (`projectsCompleted`: `kind`, `targetId`, `name`)
 - `{"cmd":"report"}` per-second flows and bottlenecks
-- `{"cmd":"state"}` time, credits, crew, reached milestones, every body
+- `{"cmd":"state"}` time, credits, crew, reached milestones, the level of
+  every megaproject (`megaprojects`: `id`, `name`, `level`), every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
   player's routes, its running projects soonest first (`kind`, `targetId`,
   `name`, `startedAt`, `finishAt`, `secondsLeft` and `timeLeft` such as
   `"1h 30m"`), and price and saturation of the goods the player holds
 - `{"cmd":"costs"}` upgrade costs of the player's buildings, the next claim
-  cost (or `"no bodies left to claim"` once every body is owned) and each
-  owned body's next extra build slot
+  cost (or `"no bodies left to claim"` once every body is owned), each
+  owned body's next extra build slot, and each megaproject's next stage
+  (`megaprojects`: `nextLevel`, `cost`, `timeTaken`)
 - `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}`
 
 `advance` and `away` tick the engine the same way, in 60 s steps; within a
