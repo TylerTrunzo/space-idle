@@ -553,6 +553,35 @@ void main() {
       expect(offline, closeTo(live, live * 0.02));
     });
 
+    test('catch-up shortens its step so fast factories do not starve', () {
+      // So fast that a minute of a factory's input is more than storage
+      // holds: inputs made in one tick are used in the next, so 60 s ticks
+      // would cap each chain at a sixtieth of its live rate.
+      final (e, s) = fullEmpire();
+      for (final b in s.bodies.expand((b) => b.buildings)) {
+        b.levels[UpgradeTrack.speed] = 50;
+      }
+      e.advance(s, 600, maxStep: 1);
+      final step = e.offlineStepSeconds(s);
+      expect(step, inInclusiveRange(1, 59));
+      BigNum earned(void Function(GameState t) run) {
+        final t = s.copy();
+        run(t);
+        return t.faction('player').credits - s.faction('player').credits;
+      }
+
+      final live = earned((t) => e.advance(t, 6 * 3600, maxStep: 1)).toDouble();
+      final away = earned((t) => e.catchUpOffline(t, 6 * 3600)).toDouble();
+      final coarse = earned((t) => e.advance(t, 6 * 3600)).toDouble();
+      expect(away, closeTo(live, live * 0.02));
+      expect(coarse, lessThan(live * 0.9));
+    });
+
+    test('catch-up keeps 60 s steps when storage holds a minute of input', () {
+      final s = engine.newGame(1);
+      expect(engine.offlineStepSeconds(s), 60);
+    });
+
     test('performance: 24 h of a 40-building empire in under 1 s', () {
       final (e, s) = fullEmpire();
       final count = s.bodies.fold(0, (sum, b) => sum + b.buildings.length);
