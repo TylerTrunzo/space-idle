@@ -256,7 +256,7 @@ final class _Loader {
     final claimBaseCredits = f.bigNum('claimBaseCredits');
     final claimGrowth = f.number('claimGrowth', ge: 1);
     final slotBaseCredits = f.bigNum('slotBaseCredits', positive: true);
-    final slotGrowth = f.number('slotGrowth', ge: 1);
+    final slotGrowth = f.number('slotGrowth', gt: 1);
     final outpostKitResource = f.string('outpostKitResource');
     final shipCapacityPerSecond = f.number('shipCapacityPerSecond', gt: 0);
     final cargoShipResource = f.string('cargoShipResource');

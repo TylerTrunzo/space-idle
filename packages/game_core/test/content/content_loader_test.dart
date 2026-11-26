@@ -368,7 +368,7 @@ void main() {
     _entry(b, 'resources', 'bar')['tier'] = 9;
     _entry(b, 'buildings', 'mine')['kind'] = 'mill';
     (b['rules'] as Map)['claimGrowth'] = 'four';
-    (b['rules'] as Map)['slotGrowth'] = 0.5;
+    (b['rules'] as Map)['slotGrowth'] = 1;
     (b['rules'] as Map)['slotBaseCredits'] = '0';
     final errors = _errors(b);
     expect(
@@ -378,7 +378,8 @@ void main() {
         'resources.bar.tier: must be <= 4',
         "buildings.mine.kind: unknown kind 'mill'",
         'rules.claimGrowth: expected a number',
-        'rules.slotGrowth: must be >= 1',
+        // Slots that never cost more could be bought without end.
+        'rules.slotGrowth: must be > 1',
         'rules.slotBaseCredits: must be > 0',
       ]),
     );

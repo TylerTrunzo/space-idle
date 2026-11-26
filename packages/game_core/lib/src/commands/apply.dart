@@ -7,6 +7,7 @@ import '../num/format.dart';
 import '../sim/crew.dart';
 import '../sim/market.dart';
 import '../state/game_state.dart';
+import '../state/save_codec.dart';
 import 'command.dart';
 
 /// Key of the credits entry in a cost map; every other key is a resource id.
@@ -313,6 +314,13 @@ CommandResult _upgrade(
       '${def.name} has no ${cmd.track.name} upgrade',
     );
   }
+  if (b.levels[cmd.track]! >= SaveCodec.maxLevel) {
+    return _fail(
+      CommandError.invalidAmount,
+      '${_buildingName(c, body, b)} is at the highest ${cmd.track.name} '
+      'level (${SaveCodec.maxLevel})',
+    );
+  }
   final cost = upgradeCost(c, b, cmd.track);
   final short = _checkCost(c, f, body, cost);
   if (short != null) return short;
@@ -501,6 +509,13 @@ CommandResult _expandSlots(
   final body = _findBody(s, cmd.bodyId);
   if (body == null) return _unknownBody(cmd.bodyId);
   if (body.ownerId != f.id) return _notOwner(body.name);
+  if (body.extraSlots >= SaveCodec.maxExtraSlots) {
+    return _fail(
+      CommandError.invalidAmount,
+      '${body.name} already has the most extra build slots '
+      '(${SaveCodec.maxExtraSlots})',
+    );
+  }
   final cost = slotCost(c, body);
   final short = _checkCost(c, f, body, cost);
   if (short != null) return short;

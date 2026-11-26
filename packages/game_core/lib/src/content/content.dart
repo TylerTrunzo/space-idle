@@ -250,7 +250,7 @@ final class RulesDef {
   final BigNum slotBaseCredits;
 
   /// Extra-slot credit multiplier per extra slot the body already has;
-  /// at least 1.
+  /// above 1, so each slot costs more than the last.
   final double slotGrowth;
 
   /// Resource id spent as outpost kits on claims after the first.

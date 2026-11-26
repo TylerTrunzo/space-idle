@@ -227,6 +227,41 @@ void main() {
     });
   });
 
+  group('commands stop at the limits a save can hold', () {
+    test('no extra build slot past the most a save holds', () {
+      final s = fresh();
+      final kora = s.body('kora')..extraSlots = SaveCodec.maxExtraSlots;
+      s.faction('player').credits = slotCost(content, kora)['credits']!;
+      expect(
+        expectFails(
+          s,
+          ExpandSlotsCommand('player', 'kora'),
+          CommandError.invalidAmount,
+        ),
+        'Kora already has the most extra build slots (1000)',
+      );
+    });
+
+    test('no upgrade past the highest level a save holds', () {
+      final s = fresh();
+      final smelter = building(s, 'b3')
+        ..levels[UpgradeTrack.speed] = SaveCodec.maxLevel;
+      s.faction('player').credits = upgradeCost(
+        content,
+        smelter,
+        UpgradeTrack.speed,
+      )['credits']!;
+      expect(
+        expectFails(
+          s,
+          const UpgradeCommand('player', 'b3', UpgradeTrack.speed),
+          CommandError.invalidAmount,
+        ),
+        'Smelter on Kora is at the highest speed level (1000)',
+      );
+    });
+  });
+
   test('demolish refunds half the credits and frees crew', () {
     final s = fresh();
     final smelter = s.body('kora').buildings.last;
