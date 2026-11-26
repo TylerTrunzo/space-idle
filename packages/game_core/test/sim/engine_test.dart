@@ -248,6 +248,15 @@ void main() {
       expect(kora.wastedThisStep['copper_ore']!.toDouble(), greaterThan(0));
     });
 
+    test('rejects a step that is not finite and above zero', () {
+      final s = engine.newGame(1);
+      final before = encode(s);
+      for (final dt in [0.0, -1.0, double.nan, double.infinity]) {
+        expect(() => engine.tick(s, dt), throwsArgumentError, reason: '$dt');
+      }
+      expect(encode(s), before);
+    });
+
     test('a shipment due at time + dt lands on the next tick', () {
       final s = engine.newGame(1);
       s.body('hollow_reach').ownerId = 'player';

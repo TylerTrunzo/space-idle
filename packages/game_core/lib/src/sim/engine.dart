@@ -71,7 +71,13 @@ final class GameEngine {
   /// tick; cargo and auto-sell take from it before the clamp, so long steps
   /// lose no more to the cap than short ones. Because time moves last, a
   /// shipment due at exactly `time + dt` lands on the next tick.
+  ///
+  /// Throws [ArgumentError], changing nothing, if [dt] is not finite and
+  /// above zero.
   void tick(GameState s, double dt) {
+    if (!dt.isFinite || dt <= 0) {
+      throw ArgumentError.value(dt, 'dt', 'must be finite and > 0');
+    }
     for (final b in s.bodies) {
       b.wastedThisStep.clear();
     }
