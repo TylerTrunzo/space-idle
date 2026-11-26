@@ -17,6 +17,20 @@ final class _IdleBot implements Bot {
   List<Command> decide(GameEngine e, GameState s, String factionId) => [];
 }
 
+/// Auto-sells Kora's steel and copper ore once, then idles.
+final class _SellerBot implements Bot {
+  @override
+  String get name => 'seller';
+
+  @override
+  List<Command> decide(GameEngine e, GameState s, String factionId) => [
+    if (s.faction(factionId).autoSell.isEmpty) ...[
+      SetAutoSellCommand(factionId, 'kora', 'steel', BigNum.zero()),
+      SetAutoSellCommand(factionId, 'kora', 'copper_ore', BigNum.zero()),
+    ],
+  ];
+}
+
 /// An idle session (24 h by default) with 60 s check-ins: First Foundry is reached in
 /// the time away after check-in 0.
 BalanceReport _shortCheckIns({double hours = 24}) => runBotSession(
@@ -63,6 +77,21 @@ void main() {
     expect(md, contains('## Dead zones'));
   });
 
+  test('income per day with each resource\'s share', () {
+    final r = runBotSession(_engine(), _SellerBot(), seed: 1, hours: 48);
+    expect(r.days, hasLength(2));
+    for (final d in r.days) {
+      expect(d.credits.toDouble(), greaterThan(0));
+      expect(d.share.keys, ['copper_ore', 'steel']);
+      expect(d.share.values.fold(0.0, (a, b) => a + b), closeTo(1, 1e-9));
+    }
+    // 0.32 copper ore a second at 1.5 against 0.2 steel at 4.
+    expect(r.days.last.share['steel'], closeTo(0.8 / (0.8 + 0.48), 0.01));
+    final md = r.toMarkdown();
+    expect(md, contains('## Income by day'));
+    expect(md, contains('| Day | Credits earned | Top resources |'));
+  });
+
   test('json report carries every section', () {
     final j = _shortCheckIns(hours: 12).toJson();
     expect(j.keys, [
@@ -78,6 +107,7 @@ void main() {
       'finalCredits',
       'bottleneckLog',
       'rejectedCommands',
+      'days',
     ]);
     expect((j['milestones']! as List).first, {
       'id': 'first_steel',

@@ -59,6 +59,34 @@ final class DeadZone {
   };
 }
 
+/// What the market paid during one day of a session.
+final class DayIncome {
+  /// Creates a day's income; [share] is copied unmodifiable.
+  DayIncome({
+    required this.day,
+    required this.credits,
+    required Map<String, double> share,
+  }) : share = Map.unmodifiable(share);
+
+  /// Day number from 1: day 1 is the first 24 h. The last day may be
+  /// shorter when the session does not end on a day boundary.
+  final int day;
+
+  /// Credits earned from market sales that day.
+  final BigNum credits;
+
+  /// Resource id to its share of [credits], in `[0, 1]`, in content order;
+  /// resources that earned nothing are left out.
+  final Map<String, double> share;
+
+  /// Serializes this day.
+  Map<String, Object?> toJson() => {
+    'day': day,
+    'credits': formatNumber(credits),
+    'share': share,
+  };
+}
+
 /// What a bot session reached and where it got stuck.
 final class BalanceReport {
   /// Creates a report; the collections are copied unmodifiable.
@@ -75,7 +103,9 @@ final class BalanceReport {
     required this.finalCredits,
     required List<String> bottleneckLog,
     required this.rejectedCommands,
-  }) : milestones = List.unmodifiable(milestones),
+    List<DayIncome> days = const [],
+  }) : days = List.unmodifiable(days),
+       milestones = List.unmodifiable(milestones),
        milestonesNotReached = List.unmodifiable(milestonesNotReached),
        deadZones = List.unmodifiable(deadZones),
        unusedResources = List.unmodifiable(unusedResources),
@@ -122,6 +152,9 @@ final class BalanceReport {
   /// Bot commands the engine rejected; above zero means a bot bug.
   final int rejectedCommands;
 
+  /// Market income of each day of the session, in order.
+  final List<DayIncome> days;
+
   /// Serializes this report.
   Map<String, Object?> toJson() => {
     'bot': botName,
@@ -136,6 +169,7 @@ final class BalanceReport {
     'finalCredits': finalCredits,
     'bottleneckLog': bottleneckLog,
     'rejectedCommands': rejectedCommands,
+    'days': [for (final d in days) d.toJson()],
   };
 
   /// Renders this report as Markdown with a milestone table.
@@ -159,6 +193,23 @@ final class BalanceReport {
     }
     for (final m in milestonesNotReached) {
       b.writeln('| ${m.name} | ${m.id} | not reached | |');
+    }
+    b
+      ..writeln()
+      ..writeln('## Income by day')
+      ..writeln()
+      ..writeln('| Day | Credits earned | Top resources |')
+      ..writeln('|---:|---:|---|');
+    for (final d in days) {
+      final top = d.share.entries.toList()
+        ..sort((x, y) => y.value.compareTo(x.value));
+      final shown = [
+        for (final e in top.take(4))
+          '${e.key} ${(e.value * 100).toStringAsFixed(0)}%',
+      ];
+      b.writeln(
+        '| ${d.day} | ${formatNumber(d.credits)} | ${shown.join(', ')} |',
+      );
     }
     b
       ..writeln()
@@ -240,6 +291,13 @@ BalanceReport runBotSession(
   var rejected = 0;
   var clock = 0.0;
   var checkIn = 0;
+  // Sales revenue at the start of each day, then at the end.
+  final revenueAt = [Map.of(faction.salesRevenue)];
+  void noteDay() {
+    if (clock >= revenueAt.length * 86400 || clock >= end) {
+      revenueAt.add(Map.of(faction.salesRevenue));
+    }
+  }
 
   void noteMilestones(int index) {
     for (final m in c.milestones) {
@@ -294,6 +352,7 @@ BalanceReport runBotSession(
       clock = next;
       tracker.sample();
     }
+    noteDay();
     checkIn++;
     noteMilestones(checkIn);
   }
@@ -319,6 +378,35 @@ BalanceReport runBotSession(
     finalCredits: formatNumber(faction.credits),
     bottleneckLog: bottleneckLog,
     rejectedCommands: rejected,
+    days: [
+      for (var i = 1; i < revenueAt.length; i++)
+        _dayIncome(c, i, revenueAt[i - 1], revenueAt[i]),
+    ],
+  );
+}
+
+/// Day [day]'s income: sales revenue [after] the day less [before] it.
+DayIncome _dayIncome(
+  Content c,
+  int day,
+  Map<String, BigNum> before,
+  Map<String, BigNum> after,
+) {
+  final earned = {
+    for (final id in c.resources.keys)
+      if ((after[id] ?? const BigNum.zero()) -
+              (before[id] ?? const BigNum.zero())
+          case final v when v > const BigNum.zero())
+        id: v,
+  };
+  final total = earned.values.fold(const BigNum.zero(), (t, v) => t + v);
+  return DayIncome(
+    day: day,
+    credits: total,
+    share: {
+      for (final MapEntry(key: id, value: v) in earned.entries)
+        id: (v / total).toDouble(),
+    },
   );
 }
 
