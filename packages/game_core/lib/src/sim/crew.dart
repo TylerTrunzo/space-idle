@@ -23,9 +23,13 @@ final class CrewTotals {
   /// Crew assigned to buildings on its bodies.
   final int assigned;
 
-  /// Crew still free to assign: `supported − assigned`; negative when
-  /// starving habitats house fewer crew than are assigned.
-  int get free => supported - assigned;
+  /// Crew still free to assign: `supported − assigned`, never below 0.
+  int get free => math.max(0, supported - assigned);
+
+  /// Crew assigned beyond what is supported: `assigned − supported`, never
+  /// below 0; above 0 when starving habitats house fewer crew than are
+  /// assigned, which slows every crewed building ([crewEfficiency]).
+  int get overAssigned => math.max(0, assigned - supported);
 }
 
 /// Crew habitat [b], of type [def], houses at full rate:
@@ -60,9 +64,8 @@ CrewTotals crewTotals(GameState s, Content c, String factionId) {
 
 /// Crew [factionId] can still assign: base crew plus habitat housing scaled
 /// by each habitat's last run fraction (the total rounded down), minus crew
-/// already assigned on its bodies.
+/// already assigned on its bodies, never below 0 ([CrewTotals.free]).
 ///
-/// Negative when starving habitats house fewer crew than are assigned.
 /// Throws if the faction does not exist.
 int availableCrew(GameState s, Content c, String factionId) =>
     crewTotals(s, c, factionId).free;

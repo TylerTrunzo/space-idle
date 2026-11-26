@@ -318,6 +318,7 @@ final class ScriptRunner {
         'supported': crew.supported,
         'assigned': crew.assigned,
         'free': crew.free,
+        'overAssigned': crew.overAssigned,
       },
       'milestones': [
         for (final m in c.milestones)

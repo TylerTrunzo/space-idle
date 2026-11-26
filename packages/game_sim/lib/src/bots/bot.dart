@@ -228,7 +228,8 @@ final class _View {
           if (b.ownerId == factionId) b,
       ],
       report = withReport ? buildFlowReport(s, c, factionId) : null {
-    freeCrew = availableCrew(s, c, factionId);
+    final crew = crewTotals(s, c, factionId);
+    freeCrew = crew.free - crew.overAssigned;
     crewEff = crewEfficiency(s, c, factionId);
   }
 
@@ -242,6 +243,8 @@ final class _View {
   /// Flows and bottlenecks; only the balanced bot needs them.
   final FlowReport? report;
 
+  /// Crew free to assign, or minus the crew assigned beyond what housing
+  /// supports.
   late final int freeCrew;
   late final double crewEff;
 

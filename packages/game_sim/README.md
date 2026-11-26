@@ -54,7 +54,8 @@ routes counts as arriving at the rate it is sent, and `creditsPerSec` is
 what auto-selling one second's net production earns, not a stockpile being
 sold down, so it matches what a stretch of `advance` earns while nothing
 changes. `state` also gives the player's crew totals (`base`, `supported`,
-`assigned`, `free`).
+`assigned`, `free`, which is never below 0, and `overAssigned`, the crew
+assigned beyond what housing supports).
 
 Bottlenecks in `report` carry a `kind`: `input` (short of `resourceId`),
 `noCrew`, `understaffed` (every input supplied but fewer crew than its

@@ -468,8 +468,11 @@ void main() {
     expect(hab.lastRunFraction, 0);
     expect(hab.lastLimitReason, 'input:food');
     expect(crewEfficiency(s, c, 'p'), 0.25);
-    // availableCrew shares the supported-crew rule: 2 supported, 8 assigned.
-    expect(availableCrew(s, c, 'p'), -6);
+    // availableCrew shares the supported-crew rule: 2 supported, 8 assigned,
+    // so none is free and 6 are assigned beyond what is supported.
+    expect(availableCrew(s, c, 'p'), 0);
+    expect(crewTotals(s, c, 'p').free, 0);
+    expect(crewTotals(s, c, 'p').overAssigned, 6);
   });
 
   test('crewTotals counts base, supported, assigned and free crew', () {
@@ -484,6 +487,7 @@ void main() {
         ); // unowned: not counted
     final t = crewTotals(s, c, 'p');
     expect((t.base, t.supported, t.assigned, t.free), (5, 10, 3, 7));
+    expect(t.overAssigned, 0);
     expect(t.free, availableCrew(s, c, 'p'));
   });
 

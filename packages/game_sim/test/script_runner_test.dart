@@ -91,6 +91,19 @@ void main() {
       'supported': 20,
       'assigned': 3,
       'free': 17,
+      'overAssigned': 0,
+    });
+  });
+
+  test('crew free never goes negative; over-assigned crew is counted', () {
+    final r = _runner();
+    r.state.faction('player').baseCrew = 1;
+    expect(r.handle({'cmd': 'state'})['crew'], {
+      'base': 1,
+      'supported': 1,
+      'assigned': 3,
+      'free': 0,
+      'overAssigned': 2,
     });
   });
 

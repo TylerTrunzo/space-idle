@@ -288,7 +288,7 @@ CommandResult _assignCrew(
   if (delta > 0 && free < delta) {
     return _fail(
       CommandError.crewUnavailable,
-      'Needs $delta more crew (you have ${math.max(0, free)} free)',
+      'Needs $delta more crew (you have $free free)',
     );
   }
 
