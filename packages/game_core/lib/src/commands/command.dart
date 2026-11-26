@@ -634,10 +634,12 @@ enum CommandError {
   /// The body to claim already has an owner.
   alreadyOwned,
 
-  /// The body to survey is already surveyed.
+  /// The body to survey is already surveyed, or a survey without a body
+  /// id finds nothing left to survey in the system.
   alreadySurveyed,
 
-  /// The route does not exist, or its endpoints are not a valid pair.
+  /// The route does not exist, or the endpoints of a route or ship move
+  /// are not a valid pair (one body twice, or two systems).
   routeInvalid,
 
   /// The same timed work is already under way: a claim of the body, an
@@ -661,7 +663,9 @@ final class CommandOk extends CommandResult {
   /// Creates a success result.
   const CommandOk({this.createdId});
 
-  /// Id of the building, route or project the command created, if any.
+  /// Id of the building, route, ship move or project the command created,
+  /// if any. A ship move's id is the `Shipment.routeId` of the ships in
+  /// flight.
   final String? createdId;
 }
 
