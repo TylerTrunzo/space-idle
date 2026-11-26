@@ -49,7 +49,7 @@ final class _Spy implements Bot {
   }
 }
 
-/// Counts [inner]'s commands per 6 h check-in.
+/// Counts [inner]'s commands per 6 h check-in, auto-sell rules aside.
 final class _Counter implements Bot {
   _Counter(this.inner);
 
@@ -63,7 +63,9 @@ final class _Counter implements Bot {
   List<Command> decide(GameEngine e, GameState s, String factionId) {
     final cmds = inner.decide(e, s, factionId);
     final i = s.time ~/ 21600;
-    perCheckIn[i] = (perCheckIn[i] ?? 0) + cmds.length;
+    perCheckIn[i] =
+        (perCheckIn[i] ?? 0) +
+        cmds.where((c) => c is! SetAutoSellCommand).length;
     return cmds;
   }
 }

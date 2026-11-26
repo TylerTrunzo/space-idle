@@ -82,9 +82,11 @@ final class BalancedBot implements Bot {
 /// commands per check-in, the way a player with a few minutes to spare
 /// acts on the most pressing things and leaves the rest.
 ///
-/// A decision more than a minute of game time after the last one starts a
-/// new check-in. The commands kept are the first of the balanced plan, so
-/// they are still valid in order.
+/// Auto-sell rules do not count: the balanced bot re-tunes how much each
+/// one keeps as demand changes, which a player sets once (and the app can
+/// do for them). A decision more than a minute of game time after the
+/// last one starts a new check-in. The commands kept are the first of the
+/// balanced plan, so they are still valid in order.
 final class CasualBot implements Bot {
   /// Creates a casual bot.
   CasualBot({this.commandsPerCheckIn = defaultCommandsPerCheckIn});
@@ -107,10 +109,14 @@ final class CasualBot implements Bot {
     final last = _lastDecision;
     if (last == null || s.time - last > 60) _used = 0;
     _lastDecision = s.time;
-    final left = commandsPerCheckIn - _used;
-    if (left <= 0) return const [];
-    final cmds = _inner.decide(e, s, factionId).take(left).toList();
-    _used += cmds.length;
+    final cmds = <Command>[];
+    for (final cmd in _inner.decide(e, s, factionId)) {
+      if (cmd is! SetAutoSellCommand) {
+        if (_used >= commandsPerCheckIn) break;
+        _used++;
+      }
+      cmds.add(cmd);
+    }
     return cmds;
   }
 }
@@ -272,15 +278,26 @@ final class _View {
   bool hasShip(BodyState body) =>
       stock(body, r.cargoShipResource) >= BigNum.from(1);
 
-  /// Credits per second at current prices of [flow]'s outputs less inputs.
+  /// Credits per second of [flow]'s outputs less inputs, each at its
+  /// [marginalPrice].
   double value(BuildingFlow flow) => _worth(flow.outputs) - _worth(flow.inputs);
 
   double _worth(Map<String, BigNum> amounts) {
     var v = 0.0;
     for (final MapEntry(key: id, value: n) in amounts.entries) {
-      v += n.toDouble() * price(s, c, id).toDouble();
+      v += n.toDouble() * marginalPrice(id);
     }
     return v;
+  }
+
+  /// Credits one more unit of [id] a second would earn once the market
+  /// settles: steady sales hold the saturation at `s = 1 / (1 + a × rate)`,
+  /// so income `rate × base × s` grows by `base × s²` per extra unit, and
+  /// by `base × floor` once the price is at the floor.
+  double marginalPrice(String id) {
+    final sat = s.market.saturation[id] ?? 1;
+    final base = c.resources[id]!.basePrice.toDouble();
+    return base * math.max(marketFloorOf(c, id), sat * sat);
   }
 
   /// Per-second flow of [b] at full input supply.
