@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../sim/crew.dart';
 import '../sim/market.dart';
 import '../state/game_state.dart';
 import 'command.dart';
@@ -59,29 +60,6 @@ Map<String, BigNum> claimCost(GameState s, Content c, String factionId) {
     _credits: r.claimBaseCredits * BigNum.from(r.claimGrowth).powInt(extra),
     if (extra > 0) r.outpostKitResource: BigNum.from(extra),
   };
-}
-
-/// Crew [factionId] can still assign: base crew plus habitat housing scaled
-/// by each habitat's last run fraction (the total rounded down), minus crew
-/// already assigned on its bodies.
-///
-/// Negative when starving habitats house fewer crew than are assigned.
-/// Throws if the faction does not exist.
-int availableCrew(GameState s, Content c, String factionId) {
-  var housing = 0.0;
-  var assigned = 0;
-  for (final body in s.bodies) {
-    if (body.ownerId != factionId) continue;
-    for (final b in body.buildings) {
-      assigned += b.crew;
-      final def = c.buildings[b.defId]!;
-      if (def.kind == BuildingKind.habitat) {
-        housing += def.housing * b.lastRunFraction;
-      }
-    }
-  }
-  // The small epsilon keeps products such as 0.29 × 100 from flooring to 28.
-  return s.faction(factionId).baseCrew + (housing + 1e-9).floor() - assigned;
 }
 
 /// Most crew [b] can hold; buildings with no base slots hold none.

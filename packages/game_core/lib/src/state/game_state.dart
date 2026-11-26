@@ -229,7 +229,13 @@ final class BodyState {
   /// Buildings on this body.
   final List<BuildingState> buildings;
 
-  /// Serializes this body.
+  /// Resource id to output lost to the storage cap in the last production
+  /// step.
+  ///
+  /// Transient: reset at the start of every step, never serialized.
+  final Map<String, BigNum> wastedThisStep = {};
+
+  /// Serializes this body; [wastedThisStep] is left out.
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
