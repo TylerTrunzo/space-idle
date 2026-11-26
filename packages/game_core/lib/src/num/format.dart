@@ -1,0 +1,86 @@
+import 'big_num.dart';
+
+const _suffixes = [
+  '',
+  'K',
+  'M',
+  'B',
+  'T',
+  'Qa',
+  'Qi',
+  'Sx',
+  'Sp',
+  'Oc',
+  'No',
+  'Dc',
+];
+
+String _trim(String s) {
+  if (!s.contains('.')) return s;
+  var end = s.length;
+  while (s[end - 1] == '0') {
+    end--;
+  }
+  if (s[end - 1] == '.') end--;
+  return s.substring(0, end);
+}
+
+/// Rounds [x] to [d] decimals, halves away from zero.
+double _roundTo(double x, int d) {
+  final f = d == 0 ? 1.0 : (d == 1 ? 10.0 : 100.0);
+  // The relative nudge absorbs mantissa*10^k error (9.995*100 = 999.4999...).
+  return (x * f * (1 + 1e-12)).roundToDouble() / f;
+}
+
+/// Rounds [x] (in `[0, 1000]`) to three significant digits.
+double _round3(double x) {
+  var d = x < 10 ? 2 : (x < 100 ? 1 : 0);
+  var r = _roundTo(x, d);
+  // Rounding can promote to the next digit band (9.996 -> 10.00).
+  if (d > 0 && r >= (d == 2 ? 10 : 100)) {
+    d--;
+    r = _roundTo(x, d);
+  }
+  return r;
+}
+
+/// Formats [v] for display: plain up to 999, suffixed (`K`..`Dc`) with three
+/// significant digits up to 1e36, scientific notation beyond.
+String formatNumber(BigNum v) {
+  if (v.isZero) return '0';
+  final sign = v.isNegative ? '-' : '';
+  final abs = v.isNegative ? -v : v;
+
+  if (abs.exponent < 3) {
+    final r = _round3(abs.toDouble());
+    if (r < 1000) {
+      final s = _trim(r.toStringAsFixed(r < 10 ? 2 : (r < 100 ? 1 : 0)));
+      return s == '0' ? '0' : '$sign$s';
+    }
+    return '${sign}1K';
+  }
+
+  var group = abs.exponent ~/ 3;
+  if (group < _suffixes.length) {
+    var scaled = _round3(abs.mantissa * _pow10(abs.exponent % 3));
+    if (scaled >= 1000) {
+      scaled = 1;
+      group++;
+    }
+    if (group < _suffixes.length) {
+      final d = scaled < 10 ? 2 : (scaled < 100 ? 1 : 0);
+      return '$sign${_trim(scaled.toStringAsFixed(d))}${_suffixes[group]}';
+    }
+    return '${sign}1e${group * 3}';
+  }
+
+  var m = double.parse(abs.mantissa.toStringAsFixed(2));
+  var e = abs.exponent;
+  if (m >= 10) {
+    m = 1;
+    e++;
+  }
+  return '$sign${_trim(m.toStringAsFixed(2))}e$e';
+}
+
+double _pow10(int n) => n == 0 ? 1 : (n == 1 ? 10 : 100);
