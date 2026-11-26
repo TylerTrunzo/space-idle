@@ -55,13 +55,19 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 
 /// Runs every building on every owned body for [dt] game seconds.
 ///
-/// Bodies run in list order. On each body, buildings run in groups by
-/// [recipeDepth], lowest first, list order within a group: each group's
-/// input demand is summed per resource and shared out in proportion from
-/// the body's stock, so no stock goes negative, and its outputs are added
-/// before the next group plans its inputs. So a chain on one body moves
-/// its goods from extractor to final product within a step, whatever the
-/// step's length. Outputs are added in full, even past the body's
+/// Bodies run in list order. On each body, habitats are planned first:
+/// life support has first claim on its inputs. Their full-rate demand is
+/// held back from the stock as it comes in, so no other building takes
+/// food, water or oxygen a habitat needs. The other buildings then run in
+/// groups by [recipeDepth], lowest first, list order within a group: each
+/// group's input demand is summed per resource and shared out in
+/// proportion from the body's stock less what the habitats claimed, so no
+/// stock goes negative, and its outputs are added before the next group
+/// plans its inputs. The habitats run last, on everything the body holds,
+/// so they use what the body made of their inputs in the same step. So a
+/// chain on one body moves its goods from extractor to final product
+/// within a step, whatever the step's length. Outputs are added in full,
+/// even past the body's
 /// [storageCap]: the engine ships and auto-sells first and clamps to the
 /// cap at the end of the tick ([clampStorage]), so a long step loses no
 /// more to the cap than many short ones. Each building's
@@ -197,47 +203,76 @@ final class _Run {
 
 void _stepBody(Content c, BodyState body, double dt, double crewEff) {
   final depth = recipeDepth(c);
-  final runs = [
-    for (final b in body.buildings)
-      if (runsRecipe(c.buildings[b.defId]!))
-        _Run(b, fullRateFlow(c, body, b, dt, crewEff)),
-  ];
+  final habitats = <_Run>[];
+  final others = <_Run>[];
+  for (final b in body.buildings) {
+    final def = c.buildings[b.defId]!;
+    if (!runsRecipe(def)) continue;
+    final run = _Run(b, fullRateFlow(c, body, b, dt, crewEff));
+    (def.kind == BuildingKind.habitat ? habitats : others).add(run);
+  }
+  // What the habitats need, claimed first from the stock as it comes in.
+  final need = <String, BigNum>{};
+  for (final run in habitats) {
+    for (final MapEntry(key: id, value: d) in run.flow.inputs.entries) {
+      need[id] = (need[id] ?? _zero) + d;
+    }
+  }
+  final reserved = <String, BigNum>{};
+  void claim() {
+    for (final MapEntry(key: id, value: d) in need.entries) {
+      reserved[id] = (body.stock[id] ?? _zero).min(d);
+    }
+  }
+
   // A stable sort: ties keep list order.
-  final order = [for (var i = 0; i < runs.length; i++) i]
+  final order = [for (var i = 0; i < others.length; i++) i]
     ..sort((x, y) {
-      final byDepth = depth[runs[x].b.defId]!.compareTo(
-        depth[runs[y].b.defId]!,
+      final byDepth = depth[others[x].b.defId]!.compareTo(
+        depth[others[y].b.defId]!,
       );
       return byDepth != 0 ? byDepth : x.compareTo(y);
     });
   var start = 0;
   while (start < order.length) {
-    final d = depth[runs[order[start]].b.defId]!;
+    final d = depth[others[order[start]].b.defId]!;
     var end = start;
-    while (end < order.length && depth[runs[order[end]].b.defId]! == d) {
+    while (end < order.length && depth[others[order[end]].b.defId]! == d) {
       end++;
     }
-    _runGroup(c, body, [for (final i in order.sublist(start, end)) runs[i]]);
+    claim();
+    _runGroup(c, body, [
+      for (final i in order.sublist(start, end)) others[i],
+    ], reserved);
     start = end;
   }
+  if (habitats.isNotEmpty) _runGroup(c, body, habitats, const {});
 }
 
-/// Runs [runs], buildings of one recipe depth on [body], on the stock the
-/// body holds now: shares each input in proportion to demand, takes the
-/// inputs, then adds the outputs.
-void _runGroup(Content c, BodyState body, List<_Run> runs) {
+/// Runs [runs], buildings on [body], on the stock the body holds now less
+/// [reserved] (resource id to units held back for habitats): shares each
+/// input in proportion to demand, takes the inputs, then adds the outputs.
+void _runGroup(
+  Content c,
+  BodyState body,
+  List<_Run> runs,
+  Map<String, BigNum> reserved,
+) {
   final demand = <String, BigNum>{};
   for (final run in runs) {
     for (final MapEntry(key: id, value: d) in run.flow.inputs.entries) {
       demand[id] = (demand[id] ?? _zero) + d;
     }
   }
-  final satisfaction = {
-    for (final MapEntry(key: id, value: d) in demand.entries)
-      id: d.isZero
-          ? 1.0
-          : math.min(1.0, ((body.stock[id] ?? _zero) / d).toDouble()),
-  };
+  final satisfaction = <String, double>{};
+  for (final MapEntry(key: id, value: d) in demand.entries) {
+    final free = (body.stock[id] ?? _zero) - (reserved[id] ?? _zero);
+    satisfaction[id] = d.isZero
+        ? 1.0
+        : free.isNegative || free.isZero
+        ? 0.0
+        : math.min(1.0, (free / d).toDouble());
+  }
 
   for (final run in runs) {
     var f = 1.0;
@@ -295,7 +330,8 @@ void _runGroup(Content c, BodyState body, List<_Run> runs) {
 /// Extractors and warehouses are 0; any other building is one more than
 /// the deepest of its inputs, where an input is as deep as the deepest
 /// building that makes it (0 if none does). So every building runs after
-/// everything that can make its inputs. A cycle in the recipe graph is
+/// everything that can make its inputs. Habitats have a depth too, but
+/// [stepProduction] plans them before every group and runs them after. A cycle in the recipe graph is
 /// broken by list order: buildings are visited in content order, inputs
 /// and their makers too, and an edge back to a building still being
 /// visited is left out. Computed once per [Content] and cached.

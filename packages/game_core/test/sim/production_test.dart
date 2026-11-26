@@ -555,6 +555,65 @@ void main() {
     expect(crewTotals(s, c, 'p').supported, 21);
   });
 
+  group('habitats get first claim on their inputs', () {
+    final shipped = shippedContent();
+    late GameState gs;
+    late BodyState kora;
+    BuildingState put(String defId, {int crew = 1}) {
+      final b = BuildingState(
+        id: 'h${kora.buildings.length}',
+        defId: defId,
+        crew: crew,
+      );
+      kora.buildings.add(b);
+      return b;
+    }
+
+    setUp(() {
+      gs = newGameState(shipped, 1)..faction('player').baseCrew = 50;
+      kora = gs.body('kora')..buildings.clear();
+    });
+
+    test('short of water and oxygen, the habitat is served before the '
+        'electrolyzer and fuel refinery that also use them', () {
+      // In 60 s the habitat needs 6 each of food, water and oxygen; the
+      // electrolyzer wants 20 water and the fuel refinery 10 oxygen.
+      final hab = put('habitat', crew: 0);
+      final electrolyzer = put('electrolyzer');
+      final refinery = put('fuel_refinery');
+      kora.stock
+        ..clear()
+        ..['water'] = n(4)
+        ..['oxygen'] = n(3)
+        ..['food'] = n(100)
+        ..['hydrogen'] = n(100);
+      stepProduction(gs, shipped, 60);
+      // Oxygen limits it: 3 of 6.
+      expect(hab.lastRunFraction, closeTo(0.5, 1e-12));
+      expect(hab.lastLimitReason, 'input:oxygen');
+      // What the habitat claimed was not there for the others.
+      expect(electrolyzer.lastRunFraction, 0);
+      expect(electrolyzer.lastLimitReason, 'input:water');
+      expect(refinery.lastRunFraction, 0);
+      expect(stock(kora, 'oxygen').isZero, isTrue);
+      expect(stock(kora, 'water'), near(1));
+    });
+
+    test('the habitat still uses what the body makes in the same step', () {
+      // An ice melter makes 30 water in 60 s from stock; the habitat needs 6.
+      final hab = put('habitat', crew: 0);
+      put('ice_melter');
+      kora.stock
+        ..clear()
+        ..['water_ice'] = n(100)
+        ..['oxygen'] = n(100)
+        ..['food'] = n(100);
+      stepProduction(gs, shipped, 60);
+      expect(hab.lastRunFraction, 1);
+      expect(stock(kora, 'water'), near(24));
+    });
+  });
+
   test('no stock goes negative', () {
     for (var seed = 1; seed <= 4; seed++) {
       final rng = Rng(seed);
