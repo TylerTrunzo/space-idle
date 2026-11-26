@@ -62,4 +62,8 @@ void main() {
       BigNum.from(1000).hashCode,
     );
   });
+  test('tiny values normalize to zero without hanging', () {
+    expect(BigNum.from(1).mulDouble(1e-310).isZero, isTrue);
+    expect(BigNum.from(5e-324).isZero, isTrue);
+  }, timeout: const Timeout(Duration(seconds: 5)));
 }

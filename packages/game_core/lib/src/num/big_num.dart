@@ -39,6 +39,7 @@ final class BigNum implements Comparable<BigNum> {
     final a = mm.abs();
     if (a >= 10 || a < 1) {
       final shift = (math.log(a) / math.ln10).floor();
+      if (ee + shift < _minExponent) return const BigNum.zero();
       mm = shift >= 0 ? mm / _pow10(shift) : mm * _pow10(-shift);
       ee += shift;
     }
@@ -50,8 +51,12 @@ final class BigNum implements Comparable<BigNum> {
       mm *= 10;
       ee--;
     }
+    if (ee < _minExponent) return const BigNum.zero();
     return BigNum._(mm, ee);
   }
+
+  /// Values with a smaller exponent are treated as zero.
+  static const _minExponent = -300;
 
   static double _pow10(int n) => math.pow(10.0, n).toDouble();
 
