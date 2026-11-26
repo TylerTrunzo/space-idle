@@ -103,6 +103,25 @@ void main() {
     expect(md, contains('| Day | Credits earned | Top resources |'));
   });
 
+  test('check-ins more than a day apart still give one entry a day', () {
+    // Check-ins every 36 h over 72 h: the absences cross the 24 h and 48 h
+    // boundaries. Each absence simulates the 12 h offline cap right after
+    // the check-in, so day 1 earns its first 12 h, day 2 the 12 h from the
+    // 36 h check-in, and day 3 only what that runs past 48 h.
+    final r = runBotSession(
+      _engine(),
+      _SellerBot(),
+      seed: 1,
+      hours: 72,
+      checkInEverySeconds: 36 * 3600,
+    );
+    expect(r.days.map((d) => d.day), [1, 2, 3]);
+    final earned = [for (final d in r.days) d.credits.toDouble()];
+    expect(earned.every((v) => v > 0), isTrue, reason: '$earned');
+    // Day 3 holds the 180 s of the second absence that ran past 48 h.
+    expect(earned[2], lessThan(earned[1] / 100));
+  });
+
   test('json report carries every section', () {
     final j = _shortCheckIns(hours: 12).toJson();
     expect(j.keys, [

@@ -250,6 +250,9 @@ final class BalanceReport {
 
 String _hours(double h) => h.toStringAsFixed(1);
 
+/// Seconds in a day of session time.
+const double _daySeconds = 86400;
+
 /// Plays a new game seeded with [seed] for [hours] with [bot] as the
 /// player, checking in every [checkInEverySeconds] (4 times a day by
 /// default, spec §6.7), and reports what it reached.
@@ -293,8 +296,11 @@ BalanceReport runBotSession(
   var checkIn = 0;
   // Sales revenue at the start of each day, then at the end.
   final revenueAt = [Map.of(faction.salesRevenue)];
-  void noteDay() {
-    if (clock >= revenueAt.length * 86400 || clock >= end) {
+  // Notes the start of every day that begins by session time [t], one at a
+  // time, so a gap of more than a day still records each boundary.
+  void noteDaysUpTo(double t) {
+    while (revenueAt.length * _daySeconds <= t &&
+        revenueAt.length * _daySeconds < end) {
       revenueAt.add(Map.of(faction.salesRevenue));
     }
   }
@@ -340,6 +346,7 @@ BalanceReport runBotSession(
       clock += step;
       tracker.sample();
       noteMilestones(checkIn);
+      noteDaysUpTo(clock);
     }
     if (applied == 0) {
       deadZones.add(
@@ -348,15 +355,28 @@ BalanceReport runBotSession(
     }
     final next = math.min((checkIn + 1) * checkInEverySeconds, end);
     if (next > clock) {
-      e.catchUpOffline(s, next - clock);
+      // The offline catch-up, capped, runs right after the player leaves;
+      // it is split at day boundaries so each day's income is its own.
+      final simulated = math.min(next - clock, c.rules.offlineCapSeconds);
+      var t = clock;
+      while (t < clock + simulated) {
+        final boundary = revenueAt.length * _daySeconds;
+        final pieceEnd = boundary > t
+            ? math.min(boundary, clock + simulated)
+            : clock + simulated;
+        e.catchUpOffline(s, pieceEnd - t, capSeconds: pieceEnd - t);
+        t = pieceEnd;
+        noteDaysUpTo(t);
+      }
       clock = next;
       tracker.sample();
     }
-    noteDay();
+    noteDaysUpTo(clock);
     checkIn++;
     noteMilestones(checkIn);
   }
 
+  revenueAt.add(Map.of(faction.salesRevenue));
   onFinished?.call(s);
   final stock = tracker.stock();
   return BalanceReport(
