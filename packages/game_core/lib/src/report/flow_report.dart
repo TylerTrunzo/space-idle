@@ -77,10 +77,25 @@ final class BodyFlow {
   final List<BuildingStatus> buildings;
 }
 
-/// A building running below full rate, and why.
+/// What holds a [Bottleneck] back.
+enum BottleneckKind {
+  /// A building is short of one of its inputs.
+  input,
+
+  /// A building has no crew assigned.
+  noCrew,
+
+  /// Habitats and base crew support fewer crew than the faction has
+  /// assigned, so every crewed building works below its crew.
+  crewShortage,
+}
+
+/// A building, or for a crew shortage every crewed building, running below
+/// full rate, and why.
 final class Bottleneck {
   /// Creates a bottleneck.
   const Bottleneck({
+    required this.kind,
     required this.bodyId,
     required this.buildingId,
     required this.resourceId,
@@ -88,16 +103,21 @@ final class Bottleneck {
     required this.message,
   });
 
+  /// What holds it back.
+  final BottleneckKind kind;
+
   /// Body the building stands on.
   final String bodyId;
 
-  /// The held-back building.
+  /// The held-back building; for [BottleneckKind.crewShortage], which slows
+  /// every crewed building, the faction's first crewed building.
   final String buildingId;
 
-  /// The input it is short of, or null when it has no crew.
+  /// The input it is short of; null unless [kind] is [BottleneckKind.input].
   final String? resourceId;
 
-  /// Share of full rate it ran at, in `[0, 1)`.
+  /// Share of full rate it ran at, in `[0, 1)`; for
+  /// [BottleneckKind.crewShortage], the faction's crew efficiency.
   final double runFraction;
 
   /// Plain-English description using display names, such as
@@ -124,7 +144,8 @@ final class FlowReport {
   final Map<String, BigNum> empireNet;
 
   /// Buildings held back, lowest run fraction first, then body and building
-  /// order.
+  /// order; a crew shortage, if any, comes before buildings at the same run
+  /// fraction.
   final List<Bottleneck> bottlenecks;
 }
 
@@ -155,7 +176,10 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   GameEngine(c).tick(copy, _sampleSeconds);
 
   final bodies = <BodyFlow>[];
-  final bottlenecks = <(int, Bottleneck)>[];
+  final bottlenecks = <(int, Bottleneck)>[
+    if (_crewShortage(copy, c, factionId, owned, crewEff) case final neck?)
+      (0, neck),
+  ];
   for (final (i, body) in owned.indexed) {
     final produced = <String, BigNum>{};
     final consumed = <String, BigNum>{};
@@ -198,6 +222,43 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   );
 }
 
+/// The crew-shortage bottleneck of [factionId], whose bodies are [owned],
+/// or null when its crew efficiency [crewEff] is 1.
+///
+/// [s] is the state the sample tick started from, so the crew counts match
+/// [crewEff].
+Bottleneck? _crewShortage(
+  GameState s,
+  Content c,
+  String factionId,
+  List<BodyState> owned,
+  double crewEff,
+) {
+  if (crewEff >= 1) return null;
+  var assigned = 0;
+  (BodyState, BuildingState)? first;
+  for (final body in owned) {
+    for (final b in body.buildings) {
+      if (b.crew == 0) continue;
+      assigned += b.crew;
+      first ??= (body, b);
+    }
+  }
+  // Efficiency below 1 means some crew is assigned, so [first] is set.
+  final (body, b) = first!;
+  final supported = assigned + availableCrew(s, c, factionId);
+  return Bottleneck(
+    kind: BottleneckKind.crewShortage,
+    bodyId: body.id,
+    buildingId: b.id,
+    resourceId: null,
+    runFraction: crewEff,
+    message:
+        'Your empire is short on crew: habitats and base crew support '
+        '$supported of $assigned assigned',
+  );
+}
+
 /// The bottleneck building [b] on [body] shows after the sample step, or
 /// null when it ran unhindered or runs no recipe.
 Bottleneck? _bottleneck(Content c, BodyState body, BuildingState b) {
@@ -205,9 +266,11 @@ Bottleneck? _bottleneck(Content c, BodyState body, BuildingState b) {
   final reason = b.lastLimitReason;
   if (def.crewSlots == 0 || reason == null) return null;
   final where = '${def.name} on ${body.name}';
+  final BottleneckKind kind;
   final String? resourceId;
   final String message;
   if (reason.startsWith('input:')) {
+    kind = BottleneckKind.input;
     resourceId = reason.substring('input:'.length);
     // Rounded, but never shown as 100% while held back.
     final pct = math.min(99, (b.lastRunFraction * 100).round());
@@ -215,10 +278,12 @@ Bottleneck? _bottleneck(Content c, BodyState body, BuildingState b) {
         '$where is running at $pct%: '
         'not enough ${c.resources[resourceId]!.name}';
   } else {
+    kind = BottleneckKind.noCrew;
     resourceId = null;
     message = '$where has no crew';
   }
   return Bottleneck(
+    kind: kind,
     bodyId: body.id,
     buildingId: b.id,
     resourceId: resourceId,

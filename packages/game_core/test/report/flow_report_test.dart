@@ -129,6 +129,7 @@ void main() {
     kora.stock['iron_ore'] = n(0.2);
     final b = buildFlowReport(s, c, 'player').bottlenecks.single;
     expect(b.message, 'Smelter on Kora is running at 50%: not enough Iron Ore');
+    expect(b.kind, BottleneckKind.input);
     expect(b.bodyId, 'kora');
     expect(b.buildingId, 'b3');
     expect(b.resourceId, 'iron_ore');
@@ -147,5 +148,46 @@ void main() {
       'Smelter on Kora is running at 50%: not enough Iron Ore',
     ]);
     expect(list.first.resourceId, isNull);
+    expect(list.first.kind, BottleneckKind.noCrew);
+  });
+
+  test('crew shortage is reported as a bottleneck', () {
+    // Three crew assigned at start; base crew of 2 supports only two.
+    s.faction('player').baseCrew = 2;
+    final b = buildFlowReport(s, c, 'player').bottlenecks.single;
+    expect(b.kind, BottleneckKind.crewShortage);
+    expect(
+      b.message,
+      'Your empire is short on crew: '
+      'habitats and base crew support 2 of 3 assigned',
+    );
+    expect(b.bodyId, 'kora');
+    expect(b.buildingId, 'b1');
+    expect(b.resourceId, isNull);
+    expect(b.runFraction, closeTo(2 / 3, 1e-12));
+  });
+
+  test('crew shortage sorts with the other bottlenecks by run fraction', () {
+    s.faction('player').baseCrew = 2;
+    // At 2/3 crew efficiency the smelter wants 0.2667 ore and gets 0.2.
+    kora.stock['iron_ore'] = n(0.2);
+    final hollow = s.body('hollow_reach')..ownerId = 'player';
+    hollow.buildings.add(BuildingState(id: 'x1', defId: 'smelter', crew: 0));
+    final list = buildFlowReport(s, c, 'player').bottlenecks;
+    expect(list.map((b) => b.kind), [
+      BottleneckKind.noCrew,
+      BottleneckKind.crewShortage,
+      BottleneckKind.input,
+    ]);
+    expect(list.map((b) => b.runFraction), [
+      0,
+      closeTo(2 / 3, 1e-12),
+      closeTo(0.75, 1e-12),
+    ]);
+  });
+
+  test('no crew bottleneck when habitats and base crew cover everyone', () {
+    s.faction('player').baseCrew = 3;
+    expect(buildFlowReport(s, c, 'player').bottlenecks, isEmpty);
   });
 }
