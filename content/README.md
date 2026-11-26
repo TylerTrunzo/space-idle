@@ -17,6 +17,12 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Equipment.** Outpost kits, habitat modules and cargo ships are for use, not trade: markets one unit deep,
   and their makers have no speed or capacity track. Each maker makes a steady 36–72 every 6 h; more
   needs another building. Claims after the first cost 5 + 5 × (bodies owned − 1) kits.
+- **Contracts.** An order asks for about 4 h of what you make of a good, but never more than one of
+  your bodies can store, nor the template's `maxQuantity` (5,000 bulk goods, 1,000 components, 100
+  advanced goods). It pays 2.5× the base price per unit, and at least `rewardIncomeSeconds` of your
+  income when it is posted (30 min, 1 h and 2 h for those tiers), so a capped order still pays its way.
+- **Orbital Station.** Each level's goods and credits are delivered bit by bit, from any body, so a
+  level may cost far more than one body holds; its timer starts once the last of it is in.
 
 ## Building niches
 
@@ -42,4 +48,4 @@ Every building is the best choice somewhere.
 | Shipyard | Cargo ships for routes (each carries 10 a second): a fixed 72 per 6 h. |
 | Outpost Kit Assembler | Kits for claims: a fixed 36 per 6 h. |
 | Habitat | The only crew housing. |
-| Depot | Stockpiling past the storage cap: from the stage to level 4 on, an Orbital Station stage needs more of one good than a body holds without one (+200% storage each, cheap capacity levels). |
+| Depot | Stockpiling past the storage cap (+200% storage each, cheap capacity levels): goods held for a big contract or a long absence. |

@@ -1,4 +1,5 @@
 import '../num/big_num.dart';
+import '../num/format.dart';
 import 'content.dart';
 
 /// Parses and validates a content bundle; backs [Content.fromBundle].
@@ -128,6 +129,8 @@ final class _Loader {
               'quantitySeconds',
               'rewardMultiplier',
               'minQuantity',
+              'maxQuantity',
+              'rewardIncomeSeconds',
             },
             _contractTemplate,
           )
@@ -868,6 +871,19 @@ final class _Loader {
     final minQuantity = f.map.containsKey('minQuantity')
         ? f.bigNum('minQuantity', positive: true)
         : null;
+    final maxQuantity = f.map.containsKey('maxQuantity')
+        ? f.bigNum('maxQuantity', positive: true)
+        : null;
+    final least =
+        minQuantity ?? BigNum.from(ContractTemplateDef.defaultMinQuantity);
+    if (maxQuantity != null && maxQuantity < least) {
+      f.err('maxQuantity', 'must be >= minQuantity (${formatNumber(least)})');
+    }
+    final rewardIncomeSeconds = f.number(
+      'rewardIncomeSeconds',
+      fallback: 0,
+      ge: 0,
+    );
     if (_errors.length > before) return null;
     return ContractTemplateDef(
       id: id,
@@ -877,6 +893,8 @@ final class _Loader {
       quantitySeconds: quantitySeconds!,
       rewardMultiplier: rewardMultiplier!,
       minQuantity: minQuantity,
+      maxQuantity: maxQuantity,
+      rewardIncomeSeconds: rewardIncomeSeconds!,
     );
   }
 

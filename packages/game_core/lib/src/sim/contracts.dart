@@ -1,6 +1,7 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../report/flow_report.dart';
+import 'production.dart';
 import '../rng.dart';
 import '../state/game_state.dart';
 
@@ -51,9 +52,12 @@ void stepContracts(GameState s, Content c, double now) {
       s.rngState = rng.state;
       report ??= buildFlowReport(s, c, f.id);
       final rate = report.netProducedPerSec(resourceId);
-      final quantity = twoSignificantFigures(
-        rate.mulDouble(template.quantitySeconds).max(template.minQuantity),
-      );
+      final quantity = _quantity(s, c, f, template, rate);
+      final perUnit =
+          quantity *
+          c.resources[resourceId]!.basePrice.mulDouble(
+            template.rewardMultiplier,
+          );
       f.contractRefillAt.removeAt(0);
       f.contracts.add(
         ContractState(
@@ -61,11 +65,9 @@ void stepContracts(GameState s, Content c, double now) {
           templateId: template.id,
           resourceId: resourceId,
           quantity: quantity,
-          rewardCredits:
-              quantity *
-              c.resources[resourceId]!.basePrice.mulDouble(
-                template.rewardMultiplier,
-              ),
+          rewardCredits: perUnit.max(
+            report.creditsPerSec.mulDouble(template.rewardIncomeSeconds),
+          ),
           postedAt: now,
         ),
       );
@@ -119,6 +121,39 @@ void freeContractSlot(FactionState f, Content c, double now) {
   if (refills.length >= RulesDef.contractSlots) return;
   final last = refills.isEmpty || refills.last < now ? now : refills.last;
   refills.add(last + c.rules.contractRefillSeconds);
+}
+
+/// Units a contract from [t] asks [f] for, given its net production
+/// [rate] of the resource: `rate × quantitySeconds` rounded to two
+/// significant figures, at most the largest storage cap among the bodies
+/// [f] owns and [ContractTemplateDef.maxQuantity] (each rounded down to two
+/// figures), and at least [ContractTemplateDef.minQuantity].
+BigNum _quantity(
+  GameState s,
+  Content c,
+  FactionState f,
+  ContractTemplateDef t,
+  BigNum rate,
+) {
+  BigNum? largest;
+  for (final b in s.bodies) {
+    if (b.ownerId != f.id) continue;
+    final cap = storageCap(s, c, b);
+    if (largest == null || cap > largest) largest = cap;
+  }
+  final most = t.maxQuantity;
+  final ceiling = largest == null || most == null
+      ? largest ?? most
+      : largest.min(most);
+  var q = twoSignificantFigures(rate.mulDouble(t.quantitySeconds));
+  if (ceiling != null) q = q.min(_twoFiguresDown(ceiling));
+  return q.max(t.minQuantity);
+}
+
+/// [v], positive, rounded down to two significant figures.
+BigNum _twoFiguresDown(BigNum v) {
+  final figures = (v.mantissa * 10 + 1e-9).floor();
+  return BigNum.parse('${figures}e${v.exponent - 1}');
 }
 
 /// [v] rounded to two significant figures, halves away from zero; zero

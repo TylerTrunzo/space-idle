@@ -780,6 +780,8 @@ final class ContractTemplateDef {
     this.quantitySeconds = defaultQuantitySeconds,
     this.rewardMultiplier = defaultRewardMultiplier,
     BigNum? minQuantity,
+    this.maxQuantity,
+    this.rewardIncomeSeconds = 0,
   }) : minQuantity = minQuantity ?? BigNum.from(defaultMinQuantity);
 
   /// [quantitySeconds] when a template does not set it: 4 hours.
@@ -814,6 +816,15 @@ final class ContractTemplateDef {
   /// Fewest units a contract asks for, above zero: what a resource made
   /// slowly, or not yet at all, is asked for.
   final BigNum minQuantity;
+
+  /// Most units a contract asks for, however much is made; at least
+  /// [minQuantity]. Null for no ceiling beyond the storage one (a contract
+  /// never asks for more than one owned body can store).
+  final BigNum? maxQuantity;
+
+  /// Seconds of the faction's income a contract pays at least, so a
+  /// capped order still pays its way; zero for none.
+  final double rewardIncomeSeconds;
 }
 
 /// All game content, validated.

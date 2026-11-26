@@ -127,6 +127,8 @@ void main() {
       expect(t.quantitySeconds, 14400);
       expect(t.rewardMultiplier, 2.5);
       expect(t.minQuantity, n(ContractTemplateDef.defaultMinQuantity));
+      expect(t.maxQuantity, isNull);
+      expect(t.rewardIncomeSeconds, 0);
     });
 
     test('content without contracts posts none', () {
@@ -171,6 +173,20 @@ void main() {
       'zero minimum quantity': (
         (t) => t['minQuantity'] = '0',
         'minQuantity: must be > 0',
+      ),
+      'zero maximum quantity': (
+        (t) => t['maxQuantity'] = '0',
+        'maxQuantity: must be > 0',
+      ),
+      'a maximum below the minimum': (
+        (t) => t
+          ..['minQuantity'] = '50'
+          ..['maxQuantity'] = '40',
+        'maxQuantity: must be >= minQuantity (50)',
+      ),
+      'negative reward income seconds': (
+        (t) => t['rewardIncomeSeconds'] = -1,
+        'rewardIncomeSeconds: must be >= 0',
       ),
       'an unknown field': (
         (t) => t['expires'] = 3600,
@@ -260,9 +276,13 @@ void main() {
           expect(made > const BigNum.zero() || inputsMade, isTrue);
           expect(k.quantity, twoSignificantFigures(k.quantity));
           expect(k.quantity >= t.minQuantity, isTrue);
+          if (t.maxQuantity case final most?) {
+            expect(k.quantity <= most, isTrue);
+          }
           expect(
-            k.rewardCredits,
-            k.quantity * r.basePrice.mulDouble(t.rewardMultiplier),
+            k.rewardCredits >=
+                k.quantity * r.basePrice.mulDouble(t.rewardMultiplier),
+            isTrue,
           );
           expect(k.delivered, const BigNum.zero());
           expect(k.postedAt, lessThanOrEqualTo(s.time));
@@ -293,6 +313,96 @@ void main() {
         expect(k.resourceId, 'hull_plate');
         expect(k.quantity, t.minQuantity);
       }
+    });
+
+    /// A game whose only eligible resource is steel, made fast enough that
+    /// 4 h of it is far more than Kora can store, with one refill due.
+    GameState steelFlood(Content c) {
+      final s = GameEngine(c).newGame(1);
+      final f = player(s);
+      f.lifetimeProduced
+        ..clear()
+        ..['steel'] = n(1);
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
+      for (final b in s.body('kora').buildings) {
+        if (b.defId == 'smelter' || b.defId == 'mine') {
+          b.levels[UpgradeTrack.speed] = 40;
+        }
+      }
+      final sell = SetAutoSellCommand('player', 'kora', 'steel', n(0));
+      expect(GameEngine(c).apply(s, sell), isA<CommandOk>());
+      return s;
+    }
+
+    /// Only steel, with [edit] applied to every template.
+    Content steelOnly(void Function(Map<String, Object?> t) edit) =>
+        contentWith((b) {
+          for (final t
+              in (b['contracts']! as List).cast<Map<String, Object?>>()) {
+            edit(t);
+          }
+        });
+
+    ContractState postSteel(GameState s, Content c) {
+      for (var i = 0; i < 40; i++) {
+        final x = s.copy();
+        stepContracts(x, c, 0);
+        if (player(x).contracts.single.resourceId == 'steel') {
+          return player(x).contracts.single;
+        }
+        // Draw again: another state of the RNG.
+        s.rngState = Rng.fromState(s.rngState).state ^ (i + 1);
+      }
+      throw StateError('steel never drawn');
+    }
+
+    test('the quantity is at most what one owned body can store', () {
+      final s = steelFlood(content);
+      final rate = buildFlowReport(
+        s,
+        content,
+        'player',
+      ).netProducedPerSec('steel');
+      final cap = storageCap(s, content, s.body('kora'));
+      expect(rate.mulDouble(14400) > cap.mulDouble(10), isTrue);
+      final k = postSteel(s, content);
+      expect(k.quantity <= cap, isTrue, reason: '${k.quantity} vs $cap');
+      expect(k.quantity >= cap.mulDouble(0.9), isTrue);
+      expect(k.quantity, twoSignificantFigures(k.quantity));
+    });
+
+    test("a template's maximum quantity caps it", () {
+      final c = steelOnly((t) => t['maxQuantity'] = '120');
+      final k = postSteel(steelFlood(c), c);
+      expect(k.quantity, n(120));
+    });
+
+    test('the reward is at least rewardIncomeSeconds of income', () {
+      final c = steelOnly(
+        (t) => t
+          ..['rewardIncomeSeconds'] = 3600
+          ..['maxQuantity'] = '10'
+          ..['minQuantity'] = '10',
+      );
+      final s = steelFlood(c);
+      final income = buildFlowReport(s, c, 'player').creditsPerSec;
+      expect(income > const BigNum.zero(), isTrue);
+      final k = postSteel(s, c);
+      expect(k.quantity, n(10));
+      expect(k.rewardCredits, income.mulDouble(3600));
+      // A small income leaves the per-unit reward.
+      final plain = steelOnly(
+        (t) => t
+          ..['rewardIncomeSeconds'] = 1
+          ..['maxQuantity'] = '1000',
+      );
+      final big = postSteel(steelFlood(plain), plain);
+      expect(
+        big.rewardCredits,
+        big.quantity * c.resources['steel']!.basePrice.mulDouble(2.5),
+      );
     });
 
     test('picks resources made, or whose inputs are made', () {
