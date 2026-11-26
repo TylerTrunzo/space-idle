@@ -131,6 +131,10 @@ const double _keepShareOfCap = 0.25;
 /// for it instead of spending.
 const double _saveFrom = 0.5;
 
+/// Share of its credits the balanced bot still spends per purchase while
+/// saving for a goal, so a check-in spent saving is not idle.
+const double _pettyShare = 0.01;
+
 /// Game seconds of income within which the rest of a goal must be in
 /// reach before the balanced bot stops investing and saves for it: one
 /// 6 h check-in gap. Further off, investing first gets there sooner.
@@ -909,7 +913,11 @@ final class _View {
   /// Builds [d] on [body], or saves for it; staffing follows on a later
   /// step so that crew moved to it is not handed straight back.
   _Step _buildAt(BuildingDef d, BodyState body, String? deposit) {
-    if (freeCrew < 1 && _crewDonor(null) == null) return const _Stuck();
+    // Buildings without crew slots (crewless habitats, warehouses) need no
+    // crew to run.
+    if (d.crewSlots > 0 && freeCrew < 1 && _crewDonor(null) == null) {
+      return const _Stuck();
+    }
     if (!canPay(body, d.buildCost)) {
       final credits = d.buildCost['credits'] ?? const BigNum.zero();
       final short = d.buildCost.entries.any(
@@ -1002,6 +1010,9 @@ final class _View {
         )
         .firstOrNull;
     if (body == null) {
+      // Complete life support on a body that makes some of it.
+      final local = _completeLifeSupport(hab);
+      if (local != null) return local;
       // No room for a new one: grow the ones there are.
       if (more == null) return const _Stuck();
       return canPay(more.$3, {'credits': more.$2})
@@ -1027,6 +1038,36 @@ final class _View {
       );
     }
     return _buildAt(hab, body, null);
+  }
+
+  /// A step toward one body making all of [hab]'s inputs itself: on the
+  /// body with a free slot that makes the most of them already (body order
+  /// on a tie), a factory for a missing one whose own inputs are all made
+  /// there. Null if no body can get closer that way.
+  _Step? _completeLifeSupport(BuildingDef hab) {
+    BodyState? best;
+    var bestMade = 0;
+    for (final b in owned) {
+      if (!hasFreeSlot(b)) continue;
+      final made = hab.inputs.keys.where((i) => madeAt(b, i)).length;
+      if (made > bestMade) {
+        best = b;
+        bestMade = made;
+      }
+    }
+    if (best == null) return null;
+    for (final i in hab.inputs.keys) {
+      if (madeAt(best, i)) continue;
+      for (final d in c.buildings.values) {
+        if (d.kind != BuildingKind.factory ||
+            !d.outputs.containsKey(i) ||
+            !d.inputs.keys.every((x) => madeAt(best!, x))) {
+          continue;
+        }
+        return _buildAt(d, best, null);
+      }
+    }
+    return null;
   }
 
   /// The cheapest capacity level on a habitat that runs at full rate, its
@@ -1091,9 +1132,12 @@ final class _View {
   /// capacity upgrades (for their extra crew slot), new extractors and
   /// factories, and an extra build slot on a full body (valued as the best
   /// building it would take, priced with it). See [gain]. Storage is
-  /// bought only when a store fills up ([fixBottleneck]).
+  /// bought only when a store fills up ([fixBottleneck]). While saving,
+  /// purchases up to [_pettyShare] of the credits held still go ahead.
   Command? grow({required BigNum reserve}) {
-    final budget = faction.credits - reserve;
+    final budget = (faction.credits - reserve).max(
+      faction.credits.mulDouble(_pettyShare),
+    );
     if (budget <= const BigNum.zero()) return null;
     Command? best;
     var bestRoi = 0.0;
