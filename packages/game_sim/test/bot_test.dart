@@ -87,6 +87,18 @@ void main() {
     expect(hit.single.gameHours, lessThanOrEqualTo(72));
   });
 
+  test('balanced bot reaches every milestone within a week', () {
+    // The magnet chain needs a slot on a body that is full by then; the
+    // bot buys one rather than giving up on the magnet works.
+    final r = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 168);
+    expect(
+      r.milestonesNotReached.map((m) => m.id),
+      isEmpty,
+      reason: r.toMarkdown(),
+    );
+    expect(r.rejectedCommands, 0);
+  });
+
   test('bot commands are valid and sessions are deterministic', () {
     final e = _engine();
     final a = runBotSession(e, BalancedBot(), seed: 1, hours: 48);

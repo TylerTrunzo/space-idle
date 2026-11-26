@@ -499,10 +499,14 @@ final class _View {
 
   /// The first fix for one of the worst bottlenecks not yet in [tried],
   /// adding it to [tried] when fixed.
+  ///
+  /// Understaffed buildings are left out: assigning free crew sees to them
+  /// first, and they would crowd out the bottlenecks worth fixing.
   Command? fixBottleneck(Set<String> tried) {
-    for (final neck in report!.bottlenecks.take(
-      BalancedBot.bottlenecksConsidered,
-    )) {
+    for (final neck
+        in report!.bottlenecks
+            .where((n) => n.kind != BottleneckKind.understaffed)
+            .take(BalancedBot.bottlenecksConsidered)) {
       if (neck.kind == BottleneckKind.storageFull) {
         final key = '${neck.bodyId}:store';
         if (tried.contains(key)) continue;
@@ -798,7 +802,8 @@ final class _View {
 
   /// The next step toward a staffed building that makes [resourceId]:
   /// staffing an idle one, building an extractor on a deposit, or building
-  /// a factory once something makes each of its inputs (those first).
+  /// a factory once something makes each of its inputs (those first); a
+  /// build slot first when the only bodies that fit are full.
   _Step ensureMade(String resourceId, [Set<String> visiting = const {}]) {
     if (visiting.length > _maxChainDepth || visiting.contains(resourceId)) {
       return const _Stuck();
@@ -818,6 +823,12 @@ final class _View {
           return _buildAt(d, body, resourceId);
         }
       }
+      // Every body with the deposit is full: a slot there comes first.
+      for (final body in owned) {
+        if (body.deposits.any((x) => x.resourceId == resourceId)) {
+          return _expand(body);
+        }
+      }
     }
     final deeper = {...visiting, resourceId};
     for (final d in c.buildings.values) {
@@ -830,6 +841,9 @@ final class _View {
       if (step is _Stuck) continue;
       final body = _site(d.inputs.keys);
       if (body != null) return _buildAt(d, body, null);
+      // A full body could get them all: a slot there comes first.
+      final full = _site(d.inputs.keys, needSlot: false);
+      if (full != null) return _expand(full);
       // Every input is made, but no body can get them all: ships are short.
       final ships = _shipsFor(d.inputs.keys, deeper);
       if (_acts(ships)) return ships;
@@ -848,14 +862,15 @@ final class _View {
     return const _Waiting();
   }
 
-  /// The owned body with a free slot that can get every one of [inputs],
-  /// made there or shipped in, with the most made there; body order breaks
-  /// a tie. Goods ship only from bodies holding a cargo ship.
-  BodyState? _site(Iterable<String> inputs) {
+  /// The owned body with a free slot (any body, without [needSlot]) that
+  /// can get every one of [inputs], made there or shipped in, with the
+  /// most made there; body order breaks a tie. Goods ship only from bodies
+  /// holding a cargo ship.
+  BodyState? _site(Iterable<String> inputs, {bool needSlot = true}) {
     BodyState? best;
     var bestLocal = -1;
     for (final body in owned) {
-      if (!hasFreeSlot(body)) continue;
+      if (needSlot && !hasFreeSlot(body)) continue;
       var local = 0;
       var reachable = true;
       for (final i in inputs) {
@@ -920,6 +935,16 @@ final class _View {
       }
     }
     return null;
+  }
+
+  /// One more build slot on full [body]: bought now, saved for, or
+  /// [_Stuck] at the most a save holds.
+  _Step _expand(BodyState body) {
+    if (body.extraSlots >= SaveCodec.maxExtraSlots) return const _Stuck();
+    final cost = slotCost(c, body);
+    return canPay(body, cost)
+        ? _Do(ExpandSlotsCommand(factionId, body.id))
+        : _Save(cost['credits']!);
   }
 
   /// Builds [d] on [body], or saves for it; staffing follows on a later
