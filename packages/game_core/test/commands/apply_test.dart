@@ -92,7 +92,13 @@ void main() {
       final s = fresh();
       final id = expectOk(
         s,
-        BuildCommand('player', 'kora', 'mine', depositResourceId: 'silicon'),
+        BuildCommand(
+          'player',
+          'kora',
+          'mine',
+          depositResourceId: 'silicon',
+          autoCrew: false,
+        ),
       );
       expect(s.faction('player').credits, n(150));
       final b = s.body('kora').buildings.last;
@@ -100,6 +106,62 @@ void main() {
       expect(b.defId, 'mine');
       expect(b.depositResourceId, 'silicon');
       expect(b.crew, 0);
+    });
+
+    test('a new building takes free crew up to its base slots', () {
+      final s = fresh();
+      s.faction('player').credits = n(1e6);
+      // 10 base crew, 3 on the starting buildings: 7 free.
+      expect(availableCrew(s, content, 'player'), 7);
+      final mine = expectOk(
+        s,
+        BuildCommand('player', 'kora', 'mine', depositResourceId: 'silicon'),
+      )!;
+      expect(building(s, mine).crew, 1);
+      // A shipyard has 2 base slots.
+      final yard = expectOk(s, BuildCommand('player', 'kora', 'shipyard'))!;
+      expect(building(s, yard).crew, 2);
+      expect(availableCrew(s, content, 'player'), 4);
+      // A depot has no crew slots.
+      s.body('kora').stock['steel'] = n(50);
+      final depot = expectOk(s, BuildCommand('player', 'kora', 'depot'))!;
+      expect(building(s, depot).crew, 0);
+      // It takes only what is free: 1 of a shipyard's 2 slots, then none.
+      s.faction('player').baseCrew = 7;
+      expect(availableCrew(s, content, 'player'), 1);
+      final second = expectOk(s, BuildCommand('player', 'kora', 'shipyard'))!;
+      expect(building(s, second).crew, 1);
+      final third = expectOk(s, BuildCommand('player', 'kora', 'shipyard'))!;
+      expect(building(s, third).crew, 0);
+    });
+
+    test('autoCrew false leaves a new building empty', () {
+      final s = fresh();
+      s.faction('player').credits = n(1e6);
+      final id = expectOk(
+        s,
+        BuildCommand('player', 'kora', 'shipyard', autoCrew: false),
+      )!;
+      expect(building(s, id).crew, 0);
+      expect(availableCrew(s, content, 'player'), 7);
+    });
+
+    test('autoCrew is on unless a command says otherwise', () {
+      expect(const BuildCommand('p', 'k', 'smelter').autoCrew, isTrue);
+      final absent = Command.fromJson({
+        'cmd': 'build',
+        'factionId': 'p',
+        'bodyId': 'k',
+        'defId': 'smelter',
+      });
+      expect((absent as BuildCommand).autoCrew, isTrue);
+      final off = Command.fromJson({...absent.toJson(), 'autoCrew': false});
+      expect((off as BuildCommand).autoCrew, isFalse);
+      expect(off.toJson()['autoCrew'], false);
+      expect(
+        () => Command.fromJson({...absent.toJson(), 'autoCrew': 'yes'}),
+        throwsFormatException,
+      );
     });
 
     test('resource costs are paid from the body stock', () {

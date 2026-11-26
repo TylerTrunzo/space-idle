@@ -197,8 +197,9 @@ final class ScriptRunner {
     return null;
   }
 
-  /// A sentence on what a claim, extra slot, megaproject stage, demolish,
-  /// new or changed route or ship move did; null for other commands.
+  /// A sentence on what a build, claim, extra slot, megaproject stage,
+  /// demolish, new or changed route or ship move did; null for other
+  /// commands.
   String? _message(
     Command cmd,
     String? createdId,
@@ -221,6 +222,7 @@ final class ScriptRunner {
           state.time,
     );
     return switch (cmd) {
+      BuildCommand() => _builtMessage(createdId!),
       ClaimBodyCommand(:final bodyId) =>
         'Started claiming ${state.body(bodyId).name} for ${list(spent)}; '
             'done in ${done()}',
@@ -251,6 +253,18 @@ final class ScriptRunner {
             '${count == 1 ? 'it lands' : 'they land'} in ${lands()}',
       _ => null,
     };
+  }
+
+  /// "Built Shipyard on Kora (b9) with 2 of 2 crew": new building [id] and
+  /// the crew it took of its base slots, which a building without crew
+  /// slots leaves out.
+  String _builtMessage(String id) {
+    final b = state.bodies
+        .expand((body) => body.buildings)
+        .firstWhere((b) => b.id == id);
+    final slots = engine.content.buildings[b.defId]!.crewSlots;
+    final crew = slots == 0 ? '' : ' with ${b.crew} of $slots crew';
+    return 'Built ${_describe(id)}$crew';
   }
 
   /// [n] cargo ships by their display name, such as "2 Cargo Ships".

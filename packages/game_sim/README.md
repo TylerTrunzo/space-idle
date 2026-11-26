@@ -15,8 +15,8 @@ Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`
 `deliverContract`, `discardContract`);
 `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts that
-changed), `createdId` for a new building, route or project, and for
-`claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`, `demolish`,
+changed), `createdId` for a new building, route, ship move or project, and for
+`build`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`, `demolish`,
 `createRoute`, `updateRoute`, `moveShips`, `deliverContract` and
 `discardContract` a `message` such as
 `"Started claiming Brine for 5K credits; done in 30m"`. Claims, extra build
@@ -27,6 +27,10 @@ a second stage of a megaproject, already under way fails with
 "orbital_station","bodyId":"kora"}` pays the next level's cost from the body's
 stock and credits; each completed stage raises the megaproject's level, a
 permanent bonus.
+
+A new building takes free crew up to its base crew slots (fewer if fewer are
+free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew"`);
+`"autoCrew":false` on `build` leaves it empty.
 
 Routes move one resource between two of the player's bodies in one system,
 using cargo ships from the source body's stock. `createRoute` takes an optional

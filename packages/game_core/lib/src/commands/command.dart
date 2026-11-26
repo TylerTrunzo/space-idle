@@ -78,6 +78,7 @@ sealed class Command {
         _str(j, 'bodyId'),
         _str(j, 'defId'),
         depositResourceId: _optStr(j, 'depositResourceId'),
+        autoCrew: _optBool(j, 'autoCrew', absent: true),
       ),
       'demolish' => DemolishCommand(f, _str(j, 'buildingId')),
       'assignCrew' => AssignCrewCommand(
@@ -153,6 +154,8 @@ sealed class Command {
 /// Builds [defId] on [bodyId], paying its build cost.
 ///
 /// Credits come from the faction; resource costs from the body's stock.
+/// With [autoCrew] the new building is crewed from the faction's free crew,
+/// up to its base crew slots.
 final class BuildCommand extends Command {
   /// Creates a build command; extractors need [depositResourceId].
   const BuildCommand(
@@ -160,6 +163,7 @@ final class BuildCommand extends Command {
     this.bodyId,
     this.defId, {
     this.depositResourceId,
+    this.autoCrew = true,
   });
 
   /// Body to build on.
@@ -171,6 +175,11 @@ final class BuildCommand extends Command {
   /// Extractor only: the body deposit to mine. Ignored for other kinds.
   final String? depositResourceId;
 
+  /// Whether the new building takes as much free crew as it has base crew
+  /// slots for (fewer if fewer are free); false leaves it empty. On unless
+  /// a command says otherwise, in JSON too.
+  final bool autoCrew;
+
   @override
   String get _cmd => 'build';
 
@@ -179,6 +188,7 @@ final class BuildCommand extends Command {
     'bodyId': bodyId,
     'defId': defId,
     'depositResourceId': depositResourceId,
+    'autoCrew': autoCrew,
   };
 }
 

@@ -320,12 +320,15 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
   final short = _checkCost(c, f, body, def.buildCost);
   if (short != null) return short;
 
+  final crew = cmd.autoCrew
+      ? math.min(def.crewSlots, availableCrew(s, c, f.id))
+      : 0;
   _pay(f, body, def.buildCost);
   final b = BuildingState(
     id: s.newId('b'),
     defId: def.id,
     depositResourceId: deposit,
-    crew: 0,
+    crew: crew,
   );
   body.buildings.add(b);
   return CommandOk(createdId: b.id);

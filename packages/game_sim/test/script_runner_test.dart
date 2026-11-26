@@ -294,6 +294,37 @@ void main() {
     expect(((reach['stock']! as Map)['cargo_ship']! as Map)['display'], '2');
   });
 
+  test('a build reply names the building and the crew it took', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    final yard = r.handle({
+      'cmd': 'build',
+      'bodyId': 'kora',
+      'defId': 'shipyard',
+    });
+    expect(
+      yard['message'],
+      'Built Shipyard on Kora (${yard['createdId']}) with 2 of 2 crew',
+    );
+    final empty = r.handle({
+      'cmd': 'build',
+      'bodyId': 'kora',
+      'defId': 'shipyard',
+      'autoCrew': false,
+    });
+    expect(
+      empty['message'],
+      'Built Shipyard on Kora (${empty['createdId']}) with 0 of 2 crew',
+    );
+    r.state.body('kora').stock['steel'] = BigNum.from(50);
+    final depot = r.handle({
+      'cmd': 'build',
+      'bodyId': 'kora',
+      'defId': 'depot',
+    });
+    expect(depot['message'], 'Built Depot on Kora (${depot['createdId']})');
+  });
+
   test('an extra slot reply says when it arrives', () {
     final r = _runner();
     r.state.faction('player').credits = BigNum.from(1e6);

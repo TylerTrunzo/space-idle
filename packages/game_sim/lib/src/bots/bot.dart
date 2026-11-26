@@ -444,6 +444,9 @@ final class _View {
 
   /// Assigns free crew to an unstaffed habitat, else another unstaffed
   /// building, else a building with open slots; body and list order.
+  ///
+  /// The bots build with `autoCrew` off and staff through this, so free
+  /// crew goes to habitats first rather than to whatever was built last.
   Command? assignFreeCrew() {
     if (freeCrew < 1) return null;
     final open = [
@@ -760,7 +763,13 @@ final class _View {
       for (final d in c.buildings.values) {
         for (final dep in buildDeposits(d, body)) {
           offer(
-            BuildCommand(factionId, body.id, d.id, depositResourceId: dep),
+            BuildCommand(
+              factionId,
+              body.id,
+              d.id,
+              depositResourceId: dep,
+              autoCrew: false,
+            ),
             body,
             d.buildCost,
           );
@@ -831,7 +840,7 @@ final class _View {
         .firstOrNull;
     if (depot == null) return null;
     if (hasFreeSlot(body) && canPay(body, depot.buildCost)) {
-      return BuildCommand(factionId, body.id, depot.id);
+      return BuildCommand(factionId, body.id, depot.id, autoCrew: false);
     }
     (Command, BigNum)? best;
     for (final b in body.buildings) {
@@ -922,7 +931,13 @@ final class _View {
       final credits = d.buildCost['credits'] ?? const BigNum.zero();
       if (best == null || credits < best.$2) {
         best = (
-          BuildCommand(factionId, body.id, d.id, depositResourceId: deposit),
+          BuildCommand(
+            factionId,
+            body.id,
+            d.id,
+            depositResourceId: deposit,
+            autoCrew: false,
+          ),
           credits,
         );
       }
@@ -1310,7 +1325,13 @@ final class _View {
       return short ? const _Stuck() : _Save(credits);
     }
     return _Do(
-      BuildCommand(factionId, body.id, d.id, depositResourceId: deposit),
+      BuildCommand(
+        factionId,
+        body.id,
+        d.id,
+        depositResourceId: deposit,
+        autoCrew: false,
+      ),
     );
   }
 
@@ -1624,7 +1645,13 @@ final class _View {
             for (final dep in buildDeposits(d, body)) {
               if (_onlyFullMarkets(d, dep)) continue;
               consider(
-                BuildCommand(factionId, body.id, d.id, depositResourceId: dep),
+                BuildCommand(
+                  factionId,
+                  body.id,
+                  d.id,
+                  depositResourceId: dep,
+                  autoCrew: false,
+                ),
                 body,
                 d.buildCost,
                 gain(body, probe(d, body, dep)),

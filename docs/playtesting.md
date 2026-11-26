@@ -64,7 +64,7 @@ counts are plain integers.
 
 | Line | What it does |
 |---|---|
-| `{"cmd":"build","bodyId":"kora","defId":"mine","depositResourceId":"silicon"}` | Build; extractors name the deposit they mine. The reply has the new `createdId` |
+| `{"cmd":"build","bodyId":"kora","defId":"mine","depositResourceId":"silicon"}` | Build; extractors name the deposit they mine. The new building takes free crew up to its base slots (add `"autoCrew":false` to leave it empty). The reply has the new `createdId` and says how much crew it took |
 | `{"cmd":"assignCrew","buildingId":"b4","crew":1}` | Set a building's crew (an absolute count) |
 | `{"cmd":"upgrade","buildingId":"b1","track":"speed"}` | Buy one level of `speed`, `efficiency` or `capacity` |
 | `{"cmd":"setAutoSell","bodyId":"kora","resourceId":"steel","keepAtLeast":"100"}` | Sell everything above 100 automatically; `null` removes the rule |
