@@ -104,8 +104,7 @@ Content _content({double baseStorageCap = 1000}) {
       housing: 10,
       buildCost: const {},
     ),
-    // Invalid for loaded content (validator wants slots >= 1), but inline
-    // content can hold it; production must skip it.
+    // A habitat that needs no crew.
     BuildingDef(
       id: 'pod',
       name: 'Pod',
@@ -452,18 +451,44 @@ void main() {
     expect(depot.lastLimitReason, isNull);
   });
 
-  test('zero-slot habitat is not run and provides no housing', () {
+  test('a habitat with no crew slots runs on its inputs alone', () {
     s.faction('p').baseCrew = 2;
     final pod = add(home, 'pod', crew: 0);
     add(home, 'works', crew: 4);
     home.stock['water'] = n(100);
-    stepProduction(s, c, 10);
-    stepProduction(s, c, 10);
-    expect(stock(home, 'water'), near(100));
-    expect(pod.lastRunFraction, 0);
-    expect(pod.lastLimitReason, isNull);
+    // Crew efficiency is 0.5 before the pod houses anyone; the pod runs at
+    // full rate all the same.
     expect(crewEfficiency(s, c, 'p'), 0.5);
-    expect(availableCrew(s, c, 'p'), -2);
+    stepProduction(s, c, 10);
+    expect(stock(home, 'water'), near(99));
+    expect(pod.lastRunFraction, 1);
+    expect(pod.lastLimitReason, isNull);
+    expect(crewEfficiency(s, c, 'p'), 1.0);
+    expect(availableCrew(s, c, 'p'), 8);
+
+    home.stock['water'] = n(0.25);
+    stepProduction(s, c, 10);
+    expect(pod.lastRunFraction, closeTo(0.25, 1e-12));
+    expect(pod.lastLimitReason, 'input:water');
+    expect(crewTotals(s, c, 'p').supported, 2 + 2);
+  });
+
+  test('habitat capacity levels add a quarter of housing each', () {
+    s.faction('p').baseCrew = 0;
+    add(
+      home,
+      'pod',
+      crew: 0,
+      levels: {UpgradeTrack.capacity: 2},
+    ).lastRunFraction = 1;
+    add(
+      home,
+      'habitat',
+      crew: 1,
+      levels: {UpgradeTrack.capacity: 1},
+    ).lastRunFraction = 0.5;
+    // 10 × 1.5 + 10 × 1.25 × 0.5
+    expect(crewTotals(s, c, 'p').supported, 21);
   });
 
   test('no stock goes negative', () {

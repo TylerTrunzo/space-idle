@@ -228,7 +228,7 @@
     "id": "habitat", "name": "Habitat", "kind": "habitat", "cycleSeconds": 10,
     "inputs": {"food": 1, "water": 1, "oxygen": 1},
     "housing": 20,
-    "crewSlots": 1,
+    "crewSlots": 0,
     "buildCost": {"credits": "1500", "habitat_module": "1"},
     "upgrades": {
       "efficiency": {"baseCredits": "1000", "growth": 1.3},

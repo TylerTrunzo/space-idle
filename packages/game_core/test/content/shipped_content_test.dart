@@ -96,6 +96,8 @@ void main() {
     );
     expect(habitat.inputs.keys, unorderedEquals(['food', 'water', 'oxygen']));
     expect(habitat.housing, greaterThan(0));
+    // Habitats need no crew, so a full crew pool can always grow.
+    expect(habitat.crewSlots, 0);
     expect(
       _producible(content, _depositsOf(bodies.values)),
       containsAll(habitat.inputs.keys),

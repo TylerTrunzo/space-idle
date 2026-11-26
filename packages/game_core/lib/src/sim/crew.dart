@@ -15,8 +15,9 @@ final class CrewTotals {
   /// Crew available without habitats.
   final int base;
 
-  /// Crew the faction can support: [base] plus habitat housing scaled by
-  /// each habitat's last run fraction, the housing total rounded down.
+  /// Crew the faction can support: [base] plus each habitat's
+  /// [habitatHousing] scaled by its last run fraction, the housing total
+  /// rounded down.
   final int supported;
 
   /// Crew assigned to buildings on its bodies.
@@ -26,6 +27,12 @@ final class CrewTotals {
   /// starving habitats house fewer crew than are assigned.
   int get free => supported - assigned;
 }
+
+/// Crew habitat [b], of type [def], houses at full rate:
+/// `housing × (1 + capacityHousingPerLevel × capacity level)`.
+double habitatHousing(RulesDef r, BuildingDef def, BuildingState b) =>
+    def.housing *
+    (1 + r.capacityHousingPerLevel * b.levels[UpgradeTrack.capacity]!);
 
 /// Base, supported, assigned and free crew of [factionId] over the bodies
 /// it owns; see [CrewTotals]. Throws if the faction does not exist.
@@ -38,7 +45,7 @@ CrewTotals crewTotals(GameState s, Content c, String factionId) {
       assigned += b.crew;
       final def = c.buildings[b.defId]!;
       if (def.kind == BuildingKind.habitat) {
-        housing += def.housing * b.lastRunFraction;
+        housing += habitatHousing(c.rules, def, b) * b.lastRunFraction;
       }
     }
   }

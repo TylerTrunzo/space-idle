@@ -842,8 +842,8 @@ final class _View {
     return best?.$1;
   }
 
-  /// The next step toward a staffed habitat that has its life support:
-  /// staffing an idle one, making its build resources and inputs, shipping
+  /// The next step toward a running habitat that has its life support:
+  /// staffing an idle one that needs crew, making its build resources and inputs, shipping
   /// its build resources to the chosen body, then building it.
   _Step _ensureHousing() {
     final hab = c.buildings.values
@@ -851,7 +851,11 @@ final class _View {
         .firstOrNull;
     if (hab == null) return const _Stuck();
     for (final (_, b) in buildings) {
-      if (b.crew == 0 && def(b).kind == BuildingKind.habitat) return _staff(b);
+      if (b.crew == 0 &&
+          def(b).kind == BuildingKind.habitat &&
+          !runsWithoutCrew(def(b))) {
+        return _staff(b);
+      }
     }
     // Feed the habitats there are before adding more.
     if (crewEff < 1 ||

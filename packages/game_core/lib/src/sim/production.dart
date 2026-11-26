@@ -20,6 +20,18 @@ double efficiencyMultiplier(RulesDef r, int level) => math.max(
   math.pow(r.efficiencyPerLevel, level).toDouble(),
 );
 
+/// Whether a [def] building runs its recipe with no crew at all: a
+/// habitat with no crew slots, which runs at the share of its inputs that
+/// stock supplies, whatever the crew situation.
+bool runsWithoutCrew(BuildingDef def) =>
+    def.kind == BuildingKind.habitat && def.crewSlots == 0;
+
+/// Whether a [def] building runs a recipe: it has crew slots or
+/// [runsWithoutCrew]. Warehouses do not.
+bool runsRecipe(BuildingDef def) =>
+    (def.crewSlots > 0 && def.kind != BuildingKind.warehouse) ||
+    runsWithoutCrew(def);
+
 /// Units of each resource body [b] can store.
 ///
 /// `baseStorageCap × (1 + Σ warehouse storageBonus)
@@ -54,8 +66,9 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// updated; habitat run fractions set next step's [crewEfficiency].
 ///
 /// Crew efficiency is read once per faction before any body runs, so the
-/// result does not depend on body order. Buildings with no crew slots
-/// (warehouses) and unowned bodies run nothing.
+/// result does not depend on body order. Habitats with no crew slots run
+/// at full rate whatever the crew ([runsWithoutCrew]); other buildings
+/// with no crew slots (warehouses) and unowned bodies run nothing.
 void stepProduction(GameState s, Content c, double dt) {
   final crewEff = {
     for (final f in s.factions) f.id: crewEfficiency(s, c, f.id),
@@ -121,8 +134,9 @@ typedef BuildingFlow = ({
 /// `amount × lastRunFraction` is what the building actually moved. Inputs
 /// are listed for every recipe input (zero when unstaffed); an extractor's
 /// only output is its deposit's resource, scaled by richness, and it makes
-/// nothing when that deposit is missing. Buildings with no crew slots
-/// (warehouses) take and make nothing.
+/// nothing when that deposit is missing. A habitat with no crew slots runs
+/// at full rate, ignoring [crewEff]; other buildings that do not
+/// [runsRecipe] (warehouses) take and make nothing.
 BuildingFlow fullRateFlow(
   Content c,
   BodyState body,
@@ -132,12 +146,13 @@ BuildingFlow fullRateFlow(
 ) {
   final r = c.rules;
   final def = c.buildings[b.defId]!;
-  // Only warehouses have no slots in loaded content; a slot-less building
-  // of any other kind (inline content only) runs nothing either.
-  if (def.crewSlots == 0) return (inputs: const {}, outputs: const {});
+  if (!runsRecipe(def)) return (inputs: const {}, outputs: const {});
   // Crew fraction uses base slots, so crew in capacity-upgrade slots pushes
-  // output above 100%.
-  final crewFrac = b.crew / def.crewSlots * crewEff;
+  // output above 100%. A crewless habitat must not wait on the crew it
+  // houses, or a crew shortage would starve it further.
+  final crewFrac = runsWithoutCrew(def)
+      ? 1.0
+      : b.crew / def.crewSlots * crewEff;
   final cycles =
       dt /
       def.cycleSeconds *
@@ -180,7 +195,7 @@ final class _Run {
 void _stepBody(Content c, BodyState body, double dt, double crewEff) {
   final runs = [
     for (final b in body.buildings)
-      if (c.buildings[b.defId]!.crewSlots > 0)
+      if (runsRecipe(c.buildings[b.defId]!))
         _Run(b, fullRateFlow(c, body, b, dt, crewEff)),
   ];
 
@@ -208,7 +223,7 @@ void _stepBody(Content c, BodyState body, double dt, double crewEff) {
       }
     }
     final b = run.b;
-    if (b.crew == 0) {
+    if (b.crew == 0 && !runsWithoutCrew(c.buildings[b.defId]!)) {
       run.fraction = 0;
       b
         ..lastRunFraction = 0

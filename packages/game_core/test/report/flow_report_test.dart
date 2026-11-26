@@ -274,7 +274,7 @@ void main() {
     // The habitat ran at 0 last step, so it houses no one yet; fed now, it
     // runs fully during the sample tick, which must not change the counts.
     s.faction('player').baseCrew = 2;
-    kora.buildings.add(BuildingState(id: 'h1', defId: 'habitat', crew: 1));
+    kora.buildings.add(BuildingState(id: 'h1', defId: 'habitat', crew: 0));
     for (final id in ['food', 'water', 'oxygen']) {
       kora.stock[id] = n(10);
     }
@@ -286,8 +286,25 @@ void main() {
     expect(
       b.message,
       'Your empire is short on crew: '
-      'habitats and base crew support 2 of 4 assigned',
+      'habitats and base crew support 2 of 3 assigned',
     );
-    expect(b.runFraction, closeTo(0.5, 1e-12));
+    expect(b.runFraction, closeTo(2 / 3, 1e-12));
+  });
+
+  test('a crewless habitat reports its supply, not a missing crew', () {
+    s.faction('player').baseCrew = 3;
+    kora.buildings.add(BuildingState(id: 'h1', defId: 'habitat', crew: 0));
+    kora.stock['food'] = n(10);
+    kora.stock['water'] = n(10);
+    kora.stock['oxygen'] = n(0.05); // half of what a second needs
+    final r = buildFlowReport(s, c, 'player');
+    final h = koraFlow(r).buildings.singleWhere((b) => b.buildingId == 'h1');
+    expect(h.runFraction, closeTo(0.5, 1e-12));
+    expect(h.effectiveFraction, closeTo(0.5, 1e-12));
+    expect(h.slots, 0);
+    expect(
+      r.bottlenecks.single.message,
+      'Habitat on Kora is running at 50%: not enough Oxygen',
+    );
   });
 }

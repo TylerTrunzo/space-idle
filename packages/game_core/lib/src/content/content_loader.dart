@@ -221,6 +221,7 @@ final class _Loader {
       'efficiencyFloor',
       'capacityCrewPerLevel',
       'capacityStoragePerLevel',
+      'capacityHousingPerLevel',
       'baseStorageCap',
       'offlineCapSeconds',
       'marketFloor',
@@ -241,6 +242,11 @@ final class _Loader {
     final efficiencyFloor = f.number('efficiencyFloor', gt: 0, le: 1);
     final capacityCrewPerLevel = f.integer('capacityCrewPerLevel', min: 0);
     final capacityStoragePerLevel = f.number('capacityStoragePerLevel', ge: 0);
+    final capacityHousingPerLevel = f.number(
+      'capacityHousingPerLevel',
+      fallback: RulesDef.defaultCapacityHousingPerLevel,
+      ge: 0,
+    );
     final baseStorageCap = f.number('baseStorageCap', gt: 0);
     final offlineCapSeconds = f.number('offlineCapSeconds', gt: 0);
     final marketFloor = f.number('marketFloor', ge: 0, le: 1);
@@ -260,6 +266,7 @@ final class _Loader {
       efficiencyFloor: efficiencyFloor!,
       capacityCrewPerLevel: capacityCrewPerLevel!,
       capacityStoragePerLevel: capacityStoragePerLevel!,
+      capacityHousingPerLevel: capacityHousingPerLevel!,
       baseStorageCap: baseStorageCap!,
       offlineCapSeconds: offlineCapSeconds!,
       marketFloor: marketFloor!,
@@ -332,7 +339,9 @@ final class _Loader {
       if (present) f.err(key, 'not used by ${b.kind.name} buildings');
     }
 
-    if (b.kind != BuildingKind.warehouse && b.crewSlots < 1) {
+    // Habitats may run without crew; warehouses never have any.
+    if ((b.kind == BuildingKind.extractor || b.kind == BuildingKind.factory) &&
+        b.crewSlots < 1) {
       f.err('crewSlots', 'must be >= 1 for ${b.kind.name} buildings');
     }
     switch (b.kind) {

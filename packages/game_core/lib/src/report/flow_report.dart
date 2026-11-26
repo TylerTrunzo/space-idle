@@ -236,7 +236,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
           buildingId: b.id,
           defId: b.defId,
           runFraction: b.lastRunFraction,
-          effectiveFraction: def.crewSlots == 0
+          effectiveFraction: runsWithoutCrew(def)
+              ? b.lastRunFraction
+              : def.crewSlots == 0
               ? 0
               : b.lastRunFraction * b.crew / def.crewSlots * crewEff,
           limitReason: b.lastLimitReason,
@@ -333,7 +335,7 @@ Bottleneck? _storageFull(
 Bottleneck? _bottleneck(Content c, BodyState body, BuildingState b) {
   final def = c.buildings[b.defId]!;
   final reason = b.lastLimitReason;
-  if (def.crewSlots == 0 || reason == null) return null;
+  if (!runsRecipe(def) || reason == null) return null;
   final where = '${def.name} on ${body.name}';
   final BottleneckKind kind;
   final String? resourceId;

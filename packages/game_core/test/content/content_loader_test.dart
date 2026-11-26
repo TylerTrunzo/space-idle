@@ -378,6 +378,46 @@ void main() {
     );
   });
 
+  test('habitats may have no crew slots; extractors and factories may not', () {
+    final b = minimalBundle();
+    _list(
+      b,
+      'resources',
+    ).add({'id': 'air', 'name': 'Air', 'tier': 1, 'basePrice': '1'});
+    _list(b, 'buildings').addAll([
+      {
+        'id': 'vent',
+        'name': 'Vent',
+        'kind': 'factory',
+        'cycleSeconds': 5,
+        'inputs': {'ore': 1},
+        'outputs': {'air': 1},
+        'crewSlots': 1,
+        'buildCost': {'credits': '10'},
+      },
+      {
+        'id': 'dome',
+        'name': 'Dome',
+        'kind': 'habitat',
+        'cycleSeconds': 10,
+        'inputs': {'air': 1},
+        'housing': 5,
+        'crewSlots': 0,
+        'buildCost': {'credits': '10'},
+      },
+    ]);
+    expect(_ok(b).buildings['dome']!.crewSlots, 0);
+    _entry(b, 'buildings', 'smelter')['crewSlots'] = 0;
+    _entry(b, 'buildings', 'mine')['crewSlots'] = 0;
+    expect(
+      _errors(b),
+      containsAll([
+        'buildings.smelter.crewSlots: must be >= 1 for factory buildings',
+        'buildings.mine.crewSlots: must be >= 1 for extractor buildings',
+      ]),
+    );
+  });
+
   test('unknown fields are reported', () {
     final b = minimalBundle();
     _entry(b, 'buildings', 'smelter')['housng'] = 4;

@@ -6,6 +6,7 @@
   "efficiencyFloor": 0.25,
   "capacityCrewPerLevel": 1,
   "capacityStoragePerLevel": 0.2,
+  "capacityHousingPerLevel": 0.25,
   "baseStorageCap": 1000,
   "offlineCapSeconds": 43200,
   "marketFloor": 0.2,

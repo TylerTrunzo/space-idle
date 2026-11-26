@@ -58,7 +58,8 @@ enum UpgradeTrack {
   /// Fewer inputs per cycle.
   efficiency,
 
-  /// More crew slots and body storage.
+  /// More crew slots and body storage; on habitats, more housing instead
+  /// of crew slots (see [RulesDef.capacityHousingPerLevel]).
   capacity,
 }
 
@@ -120,10 +121,12 @@ final class BuildingDef {
   /// Extractor only: resource ids this building may mine.
   final List<String> extracts;
 
-  /// Crew slots at capacity level 0; zero only for warehouses.
+  /// Crew slots at capacity level 0; zero for warehouses, and for
+  /// habitats that run without crew.
   final int crewSlots;
 
-  /// Habitat only: crew housed when the habitat runs at full rate.
+  /// Habitat only: crew housed when the habitat runs at full rate, before
+  /// capacity upgrades ([RulesDef.capacityHousingPerLevel]).
   final int housing;
 
   /// Warehouse only: fraction of the base storage cap added per resource.
@@ -170,6 +173,7 @@ final class RulesDef {
     required this.efficiencyFloor,
     required this.capacityCrewPerLevel,
     required this.capacityStoragePerLevel,
+    this.capacityHousingPerLevel = defaultCapacityHousingPerLevel,
     required this.baseStorageCap,
     required this.offlineCapSeconds,
     required this.marketFloor,
@@ -202,6 +206,15 @@ final class RulesDef {
 
   /// Body storage fraction added per capacity level.
   final double capacityStoragePerLevel;
+
+  /// [capacityHousingPerLevel] when the rules do not set it.
+  static const double defaultCapacityHousingPerLevel = 0.25;
+
+  /// Habitat housing fraction added per capacity level: a habitat houses
+  /// `housing × (1 + capacityHousingPerLevel × capacity level)` at full
+  /// rate. On habitats the capacity track adds housing, not crew slots
+  /// (a habitat with no base slots never gets any).
+  final double capacityHousingPerLevel;
 
   /// Units of each resource a body stores before warehouses and upgrades.
   final double baseStorageCap;
