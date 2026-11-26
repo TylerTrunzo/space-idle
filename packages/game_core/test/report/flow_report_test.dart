@@ -172,6 +172,41 @@ void main() {
     expect(plain(r.empireNet), rates({'copper_ore': 0.32, 'steel': 0.2}));
   });
 
+  test('a building fed by a route shows the route\'s supply between '
+      'landings', () {
+    // Playtest P6: a Hollow Reach to Cinder nickel route "delivered
+    // nothing" because shipments land once a minute and the report's
+    // one-second sample fell between landings, showing the magnet works at
+    // 0%. Here Hollow Reach sends 0.2 iron ore a second to Kora's smelter,
+    // which wants 0.4, with Kora's own iron mine idle.
+    s.body('hollow_reach')
+      ..ownerId = 'player'
+      ..stock['iron_ore'] = n(1000)
+      ..stock['cargo_ship'] = n(1);
+    kora.stock.remove('iron_ore');
+    engine
+      ..apply(s, const AssignCrewCommand('player', 'b1', 0))
+      ..apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'hollow_reach',
+          'kora',
+          'iron_ore',
+          n(0.2),
+          1,
+        ),
+      )
+      // The last step is 30 s, so the report samples between landings.
+      ..advance(s, 630);
+    expect(s.shipments, isNotEmpty);
+    expect(s.shipments.every((sh) => sh.arriveAt > s.time + 1), isTrue);
+    final f = koraFlow(buildFlowReport(s, c, 'player'));
+    final smelter = f.buildings.singleWhere((b) => b.buildingId == 'b3');
+    expect(smelter.runFraction, closeTo(0.5, 1e-9));
+    expect(plain(smelter.inputsPerSec), rates({'iron_ore': 0.2}));
+  });
+
   test('output lost to the storage cap is reported as waste', () {
     kora.stock['copper_ore'] = n(1000);
     final r = buildFlowReport(s, c, 'player');

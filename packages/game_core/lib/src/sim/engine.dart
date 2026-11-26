@@ -85,7 +85,9 @@ final class GameEngine {
   /// milestone check, then `time += dt`. Stock may pass the storage cap
   /// during the tick; production uses landed cargo, and cargo and
   /// auto-sell take from what is made, before the clamp, so long steps
-  /// lose no more to the cap than short ones. Because time moves last, a
+  /// lose no more to the cap than short ones. Routes take their share
+  /// before auto-sell does: a rule selling a body's whole surplus never
+  /// starves a route out of it. Because time moves last, a
   /// shipment due at exactly `time + dt` lands at the start of the next
   /// tick.
   ///
