@@ -395,6 +395,21 @@ void main() {
     expect(availableCrew(s, c, 'p'), -6);
   });
 
+  test('crewTotals counts base, supported, assigned and free crew', () {
+    s.faction('p').baseCrew = 5;
+    add(home, 'drill', crew: 2, deposit: 'iron_ore');
+    add(home, 'habitat', crew: 1).lastRunFraction = 0.5; // houses 5
+    s
+        .body('wild')
+        .buildings
+        .add(
+          BuildingState(id: 'w1', defId: 'smelter', crew: 1),
+        ); // unowned: not counted
+    final t = crewTotals(s, c, 'p');
+    expect((t.base, t.supported, t.assigned, t.free), (5, 10, 3, 7));
+    expect(t.free, availableCrew(s, c, 'p'));
+  });
+
   test('crew efficiency scales output', () {
     s.faction('p').baseCrew = 2;
     add(home, 'drill', crew: 2, deposit: 'iron_ore');

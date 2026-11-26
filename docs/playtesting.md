@@ -34,15 +34,17 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 
 | Line | What it does |
 |---|---|
-| `{"cmd":"state"}` | Game time, credits, the bodies you own and their stock |
-| `{"cmd":"report"}` | Per-second production, use, net flow and waste per body, each building's run fraction and crew, and the bottlenecks, worst first |
+| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free), the bodies you own and their stock |
+| `{"cmd":"report"}` | Per-second production, use, net flow and waste per body, credits per second, each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
 | `{"cmd":"costs"}` | Next upgrade cost of every track of every building, and the next claim cost |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
 
 A bottleneck in `report` has a `kind`: `input` (a building is short of
-`resourceId`), `noCrew`, or `crewShortage` (habitats and base crew support fewer
-crew than you have assigned, so every crewed building slows down).
+`resourceId`), `noCrew`, `crewShortage` (habitats and base crew support fewer
+crew than you have assigned, so every crewed building slows down), or
+`storageFull` (a body's store of `resourceId` is at its cap and output is being
+wasted).
 
 ### Game commands (act)
 

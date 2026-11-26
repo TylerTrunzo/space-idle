@@ -30,9 +30,17 @@ Examples:
 {"cmd":"report"}
 ```
 
+`report` gives per-second rates for each owned body, the player's
+`creditsPerSec`, and for each building its `runFraction` (input supply),
+`effectiveFraction` (run fraction × crew / base slots × crew efficiency) and
+actual `inputs` and `outputs`. `state` also gives the player's crew totals
+(`base`, `supported`, `assigned`, `free`).
+
 Bottlenecks in `report` carry a `kind`: `input` (short of `resourceId`),
-`noCrew`, or `crewShortage` (habitats and base crew support fewer crew than
-are assigned, so every crewed building slows).
+`noCrew`, `crewShortage` (habitats and base crew support fewer crew than
+are assigned, so every crewed building slows; `bodyId` and `buildingId` are
+null), or `storageFull` (`resourceId` is at the body's storage cap and
+output is being wasted; `buildingId` is null).
 
 ## Bot runs
 

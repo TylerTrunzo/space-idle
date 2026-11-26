@@ -70,6 +70,45 @@ void main() {
     expect(st[2].slots, 2);
   });
 
+  test('building statuses give actual rates and effective fraction', () {
+    s.faction('player').baseCrew = 30;
+    engine
+      ..apply(s, const UpgradeCommand('player', 'b3', UpgradeTrack.capacity))
+      ..apply(s, const AssignCrewCommand('player', 'b3', 2))
+      ..apply(s, const AssignCrewCommand('player', 'b2', 0));
+    // Two crew on one base slot want 0.8 ore a second; 0.2 is there.
+    kora.stock['iron_ore'] = n(0.2);
+    final st = koraFlow(buildFlowReport(s, c, 'player')).buildings;
+    final (mine, idle, smelter) = (st[0], st[1], st[2]);
+    expect(plain(mine.outputsPerSec), rates({'iron_ore': 0.4}));
+    expect(mine.inputsPerSec, isEmpty);
+    expect(mine.effectiveFraction, 1);
+    expect(idle.outputsPerSec, isEmpty);
+    expect(idle.effectiveFraction, 0);
+    expect(smelter.runFraction, closeTo(0.25, 1e-12));
+    // Run fraction 0.25 × crew fraction 2 × crew efficiency 1.
+    expect(smelter.effectiveFraction, closeTo(0.5, 1e-12));
+    expect(plain(smelter.inputsPerSec), rates({'iron_ore': 0.2}));
+    expect(plain(smelter.outputsPerSec), rates({'steel': 0.1}));
+  });
+
+  test('effective fraction includes crew efficiency', () {
+    s.faction('player').baseCrew = 2; // 2 of 3 assigned crew supported
+    final st = koraFlow(buildFlowReport(s, c, 'player')).buildings;
+    expect(st[0].runFraction, 1);
+    expect(st[0].effectiveFraction, closeTo(2 / 3, 1e-12));
+    expect(plain(st[0].outputsPerSec), rates({'iron_ore': 0.4 * 2 / 3}));
+  });
+
+  test('credits per second is the change over the sample tick', () {
+    expect(buildFlowReport(s, c, 'player').creditsPerSec.isZero, isTrue);
+    engine.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+    final r = buildFlowReport(s, c, 'player');
+    // 0.2 steel a second sold at about 4.
+    expect(r.creditsPerSec.toDouble(), closeTo(0.8, 1e-3));
+    expect(r.creditsPerSec.toDouble(), lessThan(0.8));
+  });
+
   test('net includes route outflow; empire net counts cargo in flight', () {
     s.body('hollow_reach').ownerId = 'player';
     kora.stock['cargo_ship'] = n(1);
@@ -95,10 +134,38 @@ void main() {
 
   test('output lost to the storage cap is reported as waste', () {
     kora.stock['copper_ore'] = n(1000);
-    final f = koraFlow(buildFlowReport(s, c, 'player'));
+    final r = buildFlowReport(s, c, 'player');
+    final f = koraFlow(r);
     expect(plain(f.producedPerSec)['copper_ore'], closeTo(0.32, 1e-9));
     expect(plain(f.wastedPerSec), rates({'copper_ore': 0.32}));
     expect(f.netPerSec.containsKey('copper_ore'), isFalse);
+
+    final b = r.bottlenecks.single;
+    expect(b.kind, BottleneckKind.storageFull);
+    expect(
+      b.message,
+      'Kora storage is full of Copper Ore: output is being wasted',
+    );
+    expect(b.bodyId, 'kora');
+    expect(b.buildingId, isNull);
+    expect(b.resourceId, 'copper_ore');
+    expect(b.runFraction, 0);
+  });
+
+  test('storage full reports the share of output kept', () {
+    // 1000 - 0.16 leaves room for half of a second's 0.32 copper ore.
+    kora.stock['copper_ore'] = n(1000 - 0.16);
+    final b = buildFlowReport(s, c, 'player').bottlenecks.single;
+    expect(b.kind, BottleneckKind.storageFull);
+    expect(b.runFraction, closeTo(0.5, 1e-9));
+  });
+
+  test('a full store that wastes nothing is not a bottleneck', () {
+    kora.stock['steel'] = n(1000); // full, but nothing makes more... yet
+    engine.apply(s, const AssignCrewCommand('player', 'b3', 0));
+    expect(buildFlowReport(s, c, 'player').bottlenecks.map((b) => b.kind), [
+      BottleneckKind.noCrew,
+    ]);
   });
 
   test('flow report does not mutate state', () {
@@ -161,8 +228,9 @@ void main() {
       'Your empire is short on crew: '
       'habitats and base crew support 2 of 3 assigned',
     );
-    expect(b.bodyId, 'kora');
-    expect(b.buildingId, 'b1');
+    // A faction-wide shortage names no body or building.
+    expect(b.bodyId, isNull);
+    expect(b.buildingId, isNull);
     expect(b.resourceId, isNull);
     expect(b.runFraction, closeTo(2 / 3, 1e-12));
   });

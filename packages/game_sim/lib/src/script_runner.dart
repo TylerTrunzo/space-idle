@@ -121,6 +121,7 @@ final class ScriptRunner {
     return {
       'ok': true,
       'empireNet': _nums(r.empireNet),
+      'creditsPerSec': _num(r.creditsPerSec),
       'bodies': [
         for (final b in r.bodies)
           {
@@ -135,9 +136,12 @@ final class ScriptRunner {
                   'buildingId': s.buildingId,
                   'defId': s.defId,
                   'runFraction': s.runFraction,
+                  'effectiveFraction': s.effectiveFraction,
                   'limitReason': s.limitReason,
                   'crew': s.crew,
                   'slots': s.slots,
+                  'inputs': _nums(s.inputsPerSec),
+                  'outputs': _nums(s.outputsPerSec),
                 },
             ],
           },
@@ -158,10 +162,17 @@ final class ScriptRunner {
 
   Map<String, Object?> _state() {
     final p = _player;
+    final crew = crewTotals(state, engine.content, p.id);
     return {
       'ok': true,
       'time': state.time,
       'credits': _num(p.credits),
+      'crew': {
+        'base': crew.base,
+        'supported': crew.supported,
+        'assigned': crew.assigned,
+        'free': crew.free,
+      },
       'bodies': [
         for (final b in state.bodies)
           if (b.ownerId == p.id)

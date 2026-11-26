@@ -3,16 +3,33 @@ import 'dart:math' as math;
 import '../content/content.dart';
 import '../state/game_state.dart';
 
-/// Crew [factionId] can support and has assigned, over the bodies it owns.
-///
-/// Supported crew is base crew plus habitat housing scaled by each habitat's
-/// last run fraction, the housing total rounded down. Throws if the faction
-/// does not exist.
-({int supported, int assigned}) _crewTotals(
-  GameState s,
-  Content c,
-  String factionId,
-) {
+/// A faction's crew over the bodies it owns.
+final class CrewTotals {
+  /// Creates crew totals.
+  const CrewTotals({
+    required this.base,
+    required this.supported,
+    required this.assigned,
+  });
+
+  /// Crew available without habitats.
+  final int base;
+
+  /// Crew the faction can support: [base] plus habitat housing scaled by
+  /// each habitat's last run fraction, the housing total rounded down.
+  final int supported;
+
+  /// Crew assigned to buildings on its bodies.
+  final int assigned;
+
+  /// Crew still free to assign: `supported − assigned`; negative when
+  /// starving habitats house fewer crew than are assigned.
+  int get free => supported - assigned;
+}
+
+/// Base, supported, assigned and free crew of [factionId] over the bodies
+/// it owns; see [CrewTotals]. Throws if the faction does not exist.
+CrewTotals crewTotals(GameState s, Content c, String factionId) {
   var housing = 0.0;
   var assigned = 0;
   for (final body in s.bodies) {
@@ -25,9 +42,13 @@ import '../state/game_state.dart';
       }
     }
   }
+  final base = s.faction(factionId).baseCrew;
   // The small epsilon keeps products such as 0.29 × 100 from flooring to 28.
-  final supported = s.faction(factionId).baseCrew + (housing + 1e-9).floor();
-  return (supported: supported, assigned: assigned);
+  return CrewTotals(
+    base: base,
+    supported: base + (housing + 1e-9).floor(),
+    assigned: assigned,
+  );
 }
 
 /// Crew [factionId] can still assign: base crew plus habitat housing scaled
@@ -36,10 +57,8 @@ import '../state/game_state.dart';
 ///
 /// Negative when starving habitats house fewer crew than are assigned.
 /// Throws if the faction does not exist.
-int availableCrew(GameState s, Content c, String factionId) {
-  final t = _crewTotals(s, c, factionId);
-  return t.supported - t.assigned;
-}
+int availableCrew(GameState s, Content c, String factionId) =>
+    crewTotals(s, c, factionId).free;
 
 /// Share of [factionId]'s assigned crew its housing supports:
 /// `min(1, supported / assigned)`, or 1 when no crew is assigned.
@@ -48,7 +67,7 @@ int availableCrew(GameState s, Content c, String factionId) {
 /// building of the faction works at this fraction of its crew.
 /// Throws if the faction does not exist.
 double crewEfficiency(GameState s, Content c, String factionId) {
-  final t = _crewTotals(s, c, factionId);
+  final t = crewTotals(s, c, factionId);
   if (t.assigned == 0) return 1;
   return math.min(1, t.supported / t.assigned);
 }

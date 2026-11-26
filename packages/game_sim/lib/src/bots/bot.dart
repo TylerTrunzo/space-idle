@@ -425,12 +425,13 @@ final class _View {
     )) {
       if (neck.kind != BottleneckKind.input) {
         // Free crew is assigned first and a crew shortage is shed
-        // ([shedCrew]); an idle building waits for crew to free up.
+        // ([shedCrew]); an idle building waits for crew to free up; auto-sell
+        // keeps stores from filling.
         continue;
       }
       final key = '${neck.bodyId}:${neck.resourceId}';
       if (tried.contains(key)) continue;
-      final fix = _fixInput(s.body(neck.bodyId), neck.resourceId!);
+      final fix = _fixInput(s.body(neck.bodyId!), neck.resourceId!);
       if (fix != null) {
         tried.add(key);
         return fix;

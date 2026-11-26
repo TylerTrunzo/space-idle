@@ -68,6 +68,30 @@ void main() {
     expect(r.handle({'cmd': 'costs'})['ok'], isTrue);
   });
 
+  test('report and state carry rates, credits per second and crew', () {
+    final r = _runner();
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'steel',
+      'keepAtLeast': '0',
+    });
+    final rep = r.handle({'cmd': 'report'});
+    expect((rep['creditsPerSec']! as Map)['display'], isA<String>());
+    final mine =
+        (((rep['bodies']! as List).first as Map)['buildings']! as List).first
+            as Map;
+    expect(mine['effectiveFraction'], 1.0);
+    expect((mine['outputs']! as Map).keys, ['iron_ore']);
+    expect(mine['inputs'], isEmpty);
+    expect(r.handle({'cmd': 'state'})['crew'], {
+      'base': 20,
+      'supported': 20,
+      'assigned': 3,
+      'free': 17,
+    });
+  });
+
   test('invalid command returns ok:false with error name', () {
     final out = _runner().handle({
       'cmd': 'build',

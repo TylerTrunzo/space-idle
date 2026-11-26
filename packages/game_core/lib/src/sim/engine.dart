@@ -18,6 +18,7 @@ final class OfflineSummary {
     required this.secondsAway,
     required Map<String, BigNum> stockGained,
     required this.creditsGained,
+    required this.totalWasted,
     required List<String> milestonesReached,
     required List<Bottleneck> topBottlenecks,
   }) : stockGained = Map.unmodifiable(stockGained),
@@ -38,12 +39,21 @@ final class OfflineSummary {
   /// Change in the player's credits; negative if it fell.
   final BigNum creditsGained;
 
+  /// Units lost on the player's bodies while away, every resource summed:
+  /// cut by storage caps, or cargo lost with both its ends. Zero means
+  /// nothing was wasted.
+  final BigNum totalWasted;
+
   /// Ids of milestones the player reached while away, in content order.
   final List<String> milestonesReached;
 
   /// The player's worst bottlenecks after catching up, at most three.
   final List<Bottleneck> topBottlenecks;
 }
+
+/// Game seconds per tick of [GameEngine.catchUpOffline], the default step
+/// of [GameEngine.advance].
+const double _offlineStepSeconds = 60;
 
 /// Runs the game: new games, commands and the passage of time.
 final class GameEngine {
@@ -95,7 +105,19 @@ final class GameEngine {
   ///
   /// Zero [seconds] does nothing. Throws [ArgumentError] if [seconds] is
   /// negative or not finite, or [maxStep] is not above zero and finite.
-  void advance(GameState s, double seconds, {double maxStep = 60}) {
+  void advance(
+    GameState s,
+    double seconds, {
+    double maxStep = _offlineStepSeconds,
+  }) => _advance(s, seconds, maxStep);
+
+  /// [advance], calling [afterTick] after every tick.
+  void _advance(
+    GameState s,
+    double seconds,
+    double maxStep, [
+    void Function()? afterTick,
+  ]) {
     if (!seconds.isFinite || seconds < 0) {
       throw ArgumentError.value(seconds, 'seconds', 'must be finite and >= 0');
     }
@@ -107,9 +129,13 @@ final class GameEngine {
     final whole = (seconds / maxStep).floor();
     for (var i = 0; i < whole; i++) {
       tick(s, maxStep);
+      afterTick?.call();
     }
     final rest = seconds - whole * maxStep;
-    if (rest > maxStep * 1e-9) tick(s, rest);
+    if (rest > maxStep * 1e-9) {
+      tick(s, rest);
+      afterTick?.call();
+    }
   }
 
   /// Simulates the [secondsAway] the player was gone, up to [capSeconds]
@@ -129,7 +155,15 @@ final class GameEngine {
     final creditsBefore = player.credits;
     final reachedBefore = Set.of(player.reachedMilestones);
 
-    advance(s, simulated);
+    var wasted = const BigNum.zero();
+    _advance(s, simulated, _offlineStepSeconds, () {
+      for (final b in s.bodies) {
+        if (b.ownerId != player.id) continue;
+        for (final v in b.wastedThisStep.values) {
+          wasted = wasted + v;
+        }
+      }
+    });
 
     final stockAfter = _empireStock(s, player.id);
     final gained = <String, BigNum>{};
@@ -144,6 +178,7 @@ final class GameEngine {
       secondsAway: secondsAway,
       stockGained: gained,
       creditsGained: player.credits - creditsBefore,
+      totalWasted: wasted,
       milestonesReached: [
         for (final m in content.milestones)
           if (player.reachedMilestones.contains(m.id) &&

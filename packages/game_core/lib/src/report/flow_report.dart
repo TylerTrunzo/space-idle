@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../commands/apply.dart';
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../num/change.dart';
 import '../sim/crew.dart';
 import '../sim/engine.dart';
 import '../sim/production.dart';
@@ -10,15 +11,19 @@ import '../state/game_state.dart';
 
 /// How one building ran in the report's sample step.
 final class BuildingStatus {
-  /// Creates a building status.
-  const BuildingStatus({
+  /// Creates a building status; the maps are copied unmodifiable.
+  BuildingStatus({
     required this.buildingId,
     required this.defId,
     required this.runFraction,
+    required this.effectiveFraction,
     required this.limitReason,
     required this.crew,
     required this.slots,
-  });
+    required Map<String, BigNum> inputsPerSec,
+    required Map<String, BigNum> outputsPerSec,
+  }) : inputsPerSec = Map.unmodifiable(inputsPerSec),
+       outputsPerSec = Map.unmodifiable(outputsPerSec);
 
   /// The building's id.
   final String buildingId;
@@ -30,6 +35,17 @@ final class BuildingStatus {
   /// recipe and stay at 0.
   final double runFraction;
 
+  /// Its actual output as a share of what it makes with its base crew
+  /// slots full, every input supplied and the faction fully housed:
+  /// `runFraction × crew / base slots × crew efficiency`.
+  ///
+  /// Shows staffing and housing as well as supply: a fully supplied
+  /// building with half its slots crewed is at 0.5. Above 1 when capacity
+  /// upgrades hold crew beyond the base slots; 0 for warehouses and
+  /// unstaffed buildings. Speed upgrades do not count; see [outputsPerSec]
+  /// for the rate.
+  final double effectiveFraction;
+
   /// `noCrew`, `input:<resourceId>`, or null when nothing held it back.
   final String? limitReason;
 
@@ -38,6 +54,14 @@ final class BuildingStatus {
 
   /// Most crew it can hold, capacity upgrades included.
   final int slots;
+
+  /// Resource id to units it actually used per second, in content order;
+  /// zero rates left out.
+  final Map<String, BigNum> inputsPerSec;
+
+  /// Resource id to units it actually made per second, before the storage
+  /// cap, in content order; zero rates left out.
+  final Map<String, BigNum> outputsPerSec;
 }
 
 /// Per-second flows on one body.
@@ -87,10 +111,14 @@ enum BottleneckKind {
   /// Habitats and base crew support fewer crew than the faction has
   /// assigned, so every crewed building works below its crew.
   crewShortage,
+
+  /// A body's stock of one resource is at its storage cap and what more
+  /// arrives is wasted.
+  storageFull,
 }
 
-/// A building, or for a crew shortage every crewed building, running below
-/// full rate, and why.
+/// Something running below full rate, and why: a building, a body's full
+/// store of one resource, or for a crew shortage the whole faction.
 final class Bottleneck {
   /// Creates a bottleneck.
   const Bottleneck({
@@ -105,18 +133,22 @@ final class Bottleneck {
   /// What holds it back.
   final BottleneckKind kind;
 
-  /// Body the building stands on.
-  final String bodyId;
+  /// Body the building or store is on; null for
+  /// [BottleneckKind.crewShortage], which is faction-wide.
+  final String? bodyId;
 
-  /// The held-back building; for [BottleneckKind.crewShortage], which slows
-  /// every crewed building, the faction's first crewed building.
-  final String buildingId;
+  /// The held-back building; null for [BottleneckKind.crewShortage] and
+  /// [BottleneckKind.storageFull].
+  final String? buildingId;
 
-  /// The input it is short of; null unless [kind] is [BottleneckKind.input].
+  /// The input a building is short of ([BottleneckKind.input]) or the
+  /// resource being wasted ([BottleneckKind.storageFull]); otherwise null.
   final String? resourceId;
 
-  /// Share of full rate it ran at, in `[0, 1)`; for
-  /// [BottleneckKind.crewShortage], the faction's crew efficiency.
+  /// Share of full rate achieved, in `[0, 1)`: a building's run fraction;
+  /// for [BottleneckKind.crewShortage] the faction's crew efficiency; for
+  /// [BottleneckKind.storageFull] the share of the body's own output of the
+  /// resource that it kept (0 when only arriving cargo was wasted).
   final double runFraction;
 
   /// Plain-English description using display names, such as
@@ -130,6 +162,7 @@ final class FlowReport {
   FlowReport({
     required List<BodyFlow> bodies,
     required Map<String, BigNum> empireNet,
+    required this.creditsPerSec,
     required List<Bottleneck> bottlenecks,
   }) : bodies = List.unmodifiable(bodies),
        empireNet = Map.unmodifiable(empireNet),
@@ -142,9 +175,13 @@ final class FlowReport {
   /// counted as held, so moving goods between its own bodies nets to zero.
   final Map<String, BigNum> empireNet;
 
-  /// Buildings held back, lowest run fraction first, then body and building
-  /// order; a crew shortage, if any, comes before buildings at the same run
-  /// fraction.
+  /// Change in the faction's credits per second: sales (auto-sell) during
+  /// the sample tick; commands are not part of it.
+  final BigNum creditsPerSec;
+
+  /// Everything held back, lowest run fraction first, then in report order:
+  /// a crew shortage first, then each body's buildings in order followed by
+  /// its full stores in content resource order.
   final List<Bottleneck> bottlenecks;
 }
 
@@ -167,24 +204,52 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   ];
   final stockBefore = [for (final b in owned) Map.of(b.stock)];
   final holdingsBefore = _holdings(copy, factionId);
+  final faction = copy.faction(factionId);
+  final creditsBefore = faction.credits;
   // The tick computes crew efficiency from the state it starts in, so the
   // crew shortage is read from that state too.
   final crewEff = crewEfficiency(copy, c, factionId);
-  final crewNeck = _crewShortage(copy, c, factionId, owned, crewEff);
+  final crewNeck = _crewShortage(copy, c, factionId, crewEff);
 
   GameEngine(c).tick(copy, _sampleSeconds);
 
   final bodies = <BodyFlow>[];
   final bottlenecks = <(int, Bottleneck)>[if (crewNeck != null) (0, crewNeck)];
+  void addNeck(Bottleneck? neck) {
+    if (neck != null) bottlenecks.add((bottlenecks.length, neck));
+  }
+
   for (final (i, body) in owned.indexed) {
     final produced = <String, BigNum>{};
     final consumed = <String, BigNum>{};
+    final statuses = <BuildingStatus>[];
     for (final b in body.buildings) {
+      final def = c.buildings[b.defId]!;
       final flow = fullRateFlow(c, body, b, _sampleSeconds, crewEff);
-      _addScaled(produced, flow.outputs, b.lastRunFraction);
-      _addScaled(consumed, flow.inputs, b.lastRunFraction);
-      final neck = _bottleneck(c, body, b);
-      if (neck != null) bottlenecks.add((bottlenecks.length, neck));
+      final inputs = _scaled(flow.inputs, b.lastRunFraction);
+      final outputs = _scaled(flow.outputs, b.lastRunFraction);
+      _addAll(produced, outputs);
+      _addAll(consumed, inputs);
+      addNeck(_bottleneck(c, body, b));
+      statuses.add(
+        BuildingStatus(
+          buildingId: b.id,
+          defId: b.defId,
+          runFraction: b.lastRunFraction,
+          effectiveFraction: def.crewSlots == 0
+              ? 0
+              : b.lastRunFraction * b.crew / def.crewSlots * crewEff,
+          limitReason: b.lastLimitReason,
+          crew: b.crew,
+          slots: maxCrew(c.rules, def, b),
+          inputsPerSec: _ordered(c, inputs),
+          outputsPerSec: _ordered(c, outputs),
+        ),
+      );
+    }
+    final cap = storageCap(copy, c, body);
+    for (final id in c.resources.keys) {
+      addNeck(_storageFull(c, body, id, cap, produced[id]));
     }
     bodies.add(
       BodyFlow(
@@ -193,17 +258,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         consumedPerSec: _ordered(c, consumed),
         netPerSec: _diff(c, body.stock, stockBefore[i]),
         wastedPerSec: _ordered(c, body.wastedThisStep),
-        buildings: [
-          for (final b in body.buildings)
-            BuildingStatus(
-              buildingId: b.id,
-              defId: b.defId,
-              runFraction: b.lastRunFraction,
-              limitReason: b.lastLimitReason,
-              crew: b.crew,
-              slots: maxCrew(c.rules, c.buildings[b.defId]!, b),
-            ),
-        ],
+        buildings: statuses,
       ),
     );
   }
@@ -214,12 +269,13 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   return FlowReport(
     bodies: bodies,
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
+    creditsPerSec: faction.credits - creditsBefore,
     bottlenecks: [for (final (_, b) in bottlenecks) b],
   );
 }
 
-/// The crew-shortage bottleneck of [factionId], whose bodies are [owned],
-/// or null when its crew efficiency [crewEff] is 1.
+/// The crew-shortage bottleneck of [factionId], or null when its crew
+/// efficiency [crewEff] is 1.
 ///
 /// [s] must be the state before the sample tick, so the crew counts match
 /// [crewEff].
@@ -227,31 +283,46 @@ Bottleneck? _crewShortage(
   GameState s,
   Content c,
   String factionId,
-  List<BodyState> owned,
   double crewEff,
 ) {
   if (crewEff >= 1) return null;
-  var assigned = 0;
-  (BodyState, BuildingState)? first;
-  for (final body in owned) {
-    for (final b in body.buildings) {
-      if (b.crew == 0) continue;
-      assigned += b.crew;
-      first ??= (body, b);
-    }
-  }
-  // Efficiency below 1 means some crew is assigned, so [first] is set.
-  final (body, b) = first!;
-  final supported = assigned + availableCrew(s, c, factionId);
+  final t = crewTotals(s, c, factionId);
   return Bottleneck(
     kind: BottleneckKind.crewShortage,
-    bodyId: body.id,
-    buildingId: b.id,
+    bodyId: null,
+    buildingId: null,
     resourceId: null,
     runFraction: crewEff,
     message:
         'Your empire is short on crew: habitats and base crew support '
-        '$supported of $assigned assigned',
+        '${t.supported} of ${t.assigned} assigned',
+  );
+}
+
+/// The storage-full bottleneck of resource [id] on [body] after the sample
+/// step, or null unless its stock is at the storage [cap] and some was
+/// wasted; [produced] is what the body's buildings made of it.
+Bottleneck? _storageFull(
+  Content c,
+  BodyState body,
+  String id,
+  BigNum cap,
+  BigNum? produced,
+) {
+  final wasted = body.wastedThisStep[id];
+  if (wasted == null || wasted.isZero) return null;
+  if ((body.stock[id] ?? const BigNum.zero()) < cap) return null;
+  final made = produced?.toDouble() ?? 0;
+  final kept = made <= 0 ? 0.0 : 1 - wasted.toDouble() / made;
+  return Bottleneck(
+    kind: BottleneckKind.storageFull,
+    bodyId: body.id,
+    buildingId: null,
+    resourceId: id,
+    runFraction: kept.clamp(0, 1).toDouble(),
+    message:
+        '${body.name} storage is full of ${c.resources[id]!.name}: '
+        'output is being wasted',
   );
 }
 
@@ -304,36 +375,36 @@ Map<String, BigNum> _holdings(GameState s, String factionId) {
   return total;
 }
 
-/// Adds `amount × fraction` for each entry of [amounts] into [into].
-void _addScaled(
-  Map<String, BigNum> into,
-  Map<String, BigNum> amounts,
-  double fraction,
-) {
-  if (fraction == 0) return;
+/// Each entry of [amounts] times [fraction], leaving out zeros.
+Map<String, BigNum> _scaled(Map<String, BigNum> amounts, double fraction) => {
+  if (fraction != 0)
+    for (final MapEntry(key: id, value: v) in amounts.entries)
+      if (v.mulDouble(fraction) case final scaled when !scaled.isZero)
+        id: scaled,
+};
+
+/// Adds each entry of [amounts] into [into].
+void _addAll(Map<String, BigNum> into, Map<String, BigNum> amounts) {
   for (final MapEntry(key: id, value: v) in amounts.entries) {
-    final scaled = v.mulDouble(fraction);
-    if (!scaled.isZero) into[id] = (into[id] ?? const BigNum.zero()) + scaled;
+    into[id] = (into[id] ?? const BigNum.zero()) + v;
   }
 }
 
 /// `after − before` per resource in content order, leaving out changes that
-/// are zero or only float residue of the larger side.
+/// are zero or only float residue (see [changeBetween]).
 Map<String, BigNum> _diff(
   Content c,
   Map<String, BigNum> after,
   Map<String, BigNum> before,
-) {
-  final out = <String, BigNum>{};
-  for (final id in c.resources.keys) {
-    final a = after[id] ?? const BigNum.zero();
-    final b = before[id] ?? const BigNum.zero();
-    final d = a - b;
-    final residue = a.max(b).mulDouble(1e-12);
-    if (d > residue || d < -residue) out[id] = d;
-  }
-  return out;
-}
+) => {
+  for (final id in c.resources.keys)
+    if (changeBetween(
+          after[id] ?? const BigNum.zero(),
+          before[id] ?? const BigNum.zero(),
+        )
+        case final d when !d.isZero)
+      id: d,
+};
 
 /// The non-zero entries of [m] in content resource order.
 Map<String, BigNum> _ordered(Content c, Map<String, BigNum> m) => {

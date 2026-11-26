@@ -473,6 +473,15 @@ void main() {
       ]);
     });
 
+    test('totals the units wasted while away', () {
+      final s = engine.newGame(1);
+      expect(engine.catchUpOffline(s, 600).totalWasted.isZero, isTrue);
+      // Copper ore is full; an hour of 0.32 a second is lost to the cap.
+      s.body('kora').stock['copper_ore'] = storageCap(s, c, s.body('kora'));
+      final sum = engine.catchUpOffline(s, 3600);
+      expect(sum.totalWasted.toDouble(), closeTo(0.32 * 3600, 1e-6));
+    });
+
     test('lists milestones reached while away, in content order', () {
       final s = engine.newGame(1);
       s.faction('player').reachedMilestones.add('own_2_bodies');
