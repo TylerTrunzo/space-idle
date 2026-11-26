@@ -211,12 +211,22 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
     if (deposit == null ||
         !def.extracts.contains(deposit) ||
         !body.deposits.any((d) => d.resourceId == deposit)) {
+      String names(Iterable<String> ids) =>
+          ids.map((id) => _resourceName(c, id)).join(', ');
+      final has = body.deposits.isEmpty
+          ? '${body.name} has no deposits'
+          : '${body.name} has ${names(body.deposits.map((d) => d.resourceId))}';
+      // Name what this extractor mines when the body has the deposit but
+      // another kind of extractor works it.
+      final mines = deposit != null && !def.extracts.contains(deposit)
+          ? '; ${def.name} mines ${names(def.extracts)}'
+          : '';
       return _fail(
         CommandError.depositMissing,
         deposit == null
-            ? '${def.name} needs a deposit to mine'
+            ? '${def.name} needs a deposit to mine ($has)'
             : "${def.name} can't mine ${_resourceName(c, deposit)} "
-                  'on ${body.name}',
+                  'on ${body.name} ($has$mines)',
       );
     }
   }

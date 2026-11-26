@@ -673,7 +673,32 @@ void main() {
           BuildCommand('player', 'kora', 'mine', depositResourceId: 'nickel'),
           CommandError.depositMissing,
         ),
-        "Mine can't mine Nickel on Kora",
+        "Mine can't mine Nickel on Kora "
+        '(Kora has Iron Ore, Copper Ore, Silicon)',
+      );
+      expect(
+        expectFails(
+          fresh(),
+          BuildCommand('player', 'kora', 'mine'),
+          CommandError.depositMissing,
+        ),
+        'Mine needs a deposit to mine (Kora has Iron Ore, Copper Ore, Silicon)',
+      );
+      // The body has the deposit, but this extractor cannot mine it.
+      expect(
+        expectFails(
+          fresh(),
+          BuildCommand(
+            'player',
+            'kora',
+            'ice_drill',
+            depositResourceId: 'iron_ore',
+          ),
+          CommandError.depositMissing,
+        ),
+        "Ice Drill can't mine Iron Ore on Kora "
+        '(Kora has Iron Ore, Copper Ore, Silicon; '
+        'Ice Drill mines Water Ice, Ammonia)',
       );
     });
 
