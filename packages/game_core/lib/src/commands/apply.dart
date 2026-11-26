@@ -876,6 +876,13 @@ CommandResult _survey(
       'A survey of that body is already under way',
     );
   }
+  if (hidden.systemId != source.systemId) {
+    return _fail(
+      CommandError.routeInvalid,
+      "Survey drones from ${source.name} can't reach that body: it is in "
+      'another system',
+    );
+  }
   if (source.ownerId != f.id) return _notYours(s, f, source);
   final cost = surveyCost(c);
   final short = _checkCost(c, f, source, cost);

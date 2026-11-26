@@ -505,9 +505,9 @@ final class SurveyCommand extends Command {
   /// of [sourceBodyId]'s system.
   const SurveyCommand(super.factionId, this.bodyId, this.sourceBodyId);
 
-  /// Hidden body to reveal; null for the first one in content order in the
-  /// source body's system that is neither surveyed nor under survey (see
-  /// `unsurveyedSignals`).
+  /// Hidden body to reveal, in the source body's system; null for the
+  /// first one in content order in that system that is neither surveyed
+  /// nor under survey (see `unsurveyedSignals`).
   final String? bodyId;
 
   /// Owned body whose stock supplies the survey drones.
@@ -710,7 +710,8 @@ enum CommandError {
   alreadySurveyed,
 
   /// The route does not exist, or the endpoints of a route or ship move
-  /// are not a valid pair (one body twice, or two systems).
+  /// are not a valid pair (one body twice, or two systems), or a survey's
+  /// body is in another system than its source.
   routeInvalid,
 
   /// The same timed work is already under way: a claim of the body, an

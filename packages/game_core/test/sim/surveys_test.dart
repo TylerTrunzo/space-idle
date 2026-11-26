@@ -333,6 +333,61 @@ void main() {
     });
   });
 
+  group('a survey with a body id', () {
+    test('reaches only a body in the source system, like the id-less form', () {
+      final b = shippedBundle();
+      final galaxy = (b['galaxy']! as Map).cast<String, Object?>();
+      b['galaxy'] = {
+        ...galaxy,
+        'systems': [
+          ...(galaxy['systems']! as List),
+          {
+            'id': 'far',
+            'name': 'Far',
+            'bodies': [
+              {
+                'id': 'far_rock',
+                'name': 'Far Rock',
+                'typeId': 'rocky',
+                'orbit': 1,
+                'hidden': true,
+                'deposits': [
+                  {'resourceId': 'iron_ore', 'richness': 1},
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      final c = switch (Content.fromBundle(b)) {
+        ContentOk(:final content) => content,
+        ContentInvalid(:final errors) => throw StateError('$errors'),
+      };
+      final far = GameEngine(c);
+      final s = far.newGame(1)
+        ..faction('player').credits = n(1e9)
+        ..body('kora').stock['survey_drone'] = n(9);
+      final before = encode(s);
+      final r = far.apply(s, const SurveyCommand('player', 'far_rock', 'kora'));
+      expect(
+        r,
+        isA<CommandFailed>()
+            .having((f) => f.error, 'error', CommandError.routeInvalid)
+            .having(
+              (f) => f.message,
+              'message',
+              "Survey drones from Kora can't reach that body: it is in "
+                  'another system',
+            ),
+      );
+      expect(encode(s), before);
+      expect(
+        far.apply(s, const SurveyCommand('player', 'tessaly', 'kora')),
+        isA<CommandOk>(),
+      );
+    });
+  });
+
   group('a survey', () {
     test('reveals the body on completion, and not before', () {
       final s = rich();
