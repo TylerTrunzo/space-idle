@@ -127,9 +127,14 @@ const int _maxCommandsPerDecision = 60;
 /// Storage share a bot keeps of a resource it uses; the rest is sold.
 const double _keepShareOfCap = 0.25;
 
-/// Share of a goal's price in hand from which the balanced bot saves for
-/// it instead of spending.
+/// Share of a goal's price in hand from which the balanced bot may save
+/// for it instead of spending.
 const double _saveFrom = 0.5;
+
+/// Game seconds of income within which the rest of a goal must be in
+/// reach before the balanced bot stops investing and saves for it: one
+/// 6 h check-in gap. Further off, investing first gets there sooner.
+const double _saveWithinSeconds = 21600;
 
 /// Units per second of a route moving build parts or cargo ships: a slow
 /// trickle, one every 100 s.
@@ -699,13 +704,17 @@ final class _View {
   /// toward more housing when crew has run out.
   ///
   /// Saving is only worth it once at least [_saveFrom] of the sum is in
-  /// hand; a goal further off than that lets the next one act, so the bot
-  /// keeps growing in the meantime.
+  /// hand and today's income would cover the rest within
+  /// [_saveWithinSeconds]; a goal further off than that lets the next one
+  /// act, so the bot keeps growing in the meantime.
   _Step pursueGoals() {
+    final income = math.max(0.0, report!.creditsPerSec.toDouble());
     _Step? worth(_Step step) => switch (step) {
       _Do() => step,
       _Save(:final credits)
-          when faction.credits >= credits.mulDouble(_saveFrom) =>
+          when faction.credits >= credits.mulDouble(_saveFrom) &&
+              faction.credits.toDouble() + income * _saveWithinSeconds >=
+                  credits.toDouble() =>
         step,
       _ => null,
     };
