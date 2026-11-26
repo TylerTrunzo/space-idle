@@ -318,6 +318,8 @@ final class Shipment {
     required this.resourceId,
     required this.amount,
     required this.arriveAt,
+    this.fromBodyId,
+    this.ownerId,
   });
 
   /// Restores a shipment written by [toJson].
@@ -327,6 +329,8 @@ final class Shipment {
     resourceId: j['resourceId']! as String,
     amount: BigNum.fromJson(j['amount']! as String),
     arriveAt: (j['arriveAt']! as num).toDouble(),
+    fromBodyId: j['fromBodyId'] as String?,
+    ownerId: j['ownerId'] as String?,
   );
 
   /// Route that sent it.
@@ -344,6 +348,16 @@ final class Shipment {
   /// Game time in seconds at which it arrives.
   final double arriveAt;
 
+  /// Source body id, where the goods return if the destination is lost.
+  ///
+  /// Null in saves written before this field existed.
+  final String? fromBodyId;
+
+  /// Faction that sent it; it outlives the route's removal.
+  ///
+  /// Null in saves written before this field existed.
+  final String? ownerId;
+
   /// Serializes this shipment.
   Map<String, Object?> toJson() => {
     'routeId': routeId,
@@ -351,6 +365,8 @@ final class Shipment {
     'resourceId': resourceId,
     'amount': amount.toJson(),
     'arriveAt': arriveAt,
+    'fromBodyId': fromBodyId,
+    'ownerId': ownerId,
   };
 }
 

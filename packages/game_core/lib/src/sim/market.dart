@@ -54,3 +54,28 @@ SaleResult sell(
   );
   return SaleResult(sold: sold, revenue: revenue);
 }
+
+/// Recovers every depressed saturation toward 1 by `dt /
+/// marketRecoverySeconds`, then runs each faction's auto-sell rules.
+///
+/// A rule sells `stock - keepAtLeast` when positive, only while its
+/// faction owns the body; revenue goes to that faction. Factions and their
+/// rules run in list order. Resources are visited in sorted-id order so
+/// recovery does not depend on map insertion order.
+void stepMarket(GameState s, Content c, double dt) {
+  final sat = s.market.saturation;
+  for (final id in sat.keys.toList()..sort()) {
+    sat[id] = math.min(1, sat[id]! + dt / c.rules.marketRecoverySeconds);
+  }
+  for (final f in s.factions) {
+    for (final rule in f.autoSell) {
+      final body = s.body(rule.bodyId);
+      if (body.ownerId != f.id) continue;
+      final held = body.stock[rule.resourceId] ?? const BigNum.zero();
+      final excess = held - rule.keepAtLeast;
+      if (excess > const BigNum.zero()) {
+        sell(s, c, f.id, body.id, rule.resourceId, excess);
+      }
+    }
+  }
+}
