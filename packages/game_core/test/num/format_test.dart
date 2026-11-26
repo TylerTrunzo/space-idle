@@ -31,4 +31,22 @@ void main() {
     'carry into scientific',
     () => expect(formatNumber(BigNum.parse('9.9996e35')), '1e36'),
   );
+
+  test('durations show seconds, minutes, hours and from a day up days', () {
+    final cases = <double, String>{
+      0: '0s',
+      -5: '0s',
+      45: '45s',
+      1830: '30m 30s',
+      3600: '1h',
+      5400: '1h 30m',
+      43200: '12h',
+      86399: '1d',
+      86400: '1d',
+      90000: '1d 1h',
+      352800: '4d 2h',
+      352801: '4d 3h',
+    };
+    cases.forEach((v, s) => expect(formatDuration(v), s, reason: '$v'));
+  });
 }

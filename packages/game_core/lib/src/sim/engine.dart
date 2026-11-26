@@ -5,6 +5,7 @@ import '../commands/command.dart';
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../num/change.dart';
+import '../num/format.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
 import 'contracts.dart';
@@ -41,6 +42,7 @@ final class OfflineSummary {
     required this.awayFrom,
     required this.secondsSimulated,
     required this.secondsAway,
+    required this.capSeconds,
     required Map<String, BigNum> stockGained,
     required this.creditsGained,
     required this.totalWasted,
@@ -61,6 +63,26 @@ final class OfflineSummary {
 
   /// Seconds the player was away, as passed in.
   final double secondsAway;
+
+  /// The offline cap this catch-up ran under, in seconds: the most of an
+  /// absence it simulates.
+  final double capSeconds;
+
+  /// Whether the absence was longer than [capSeconds], so only part of it
+  /// counted.
+  bool get capped => secondsAway > capSeconds;
+
+  /// The return in one line for the player, such as "Away 4d 2h; 12h
+  /// counted (cap); +1.2M credits", or "Away 3h; +36K credits" when the
+  /// whole absence counted.
+  String get headline {
+    final counted = capped
+        ? '; ${formatDuration(secondsSimulated)} counted (cap)'
+        : '';
+    final sign = creditsGained.isNegative ? '' : '+';
+    return 'Away ${formatDuration(secondsAway)}$counted; '
+        '$sign${formatNumber(creditsGained)} credits';
+  }
 
   /// Resource id to the change in the player's stock summed over the bodies
   /// it owns, in content order; negative for resources used up. Resources
@@ -267,6 +289,7 @@ final class GameEngine {
       awayFrom: awayFrom,
       secondsSimulated: simulated,
       secondsAway: secondsAway,
+      capSeconds: cap,
       stockGained: gained,
       creditsGained: player.credits - creditsBefore,
       totalWasted: wasted,

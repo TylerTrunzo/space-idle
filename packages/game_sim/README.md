@@ -75,8 +75,10 @@ commands:
 - `{"cmd":"advance","seconds":N}` run the simulation for N seconds, no cap
 - `{"cmd":"away","seconds":N}` simulate the player being away for N seconds
   (offline catch-up, capped at the offline limit: 12 h plus the player's
-  megaproject bonuses, at most 48 h) and print the away summary:
-  seconds away and simulated, credits and stock gained, units wasted to
+  megaproject bonuses, at most 48 h) and print the away summary: a one-line
+  `headline` such as `"Away 4d 2h; 12h counted (cap); +1.2M credits"`,
+  seconds away and simulated, the cap (`capSeconds`) and whether the absence
+  passed it (`capped`), credits and stock gained, units wasted to
   storage caps, milestones reached and the top bottlenecks, those losing the
   most credits an hour first; one that was there before the absence says
   `"ongoing": "ongoing since 12.0h"` (game hours); and the projects that

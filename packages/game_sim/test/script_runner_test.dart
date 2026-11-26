@@ -539,6 +539,13 @@ void main() {
     expect(out['ok'], isTrue, reason: '$out');
     expect(out['secondsAway'], 100000.0);
     expect(out['secondsSimulated'], 43200.0);
+    expect(out['capSeconds'], 43200.0);
+    expect(out['capped'], isTrue);
+    expect(
+      out['headline'],
+      'Away 1d 4h; 12h counted (cap); '
+      '+${(out['creditsGained']! as Map)['display']} credits',
+    );
     expect(out['time'], 43200.0);
     expect(r.state.time, 43200.0);
     final credits = out['creditsGained']! as Map;

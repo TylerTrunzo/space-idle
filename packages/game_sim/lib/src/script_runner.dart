@@ -385,8 +385,11 @@ final class ScriptRunner {
     return {
       'ok': true,
       'time': state.time,
+      'headline': sum.headline,
       'secondsAway': sum.secondsAway,
       'secondsSimulated': sum.secondsSimulated,
+      'capSeconds': sum.capSeconds,
+      'capped': sum.capped,
       'creditsGained': _num(sum.creditsGained),
       'stockGained': _nums(sum.stockGained),
       'totalWasted': _num(sum.totalWasted),

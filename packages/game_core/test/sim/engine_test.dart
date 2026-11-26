@@ -676,6 +676,56 @@ void main() {
       expect(s.time, 43200);
     });
 
+    test('a capped return says so in its headline', () {
+      final s = engine.newGame(1);
+      engine.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+      // Away 4 days 2 hours; the base cap counts 12 h of it.
+      final sum = engine.catchUpOffline(s, 4 * 86400 + 2 * 3600);
+      expect(sum.capped, isTrue);
+      expect(sum.capSeconds, 43200);
+      expect(sum.secondsSimulated, 43200);
+      expect(sum.creditsGained > const BigNum.zero(), isTrue);
+      expect(
+        sum.headline,
+        'Away 4d 2h; 12h counted (cap); '
+        '+${formatNumber(sum.creditsGained)} credits',
+      );
+    });
+
+    test('an uncapped return has a shorter headline', () {
+      final s = engine.newGame(1);
+      final sum = engine.catchUpOffline(s, 3 * 3600);
+      expect(sum.capped, isFalse);
+      expect(sum.capSeconds, 43200);
+      expect(
+        sum.headline,
+        'Away 3h; +${formatNumber(sum.creditsGained)} credits',
+      );
+      // Exactly the cap loses nothing, so it is not capped; a fall in
+      // credits shows with a minus sign.
+      final t = engine.newGame(1);
+      t.faction('player').credits = n(1000);
+      t.body('kora').stock['iron_ore'] = n(0);
+      t.body('kora').buildings.clear();
+      t.routes.clear();
+      final flat = engine.catchUpOffline(t, 43200);
+      expect(flat.capped, isFalse);
+      expect(flat.headline, 'Away 12h; +0 credits');
+      final down = OfflineSummary(
+        awayFrom: 0,
+        secondsSimulated: 60,
+        secondsAway: 60,
+        capSeconds: 43200,
+        stockGained: const {},
+        creditsGained: n(-1500),
+        totalWasted: const BigNum.zero(),
+        milestonesReached: const [],
+        topBottlenecks: const [],
+        projectsCompleted: const [],
+      );
+      expect(down.headline, 'Away 1m; -1.5K credits');
+    });
+
     test('a short absence is simulated in full; capSeconds overrides', () {
       final s = engine.newGame(1);
       expect(engine.catchUpOffline(s, 500).secondsSimulated, 500);

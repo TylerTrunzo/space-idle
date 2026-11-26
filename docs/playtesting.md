@@ -38,7 +38,7 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 | `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what selling one second's net output earns, not a stockpile being sold down), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
 | `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), and the next extra build slot on each body you own |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
-| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h) and shows the away summary, with credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks, those costing the most credits an hour first, each marked "ongoing since Xh" if it was already there when you left |
+| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h, more with Orbital Station levels) and shows the away summary: a one-line `headline` ("Away 4d 2h; 12h counted (cap); +1.2M credits"), the cap and whether you passed it (`capSeconds`, `capped`), credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks, those costing the most credits an hour first, each marked "ongoing since Xh" if it was already there when you left |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
 
 `advance` and `away` step the engine the same way (60 s ticks; every chain on a
