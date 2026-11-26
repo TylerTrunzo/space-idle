@@ -27,6 +27,6 @@
   {"id": "cargo_ship", "name": "Cargo Ship", "tier": 2, "basePrice": "230", "marketDepth": 30, "marketFloor": 0.00001},
   {"id": "outpost_kit", "name": "Outpost Kit", "tier": 2, "basePrice": "600", "marketDepth": 30, "marketFloor": 0.00001},
 
-  {"id": "station_segment", "name": "Station Segment", "tier": 3, "basePrice": "1200", "marketDepth": 125000},
+  {"id": "station_segment", "name": "Station Segment", "tier": 3, "basePrice": "1000", "marketDepth": 150000},
   {"id": "survey_drone", "name": "Survey Drone", "tier": 3, "basePrice": "480", "marketDepth": 208333}
 ]

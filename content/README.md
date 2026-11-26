@@ -8,9 +8,10 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   pay early, but bulk sales earn almost nothing. Components (tier 2) and advanced goods (tier 3) have
   deep markets, so late income comes from them and is spread over several goods, because each market
   pays less per unit the more of it is sold. Orbital Station levels deepen every market by 25%.
-- **Upgrades.** Speed costs ×1.17 a level, efficiency ×1.2 (and stops at 25% of inputs, shown as
-  maxed). A capacity level costs ×1.2 a level *and* rises with the building's speed level, so one more
-  crew never pays back more than about 1.7× faster than a speed level, however fast the building is.
+- **Upgrades.** Speed and capacity on a building share one counter: each speed or capacity upgrade
+  makes the next one of either 17% pricier, so the order you buy them in hardly matters, and one more
+  crew never pays back more than about 1.7× faster than a speed level (capacity's base is 6× speed's).
+  Efficiency counts on its own (×1.2 a level) and stops at 25% of inputs, shown as maxed.
 - **Crew.** A habitat's capacity levels raise its housing and its food, water and oxygen use alike
   (+25% each a level), so every crew costs the same upkeep.
 - **Equipment.** Outpost kits, habitat modules and cargo ships are for use, not trade: tiny markets,
@@ -35,7 +36,7 @@ Every building is the best choice somewhere.
 | Fertilizer Plant, Hydroponic Farm | The most food per crew where ammonia is. |
 | Protein Vat | Food without ammonia: with an ice melter and electrolyzer, a body with only ice can feed its habitats. |
 | Reactor Works | Reactor cores, a deep export and the station's core input. |
-| Station Dock | Station segments: the top export, and Orbital Station stages. |
+| Station Dock | Station segments from plates, magnets and circuits: the top export, and Orbital Station stages (reactor cores go to the station directly, so the dock never eats them). |
 | Drone Works | Survey drones: a deep export, surveys, and Orbital Station stages. |
 | Module Works | Habitat modules for habitats: a fixed 72 per 6 h. |
 | Shipyard | Cargo ships for routes (each carries 10 a second): a fixed 72 per 6 h. |

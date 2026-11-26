@@ -56,10 +56,12 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
 /// Cost of the next level of track [t] on [b]: `baseCredits × growth^level`
 /// credits.
 ///
-/// A capacity level on a building that also has a speed track costs
-/// `speed growth^speed level` times more: one more crew adds a share of
-/// output that every speed level has raised, so its price follows the
-/// speed curve and stays comparable to a speed level's at any speed.
+/// Speed and capacity on a building that has both share one level
+/// counter: either costs its own `baseCredits × growth^(speed level +
+/// capacity level)` (the two growths are equal; content validation checks
+/// it). So each speed or capacity upgrade makes the next of either pricier
+/// by the same step, and the order they are bought in changes the total by
+/// at most the ratio of their bases. Efficiency keeps its own counter.
 ///
 /// Throws [ArgumentError] if the building's type has no such track.
 Map<String, BigNum> upgradeCost(Content c, BuildingState b, UpgradeTrack t) {
@@ -68,15 +70,25 @@ Map<String, BigNum> upgradeCost(Content c, BuildingState b, UpgradeTrack t) {
   if (curve == null) {
     throw ArgumentError.value(t, 't', 'building ${b.defId} has no such track');
   }
-  var credits =
-      curve.baseCredits * BigNum.from(curve.growth).powInt(b.levels[t]!);
-  final speed = upgrades[UpgradeTrack.speed];
-  if (t == UpgradeTrack.capacity && speed != null) {
-    credits =
-        credits *
-        BigNum.from(speed.growth).powInt(b.levels[UpgradeTrack.speed]!);
-  }
-  return {_credits: credits};
+  return {
+    _credits:
+        curve.baseCredits *
+        BigNum.from(curve.growth).powInt(upgradeCounter(c, b, t)),
+  };
+}
+
+/// The level count track [t]'s price on [b] grows with: the speed and
+/// capacity levels together for either of those tracks when the building's
+/// type has both ([upgradeCost]), else the track's own level.
+int upgradeCounter(Content c, BuildingState b, UpgradeTrack t) {
+  final upgrades = c.buildings[b.defId]!.upgrades;
+  final shared =
+      t != UpgradeTrack.efficiency &&
+      upgrades.containsKey(UpgradeTrack.speed) &&
+      upgrades.containsKey(UpgradeTrack.capacity);
+  return shared
+      ? b.levels[UpgradeTrack.speed]! + b.levels[UpgradeTrack.capacity]!
+      : b.levels[t]!;
 }
 
 /// Why the next level of track [t] on [b] would do nothing, or null if it

@@ -379,6 +379,15 @@ void main() {
     expect(speed['cost'], isA<Map<String, Object?>>());
   });
 
+  test('costs explain the shared speed and capacity counter', () {
+    expect(
+      _runner().handle({'cmd': 'costs'})['upgradeNote'],
+      'Speed and capacity on a building share one counter: each speed or '
+      'capacity upgrade makes the next one 17% pricier. Efficiency counts '
+      'on its own.',
+    );
+  });
+
   test("costs include each megaproject's next level", () {
     final r = _runner();
     final next =

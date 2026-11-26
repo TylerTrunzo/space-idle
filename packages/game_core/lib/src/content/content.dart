@@ -70,7 +70,7 @@ enum UpgradeTrack {
   /// More crew slots and body storage; on habitats, more housing and the
   /// life support to match instead of crew slots (see
   /// [RulesDef.capacityHousingPerLevel]). On a building with a speed track
-  /// its price also rises with the speed level (see `upgradeCost`).
+  /// it shares one price counter with speed (see `upgradeCost`).
   capacity,
 }
 

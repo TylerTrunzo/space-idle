@@ -536,6 +536,7 @@ final class ScriptRunner {
             },
           },
       },
+      'upgradeNote': _upgradeNote(c),
       'upgrades': [
         for (final body in state.bodies)
           if (body.ownerId == p.id)
@@ -561,6 +562,23 @@ final class ScriptRunner {
               },
       ],
     };
+  }
+
+  /// How speed and capacity prices grow ([upgradeCost]), with the step as
+  /// a percentage when every building shares the same one.
+  String _upgradeNote(Content c) {
+    final steps = {
+      for (final d in c.buildings.values)
+        if (d.upgrades[UpgradeTrack.speed] case final speed?
+            when d.upgrades.containsKey(UpgradeTrack.capacity))
+          speed.growth,
+    };
+    final pricier = steps.length == 1
+        ? '${((steps.single - 1) * 100).round()}% pricier'
+        : 'pricier by its speed growth';
+    return 'Speed and capacity on a building share one counter: each speed '
+        'or capacity upgrade makes the next one $pricier. Efficiency counts '
+        'on its own.';
   }
 
   String _path(Map<String, Object?> line) {

@@ -524,6 +524,15 @@ final class _Loader {
         out[track] = UpgradeCostDef(baseCredits: baseCredits, growth: growth);
       }
     }
+    final speed = out[UpgradeTrack.speed];
+    final capacity = out[UpgradeTrack.capacity];
+    if (speed != null && capacity != null && capacity.growth != speed.growth) {
+      err(
+        '${f.path}.upgrades.capacity.growth',
+        'must equal the speed growth (${speed.growth}): speed and capacity '
+            'share one level counter',
+      );
+    }
     return out;
   }
 

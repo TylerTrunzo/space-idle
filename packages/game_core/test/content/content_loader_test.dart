@@ -362,6 +362,27 @@ void main() {
     expect(variants, greaterThan(500));
   });
 
+  test('speed and capacity on one building share one growth', () {
+    final b = minimalBundle();
+    final mine = _entry(b, 'buildings', 'mine');
+    (mine['upgrades'] as Map)['capacity'] = {
+      'baseCredits': '300',
+      'growth': 1.2,
+    };
+    _ok(b);
+    (mine['upgrades'] as Map)['capacity'] = {
+      'baseCredits': '300',
+      'growth': 1.5,
+    };
+    expect(
+      _errors(b),
+      contains(
+        'buildings.mine.upgrades.capacity.growth: must equal the speed '
+        'growth (1.2): speed and capacity share one level counter',
+      ),
+    );
+  });
+
   test('claim kits default to 5 plus 5 per extra body owned', () {
     final c = _ok(minimalBundle());
     expect(c.rules.claimKitsBase, 5);

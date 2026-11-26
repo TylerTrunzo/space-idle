@@ -7,7 +7,7 @@
     "buildCost": {"credits": "100"},
     "upgrades": {
       "speed": {"baseCredits": "50", "growth": 1.17},
-      "capacity": {"baseCredits": "300", "growth": 1.2}
+      "capacity": {"baseCredits": "300", "growth": 1.17}
     }
   },
   {
@@ -18,7 +18,7 @@
     "buildCost": {"credits": "250"},
     "upgrades": {
       "speed": {"baseCredits": "120", "growth": 1.17},
-      "capacity": {"baseCredits": "720", "growth": 1.2}
+      "capacity": {"baseCredits": "720", "growth": 1.17}
     }
   },
   {
@@ -29,7 +29,7 @@
     "buildCost": {"credits": "600"},
     "upgrades": {
       "speed": {"baseCredits": "300", "growth": 1.17},
-      "capacity": {"baseCredits": "1800", "growth": 1.2}
+      "capacity": {"baseCredits": "1800", "growth": 1.17}
     }
   },
   {
@@ -41,7 +41,7 @@
     "upgrades": {
       "speed": {"baseCredits": "75", "growth": 1.17},
       "efficiency": {"baseCredits": "100", "growth": 1.2},
-      "capacity": {"baseCredits": "450", "growth": 1.2}
+      "capacity": {"baseCredits": "450", "growth": 1.17}
     }
   },
   {
@@ -53,7 +53,7 @@
     "upgrades": {
       "speed": {"baseCredits": "400", "growth": 1.17},
       "efficiency": {"baseCredits": "528", "growth": 1.2},
-      "capacity": {"baseCredits": "2400", "growth": 1.2}
+      "capacity": {"baseCredits": "2400", "growth": 1.17}
     }
   },
   {
@@ -65,7 +65,7 @@
     "upgrades": {
       "speed": {"baseCredits": "75", "growth": 1.17},
       "efficiency": {"baseCredits": "100", "growth": 1.2},
-      "capacity": {"baseCredits": "450", "growth": 1.2}
+      "capacity": {"baseCredits": "450", "growth": 1.17}
     }
   },
   {
@@ -77,7 +77,7 @@
     "upgrades": {
       "speed": {"baseCredits": "120", "growth": 1.17},
       "efficiency": {"baseCredits": "160", "growth": 1.2},
-      "capacity": {"baseCredits": "720", "growth": 1.2}
+      "capacity": {"baseCredits": "720", "growth": 1.17}
     }
   },
   {
@@ -89,7 +89,7 @@
     "upgrades": {
       "speed": {"baseCredits": "300", "growth": 1.17},
       "efficiency": {"baseCredits": "400", "growth": 1.2},
-      "capacity": {"baseCredits": "1800", "growth": 1.2}
+      "capacity": {"baseCredits": "1800", "growth": 1.17}
     }
   },
   {
@@ -101,7 +101,7 @@
     "upgrades": {
       "speed": {"baseCredits": "250", "growth": 1.17},
       "efficiency": {"baseCredits": "330", "growth": 1.2},
-      "capacity": {"baseCredits": "1500", "growth": 1.2}
+      "capacity": {"baseCredits": "1500", "growth": 1.17}
     }
   },
   {
@@ -113,7 +113,7 @@
     "upgrades": {
       "speed": {"baseCredits": "100", "growth": 1.17},
       "efficiency": {"baseCredits": "130", "growth": 1.2},
-      "capacity": {"baseCredits": "600", "growth": 1.2}
+      "capacity": {"baseCredits": "600", "growth": 1.17}
     }
   },
   {
@@ -125,7 +125,7 @@
     "upgrades": {
       "speed": {"baseCredits": "200", "growth": 1.17},
       "efficiency": {"baseCredits": "260", "growth": 1.2},
-      "capacity": {"baseCredits": "1200", "growth": 1.2}
+      "capacity": {"baseCredits": "1200", "growth": 1.17}
     }
   },
   {
@@ -137,7 +137,7 @@
     "upgrades": {
       "speed": {"baseCredits": "250", "growth": 1.17},
       "efficiency": {"baseCredits": "330", "growth": 1.2},
-      "capacity": {"baseCredits": "1500", "growth": 1.2}
+      "capacity": {"baseCredits": "1500", "growth": 1.17}
     }
   },
   {
@@ -149,7 +149,7 @@
     "upgrades": {
       "speed": {"baseCredits": "1500", "growth": 1.17},
       "efficiency": {"baseCredits": "2000", "growth": 1.2},
-      "capacity": {"baseCredits": "9000", "growth": 1.2}
+      "capacity": {"baseCredits": "9000", "growth": 1.17}
     }
   },
   {
@@ -161,7 +161,7 @@
     "upgrades": {
       "speed": {"baseCredits": "200", "growth": 1.17},
       "efficiency": {"baseCredits": "260", "growth": 1.2},
-      "capacity": {"baseCredits": "1200", "growth": 1.2}
+      "capacity": {"baseCredits": "1200", "growth": 1.17}
     }
   },
   {
@@ -173,7 +173,7 @@
     "upgrades": {
       "speed": {"baseCredits": "150", "growth": 1.17},
       "efficiency": {"baseCredits": "200", "growth": 1.2},
-      "capacity": {"baseCredits": "900", "growth": 1.2}
+      "capacity": {"baseCredits": "900", "growth": 1.17}
     }
   },
   {
@@ -185,7 +185,7 @@
     "upgrades": {
       "speed": {"baseCredits": "200", "growth": 1.17},
       "efficiency": {"baseCredits": "260", "growth": 1.2},
-      "capacity": {"baseCredits": "1200", "growth": 1.2}
+      "capacity": {"baseCredits": "1200", "growth": 1.17}
     }
   },
   {
@@ -197,7 +197,7 @@
     "upgrades": {
       "speed": {"baseCredits": "250", "growth": 1.17},
       "efficiency": {"baseCredits": "330", "growth": 1.2},
-      "capacity": {"baseCredits": "1500", "growth": 1.2}
+      "capacity": {"baseCredits": "1500", "growth": 1.17}
     }
   },
   {
@@ -209,7 +209,7 @@
     "upgrades": {
       "speed": {"baseCredits": "750", "growth": 1.17},
       "efficiency": {"baseCredits": "1000", "growth": 1.2},
-      "capacity": {"baseCredits": "4500", "growth": 1.2}
+      "capacity": {"baseCredits": "4500", "growth": 1.17}
     }
   },
   {
@@ -221,7 +221,7 @@
     "upgrades": {
       "speed": {"baseCredits": "2000", "growth": 1.17},
       "efficiency": {"baseCredits": "2640", "growth": 1.2},
-      "capacity": {"baseCredits": "12000", "growth": 1.2}
+      "capacity": {"baseCredits": "12000", "growth": 1.17}
     }
   },
   {
@@ -253,7 +253,7 @@
     "upgrades": {
       "speed": {"baseCredits": "4000", "growth": 1.17},
       "efficiency": {"baseCredits": "5280", "growth": 1.2},
-      "capacity": {"baseCredits": "24000", "growth": 1.2}
+      "capacity": {"baseCredits": "24000", "growth": 1.17}
     }
   },
   {
@@ -268,14 +268,14 @@
   },
   {
     "id": "station_dock", "name": "Station Dock", "kind": "factory", "cycleSeconds": 120,
-    "inputs": {"reactor_core": 2, "hull_plate": 8, "magnet": 2},
+    "inputs": {"hull_plate": 8, "magnet": 2, "circuit": 4},
     "outputs": {"station_segment": 1},
     "crewSlots": 3,
     "buildCost": {"credits": "20000"},
     "upgrades": {
       "speed": {"baseCredits": "10000", "growth": 1.17},
       "efficiency": {"baseCredits": "13200", "growth": 1.2},
-      "capacity": {"baseCredits": "60000", "growth": 1.2}
+      "capacity": {"baseCredits": "60000", "growth": 1.17}
     }
   },
   {

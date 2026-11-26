@@ -382,34 +382,29 @@ void main() {
       });
     });
 
-    test('capacity costs rise with the speed level too', () {
-      // A crew slot on a faster building adds more output, so its price
-      // follows the speed curve: capacity base × capacity growth^capacity
-      // level × speed growth^speed level.
+    test('speed and capacity share one counter; efficiency has its own', () {
+      // Each speed or capacity level makes the next of either pricier by
+      // the shared growth: base × growth^(speed level + capacity level).
       final s = fresh();
-      final mine = s.body('kora').buildings.first;
-      final ups = content.buildings['mine']!.upgrades;
-      final cap = ups[UpgradeTrack.capacity]!;
+      final smelter = building(s, 'b3');
+      final ups = content.buildings['smelter']!.upgrades;
       final speed = ups[UpgradeTrack.speed]!;
-      expect(upgradeCost(content, mine, UpgradeTrack.capacity), {
-        'credits': cap.baseCredits,
+      final cap = ups[UpgradeTrack.capacity]!;
+      final eff = ups[UpgradeTrack.efficiency]!;
+      expect(cap.growth, speed.growth);
+      smelter.levels
+        ..[UpgradeTrack.speed] = 3
+        ..[UpgradeTrack.capacity] = 2
+        ..[UpgradeTrack.efficiency] = 4;
+      final step = BigNum.from(speed.growth).powInt(5);
+      expect(upgradeCost(content, smelter, UpgradeTrack.speed), {
+        'credits': speed.baseCredits * step,
       });
-      mine.levels[UpgradeTrack.speed] = 3;
-      mine.levels[UpgradeTrack.capacity] = 2;
-      final want = cap.baseCredits
-          .mulDouble(math.pow(cap.growth, 2).toDouble())
-          .mulDouble(math.pow(speed.growth, 3).toDouble());
-      expect(
-        upgradeCost(
-          content,
-          mine,
-          UpgradeTrack.capacity,
-        )['credits']!.toDouble(),
-        closeTo(want.toDouble(), want.toDouble() * 1e-12),
-      );
-      // The speed track's own price ignores capacity levels.
-      expect(upgradeCost(content, mine, UpgradeTrack.speed), {
-        'credits': speed.baseCredits * BigNum.from(speed.growth).powInt(3),
+      expect(upgradeCost(content, smelter, UpgradeTrack.capacity), {
+        'credits': cap.baseCredits * step,
+      });
+      expect(upgradeCost(content, smelter, UpgradeTrack.efficiency), {
+        'credits': eff.baseCredits * BigNum.from(eff.growth).powInt(4),
       });
       // A habitat has no speed track: its capacity follows its own curve.
       final hab = BuildingState(id: 'h', defId: 'habitat', crew: 0)
@@ -419,6 +414,40 @@ void main() {
       expect(upgradeCost(content, hab, UpgradeTrack.capacity), {
         'credits': habCap.baseCredits * BigNum.from(habCap.growth).powInt(2),
       });
+    });
+
+    test('buying order changes the total by at most the base ratio', () {
+      // 20 speed and 20 capacity levels, all speed first or all capacity
+      // first: the totals differ by no more than capacity base / speed base,
+      // never by growth^level.
+      final ups = content.buildings['smelter']!.upgrades;
+      final ratio =
+          ups[UpgradeTrack.capacity]!.baseCredits.toDouble() /
+          ups[UpgradeTrack.speed]!.baseCredits.toDouble();
+      double total(List<UpgradeTrack> order) {
+        final b = BuildingState(id: 'x', defId: 'smelter', crew: 1);
+        var sum = 0.0;
+        for (final t in order) {
+          sum += upgradeCost(content, b, t)['credits']!.toDouble();
+          b.levels[t] = b.levels[t]! + 1;
+        }
+        return sum;
+      }
+
+      const sp = UpgradeTrack.speed;
+      const ca = UpgradeTrack.capacity;
+      final speedFirst = total([
+        ...List.filled(20, sp),
+        ...List.filled(20, ca),
+      ]);
+      final capFirst = total([...List.filled(20, ca), ...List.filled(20, sp)]);
+      final alternating = total([
+        for (var i = 0; i < 20; i++) ...[sp, ca],
+      ]);
+      for (final t in [capFirst, alternating]) {
+        expect(t / speedFirst, inInclusiveRange(1 / ratio, ratio));
+      }
+      expect(capFirst / speedFirst, lessThan(ratio));
     });
 
     test('track the building lacks is unknownDef', () {
