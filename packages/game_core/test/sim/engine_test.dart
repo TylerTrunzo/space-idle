@@ -527,20 +527,45 @@ void main() {
       }
     });
 
-    test('step invariance with the smelter fed from auto-sold ore', () {
-      // Auto-sell on iron ore must leave the smelter its input for the
-      // next step, however long the step.
+    test('step invariance with a cycle\'s input auto-sold', () {
+      // Auto-sell on water must leave the electrolyzer its input for the
+      // next step, however long the step. The hydrogen furnace makes the
+      // water and runs after the electrolyzer (the furnace-to-electrolyzer
+      // edge of their cycle is the one recipe depth drops), so what it
+      // makes is used only in the next step: only the step's kept demand
+      // stops the market selling it first.
       GameState run(double maxStep) {
         final s = engine.newGame(1);
-        engine
-          ..apply(s, SetAutoSellCommand('player', 'kora', 'iron_ore', n(0)))
-          ..apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)))
-          ..advance(s, 3600, maxStep: maxStep);
+        final kora = s.body('kora');
+        kora.buildings.removeWhere((b) => b.id != 'b1');
+        kora.buildings.addAll([
+          BuildingState(id: 'b90', defId: 'hydrogen_furnace', crew: 1),
+          BuildingState(id: 'b91', defId: 'electrolyzer', crew: 1),
+        ]);
+        s.nextId = 100;
+        kora.stock
+          ..clear()
+          ..['hydrogen'] = n(1000)
+          ..['iron_ore'] = n(100);
+        for (final id in ['water', 'steel', 'oxygen']) {
+          engine.apply(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        engine.advance(s, 1800, maxStep: maxStep);
         return s;
       }
 
       final fine = run(1);
       final coarse = run(60);
+      final oxygen = <double>[];
+      for (final s in [fine, coarse]) {
+        final electrolyzer = s.body('kora').buildings.last;
+        // The furnace makes 1 water per 6 s; the electrolyzer wants 2.
+        expect(electrolyzer.lastRunFraction, closeTo(0.5, 1e-9));
+        oxygen.add(s.faction('player').lifetimeProduced['oxygen']!.toDouble());
+      }
+      // The water lands one step late, so the runs differ by at most one
+      // coarse step of oxygen: 60 s at half of 1 per 6 s.
+      expect((oxygen[0] - oxygen[1]).abs(), lessThanOrEqualTo(5 + 1e-6));
       final cf = fine.faction('player').credits.toDouble();
       final cc = coarse.faction('player').credits.toDouble();
       expect(
@@ -548,13 +573,6 @@ void main() {
         lessThanOrEqualTo(0.02 * cf),
         reason: '$cf vs $cc',
       );
-      for (final s in [fine, coarse]) {
-        final smelter = s
-            .body('kora')
-            .buildings
-            .firstWhere((b) => b.defId == 'smelter');
-        expect(smelter.lastRunFraction, 1);
-      }
     });
 
     test('30-day jump finishes with finite, non-negative stocks', () {
