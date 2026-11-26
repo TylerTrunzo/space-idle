@@ -5,6 +5,9 @@ import 'package:test/test.dart';
 
 import 'helpers.dart';
 
+/// Placeholder replaced by the number literal `1e999` in the save text.
+const _huge = '__huge__';
+
 void main() {
   final content = shippedContent();
   Map<String, Object?> fresh() => newGameState(content, 3).toJson();
@@ -195,6 +198,144 @@ void main() {
         reason: field,
       );
     }
+  });
+
+  group('decode rejects saves the engine cannot run:', () {
+    // Each case breaks one integrity rule in an otherwise valid save.
+    List<Map<String, Object?>> list(Object? v) =>
+        (v! as List).cast<Map<String, Object?>>();
+    Map<String, Object?> body(Map<String, Object?> m, String id) =>
+        list(m['bodies']).firstWhere((b) => b['id'] == id);
+    Map<String, Object?> building(Map<String, Object?> m, int i) =>
+        list(body(m, 'kora')['buildings'])[i];
+    Map<String, Object?> player(Map<String, Object?> m) =>
+        list(m['factions']).first;
+    Map<String, Object?> route({String owner = 'player', String id = 'r1'}) => {
+      'id': id,
+      'ownerId': owner,
+      'fromBodyId': 'kora',
+      'toBodyId': 'cinder',
+      'resourceId': 'iron_ore',
+      'ratePerSecond': '1',
+      'cargoShips': 1,
+    };
+    Map<String, Object?> shipment({String owner = 'player'}) => {
+      'routeId': 'r1',
+      'fromBodyId': 'kora',
+      'toBodyId': 'cinder',
+      'ownerId': owner,
+      'resourceId': 'iron_ore',
+      'amount': '1',
+      'departAt': 0,
+      'arriveAt': 5,
+    };
+
+    final cases = <String, void Function(Map<String, Object?>)>{
+      'body owned by a missing faction': (m) =>
+          body(m, 'brine')['ownerId'] = 'ghost',
+      'route owned by a missing faction': (m) =>
+          m['routes'] = [route(owner: 'ghost')],
+      'shipment owned by a missing faction': (m) =>
+          m['shipments'] = [shipment(owner: 'ghost')],
+      'no player faction': (m) => player(m)['isPlayer'] = false,
+      'no factions at all': (m) => m['factions'] = <Object?>[],
+      'two player factions': (m) => m['factions'] = [
+        player(m),
+        {...player(m), 'id': 'player2'},
+      ],
+      'duplicate faction id': (m) => m['factions'] = [
+        player(m),
+        {...player(m), 'isPlayer': false},
+      ],
+      'duplicate body id': (m) => body(m, 'brine')['id'] = 'kora',
+      'duplicate building id': (m) =>
+          building(m, 1)['id'] = building(m, 0)['id'],
+      'duplicate route id': (m) => m['routes'] = [route(), route()],
+      'nextId at a building id in use': (m) => m['nextId'] = 3,
+      'nextId below a route id in use': (m) => m['routes'] = [route(id: 'r40')],
+      'negative crew': (m) => building(m, 0)['crew'] = -1,
+      'crew above the building slots': (m) => building(m, 0)['crew'] = 2,
+      'negative upgrade level': (m) =>
+          (building(m, 0)['levels']! as Map)['speed'] = -3,
+      'upgrade level above 1000': (m) =>
+          (building(m, 0)['levels']! as Map)['speed'] = 100000,
+      'run fraction outside [0, 1]': (m) =>
+          building(m, 0)['lastRunFraction'] = 1.5,
+      'negative stock': (m) =>
+          (body(m, 'kora')['stock']! as Map)['iron_ore'] = '-5e3',
+      'negative keepAtLeast': (m) => player(m)['autoSell'] = [
+        {'bodyId': 'kora', 'resourceId': 'iron_ore', 'keepAtLeast': '-1e9'},
+      ],
+      'negative credits': (m) => player(m)['credits'] = '-1',
+      'negative base crew': (m) => player(m)['baseCrew'] = -1,
+      'saturation above 1': (m) => m['market'] = {
+        'saturation': {'iron_ore': 5},
+      },
+      'saturation below the market floor': (m) => m['market'] = {
+        'saturation': {'iron_ore': 0.1},
+      },
+      'extractor on a deposit its body lacks': (m) =>
+          building(m, 0)['depositResourceId'] = 'nickel',
+      'extractor with no deposit': (m) =>
+          building(m, 0)['depositResourceId'] = null,
+      'extractor on a deposit it cannot mine': (m) {
+        (body(m, 'kora')['deposits']! as List).add({
+          'resourceId': 'water_ice',
+          'richness': 1,
+        });
+        building(m, 0)['depositResourceId'] = 'water_ice';
+      },
+      'deposit richness not above 0': (m) =>
+          (list(body(m, 'kora')['deposits']).first)['richness'] = 0,
+      'route without a cargo ship': (m) =>
+          m['routes'] = [route()..['cargoShips'] = 0],
+      'route rate not above 0': (m) =>
+          m['routes'] = [route()..['ratePerSecond'] = '0'],
+      'negative shipment amount': (m) =>
+          m['shipments'] = [shipment()..['amount'] = '-1'],
+      'negative time': (m) => m['time'] = -1,
+      // JSON can spell a number too large for a double; it reads as
+      // infinity.
+      'time too large to be finite': (m) => m['time'] = _huge,
+    };
+    for (final MapEntry(key: name, value: corrupt) in cases.entries) {
+      test(name, () {
+        final m = jsonDecode(jsonEncode(fresh())) as Map<String, Object?>;
+        corrupt(m);
+        final text = jsonEncode(m).replaceAll('"$_huge"', '1e999');
+        final r = SaveCodec.decode(text, content);
+        expect(r, isA<SaveError>(), reason: name);
+        expect((r as SaveError).kind, SaveErrorKind.invalidValue);
+        expect(r.message, isNotEmpty);
+      });
+    }
+
+    test('a body in an unknown system is an unknown content id', () {
+      final m = fresh();
+      body(m, 'brine')['systemId'] = 'nowhere';
+      expect(
+        err(SaveCodec.decode(jsonEncode(m), content)).kind,
+        SaveErrorKind.unknownContentId,
+      );
+    });
+
+    test('a game played for a while still loads', () {
+      final s = newGameState(content, 3);
+      final e = GameEngine(content);
+      e
+        ..apply(s, SetAutoSellCommand('player', 'kora', 'steel', BigNum.zero()))
+        ..apply(
+          s,
+          const BuildCommand(
+            'player',
+            'kora',
+            'mine',
+            depositResourceId: 'silicon',
+          ),
+        )
+        ..advance(s, 86400);
+      expect(SaveCodec.decode(SaveCodec.encode(s), content), isA<SaveOk>());
+    });
   });
 
   test('decode rejects missing fields', () {

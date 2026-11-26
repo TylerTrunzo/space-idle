@@ -19,7 +19,7 @@ void main() {
 
   RouteState route({double rate = 1, int ships = 2}) {
     final r = RouteState(
-      id: 'r1',
+      id: s.newId('r'),
       ownerId: 'p',
       fromBodyId: 'a',
       toBodyId: 'b',
