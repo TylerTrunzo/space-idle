@@ -64,11 +64,21 @@ final class BalancedBot implements Bot {
   String get name => 'balanced';
 
   @override
-  List<Command> decide(GameEngine e, GameState s, String factionId) {
+  List<Command> decide(GameEngine e, GameState s, String factionId) =>
+      plan(e, s, factionId);
+
+  /// [decide]'s plan, ending before the command that would take the
+  /// commands other than auto-sell rules past [budget], if given.
+  List<Command> plan(
+    GameEngine e,
+    GameState s,
+    String factionId, {
+    int? budget,
+  }) {
     // Each bottleneck gets one fix per decision: the 1 s sample cannot see
     // a fix work until stock has had a real step to refill.
     final tried = <String>{};
-    return planCommands(e, s, (w) {
+    return planCommands(e, s, budget: budget, (w) {
       final v = _View(e.content, w, factionId, withReport: true);
       final quick =
           v.assignFreeCrew() ??
@@ -122,14 +132,13 @@ final class CasualBot implements Bot {
     final last = _lastDecision;
     if (last == null || s.time - last > 60) _used = 0;
     _lastDecision = s.time;
-    final cmds = <Command>[];
-    for (final cmd in _inner.decide(e, s, factionId)) {
-      if (cmd is! SetAutoSellCommand) {
-        if (_used >= commandsPerCheckIn) break;
-        _used++;
-      }
-      cmds.add(cmd);
-    }
+    final cmds = _inner.plan(
+      e,
+      s,
+      factionId,
+      budget: commandsPerCheckIn - _used,
+    );
+    _used += cmds.where((c) => c is! SetAutoSellCommand).length;
     return cmds;
   }
 }
@@ -193,16 +202,25 @@ const int _maxChainDepth = 8;
 /// the copy matches [s], so the caller's [GameEngine.apply] rejects it too
 /// and the bot bug shows up in its count of rejected commands (see
 /// `BalanceReport.rejectedCommands`) instead of passing silently.
+///
+/// With a [budget], the plan ends before the command that would make more
+/// than [budget] commands other than auto-sell rules.
 List<Command> planCommands(
   GameEngine e,
   GameState s,
-  Command? Function(GameState w) next,
-) {
+  Command? Function(GameState w) next, {
+  int? budget,
+}) {
   final w = s.copy();
   final out = <Command>[];
+  var counted = 0;
   for (var i = 0; i < _maxCommandsPerDecision; i++) {
     final cmd = next(w);
     if (cmd == null) break;
+    if (budget != null && cmd is! SetAutoSellCommand) {
+      if (counted >= budget) break;
+      counted++;
+    }
     out.add(cmd);
     if (e.apply(w, cmd) is! CommandOk) break;
   }
