@@ -127,6 +127,6 @@ void main() {
       ('smelter', null),
     ]);
     expect(content.rules.claimBaseCredits, BigNum.from(5000));
-    expect(content.milestones, hasLength(8));
+    expect(content.milestones, hasLength(14));
   });
 }
