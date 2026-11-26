@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import '../commands/apply.dart';
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../sim/market.dart';
 import 'game_state.dart';
 
 /// Upgrades an older save map by one version.
@@ -238,8 +239,8 @@ final class SaveCodec {
       return 'nextId ${s.nextId} is not above id suffix $highestSuffix';
     }
 
-    final floor = c.rules.marketFloor;
     for (final MapEntry(key: id, value: v) in s.market.saturation.entries) {
+      final floor = marketFloorOf(c, id);
       if (!(v >= floor && v <= 1)) {
         return 'market: saturation of $id is $v, outside [$floor, 1]';
       }

@@ -18,6 +18,11 @@ final class SaleResult {
   final BigNum revenue;
 }
 
+/// Lowest saturation [resourceId]'s market falls to: its own
+/// [ResourceDef.marketFloor], else the rules' [RulesDef.marketFloor].
+double marketFloorOf(Content c, String resourceId) =>
+    c.resources[resourceId]!.marketFloor ?? c.rules.marketFloor;
+
 /// Current price per unit of [resourceId]: base price × saturation.
 BigNum price(GameState s, Content c, String resourceId) => c
     .resources[resourceId]!
@@ -28,7 +33,7 @@ BigNum price(GameState s, Content c, String resourceId) => c
 /// [factionId], all at once.
 ///
 /// Each unit sold cuts the saturation by `1 / marketDepth` of itself, down
-/// to the market floor, and earns the price at the saturation it sold at.
+/// to the floor ([marketFloorOf]), and earns the price at the saturation it sold at.
 /// So `n` units take the saturation from `s0` to `s0 × e^(−n / depth)` and
 /// earn `basePrice × marketDepth × (s0 − s1)`; every unit past the floor
 /// earns `basePrice × marketFloor`. One large sale earns what the same
@@ -51,7 +56,7 @@ SaleResult sell(
     return const SaleResult(sold: BigNum.zero(), revenue: BigNum.zero());
   }
   final res = c.resources[resourceId]!;
-  final floor = c.rules.marketFloor;
+  final floor = marketFloorOf(c, resourceId);
   final s0 = s.market.saturation[resourceId] ?? 1;
   final depth = res.marketDepth;
   // Units that take the saturation from s0 down to the floor.
@@ -162,7 +167,7 @@ void stepMarket(GameState s, Content c, double dt) {
   double units,
   double dt,
 ) {
-  final floor = c.rules.marketFloor;
+  final floor = marketFloorOf(c, res.id);
   final r = 1 / c.rules.marketRecoverySeconds;
   final k = r + units / dt / res.marketDepth;
   final eq = r / k;

@@ -10,6 +10,7 @@ final class ResourceDef {
     required this.tier,
     required this.basePrice,
     this.marketDepth = defaultMarketDepth,
+    this.marketFloor,
   });
 
   /// Market depth used when a resource does not set one.
@@ -36,6 +37,11 @@ final class ResourceDef {
   /// RulesDef.marketRecoverySeconds` units a second holds it at half
   /// price. Larger is a deeper, more forgiving market.
   final double marketDepth;
+
+  /// Lowest saturation its market falls to, in `[0, 1]`; null uses
+  /// [RulesDef.marketFloor]. A low floor makes piling up this resource pay
+  /// ever less.
+  final double? marketFloor;
 }
 
 /// What a building does each cycle.

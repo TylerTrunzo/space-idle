@@ -150,6 +150,37 @@ void main() {
     }
   });
 
+  test("a resource's own floor replaces the rules' floor", () {
+    final base = economyContent();
+    c = Content(
+      rules: base.rules,
+      resources: {
+        'ore': ResourceDef(
+          id: 'ore',
+          name: 'Ore',
+          tier: 0,
+          basePrice: n(10),
+          marketDepth: 100,
+          marketFloor: 0.05,
+        ),
+      },
+      buildings: base.buildings,
+      bodyTypes: base.bodyTypes,
+      galaxy: base.galaxy,
+      milestones: base.milestones,
+    );
+    s = newGameState(c, 1)..body('a').stock['ore'] = n(1000);
+    sell(s, c, 'p', 'a', 'ore', n(1000));
+    expect(s.market.saturation['ore'], 0.05);
+    s
+        .faction('p')
+        .autoSell
+        .add(AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(0)));
+    s.body('a').stock['ore'] = n(1000);
+    stepMarket(s, c, 1);
+    expect(s.market.saturation['ore'], 0.05);
+  });
+
   test('a sale starting at the floor pays the floor price', () {
     s.market.saturation['ore'] = 0.2;
     expect(

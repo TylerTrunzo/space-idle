@@ -424,6 +424,18 @@ void main() {
     );
   });
 
+  test('a resource may set its own market floor', () {
+    final b = minimalBundle();
+    _entry(b, 'resources', 'ore')['marketFloor'] = 0.02;
+    final c = _ok(b);
+    expect(c.resources['ore']!.marketFloor, 0.02);
+    expect(c.resources['bar']!.marketFloor, isNull);
+    expect(marketFloorOf(c, 'ore'), 0.02);
+    expect(marketFloorOf(c, 'bar'), c.rules.marketFloor);
+    _entry(b, 'resources', 'bar')['marketFloor'] = 1.5;
+    expect(_errors(b), contains('resources.bar.marketFloor: must be <= 1'));
+  });
+
   test('unknown fields are reported', () {
     final b = minimalBundle();
     _entry(b, 'buildings', 'smelter')['housng'] = 4;

@@ -294,7 +294,7 @@ void main() {
         'saturation': {'iron_ore': 5},
       },
       'saturation below the market floor': (m) => m['market'] = {
-        'saturation': {'iron_ore': 0.1},
+        'saturation': {'iron_ore': -0.1},
       },
       'extractor on a deposit its body lacks': (m) =>
           building(m, 0)['depositResourceId'] = 'nickel',

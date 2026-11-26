@@ -53,7 +53,7 @@ final class _Loader {
       'resources',
       _listAt('resources', bundle['resources']),
       _resourceIds,
-      const {'id', 'name', 'tier', 'basePrice', 'marketDepth'},
+      const {'id', 'name', 'tier', 'basePrice', 'marketDepth', 'marketFloor'},
       _resource,
     );
     final buildings = _entries(
@@ -297,6 +297,9 @@ final class _Loader {
       fallback: ResourceDef.defaultMarketDepth,
       gt: 0,
     );
+    final marketFloor = f.map.containsKey('marketFloor')
+        ? f.number('marketFloor', ge: 0, le: 1)
+        : null;
     if (_errors.length > before) return null;
     return ResourceDef(
       id: id,
@@ -304,6 +307,7 @@ final class _Loader {
       tier: tier!,
       basePrice: basePrice!,
       marketDepth: marketDepth!,
+      marketFloor: marketFloor,
     );
   }
 
