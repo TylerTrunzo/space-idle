@@ -128,6 +128,10 @@ final class SaveCodec {
     return SaveOk(state);
   }
 
+  /// Largest number an engine-made id such as `b7` may end in: 2^53 − 1,
+  /// the largest integer exact on every platform.
+  static const int _maxIdNumber = 9007199254740991;
+
   /// Highest upgrade level a save may hold on any track.
   static const int maxLevel = 1000;
 
@@ -160,7 +164,12 @@ final class SaveCodec {
       if (!seen.add(id)) return 'duplicate $kind id $id';
       final m = suffix.firstMatch(id);
       if (m != null) {
-        highestSuffix = math.max(highestSuffix, int.parse(m.group(1)!));
+        // Above 2^53 an id number is not exact on the web, and past 64 bits
+        // it does not parse at all; no engine-made id gets near either.
+        final n = int.tryParse(m.group(1)!);
+        if (n == null || n > _maxIdNumber)
+          return '$kind id $id: number too large';
+        highestSuffix = math.max(highestSuffix, n);
       }
       return null;
     }

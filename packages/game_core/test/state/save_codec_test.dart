@@ -253,6 +253,10 @@ void main() {
       'duplicate route id': (m) => m['routes'] = [route(), route()],
       'nextId at a building id in use': (m) => m['nextId'] = 3,
       'nextId below a route id in use': (m) => m['routes'] = [route(id: 'r40')],
+      'building id suffix too large for an int': (m) =>
+          building(m, 0)['id'] = 'b99999999999999999999999',
+      'route id suffix too large for an int': (m) =>
+          m['routes'] = [route(id: 'r99999999999999999999999')],
       'negative crew': (m) => building(m, 0)['crew'] = -1,
       'crew above the building slots': (m) => building(m, 0)['crew'] = 2,
       'negative upgrade level': (m) =>
