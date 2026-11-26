@@ -501,6 +501,15 @@ void main() {
     expect(crewEfficiency(s, c, 'p'), 1.0);
   });
 
+  test('crew below the base slots is understaffed, even at full supply', () {
+    final works = add(home, 'works', crew: 2);
+    final full = add(home, 'works', crew: 7);
+    stepProduction(s, c, 10);
+    expect(works.lastRunFraction, 1);
+    expect(works.lastLimitReason, 'understaffed');
+    expect(full.lastLimitReason, isNull);
+  });
+
   test('zero crew produces nothing', () {
     final d = add(home, 'drill', crew: 0, deposit: 'iron_ore');
     final sm = add(home, 'smelter', crew: 0);

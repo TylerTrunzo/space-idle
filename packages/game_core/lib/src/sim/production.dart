@@ -72,7 +72,10 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// cap at the end of the tick ([clampStorage]), so a long step loses no
 /// more to the cap than many short ones. Each building's
 /// [BuildingState.lastRunFraction] and [BuildingState.lastLimitReason] are
-/// updated; habitat run fractions set next step's [crewEfficiency]. What
+/// updated: the limit is `noCrew`, `input:<resourceId>` for the input that
+/// ran shortest, `understaffed` for a fully supplied building with crew
+/// below its base slots, or null; habitat run fractions set next step's
+/// [crewEfficiency]. What
 /// each body makes is added to its owner's
 /// [FactionState.lifetimeProduced].
 ///
@@ -307,9 +310,14 @@ void _runGroup(
         ..lastLimitReason = 'noCrew';
     } else {
       run.fraction = f;
+      final def = c.buildings[b.defId]!;
       b
         ..lastRunFraction = f
-        ..lastLimitReason = limit == null ? null : 'input:$limit';
+        ..lastLimitReason = limit != null
+            ? 'input:$limit'
+            : !runsWithoutCrew(def) && b.crew < def.crewSlots
+            ? 'understaffed'
+            : null;
     }
   }
 

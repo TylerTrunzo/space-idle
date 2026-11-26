@@ -294,6 +294,32 @@ void main() {
     expect(b.runFraction, closeTo(0.5, 1e-12));
   });
 
+  test('a building with crew below its base slots is understaffed', () {
+    s.faction('player')
+      ..baseCrew = 30
+      ..credits = n(1e9);
+    kora.stock
+      ..['copper_wire'] = n(100)
+      ..['silicon_wafer'] = n(100);
+    final id = engine.apply(
+      s,
+      const BuildCommand('player', 'kora', 'circuit_fab'),
+    );
+    final fab = (id as CommandOk).createdId!;
+    engine.apply(s, AssignCrewCommand('player', fab, 1));
+    final r = buildFlowReport(s, c, 'player');
+    final status = koraFlow(
+      r,
+    ).buildings.singleWhere((b) => b.buildingId == fab);
+    expect(status.runFraction, 1);
+    expect(status.limitReason, 'understaffed');
+    final neck = r.bottlenecks.singleWhere((b) => b.buildingId == fab);
+    expect(neck.kind, BottleneckKind.understaffed);
+    expect(neck.message, 'Circuit Fab on Kora is understaffed: 1 of 2 crew');
+    expect(neck.resourceId, isNull);
+    expect(neck.runFraction, closeTo(0.5, 1e-12));
+  });
+
   test('bottlenecks sort by run fraction, then body and building order', () {
     kora.stock['iron_ore'] = n(0.2);
     engine.apply(s, const AssignCrewCommand('player', 'b1', 0));

@@ -57,7 +57,9 @@ changes. `state` also gives the player's crew totals (`base`, `supported`,
 `assigned`, `free`).
 
 Bottlenecks in `report` carry a `kind`: `input` (short of `resourceId`),
-`noCrew`, `crewShortage` (habitats and base crew support fewer crew than
+`noCrew`, `understaffed` (every input supplied but fewer crew than its
+base slots; the building's `limitReason` is `understaffed` too),
+`crewShortage` (habitats and base crew support fewer crew than
 are assigned, so every crewed building slows; `bodyId` and `buildingId` are
 null), or `storageFull` (`resourceId` is at the body's storage cap and
 output is being wasted; `buildingId` is null).

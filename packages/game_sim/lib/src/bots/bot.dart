@@ -214,6 +214,11 @@ final class _Stuck extends _Step {
 /// Whether [step] asks for action or saving.
 bool _acts(_Step step) => step is _Do || step is _Save;
 
+/// Whether [b] ran its last step on every input it wanted: nothing held it
+/// back, or only a crew below its base slots.
+bool _runsFreely(BuildingState b) =>
+    b.lastLimitReason == null || b.lastLimitReason == 'understaffed';
+
 /// One planning step's view of a faction: the state, its buildings and the
 /// decisions built from them.
 final class _View {
@@ -585,9 +590,7 @@ final class _View {
     (Command, BigNum)? upgrade;
     for (final b in body.buildings) {
       if (b.crew == 0 || !makes(b, resourceId)) continue;
-      final t = b.lastLimitReason == null
-          ? UpgradeTrack.speed
-          : UpgradeTrack.efficiency;
+      final t = _runsFreely(b) ? UpgradeTrack.speed : UpgradeTrack.efficiency;
       if (!def(b).upgrades.containsKey(t)) continue;
       final cost = upgradeCost(c, b, t);
       if (!canPay(body, cost)) continue;
@@ -1170,7 +1173,7 @@ final class _View {
             d.kind != BuildingKind.habitat &&
             freeCrew >= 1 &&
             b.crew > 0 &&
-            b.lastLimitReason == null &&
+            _runsFreely(b) &&
             b.crew >= maxCrew(r, d, b)) {
           // One more crew slot, worth it when crew is free and this
           // building runs freely with every slot filled.
@@ -1182,7 +1185,7 @@ final class _View {
             g,
           );
         }
-        if (b.crew == 0 || b.lastLimitReason != null) continue;
+        if (b.crew == 0 || !_runsFreely(b)) continue;
         if (d.kind == BuildingKind.habitat) continue;
         final flow = flowOf(body, b);
         if (ups.containsKey(UpgradeTrack.speed)) {

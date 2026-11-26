@@ -216,7 +216,8 @@ final class BuildingState {
   /// Fraction of full rate achieved in the last step.
   double lastRunFraction;
 
-  /// Why the last step ran below full rate, if it did.
+  /// Why the last step ran below full rate, if it did: `noCrew`,
+  /// `input:<resourceId>` or `understaffed` (see `stepProduction`).
   String? lastLimitReason;
 
   /// Serializes this building.

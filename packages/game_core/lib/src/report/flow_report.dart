@@ -47,7 +47,8 @@ final class BuildingStatus {
   /// for the rate.
   final double effectiveFraction;
 
-  /// `noCrew`, `input:<resourceId>`, or null when nothing held it back.
+  /// `noCrew`, `input:<resourceId>`, `understaffed` (fully supplied, crew
+  /// below its base slots), or null when nothing held it back.
   final String? limitReason;
 
   /// Crew assigned.
@@ -109,6 +110,9 @@ enum BottleneckKind {
   /// A building has no crew assigned.
   noCrew,
 
+  /// A building has every input but fewer crew than its base slots.
+  understaffed,
+
   /// Habitats and base crew support fewer crew than the faction has
   /// assigned, so every crewed building works below its crew.
   crewShortage,
@@ -146,7 +150,8 @@ final class Bottleneck {
   /// resource being wasted ([BottleneckKind.storageFull]); otherwise null.
   final String? resourceId;
 
-  /// Share of full rate achieved, in `[0, 1)`: a building's run fraction;
+  /// Share of full rate achieved, in `[0, 1)`: a building's run fraction,
+  /// for [BottleneckKind.understaffed] its crew over its base slots;
   /// for [BottleneckKind.crewShortage] the faction's crew efficiency; for
   /// [BottleneckKind.storageFull] the share of the body's own output of the
   /// resource that it kept (0 when only arriving cargo was wasted).
@@ -402,6 +407,15 @@ Bottleneck? _bottleneck(Content c, BodyState body, BuildingState b) {
     message =
         '$where is running at $pct%: '
         'not enough ${c.resources[resourceId]!.name}';
+  } else if (reason == 'understaffed') {
+    return Bottleneck(
+      kind: BottleneckKind.understaffed,
+      bodyId: body.id,
+      buildingId: b.id,
+      resourceId: null,
+      runFraction: b.lastRunFraction * b.crew / def.crewSlots,
+      message: '$where is understaffed: ${b.crew} of ${def.crewSlots} crew',
+    );
   } else {
     kind = BottleneckKind.noCrew;
     resourceId = null;

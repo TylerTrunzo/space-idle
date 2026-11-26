@@ -47,7 +47,9 @@ so a long `advance` earns what many short ones do. `away` only adds the 12 h cap
 and the summary.
 
 A bottleneck in `report` has a `kind`: `input` (a building is short of
-`resourceId`), `noCrew`, `crewShortage` (habitats and base crew support fewer
+`resourceId`), `noCrew`, `understaffed` (a building has every input but fewer
+crew than its base slots, such as "Circuit Fab on Kora is understaffed: 1 of
+2 crew"), `crewShortage` (habitats and base crew support fewer
 crew than you have assigned, so every crewed building slows down), or
 `storageFull` (a body's store of `resourceId` is at its cap and output is being
 wasted).
