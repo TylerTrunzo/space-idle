@@ -170,6 +170,24 @@ void main() {
       );
     });
 
+    test('seen bottleneck resource and body', () {
+      for (final (body, resource) in [('kora', 'nope'), ('nope', 'steel')]) {
+        expectUnknown(
+          (s) => s
+              .faction('player')
+              .seenBottlenecks
+              .add(
+                SeenBottleneck(
+                  kind: 'storageFull',
+                  bodyId: body,
+                  resourceId: resource,
+                  firstSeenAt: 0,
+                ),
+              ),
+        );
+      }
+    });
+
     test('auto-sell body', () {
       expectUnknown(
         (s) => s.faction('player').autoSell.add(rule(body: 'nope')),
@@ -307,6 +325,32 @@ void main() {
       'negative lifetime credits': (m) => player(m)['lifetimeCredits'] = '-1',
       'negative lifetime produced': (m) =>
           player(m)['lifetimeProduced'] = {'steel': '-1'},
+      'bottleneck seen after the save time': (m) =>
+          player(m)['seenBottlenecks'] = [
+            {
+              'kind': 'noCrew',
+              'bodyId': 'kora',
+              'buildingId': 'b1',
+              'firstSeenAt': 5,
+            },
+          ],
+      'bottleneck of an unknown kind': (m) => player(m)['seenBottlenecks'] = [
+        {'kind': 'vibes', 'bodyId': 'kora', 'firstSeenAt': 0},
+      ],
+      'the same bottleneck twice': (m) => player(m)['seenBottlenecks'] = [
+        {
+          'kind': 'noCrew',
+          'bodyId': 'kora',
+          'buildingId': 'b1',
+          'firstSeenAt': 0,
+        },
+        {
+          'kind': 'noCrew',
+          'bodyId': 'kora',
+          'buildingId': 'b1',
+          'firstSeenAt': 0,
+        },
+      ],
       'negative base crew': (m) => player(m)['baseCrew'] = -1,
       'saturation above 1': (m) => m['market'] = {
         'saturation': {'iron_ore': 5},

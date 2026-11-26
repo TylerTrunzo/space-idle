@@ -21,7 +21,9 @@ credits"`. Meta commands:
 - `{"cmd":"away","seconds":N}` simulate the player being away for N seconds
   (offline catch-up, capped at the offline limit) and print the away summary:
   seconds away and simulated, credits and stock gained, units wasted to
-  storage caps, milestones reached and the top bottlenecks
+  storage caps, milestones reached and the top bottlenecks, those losing the
+  most credits an hour first; one that was there before the absence says
+  `"ongoing": "ongoing since 12.0h"` (game hours)
 - `{"cmd":"report"}` per-second flows and bottlenecks
 - `{"cmd":"state"}` time, credits, crew, reached milestones, every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
@@ -64,7 +66,11 @@ base slots; the building's `limitReason` is `understaffed` too),
 `crewShortage` (habitats and base crew support fewer crew than
 are assigned, so every crewed building slows; `bodyId` and `buildingId` are
 null), or `storageFull` (`resourceId` is at the body's storage cap and
-output is being wasted; `buildingId` is null).
+output is being wasted; `buildingId` is null). Each also gives
+`firstSeenAt`, the game time since which it has held without a break, and
+`lostCreditsPerHour`, an estimate at current prices of what it costs (the
+wasted units for `storageFull`, the output not made for `input`; null for
+the other kinds).
 
 ## Bot runs
 

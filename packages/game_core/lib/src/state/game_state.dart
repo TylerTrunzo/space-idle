@@ -53,6 +53,67 @@ final class AutoSellRule {
   );
 }
 
+/// A bottleneck a faction has had since [firstSeenAt], kept so reports can
+/// tell a standing problem from a new one.
+///
+/// Identified by [kind], [bodyId], [buildingId] and [resourceId], as on the
+/// report's `Bottleneck`; the engine refreshes the list after every tick.
+final class SeenBottleneck {
+  /// Creates a record.
+  SeenBottleneck({
+    required this.kind,
+    this.bodyId,
+    this.buildingId,
+    this.resourceId,
+    required this.firstSeenAt,
+  });
+
+  /// Restores a record written by [toJson].
+  factory SeenBottleneck.fromJson(Map<String, Object?> j) => SeenBottleneck(
+    kind: j['kind']! as String,
+    bodyId: j['bodyId'] as String?,
+    buildingId: j['buildingId'] as String?,
+    resourceId: j['resourceId'] as String?,
+    firstSeenAt: (j['firstSeenAt']! as num).toDouble(),
+  );
+
+  /// Name of its `BottleneckKind`, such as `input`.
+  final String kind;
+
+  /// Body it is on; null for a faction-wide crew shortage.
+  final String? bodyId;
+
+  /// Building held back; null for a crew shortage or a full store.
+  final String? buildingId;
+
+  /// Input short of, or resource being wasted; null otherwise.
+  final String? resourceId;
+
+  /// Game time in seconds of the tick it was first seen in.
+  final double firstSeenAt;
+
+  /// Its identity: kind, body, building and resource.
+  String get key => bottleneckKey(kind, bodyId, buildingId, resourceId);
+
+  /// Serializes this record; null ids are left out.
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'bodyId': ?bodyId,
+    'buildingId': ?buildingId,
+    'resourceId': ?resourceId,
+    'firstSeenAt': firstSeenAt,
+  };
+}
+
+/// The identity of a bottleneck of [kind] on [bodyId], [buildingId] and
+/// [resourceId], any of which may be null.
+String bottleneckKey(
+  String kind,
+  String? bodyId,
+  String? buildingId,
+  String? resourceId,
+) => '$kind/${bodyId ?? ''}/${buildingId ?? ''}/${resourceId ?? ''}';
+
 /// A faction's mutable state: the player or an AI rival.
 final class FactionState {
   /// Creates a faction.
@@ -67,7 +128,9 @@ final class FactionState {
     Map<String, BigNum>? salesRevenue,
     BigNum? lifetimeCredits,
     Map<String, BigNum>? lifetimeProduced,
+    List<SeenBottleneck>? seenBottlenecks,
   }) : autoSell = autoSell ?? [],
+       seenBottlenecks = seenBottlenecks ?? [],
        reachedMilestones = reachedMilestones ?? {},
        salesRevenue = salesRevenue ?? {},
        lifetimeCredits =
@@ -99,6 +162,10 @@ final class FactionState {
     lifetimeProduced: j['lifetimeProduced'] == null
         ? null
         : _bigMap(j['lifetimeProduced']),
+    // Absent in saves from before bottlenecks were remembered.
+    seenBottlenecks: j['seenBottlenecks'] == null
+        ? null
+        : _list(j['seenBottlenecks'], SeenBottleneck.fromJson),
   );
 
   /// Unique id.
@@ -136,6 +203,10 @@ final class FactionState {
   /// milestones count it.
   final Map<String, BigNum> lifetimeProduced;
 
+  /// The bottlenecks the faction had in the last tick, each with when it
+  /// was first seen, in report order; see `noteBottlenecks`.
+  final List<SeenBottleneck> seenBottlenecks;
+
   /// Serializes this faction; milestones are written sorted.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -152,6 +223,7 @@ final class FactionState {
     'lifetimeProduced': {
       for (final e in lifetimeProduced.entries) e.key: e.value.toJson(),
     },
+    'seenBottlenecks': [for (final b in seenBottlenecks) b.toJson()],
   };
 
   /// An independent deep copy of this faction.
@@ -166,6 +238,8 @@ final class FactionState {
     salesRevenue: Map.of(salesRevenue),
     lifetimeCredits: lifetimeCredits,
     lifetimeProduced: Map.of(lifetimeProduced),
+    // Records are immutable, so a new list is a deep copy.
+    seenBottlenecks: List.of(seenBottlenecks),
   );
 }
 

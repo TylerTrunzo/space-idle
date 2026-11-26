@@ -5,6 +5,7 @@ import '../commands/apply.dart';
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../num/change.dart';
+import '../report/flow_report.dart';
 import '../sim/production.dart';
 import '../sim/market.dart';
 import 'game_state.dart';
@@ -142,6 +143,11 @@ final class SaveCodec {
   /// Highest upgrade level a save may hold on any track.
   static const int maxLevel = 1000;
 
+  /// Names a [SeenBottleneck.kind] may take.
+  static final Set<String> bottleneckKinds = {
+    for (final k in BottleneckKind.values) k.name,
+  };
+
   /// Sets to zero each stock in [s] that lies below zero by no more than
   /// [takeResidue] times its body's [storageCap] (at least 1): float
   /// residue that older engine builds wrote, which [_invalidValue] would
@@ -177,6 +183,19 @@ final class SaveCodec {
       }
       for (final MapEntry(key: id, value: v) in f.lifetimeProduced.entries) {
         if (v < zero) return 'faction ${f.id}: negative lifetime $id made';
+      }
+      final seen = <String>{};
+      for (final b in f.seenBottlenecks) {
+        if (!bottleneckKinds.contains(b.kind)) {
+          return 'faction ${f.id}: unknown bottleneck kind ${b.kind}';
+        }
+        if (!seen.add(b.key)) {
+          return 'faction ${f.id}: bottleneck ${b.key} listed twice';
+        }
+        if (!(b.firstSeenAt >= 0 && b.firstSeenAt <= s.time)) {
+          return 'faction ${f.id}: bottleneck ${b.key} first seen at '
+              '${b.firstSeenAt}, outside [0, ${s.time}]';
+        }
       }
       final rules = <(String, String)>{};
       for (final r in f.autoSell) {
@@ -337,6 +356,15 @@ final class SaveCodec {
       for (final id in f.lifetimeProduced.keys) {
         if (!resource(id)) {
           return 'faction ${f.id}: lifetime produced of unknown resource $id';
+        }
+      }
+      for (final b in f.seenBottlenecks) {
+        if (!resource(b.resourceId)) {
+          return 'faction ${f.id}: bottleneck of unknown resource '
+              '${b.resourceId}';
+        }
+        if (b.bodyId case final id? when !bodyIds.contains(id)) {
+          return 'faction ${f.id}: bottleneck on unknown body $id';
         }
       }
       for (final r in f.autoSell) {

@@ -48,13 +48,22 @@ Map<String, Object?> _nums(Map<String, BigNum> m) => {
   for (final e in m.entries) e.key: _num(e.value),
 };
 
-Map<String, Object?> _bottleneck(Bottleneck n) => {
+/// A bottleneck as JSON. With [awayFrom], the start of an absence, one
+/// first seen before it also says since when it has been going on.
+Map<String, Object?> _bottleneck(Bottleneck n, {double? awayFrom}) => {
   'kind': n.kind.name,
   'bodyId': n.bodyId,
   'buildingId': n.buildingId,
   'resourceId': n.resourceId,
   'runFraction': n.runFraction,
   'message': n.message,
+  'firstSeenAt': n.firstSeenAt,
+  'lostCreditsPerHour': switch (n.lostCreditsPerHour) {
+    final v? => _num(v),
+    null => null,
+  },
+  if (awayFrom != null && n.firstSeenAt < awayFrom)
+    'ongoing': 'ongoing since ${(n.firstSeenAt / 3600).toStringAsFixed(1)}h',
 };
 
 Map<String, Object?> _fail(String error, String message) => {
@@ -261,7 +270,10 @@ final class ScriptRunner {
       'milestonesReached': [
         for (final id in sum.milestonesReached) {'id': id, 'name': names[id]},
       ],
-      'topBottlenecks': [for (final n in sum.topBottlenecks) _bottleneck(n)],
+      'topBottlenecks': [
+        for (final n in sum.topBottlenecks)
+          _bottleneck(n, awayFrom: sum.awayFrom),
+      ],
     };
   }
 

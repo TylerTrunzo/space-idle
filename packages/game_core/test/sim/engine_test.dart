@@ -400,6 +400,60 @@ void main() {
     });
   });
 
+  group('bottleneck history', () {
+    SeenBottleneck? seen(GameState s, String buildingId) => s
+        .faction('player')
+        .seenBottlenecks
+        .where((b) => b.buildingId == buildingId)
+        .firstOrNull;
+
+    test('a bottleneck keeps the time it was first seen while it lasts', () {
+      final s = engine.newGame(1);
+      engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+      engine.advance(s, 600);
+      final mine = seen(s, 'b1')!;
+      expect(mine.kind, 'noCrew');
+      expect(mine.bodyId, 'kora');
+      expect(mine.resourceId, isNull);
+      expect(mine.firstSeenAt, 0);
+      engine.advance(s, 3600);
+      expect(seen(s, 'b1')!.firstSeenAt, 0);
+      final neck = buildFlowReport(
+        s,
+        c,
+        'player',
+      ).bottlenecks.singleWhere((b) => b.buildingId == 'b1');
+      expect(neck.firstSeenAt, 0);
+    });
+
+    test(
+      'a bottleneck that clears is forgotten; when it returns it is new',
+      () {
+        final s = engine.newGame(1);
+        engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+        engine.advance(s, 600);
+        engine.apply(s, const AssignCrewCommand('player', 'b1', 1));
+        engine.advance(s, 60);
+        expect(seen(s, 'b1'), isNull);
+        engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+        engine.advance(s, 60);
+        expect(seen(s, 'b1')!.firstSeenAt, 660);
+      },
+    );
+
+    test('a bottleneck the report finds first is new as of now', () {
+      final s = engine.newGame(1);
+      engine.advance(s, 120);
+      engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+      final neck = buildFlowReport(
+        s,
+        c,
+        'player',
+      ).bottlenecks.singleWhere((b) => b.buildingId == 'b1');
+      expect(neck.firstSeenAt, 120);
+    });
+  });
+
   group('advance', () {
     test('splits into maxStep steps with the remainder last', () {
       final s = engine.newGame(1);
@@ -567,9 +621,11 @@ void main() {
         closeTo(s.faction('player').credits.toDouble() - 250, 1e-6),
       );
       expect(sum.milestonesReached, isEmpty);
+      // The starved smelter's lost steel has a price; the idle mine's loss
+      // is not estimated, so it comes after.
       expect(sum.topBottlenecks.map((b) => b.message), [
-        'Mine on Kora has no crew',
         'Smelter on Kora is running at 0%: not enough Iron Ore',
+        'Mine on Kora has no crew',
       ]);
     });
 
@@ -620,6 +676,34 @@ void main() {
         ..lifetimeCredits = n(1e4);
       final sum = engine.catchUpOffline(s, 3600);
       expect(sum.milestonesReached, ['first_steel', 'credits_10k']);
+    });
+
+    test('top bottlenecks rank by the credits they lose an hour', () {
+      final s = engine.newGame(1);
+      // An idle iron mine starves the smelter of ore, and Kora's copper ore
+      // store fills and wastes all the mine makes.
+      engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+      final sum = engine.catchUpOffline(s, 3 * 3600);
+      expect(sum.awayFrom, 0);
+      expect(sum.topBottlenecks.map((b) => b.kind), [
+        BottleneckKind.input,
+        BottleneckKind.storageFull,
+        BottleneckKind.noCrew,
+      ]);
+      // The smelter's lost 0.2 steel a second, then 0.32 copper ore a
+      // second wasted, each at its current price; no estimate for the idle
+      // mine.
+      final steel = price(s, c, 'steel').toDouble();
+      final ore = price(s, c, 'copper_ore').toDouble();
+      final lost = [
+        for (final b in sum.topBottlenecks) b.lostCreditsPerHour?.toDouble(),
+      ];
+      expect(lost[0], closeTo(0.2 * steel * 3600, 1e-6));
+      expect(lost[1], closeTo(0.32 * ore * 3600, 1e-6));
+      expect(lost[2], isNull);
+      // The report itself still sorts by run fraction, then report order.
+      final necks = buildFlowReport(s, c, 'player').bottlenecks;
+      expect(necks.first.kind, BottleneckKind.noCrew);
     });
 
     test('top bottlenecks are at most three', () {

@@ -101,6 +101,26 @@ void main() {
     expect(jsonEncode(s.toJson()), once);
   });
 
+  test('seen bottlenecks round trip and copy deeply', () {
+    final s = newGameState(content, 3)..time = 100;
+    s.faction('player').seenBottlenecks.addAll([
+      SeenBottleneck(
+        kind: 'noCrew',
+        bodyId: 'kora',
+        buildingId: 'b1',
+        firstSeenAt: 60,
+      ),
+      SeenBottleneck(kind: 'crewShortage', firstSeenAt: 0),
+    ]);
+    final once = jsonEncode(s.toJson());
+    final back = GameState.fromJson(jsonDecode(once) as Map<String, Object?>);
+    expect(jsonEncode(back.toJson()), once);
+    final t = s.copy();
+    t.faction('player').seenBottlenecks.clear();
+    expect(jsonEncode(s.toJson()), once);
+    expect(SaveCodec.decode(once, content), isA<SaveOk>());
+  });
+
   test('copy is a deep copy equal to a save round trip', () {
     final s = newGameState(content, 3)
       ..routes.add(

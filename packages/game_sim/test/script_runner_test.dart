@@ -262,6 +262,18 @@ void main() {
     expect(out['topBottlenecks'], isA<List<Object?>>());
   });
 
+  test('away marks bottlenecks that were there before it as ongoing', () {
+    final r = _runner();
+    r.handle({'cmd': 'assignCrew', 'buildingId': 'b1', 'crew': 0});
+    r.handle({'cmd': 'advance', 'seconds': 7200});
+    final out = r.handle({'cmd': 'away', 'seconds': 3600});
+    final necks = (out['topBottlenecks']! as List).cast<Map<String, Object?>>();
+    final idle = necks.singleWhere((n) => n['buildingId'] == 'b1');
+    expect(idle['firstSeenAt'], 0.0);
+    expect(idle['ongoing'], 'ongoing since 0.0h');
+    expect(necks.every((n) => n.containsKey('lostCreditsPerHour')), isTrue);
+  });
+
   test('away needs a number of seconds', () {
     final r = _runner();
     expect(r.handle({'cmd': 'away'})['error'], 'badCommand');

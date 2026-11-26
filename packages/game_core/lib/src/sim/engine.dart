@@ -15,6 +15,7 @@ import 'production.dart';
 final class OfflineSummary {
   /// Creates a summary; the collections are copied unmodifiable.
   OfflineSummary({
+    required this.awayFrom,
     required this.secondsSimulated,
     required this.secondsAway,
     required Map<String, BigNum> stockGained,
@@ -25,6 +26,10 @@ final class OfflineSummary {
   }) : stockGained = Map.unmodifiable(stockGained),
        milestonesReached = List.unmodifiable(milestonesReached),
        topBottlenecks = List.unmodifiable(topBottlenecks);
+
+  /// Game time in seconds at which the absence began; a bottleneck in
+  /// [topBottlenecks] first seen before it was there all along.
+  final double awayFrom;
 
   /// Game seconds actually simulated: the time away, capped.
   final double secondsSimulated;
@@ -51,7 +56,9 @@ final class OfflineSummary {
   /// Ids of milestones the player reached while away, in content order.
   final List<String> milestonesReached;
 
-  /// The player's worst bottlenecks after catching up, at most three.
+  /// The player's worst bottlenecks after catching up, at most three: those
+  /// with an estimate of the credits they lose an hour first, most first
+  /// ([Bottleneck.lostCreditsPerHour]), then the rest in report order.
   final List<Bottleneck> topBottlenecks;
 }
 
@@ -82,7 +89,7 @@ final class GameEngine {
   /// In order: reset each body's [BodyState.wastedThisStep], land the
   /// shipments due ([deliverShipments]), production, send cargo
   /// ([sendCargo]), market (recovery and auto-sell), [clampStorage],
-  /// milestone check, then `time += dt`. Stock may pass the storage cap
+  /// [noteBottlenecks], milestone check, then `time += dt`. Stock may pass the storage cap
   /// during the tick; production uses landed cargo, and cargo and
   /// auto-sell take from what is made, before the clamp, so long steps
   /// lose no more to the cap than short ones. Routes take their share
@@ -106,6 +113,7 @@ final class GameEngine {
     sendCargo(s, content, dt);
     stepMarket(s, content, dt);
     clampStorage(s, content, kept);
+    noteBottlenecks(s, content, s.time);
     _checkMilestones(s);
     s.time += dt;
   }
@@ -167,6 +175,7 @@ final class GameEngine {
     final stockBefore = _empireStock(s, player.id);
     final creditsBefore = player.credits;
     final reachedBefore = Set.of(player.reachedMilestones);
+    final awayFrom = s.time;
 
     var wasted = const BigNum.zero();
     _advance(s, simulated, _offlineStepSeconds, () {
@@ -187,7 +196,20 @@ final class GameEngine {
       );
       if (!delta.isZero) gained[id] = delta;
     }
+    final necks =
+        buildFlowReport(s, content, player.id).bottlenecks.indexed.toList()
+          ..sort((x, y) {
+            final (a, b) = (x.$2.lostCreditsPerHour, y.$2.lostCreditsPerHour);
+            if (a != null && b != null) {
+              final byLoss = b.compareTo(a);
+              if (byLoss != 0) return byLoss;
+            } else if (a != null || b != null) {
+              return a != null ? -1 : 1;
+            }
+            return x.$1.compareTo(y.$1);
+          });
     return OfflineSummary(
+      awayFrom: awayFrom,
       secondsSimulated: simulated,
       secondsAway: secondsAway,
       stockGained: gained,
@@ -199,11 +221,7 @@ final class GameEngine {
               !reachedBefore.contains(m.id))
             m.id,
       ],
-      topBottlenecks: buildFlowReport(
-        s,
-        content,
-        player.id,
-      ).bottlenecks.take(topBottleneckCount).toList(),
+      topBottlenecks: [for (final (_, b) in necks.take(topBottleneckCount)) b],
     );
   }
 

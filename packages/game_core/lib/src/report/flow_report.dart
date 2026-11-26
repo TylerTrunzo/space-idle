@@ -133,6 +133,8 @@ final class Bottleneck {
     required this.resourceId,
     required this.runFraction,
     required this.message,
+    this.firstSeenAt = 0,
+    this.lostCreditsPerHour,
   });
 
   /// What holds it back.
@@ -160,6 +162,33 @@ final class Bottleneck {
   /// Plain-English description using display names, such as
   /// "Smelter on Kora is running at 50%: not enough Iron Ore".
   final String message;
+
+  /// Game time in seconds since which the faction has had it without a
+  /// break, from [FactionState.seenBottlenecks]; the report's own time when
+  /// it is new.
+  final double firstSeenAt;
+
+  /// Estimated credits it costs an hour, at current market prices, where
+  /// that can be worked out: for [BottleneckKind.storageFull] the wasted
+  /// units' value; for [BottleneckKind.input] the value of the output the
+  /// building does not make. Null for the other kinds.
+  final BigNum? lostCreditsPerHour;
+
+  /// [kind], [bodyId], [buildingId] and [resourceId] as one key, as in
+  /// [SeenBottleneck.key].
+  String get key => bottleneckKey(kind.name, bodyId, buildingId, resourceId);
+
+  Bottleneck _with({double? firstSeenAt, BigNum? lostCreditsPerHour}) =>
+      Bottleneck(
+        kind: kind,
+        bodyId: bodyId,
+        buildingId: buildingId,
+        resourceId: resourceId,
+        runFraction: runFraction,
+        message: message,
+        firstSeenAt: firstSeenAt ?? this.firstSeenAt,
+        lostCreditsPerHour: lostCreditsPerHour ?? this.lostCreditsPerHour,
+      );
 }
 
 /// A faction's resource flows and bottlenecks, per second.
@@ -289,7 +318,18 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
       final outputs = _scaled(flow.outputs, b.lastRunFraction);
       _addAll(produced, outputs);
       _addAll(consumed, inputs);
-      addNeck(_bottleneck(c, body, b));
+      final neck = _bottleneck(c, body, b);
+      addNeck(
+        neck?.kind == BottleneckKind.input
+            ? neck!._with(
+                lostCreditsPerHour: _valuePerHour(
+                  s,
+                  c,
+                  _scaled(flow.outputs, 1 - b.lastRunFraction),
+                ),
+              )
+            : neck,
+      );
       statuses.add(
         BuildingStatus(
           buildingId: b.id,
@@ -310,7 +350,13 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     }
     final cap = storageCap(copy, c, body);
     for (final id in c.resources.keys) {
-      addNeck(_storageFull(c, body, id, cap, produced[id]));
+      addNeck(
+        _storageFull(c, body, id, cap, produced[id])?._with(
+          lostCreditsPerHour: _valuePerHour(s, c, {
+            id: body.wastedThisStep[id]!,
+          }),
+        ),
+      );
     }
     bodies.add(
       BodyFlow(
@@ -327,12 +373,88 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     final byRun = x.$2.runFraction.compareTo(y.$2.runFraction);
     return byRun != 0 ? byRun : x.$1.compareTo(y.$1);
   });
+  final since = {
+    for (final seen in s.faction(factionId).seenBottlenecks)
+      seen.key: seen.firstSeenAt,
+  };
   return FlowReport(
     bodies: bodies,
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
     creditsPerSec: faction.credits - creditsBefore,
-    bottlenecks: [for (final (_, b) in bottlenecks) b],
+    bottlenecks: [
+      for (final (_, b) in bottlenecks)
+        b._with(firstSeenAt: since[b.key] ?? s.time),
+    ],
   );
+}
+
+/// Credits an hour that [perSec] (resource id to units a second) is worth
+/// at the current market prices of [s].
+BigNum _valuePerHour(GameState s, Content c, Map<String, BigNum> perSec) {
+  var total = const BigNum.zero();
+  for (final MapEntry(key: id, value: v) in perSec.entries) {
+    total = total + v * price(s, c, id);
+  }
+  return total.mulDouble(3600);
+}
+
+/// Refreshes every faction's [FactionState.seenBottlenecks] from the tick
+/// that just ran: a bottleneck still there keeps its first-seen time, a
+/// new one is seen [at], and one that cleared is dropped.
+///
+/// Reads what the tick left in [s], as the report does: each building's
+/// [BuildingState.lastLimitReason], each full store that wasted output
+/// ([BodyState.wastedThisStep]), and a crew efficiency below 1. The engine
+/// calls it at the end of every tick with the tick's start time.
+void noteBottlenecks(GameState s, Content c, double at) {
+  for (final f in s.factions) {
+    final before = {for (final b in f.seenBottlenecks) b.key: b.firstSeenAt};
+    final now = <SeenBottleneck>[];
+    void see(String kind, String? body, String? building, String? resource) {
+      now.add(
+        SeenBottleneck(
+          kind: kind,
+          bodyId: body,
+          buildingId: building,
+          resourceId: resource,
+          firstSeenAt:
+              before[bottleneckKey(kind, body, building, resource)] ?? at,
+        ),
+      );
+    }
+
+    if (crewEfficiency(s, c, f.id) < 1) {
+      see(BottleneckKind.crewShortage.name, null, null, null);
+    }
+    for (final body in s.bodies) {
+      if (body.ownerId != f.id) continue;
+      for (final b in body.buildings) {
+        final reason = b.lastLimitReason;
+        if (reason == null || !runsRecipe(c.buildings[b.defId]!)) continue;
+        if (reason.startsWith('input:')) {
+          see(
+            BottleneckKind.input.name,
+            body.id,
+            b.id,
+            reason.substring('input:'.length),
+          );
+        } else {
+          see(reason, body.id, b.id, null);
+        }
+      }
+      if (body.wastedThisStep.isEmpty) continue;
+      final cap = storageCap(s, c, body);
+      for (final id in c.resources.keys) {
+        final wasted = body.wastedThisStep[id];
+        if (wasted == null || wasted.isZero) continue;
+        if ((body.stock[id] ?? const BigNum.zero()) < cap) continue;
+        see(BottleneckKind.storageFull.name, body.id, null, id);
+      }
+    }
+    f.seenBottlenecks
+      ..clear()
+      ..addAll(now);
+  }
 }
 
 /// The crew-shortage bottleneck of [factionId], or null when its crew
