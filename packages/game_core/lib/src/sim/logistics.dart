@@ -51,12 +51,15 @@ void deliverShipments(GameState s) {
 /// than [mergeSeconds] ago and is still in flight; otherwise it leaves in
 /// a new [Shipment] arriving at `time + travelSeconds`. Other routes are
 /// skipped this step. Nothing lands here; see [deliverShipments].
-void sendCargo(
+///
+/// Returns route id to the units it sent, for the routes that sent any.
+Map<String, BigNum> sendCargo(
   GameState s,
   Content c,
   double dt, {
   double mergeSeconds = shipmentMergeSeconds,
 }) {
+  final sent = <String, BigNum>{};
   for (final r in s.routes) {
     final from = s.body(r.fromBodyId);
     final to = s.body(r.toBodyId);
@@ -66,6 +69,7 @@ void sendCargo(
     final amount = rate.mulDouble(dt).min(held);
     if (amount <= const BigNum.zero()) continue;
     from.take(r.resourceId, amount);
+    sent[r.id] = amount;
     final newest = _newestOf(s, r.id);
     if (newest != null &&
         s.time - newest.departAt < mergeSeconds &&
@@ -86,6 +90,7 @@ void sendCargo(
       ),
     );
   }
+  return sent;
 }
 
 /// The shipment route [routeId] sent last, or null if none is in flight.

@@ -116,6 +116,36 @@ void main() {
     expect(r.creditsPerSec.toDouble(), lessThan(full));
   });
 
+  group('rates are steady per-second rates, not one tick\'s drain', () {
+    // Auto-selling every input keeps back only one step's demand, so after
+    // a 60 s tick a 1 s sample would sell 59 s of kept ore at once.
+    void autoSellAll() {
+      for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+        engine.apply(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+      }
+    }
+
+    test('credits per second match what a 10 minute advance earns', () {
+      autoSellAll();
+      engine.advance(s, 4 * 3600);
+      final r = buildFlowReport(s, c, 'player');
+      final before = s.faction('player').credits;
+      engine.advance(s, 600);
+      final earned = (s.faction('player').credits - before).toDouble() / 600;
+      expect(earned, greaterThan(0));
+      expect(r.creditsPerSec.toDouble(), closeTo(earned, earned * 0.1));
+    });
+
+    test('net per second is the steady flow', () {
+      autoSellAll();
+      engine.advance(s, 4 * 3600);
+      final f = koraFlow(buildFlowReport(s, c, 'player'));
+      // The smelter uses all the iron ore the mine makes and the rest is
+      // sold as it is made, so no stock moves.
+      expect(f.netPerSec, isEmpty);
+    });
+  });
+
   test('net includes route outflow; empire net counts cargo in flight', () {
     s.body('hollow_reach').ownerId = 'player';
     kora.stock['cargo_ship'] = n(1);
@@ -134,8 +164,11 @@ void main() {
     expect(r.bodies.map((b) => b.bodyId), ['kora', 'hollow_reach']);
     final f = koraFlow(r);
     expect(plain(f.producedPerSec)['copper_ore'], closeTo(0.32, 1e-9));
-    // All of this second's copper ore left on the route.
+    // All of this second's copper ore left on the route, and in steady
+    // flow as much lands at the other end each second.
     expect(f.netPerSec.containsKey('copper_ore'), isFalse);
+    final hollow = r.bodies.singleWhere((b) => b.bodyId == 'hollow_reach');
+    expect(plain(hollow.netPerSec), rates({'copper_ore': 0.32}));
     expect(plain(r.empireNet), rates({'copper_ore': 0.32, 'steel': 0.2}));
   });
 

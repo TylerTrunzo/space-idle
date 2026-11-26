@@ -49,8 +49,12 @@ Examples:
 `report` gives per-second rates for each owned body, the player's
 `creditsPerSec`, and for each building its `runFraction` (input supply),
 `effectiveFraction` (run fraction × crew / base slots × crew efficiency) and
-actual `inputs` and `outputs`. `state` also gives the player's crew totals
-(`base`, `supported`, `assigned`, `free`).
+actual `inputs` and `outputs`. The rates are steady-state rates: cargo on
+routes counts as arriving at the rate it is sent, and `creditsPerSec` is
+what auto-selling one second's net production earns, not a stockpile being
+sold down, so it matches what a stretch of `advance` earns while nothing
+changes. `state` also gives the player's crew totals (`base`, `supported`,
+`assigned`, `free`).
 
 Bottlenecks in `report` carry a `kind`: `input` (short of `resourceId`),
 `noCrew`, `crewShortage` (habitats and base crew support fewer crew than

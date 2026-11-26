@@ -103,7 +103,16 @@ SaleResult sell(
 /// the same price per unit. Factions and their rules
 /// run in list order; resources are settled in sorted-id order so the
 /// result does not depend on map insertion order.
-void stepMarket(GameState s, Content c, double dt) {
+///
+/// [limits], when given, caps what auto-sell may sell this step: body id
+/// to resource id to units, a missing entry meaning nothing. The flow
+/// report uses it to sell only what a step makes (see `buildFlowReport`).
+void stepMarket(
+  GameState s,
+  Content c,
+  double dt, {
+  Map<String, Map<String, BigNum>>? limits,
+}) {
   final sales = <String, List<(FactionState, BodyState, BigNum)>>{};
   final demand = <String, Map<String, BigNum>>{};
   // Body id to resource id to what earlier rules already queued for sale,
@@ -129,7 +138,13 @@ void stepMarket(GameState s, Content c, double dt) {
       final keep = (rule.keepAtLeast + (used[rule.resourceId] ?? _zero)).min(
         rule.keepAtLeast.max(storageCap(s, c, body)),
       );
-      final excess = held - keep;
+      var excess = held - keep;
+      if (limits != null) {
+        excess = excess.min(
+          (limits[body.id]?[rule.resourceId] ?? _zero) -
+              (taken[rule.resourceId] ?? _zero),
+        );
+      }
       if (excess > _zero) {
         (sales[rule.resourceId] ??= []).add((f, body, excess));
         taken[rule.resourceId] = (taken[rule.resourceId] ?? _zero) + excess;

@@ -5,7 +5,8 @@ import '../content/content.dart';
 import '../num/big_num.dart';
 import '../num/change.dart';
 import '../sim/crew.dart';
-import '../sim/engine.dart';
+import '../sim/logistics.dart';
+import '../sim/market.dart';
 import '../sim/production.dart';
 import '../state/game_state.dart';
 
@@ -175,8 +176,9 @@ final class FlowReport {
   /// counted as held, so moving goods between its own bodies nets to zero.
   final Map<String, BigNum> empireNet;
 
-  /// Change in the faction's credits per second: sales (auto-sell) during
-  /// the sample tick; commands are not part of it.
+  /// Credits the faction earns per second in steady state: the auto-sale
+  /// revenue of what the sample step made and landed, not of stock built
+  /// up before it (see [buildFlowReport]); commands are not part of it.
   final BigNum creditsPerSec;
 
   /// Everything held back, lowest run fraction first, then in report order:
@@ -190,19 +192,41 @@ const double _sampleSeconds = 1;
 
 /// Reports [factionId]'s per-second flows and bottlenecks.
 ///
-/// Rates come from one engine tick of 1 s run on a deep copy of [s], so [s]
-/// is never changed. Net rates are stock differences across that tick;
-/// produced and consumed rates are each building's [fullRateFlow] scaled
-/// by the run fraction the tick settled on. All maps list resources in
-/// content order and leave out zero rates. Throws if the faction does not
-/// exist.
+/// The rates are steady-state rates: what one second of play moves once
+/// the economy runs as it does now, not one tick's catch-up. They come
+/// from a sample step of 1 s run on a deep copy of [s], so [s] is never
+/// changed. The step runs the engine's tick in order (production, cargo,
+/// market, storage cap) with two changes that take out one-off lumps:
+///
+/// - Cargo flows steadily: each route's cargo lands at its destination
+///   at the rate the route sends it (measured by a first pass over another
+///   copy), while cargo already in flight, which lands in lumps, is left
+///   out.
+/// - Auto-sell sells only what the step added to a body's stock, never
+///   stock built up before it, such as the step's demand kept back by a
+///   long tick that a 1 s step no longer needs.
+///
+/// So [FlowReport.creditsPerSec] is the auto-sale revenue of the step's
+/// net production, and over a stable stretch of play matches the credits
+/// actually earned per second. Net rates are stock differences across the
+/// step; produced and consumed rates are each building's [fullRateFlow]
+/// scaled by the run fraction the step settled on. All maps list
+/// resources in content order and leave out zero rates. Throws if the
+/// faction does not exist.
 FlowReport buildFlowReport(GameState s, Content c, String factionId) {
-  final copy = s.copy();
+  // First pass: what each route sends in a step from this state.
+  final probe = s.copy();
+  deliverShipments(probe);
+  stepProduction(probe, c, _sampleSeconds);
+  final routeFlow = sendCargo(probe, c, _sampleSeconds);
+
+  final copy = s.copy()..shipments.clear();
   final owned = [
     for (final b in copy.bodies)
       if (b.ownerId == factionId) b,
   ];
   final stockBefore = [for (final b in owned) Map.of(b.stock)];
+  final atStart = {for (final b in copy.bodies) b.id: Map.of(b.stock)};
   final holdingsBefore = _holdings(copy, factionId);
   final faction = copy.faction(factionId);
   final creditsBefore = faction.credits;
@@ -211,7 +235,37 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   final crewEff = crewEfficiency(copy, c, factionId);
   final crewNeck = _crewShortage(copy, c, factionId, crewEff);
 
-  GameEngine(c).tick(copy, _sampleSeconds);
+  final kept = stockOverCap(copy, c);
+  // Steady cargo: what each route sends lands as it leaves. It counts as
+  // held in flight before the step, so moving it nets to zero.
+  for (final r in copy.routes) {
+    final amount = routeFlow[r.id];
+    if (amount == null) continue;
+    final to = copy.body(r.toBodyId);
+    to.stock[r.resourceId] =
+        (to.stock[r.resourceId] ?? const BigNum.zero()) + amount;
+    if (r.ownerId == factionId) {
+      holdingsBefore[r.resourceId] =
+          (holdingsBefore[r.resourceId] ?? const BigNum.zero()) + amount;
+    }
+  }
+  stepProduction(copy, c, _sampleSeconds);
+  sendCargo(copy, c, _sampleSeconds);
+  stepMarket(
+    copy,
+    c,
+    _sampleSeconds,
+    limits: {
+      for (final b in copy.bodies)
+        b.id: {
+          for (final MapEntry(key: id, value: v) in b.stock.entries)
+            if (v - (atStart[b.id]![id] ?? const BigNum.zero()) case final added
+                when added > const BigNum.zero())
+              id: added,
+        },
+    },
+  );
+  clampStorage(copy, c, kept);
 
   final bodies = <BodyFlow>[];
   final bottlenecks = <(int, Bottleneck)>[if (crewNeck != null) (0, crewNeck)];
