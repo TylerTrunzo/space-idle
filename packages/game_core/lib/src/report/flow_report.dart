@@ -312,14 +312,16 @@ Bottleneck? _storageFull(
   final wasted = body.wastedThisStep[id];
   if (wasted == null || wasted.isZero) return null;
   if ((body.stock[id] ?? const BigNum.zero()) < cap) return null;
-  final made = produced?.toDouble() ?? 0;
-  final kept = made <= 0 ? 0.0 : 1 - wasted.toDouble() / made;
+  final made = produced ?? const BigNum.zero();
+  // Kept units, with float residue of waste ≈ output snapped to zero.
+  final kept = changeBetween(made, wasted);
+  final share = made.isZero || kept.isNegative ? 0.0 : (kept / made).toDouble();
   return Bottleneck(
     kind: BottleneckKind.storageFull,
     bodyId: body.id,
     buildingId: null,
     resourceId: id,
-    runFraction: kept.clamp(0, 1).toDouble(),
+    runFraction: share.clamp(0, 1).toDouble(),
     message:
         '${body.name} storage is full of ${c.resources[id]!.name}: '
         'output is being wasted',

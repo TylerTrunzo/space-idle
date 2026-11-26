@@ -160,6 +160,17 @@ void main() {
     expect(b.runFraction, closeTo(0.5, 1e-9));
   });
 
+  test('a store that wastes all it makes keeps exactly 0', () {
+    // Eight hours of the starting setup fill copper ore and steel; the
+    // waste then matches production up to float residue.
+    engine.advance(s, 8 * 3600);
+    final necks = buildFlowReport(s, c, 'player').bottlenecks;
+    expect(necks.map((b) => (b.kind, b.resourceId, b.runFraction)), [
+      (BottleneckKind.storageFull, 'copper_ore', 0),
+      (BottleneckKind.storageFull, 'steel', 0),
+    ]);
+  });
+
   test('a full store that wastes nothing is not a bottleneck', () {
     kora.stock['steel'] = n(1000); // full, but nothing makes more... yet
     engine.apply(s, const AssignCrewCommand('player', 'b3', 0));
