@@ -122,6 +122,36 @@ void main() {
     expect(earned[2], lessThan(earned[1] / 100));
   });
 
+  test('new things, day ends and income by tier', () {
+    final r = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 48);
+    final claimed = r.events.firstWhere((e) => e.kind == SessionEventKind.body);
+    expect(claimed.text, endsWith(' claimed'));
+    final hit = r.milestones.firstWhere((m) => m.id == 'own_2_bodies');
+    expect(claimed.gameHours, hit.gameHours);
+    expect(
+      r.events.where((e) => e.kind == SessionEventKind.milestone),
+      hasLength(r.milestones.length),
+    );
+    expect(r.newThingsOn(1) + r.newThingsOn(2), r.events.length);
+    expect(r.daysWithNewThings(2), 2);
+
+    expect(r.dayEnds.map((d) => d.day), [1, 2]);
+    expect(r.dayEnds.last.bodiesOwned, greaterThanOrEqualTo(2));
+    expect(r.dayEnds.last.megaprojectLevels.keys, ['orbital_station']);
+    for (final d in r.days) {
+      final total = [
+        for (final t in [0, 1, 2, 3]) r.tierShare(d, t),
+      ].fold(0.0, (a, b) => a + b);
+      expect(total, closeTo(1, 1e-9));
+    }
+    final md = r.toMarkdown();
+    expect(md, contains('## Days'));
+    expect(md, contains('| Day | New | Milestones | Projects |'));
+    expect(md, contains('Days with something new'));
+    expect(md, contains('## Timeline'));
+    expect(md, contains(claimed.text));
+  });
+
   test('json report carries every section', () {
     final j = _shortCheckIns(hours: 12).toJson();
     expect(j.keys, [
@@ -138,6 +168,8 @@ void main() {
       'bottleneckLog',
       'rejectedCommands',
       'days',
+      'events',
+      'dayEnds',
     ]);
     expect((j['milestones']! as List).first, {
       'id': 'first_steel',

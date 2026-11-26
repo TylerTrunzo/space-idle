@@ -87,6 +87,92 @@ final class DayIncome {
   };
 }
 
+/// What kind of new thing a [SessionEvent] is.
+enum SessionEventKind {
+  /// A milestone reached.
+  milestone,
+
+  /// A claim completed: a body is the faction's.
+  body,
+
+  /// A survey completed: a hidden body revealed.
+  survey,
+
+  /// An extra build slot arrived.
+  extraSlot,
+
+  /// A megaproject stage completed: its level rose.
+  megaproject,
+
+  /// A contract delivered in full.
+  contract,
+}
+
+/// Something new the player saw: a milestone, a completed project or a
+/// completed contract.
+final class SessionEvent {
+  /// Creates an event.
+  const SessionEvent({
+    required this.gameHours,
+    required this.day,
+    required this.kind,
+    required this.text,
+  });
+
+  /// Session hours when the player first saw it: when it happened during
+  /// a check-in, else on returning to the next one.
+  final double gameHours;
+
+  /// What kind of thing it is.
+  final SessionEventKind kind;
+
+  /// What happened, such as "Orbital Station level 2" or "Brine claimed".
+  final String text;
+
+  /// Day number from 1 in which it was seen: day 1 is the first 24 h.
+  /// What is seen as the session ends counts in its last day.
+  final int day;
+
+  /// Serializes this event.
+  Map<String, Object?> toJson() => {
+    'gameHours': gameHours,
+    'day': day,
+    'kind': kind.name,
+    'text': text,
+  };
+}
+
+/// Where a session stood at the end of one day.
+final class DayEnd {
+  /// Creates a day's end; [megaprojectLevels] is copied unmodifiable.
+  DayEnd({
+    required this.day,
+    required this.bodiesOwned,
+    required this.contractsCompleted,
+    required Map<String, int> megaprojectLevels,
+  }) : megaprojectLevels = Map.unmodifiable(megaprojectLevels);
+
+  /// Day number from 1.
+  final int day;
+
+  /// Bodies the faction owned.
+  final int bodiesOwned;
+
+  /// Contracts completed since the session began.
+  final int contractsCompleted;
+
+  /// Megaproject id to the faction's level of it, in content order.
+  final Map<String, int> megaprojectLevels;
+
+  /// Serializes this day's end.
+  Map<String, Object?> toJson() => {
+    'day': day,
+    'bodiesOwned': bodiesOwned,
+    'contractsCompleted': contractsCompleted,
+    'megaprojectLevels': megaprojectLevels,
+  };
+}
+
 /// What a bot session reached and where it got stuck.
 final class BalanceReport {
   /// Creates a report; the collections are copied unmodifiable.
@@ -104,7 +190,13 @@ final class BalanceReport {
     required List<String> bottleneckLog,
     required this.rejectedCommands,
     List<DayIncome> days = const [],
+    List<SessionEvent> events = const [],
+    List<DayEnd> dayEnds = const [],
+    Map<String, int> resourceTiers = const {},
   }) : days = List.unmodifiable(days),
+       events = List.unmodifiable(events),
+       dayEnds = List.unmodifiable(dayEnds),
+       resourceTiers = Map.unmodifiable(resourceTiers),
        milestones = List.unmodifiable(milestones),
        milestonesNotReached = List.unmodifiable(milestonesNotReached),
        deadZones = List.unmodifiable(deadZones),
@@ -155,6 +247,46 @@ final class BalanceReport {
   /// Market income of each day of the session, in order.
   final List<DayIncome> days;
 
+  /// Every new thing the player saw, in the order seen: milestones,
+  /// completed claims, surveys, extra slots and megaproject stages, and
+  /// completed contracts.
+  final List<SessionEvent> events;
+
+  /// Where the faction stood at the end of each day, in order.
+  final List<DayEnd> dayEnds;
+
+  /// Resource id to its tier, for income shares by tier.
+  final Map<String, int> resourceTiers;
+
+  /// New things ([events]) seen on day [day].
+  int newThingsOn(int day) => events.where((e) => e.day == day).length;
+
+  /// Days among the first [days] on which something new was seen.
+  int daysWithNewThings(int days) => [
+    for (var d = 1; d <= days; d++)
+      if (newThingsOn(d) > 0) d,
+  ].length;
+
+  /// The fewest days with something new in any 7 days in a row within the
+  /// first [days]; 7 if every day had something.
+  int worstWeekWithNewThings(int days) {
+    var worst = 7;
+    for (var start = 1; start + 6 <= days; start++) {
+      var n = 0;
+      for (var d = start; d < start + 7; d++) {
+        if (newThingsOn(d) > 0) n++;
+      }
+      worst = math.min(worst, n);
+    }
+    return worst;
+  }
+
+  /// Share in `[0, 1]` of [income]'s credits earned from resources of
+  /// [tier].
+  double tierShare(DayIncome income, int tier) => income.share.entries
+      .where((e) => resourceTiers[e.key] == tier)
+      .fold(0.0, (t, e) => t + e.value);
+
   /// Serializes this report.
   Map<String, Object?> toJson() => {
     'bot': botName,
@@ -170,6 +302,8 @@ final class BalanceReport {
     'bottleneckLog': bottleneckLog,
     'rejectedCommands': rejectedCommands,
     'days': [for (final d in days) d.toJson()],
+    'events': [for (final e in events) e.toJson()],
+    'dayEnds': [for (final d in dayEnds) d.toJson()],
   };
 
   /// Renders this report as Markdown with a milestone table.
@@ -211,6 +345,21 @@ final class BalanceReport {
         '| ${d.day} | ${formatNumber(d.credits)} | ${shown.join(', ')} |',
       );
     }
+    _writeDays(b);
+    b
+      ..writeln()
+      ..writeln('## Timeline')
+      ..writeln()
+      ..writeln(
+        'Claims, surveys, extra slots, megaproject stages and '
+        'contracts, as seen; milestones are listed above.',
+      )
+      ..writeln();
+    final timeline = events.where((e) => e.kind != SessionEventKind.milestone);
+    if (timeline.isEmpty) b.writeln('None.');
+    for (final e in timeline) {
+      b.writeln('- ${_hours(e.gameHours)} h (day ${e.day}): ${e.text}');
+    }
     b
       ..writeln()
       ..writeln('## Dead zones')
@@ -245,6 +394,61 @@ final class BalanceReport {
       b.writeln('- $line');
     }
     return b.toString();
+  }
+}
+
+extension on BalanceReport {
+  /// The table of what each day brought and where it ended.
+  void _writeDays(StringBuffer b) {
+    final first = math.min(21, days.length);
+    final megaprojects = dayEnds.isEmpty
+        ? const <String>[]
+        : dayEnds.first.megaprojectLevels.keys.toList();
+    final tiers = {...resourceTiers.values}.toList()..sort();
+    final highTiers = [
+      for (final t in tiers)
+        if (t >= 2) t,
+    ];
+    b
+      ..writeln()
+      ..writeln('## Days')
+      ..writeln()
+      ..writeln(
+        'Days with something new (a milestone, project completion, contract '
+        'or body) in the first $first: ${daysWithNewThings(first)} of $first; '
+        'the worst 7 days in a row had ${worstWeekWithNewThings(first)}.',
+      )
+      ..writeln()
+      ..writeln(
+        '| Day | New | Milestones | Projects | Contracts total | Bodies '
+        '${[for (final m in megaprojects) '| $m '].join()}'
+        '| Earned | Tier 0-1 '
+        '${[for (final t in highTiers) '| Tier $t '].join()}|',
+      )
+      ..writeln(
+        '|---:|---:|---:|---:|---:|---:'
+        '${'|---:' * megaprojects.length}|---:|---:'
+        '${'|---:' * highTiers.length}|',
+      );
+    for (final income in days) {
+      final d = income.day;
+      final seen = events.where((e) => e.day == d);
+      final end = dayEnds.where((x) => x.day == d).firstOrNull;
+      String pct(double v) => '${(v * 100).toStringAsFixed(0)}%';
+      final low = tiers
+          .where((t) => t <= 1)
+          .fold(0.0, (sum, t) => sum + tierShare(income, t));
+      b.writeln(
+        '| $d | ${seen.length} '
+        '| ${seen.where((e) => e.kind == SessionEventKind.milestone).length} '
+        '| ${seen.where((e) => e.kind != SessionEventKind.milestone && e.kind != SessionEventKind.contract).length} '
+        '| ${end?.contractsCompleted ?? ''} '
+        '| ${end?.bodiesOwned ?? ''} '
+        '${[for (final m in megaprojects) '| ${end?.megaprojectLevels[m] ?? ''} '].join()}'
+        '| ${formatNumber(income.credits)} | ${pct(low)} '
+        '${[for (final t in highTiers) '| ${pct(tierShare(income, t))} '].join()}|',
+      );
+    }
   }
 }
 
@@ -289,6 +493,11 @@ BalanceReport runBotSession(
   final end = hours * 3600;
   final tracker = _Tracker(c, s, faction.id);
   final hits = <MilestoneHit>[];
+  final lastDay = (end / _daySeconds).ceil();
+  int dayAt(double t) => math.min(t ~/ _daySeconds + 1, lastDay);
+  final watch = _Watch(c, s, faction.id, dayAt);
+  final events = <SessionEvent>[];
+  final dayEnds = <DayEnd>[];
   final deadZones = <DeadZone>[];
   final bottleneckLog = <String>[];
   var rejected = 0;
@@ -302,6 +511,7 @@ BalanceReport runBotSession(
     while (revenueAt.length * _daySeconds <= t &&
         revenueAt.length * _daySeconds < end) {
       revenueAt.add(Map.of(faction.salesRevenue));
+      dayEnds.add(watch.dayEnd(revenueAt.length - 1));
     }
   }
 
@@ -317,8 +527,17 @@ BalanceReport runBotSession(
             checkInIndex: index,
           ),
         );
+        events.add(
+          SessionEvent(
+            gameHours: clock / 3600,
+            day: dayAt(clock),
+            kind: SessionEventKind.milestone,
+            text: m.name,
+          ),
+        );
       }
     }
+    events.addAll(watch.changes(clock));
   }
 
   while (clock < end) {
@@ -378,6 +597,7 @@ BalanceReport runBotSession(
   }
 
   revenueAt.add(Map.of(faction.salesRevenue));
+  dayEnds.add(watch.dayEnd(revenueAt.length - 1));
   onFinished?.call(s);
   final stock = tracker.stock();
   return BalanceReport(
@@ -403,6 +623,9 @@ BalanceReport runBotSession(
       for (var i = 1; i < revenueAt.length; i++)
         _dayIncome(c, i, revenueAt[i - 1], revenueAt[i]),
     ],
+    events: events,
+    dayEnds: dayEnds,
+    resourceTiers: {for (final r in c.resources.values) r.id: r.tier},
   );
 }
 
@@ -427,6 +650,89 @@ DayIncome _dayIncome(
     share: {
       for (final MapEntry(key: id, value: v) in earned.entries)
         id: (v / total).toDouble(),
+    },
+  );
+}
+
+/// Notes what is new for a faction since it last looked: bodies owned,
+/// bodies surveyed, extra slots, megaproject levels and contracts done.
+final class _Watch {
+  _Watch(this.c, this.s, this.factionId, this.dayAt) {
+    _take();
+  }
+
+  final Content c;
+  final GameState s;
+  final String factionId;
+
+  /// The report day of session second `t`.
+  final int Function(double t) dayAt;
+  Set<String> _owned = {};
+  Set<String> _surveyed = {};
+  Map<String, int> _slots = {};
+  Map<String, int> _levels = {};
+  int _contracts = 0;
+
+  FactionState get _faction => s.faction(factionId);
+
+  void _take() {
+    _owned = {
+      for (final b in s.bodies)
+        if (b.ownerId == factionId) b.id,
+    };
+    _surveyed = {
+      for (final b in s.bodies)
+        if (b.surveyed) b.id,
+    };
+    _slots = {for (final b in s.bodies) b.id: b.extraSlots};
+    _levels = Map.of(_faction.megaprojectLevels);
+    _contracts = _faction.contractsCompleted;
+  }
+
+  /// What changed since the last call, each stamped session second
+  /// [clock], in body and content order.
+  List<SessionEvent> changes(double clock) {
+    final out = <SessionEvent>[];
+    void add(SessionEventKind kind, String text) => out.add(
+      SessionEvent(
+        gameHours: clock / 3600,
+        day: dayAt(clock),
+        kind: kind,
+        text: text,
+      ),
+    );
+    for (final b in s.bodies) {
+      if (b.surveyed && !_surveyed.contains(b.id)) {
+        add(SessionEventKind.survey, '${b.name} surveyed');
+      }
+      if (b.ownerId == factionId && !_owned.contains(b.id)) {
+        add(SessionEventKind.body, '${b.name} claimed');
+      }
+      if (b.extraSlots > (_slots[b.id] ?? 0)) {
+        add(SessionEventKind.extraSlot, 'Extra build slot on ${b.name}');
+      }
+    }
+    for (final m in c.megaprojects.values) {
+      final level = _faction.megaprojectLevels[m.id] ?? 0;
+      for (var l = (_levels[m.id] ?? 0) + 1; l <= level; l++) {
+        add(SessionEventKind.megaproject, '${m.name} level $l');
+      }
+    }
+    for (var n = _contracts + 1; n <= _faction.contractsCompleted; n++) {
+      add(SessionEventKind.contract, 'Contract $n completed');
+    }
+    _take();
+    return out;
+  }
+
+  /// Where the faction stands now, as the end of day [day].
+  DayEnd dayEnd(int day) => DayEnd(
+    day: day,
+    bodiesOwned: s.bodies.where((b) => b.ownerId == factionId).length,
+    contractsCompleted: _faction.contractsCompleted,
+    megaprojectLevels: {
+      for (final m in c.megaprojects.values)
+        m.id: _faction.megaprojectLevels[m.id] ?? 0,
     },
   );
 }
