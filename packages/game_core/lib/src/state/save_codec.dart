@@ -219,10 +219,22 @@ final class SaveCodec {
         return 'faction ${f.id}: ${f.contractRefillAt.length} contract '
             'refills, at most ${RulesDef.contractSlots}';
       }
+      if (f.contracts.length + f.contractRefillAt.length >
+          RulesDef.contractSlots) {
+        return 'faction ${f.id}: ${f.contracts.length} contracts and '
+            '${f.contractRefillAt.length} refills, at most '
+            '${RulesDef.contractSlots} together';
+      }
+      double? previousRefill;
       for (final t in f.contractRefillAt) {
         if (!(t.isFinite && t >= 0)) {
           return 'faction ${f.id}: contract refill at $t';
         }
+        if (previousRefill != null && t < previousRefill) {
+          return 'faction ${f.id}: contract refills not in ascending order '
+              '($previousRefill then $t)';
+        }
+        previousRefill = t;
       }
       for (final k in f.contracts) {
         final problem = _invalidContract(s, k);

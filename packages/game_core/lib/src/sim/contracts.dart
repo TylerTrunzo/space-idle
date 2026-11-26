@@ -20,9 +20,13 @@ import '../state/game_state.dart';
 /// basePrice × rewardMultiplier` credits.
 ///
 /// When nothing qualifies, the refill stays due and is used once something
-/// does. The RNG is drawn only when a contract is posted, two numbers each
-/// time, and the flow report built at most once per faction per call, so
-/// a tick without a due refill costs next to nothing. A faction with no
+/// does. That finding is remembered per faction, for as long as the
+/// resources it has made and those on its board stay the same, so a refill
+/// left waiting through a long catch-up costs one cheap comparison a tick,
+/// not an eligibility scan; the memory only skips work, never changes what
+/// is posted. The RNG is drawn only when a contract is posted, two numbers
+/// each time, and the flow report built at most once per faction per call,
+/// so a tick without a due refill costs next to nothing. A faction with no
 /// refills banked (every faction but the player in stage 1.5) has no board.
 ///
 /// The engine runs it at the end of every tick with the tick's end time,
@@ -34,8 +38,13 @@ void stepContracts(GameState s, Content c, double now) {
     while (f.contracts.length < RulesDef.contractSlots &&
         f.contractRefillAt.isNotEmpty &&
         f.contractRefillAt.first <= now) {
+      final key = _EligibilityKey.of(c, f);
+      if (_nothingEligible[f]?.matches(key) ?? false) break;
       final choices = _choices(c, f);
-      if (choices.isEmpty) break;
+      if (choices.isEmpty) {
+        _nothingEligible[f] = key;
+        break;
+      }
       final rng = Rng.fromState(s.rngState);
       final (template, resources) = choices[rng.nextInt(choices.length)];
       final resourceId = resources[rng.nextInt(resources.length)];
@@ -63,6 +72,43 @@ void stepContracts(GameState s, Content c, double now) {
     }
   }
 }
+
+/// What decides whether any contract can be posted to a board: the
+/// resources its faction has made and those already on the board, with the
+/// content they were read against.
+final class _EligibilityKey {
+  _EligibilityKey(this._content, this._made, this._onBoard);
+
+  /// The key for [f] against [c]; resources in content order.
+  factory _EligibilityKey.of(Content c, FactionState f) => _EligibilityKey(c, [
+    for (final id in c.resources.keys)
+      if ((f.lifetimeProduced[id] ?? const BigNum.zero()) > const BigNum.zero())
+        id,
+  ], [for (final k in f.contracts) k.resourceId]..sort());
+
+  final Content _content;
+  final List<String> _made;
+  final List<String> _onBoard;
+
+  /// Whether [o] is the same key.
+  bool matches(_EligibilityKey o) =>
+      identical(_content, o._content) &&
+      _sameIds(_made, o._made) &&
+      _sameIds(_onBoard, o._onBoard);
+}
+
+bool _sameIds(List<String> a, List<String> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+/// The key under which a faction last had no contract to post. It lives
+/// outside [FactionState], so it is never saved or copied: a loaded or
+/// copied state simply scans once.
+final _nothingEligible = Expando<_EligibilityKey>('nothingEligible');
 
 /// Banks a refill for a slot of [f]'s board freed at [now], by a contract
 /// completed or discarded: `max(now, last refill banked) +

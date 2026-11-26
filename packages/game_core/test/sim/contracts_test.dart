@@ -336,6 +336,24 @@ void main() {
       expect(s.rngState, isNot(rng));
     });
 
+    test('a refill left waiting posts as soon as something is made, however '
+        'often it was checked before', () {
+      final s = e.newGame(1);
+      final f = player(s);
+      f.lifetimeProduced.clear();
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
+      for (var i = 0; i < 5; i++) {
+        stepContracts(s, content, i * 60.0);
+      }
+      expect(f.contracts, isEmpty);
+      f.lifetimeProduced['copper_ore'] = n(1);
+      stepContracts(s, content, 300);
+      expect(f.contracts.single.resourceId, anyOf('copper_ore', 'copper_wire'));
+      expect(f.contractRefillAt, isEmpty);
+    });
+
     test('is deterministic for the same seed and state', () {
       final a = e.newGame(7);
       final b = e.newGame(7);
@@ -752,6 +770,12 @@ void main() {
           m['nextId'] = 9001;
         },
         'four refills': (m) => me(m)['contractRefillAt'] = [1, 2, 3, 4],
+        'refills out of order': (m) => me(m)['contractRefillAt'] = [100, 50],
+        'contracts and refills over 3 together': (m) {
+          final ks = list(me(m)['contracts']);
+          me(m)['contracts'] = ks.take(2).toList();
+          me(m)['contractRefillAt'] = [1, 2];
+        },
         'a negative refill time': (m) => me(m)['contractRefillAt'] = [-1],
         'a duplicate contract id': (m) {
           final ks = list(me(m)['contracts']);
@@ -773,6 +797,13 @@ void main() {
           expect(r.message, isNotEmpty);
         });
       }
+
+      test('refills at the same time, or ascending, load', () {
+        final m = board();
+        me(m)['contracts'] = list(me(m)['contracts']).take(1).toList();
+        me(m)['contractRefillAt'] = [5, 5];
+        expect(SaveCodec.decode(jsonEncode(m), content), isA<SaveOk>());
+      });
 
       test('a fully delivered quantity of exactly the ask loads', () {
         final m = board();
