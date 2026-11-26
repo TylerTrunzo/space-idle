@@ -1188,6 +1188,54 @@ void main() {
       );
     });
 
+    test('an unknown building type lists what the body can build', () {
+      final s = fresh();
+      final msg = expectFails(
+        s,
+        BuildCommand('player', 'kora', 'smeltr'),
+        CommandError.unknownDef,
+      );
+      // Kora has metal and silicon deposits but no ice or gas.
+      final buildable = [
+        for (final d in content.buildings.values)
+          if (d.id != 'ice_drill' && d.id != 'gas_skimmer')
+            '${d.name} (${d.id})',
+      ];
+      expect(
+        msg,
+        'There is no building type smeltr. Kora can build: '
+        '${buildable.join(', ')}',
+      );
+      expect(msg, contains('Mine (mine), Smelter (smelter), '));
+      expect(msg, isNot(contains('Ice Drill')));
+    });
+
+    test("a claim short of kits says what makes them", () {
+      final s = fresh()..faction('player').credits = n(1e9);
+      s.body('brine').ownerId = 'player';
+      s.body('kora').stock['outpost_kit'] = n(2);
+      expect(
+        expectFails(
+          s,
+          ClaimBodyCommand('player', 'cinder', 'kora'),
+          CommandError.cannotAfford,
+        ),
+        'Needs 10 Outpost Kit on Kora (you have 2). An Outpost Kit '
+        'Assembler makes 1 Outpost Kit from 6 Hull Plate, 12 Fuel and '
+        '6 Circuit',
+      );
+      // Short of credits, the message is the usual one.
+      s.faction('player').credits = n(0);
+      expect(
+        expectFails(
+          s,
+          ClaimBodyCommand('player', 'cinder', 'kora'),
+          CommandError.cannotAfford,
+        ),
+        startsWith('Needs '),
+      );
+    });
+
     test('not the owner', () {
       final s = withRival();
       expect(
@@ -1331,6 +1379,7 @@ Content withClaims(
       shipCapacityPerSecond: r.shipCapacityPerSecond,
       cargoShipResource: r.cargoShipResource,
       baseTravelSeconds: r.baseTravelSeconds,
+      shipmentMergeSeconds: r.shipmentMergeSeconds,
       claimSecondsBase: r.claimSecondsBase,
       claimSecondsPerOwned: r.claimSecondsPerOwned,
       expandSlotsSeconds: r.expandSlotsSeconds,

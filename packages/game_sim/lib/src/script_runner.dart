@@ -217,15 +217,17 @@ final class ScriptRunner {
     String done() => formatDuration(
       state.projects.firstWhere((p) => p.id == createdId).finishAt - state.time,
     );
+    final kit = c.rules.outpostKitResource;
     String lands() => formatDuration(
       state.shipments.firstWhere((sh) => sh.routeId == createdId).arriveAt -
           state.time,
     );
     return switch (cmd) {
       BuildCommand() => _builtMessage(createdId!),
-      ClaimBodyCommand(:final bodyId) =>
-        'Started claiming ${state.body(bodyId).name} for ${list(spent)}; '
-            'done in ${done()}',
+      ClaimBodyCommand(:final bodyId, :final sourceBodyId) =>
+        'Started claiming ${state.body(bodyId).name} for ${list(spent)}'
+            '${spent.containsKey('$sourceBodyId/$kit') ? '' : ' (no kits needed)'}'
+            '; done in ${done()}',
       SurveyCommand() =>
         'Started a survey for ${list(spent)}; done in ${done()}',
       ExpandSlotsCommand(:final bodyId) =>

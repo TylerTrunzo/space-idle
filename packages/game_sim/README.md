@@ -19,7 +19,8 @@ changed), `createdId` for a new building, route, ship move or project, and for
 `build`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`, `demolish`,
 `createRoute`, `updateRoute`, `moveShips`, `deliverContract` and
 `discardContract` a `message` such as
-`"Started claiming Brine for 5K credits; done in 30m"`. Claims, extra build
+`"Started claiming Brine for 5K credits (no kits needed); done in 30m"` (only
+the first claim needs no outpost kits). Claims, extra build
 slots and megaproject stages are projects: they are paid for at once and take
 effect when their timer runs out (a claim of a body, a second slot on one, or
 a second stage of a megaproject, already under way fails with
@@ -103,6 +104,10 @@ length does not change what is earned. The only difference is that `away`
 caps the time at the offline limit and summarizes it.
 
 Replies are `{"ok":true,...}` or `{"ok":false,"error":"...","message":"..."}`.
+Error messages are plain sentences with display names: an unknown building
+type lists what the body can build (`"Mine (mine), Smelter (smelter), ..."`),
+and a claim short of outpost kits says what makes them (`"An Outpost Kit
+Assembler makes 1 Outpost Kit from 6 Hull Plate, 12 Fuel and 6 Circuit"`).
 Numbers appear as `{"value":"2.41e6","display":"2.41M"}`.
 
 Examples:

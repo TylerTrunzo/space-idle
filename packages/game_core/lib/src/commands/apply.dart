@@ -240,12 +240,16 @@ CommandFailed? _checkOwnedBuilding(
 }
 
 /// The failure if [f] and [stockBody] cannot cover [cost], else null.
+///
+/// [hint], when given, may add a sentence about the first cost item short,
+/// by its key, such as how to make it.
 CommandFailed? _checkCost(
   Content c,
   FactionState f,
   BodyState stockBody,
-  Map<String, BigNum> cost,
-) {
+  Map<String, BigNum> cost, {
+  String? Function(String id)? hint,
+}) {
   for (final MapEntry(key: id, value: need) in cost.entries) {
     final have = id == _credits
         ? f.credits
@@ -254,14 +258,61 @@ CommandFailed? _checkCost(
       final what = id == _credits
           ? 'credits'
           : '${_resourceName(c, id)} on ${stockBody.name}';
+      final more = switch (hint?.call(id)) {
+        final h? => '. $h',
+        null => '',
+      };
       return _fail(
         CommandError.cannotAfford,
-        'Needs ${formatNumber(need)} $what (you have ${formatNumber(have)})',
+        'Needs ${formatNumber(need)} $what (you have ${formatNumber(have)})'
+        '$more',
       );
     }
   }
   return null;
 }
+
+/// "A" or "An", to start a sentence about [word].
+String _article(String word) => 'AEIOUaeiou'.contains(word[0]) ? 'An' : 'A';
+
+/// [items] as "a, b and c".
+String _and(List<String> items) => items.length < 2
+    ? items.join()
+    : '${items.sublist(0, items.length - 1).join(', ')} and ${items.last}';
+
+/// "6 Hull Plate": [units] of resource [id].
+String _units(Content c, double units, String id) =>
+    '${formatNumber(BigNum.from(units))} ${_resourceName(c, id)}';
+
+/// What makes [resourceId], one sentence per building type whose recipe
+/// outputs it, such as "An Outpost Kit Assembler makes 1 Outpost Kit from
+/// 6 Hull Plate, 12 Fuel and 6 Circuit"; null if nothing does.
+String? _howToMake(Content c, String resourceId) {
+  final ways = <String>[];
+  for (final d in c.buildings.values) {
+    final out = d.outputs[resourceId];
+    if (d.kind == BuildingKind.extractor || out == null) continue;
+    final inputs = [
+      for (final MapEntry(key: id, value: v) in d.inputs.entries)
+        _units(c, v, id),
+    ];
+    ways.add(
+      '${_article(d.name)} ${d.name} makes ${_units(c, out, resourceId)}'
+      '${inputs.isEmpty ? '' : ' from ${_and(inputs)}'}',
+    );
+  }
+  return ways.isEmpty ? null : ways.join('. ');
+}
+
+/// The building types [body] can hold, as "Mine (mine), Smelter
+/// (smelter)", in content order: every one but an extractor that can mine
+/// none of the body's deposits.
+String _buildable(Content c, BodyState body) => [
+  for (final d in c.buildings.values)
+    if (d.kind != BuildingKind.extractor ||
+        body.deposits.any((x) => d.extracts.contains(x.resourceId)))
+      '${d.name} (${d.id})',
+].join(', ');
 
 /// Takes [cost] from [f]'s credits and [stockBody]'s stock, snapping float
 /// residue below zero to zero ([takeFrom]).
@@ -282,7 +333,8 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
   if (def == null) {
     return _fail(
       CommandError.unknownDef,
-      'There is no building type ${cmd.defId}',
+      'There is no building type ${cmd.defId}. ${body.name} can build: '
+      '${_buildable(c, body)}',
     );
   }
   if (body.ownerId != f.id) return _notOwner(body.name);
@@ -726,7 +778,14 @@ CommandResult _claim(
   }
   if (source.ownerId != f.id) return _notOwner(source.name);
   final cost = claimCost(s, c, f.id);
-  final short = _checkCost(c, f, source, cost);
+  final kit = c.rules.outpostKitResource;
+  final short = _checkCost(
+    c,
+    f,
+    source,
+    cost,
+    hint: (id) => id == kit ? _howToMake(c, kit) : null,
+  );
   if (short != null) return short;
 
   final seconds = claimSeconds(s, c, f.id);

@@ -80,8 +80,10 @@ counts are plain integers.
 A successful command reply lists what it `spent` and `gained` (credits, and
 `body/resource` amounts). `claimBody`, `demolish`, `createRoute`,
 `updateRoute` and `moveShips` also say in a `message` what was claimed,
-refunded, created, changed or sent, with ids. A
-`depositMissing` error lists the deposits the body has.
+refunded, created, changed or sent, with ids (a first claim's says it
+needed no kits). A `depositMissing` error lists the deposits the body has, an
+unknown building type lists the buildings the body can take, and a claim
+short of outpost kits says which building makes them and from what.
 
 Things worth knowing:
 

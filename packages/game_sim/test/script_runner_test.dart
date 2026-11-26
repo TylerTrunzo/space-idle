@@ -190,7 +190,7 @@ void main() {
     expect(claim['ok'], isTrue);
     expect(
       claim['message'],
-      'Started claiming Brine for 5K credits; done in 30m',
+      'Started claiming Brine for 5K credits (no kits needed); done in 30m',
     );
     expect(claim['createdId'], startsWith('p'));
     expect((claim['spent']! as Map).keys, ['credits']);
@@ -323,6 +323,22 @@ void main() {
       'defId': 'depot',
     });
     expect(depot['message'], 'Built Depot on Kora (${depot['createdId']})');
+  });
+
+  test('a claim after the first one says the kits it took', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    r.state.body('brine').ownerId = 'player';
+    r.state.body('kora').stock['outpost_kit'] = BigNum.from(10);
+    final claim = r.handle({
+      'cmd': 'claimBody',
+      'bodyId': 'cinder',
+      'sourceBodyId': 'kora',
+    });
+    expect(
+      claim['message'],
+      'Started claiming Cinder for 65K credits and 10 Outpost Kit; done in 1h',
+    );
   });
 
   test('an extra slot reply says when it arrives', () {
