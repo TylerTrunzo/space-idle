@@ -326,6 +326,14 @@ final class _View {
     (rt) => rt.toBodyId == body.id && rt.resourceId == resourceId,
   );
 
+  /// The stop level for a route bringing [resourceId] to [to]: what the
+  /// bot keeps there for use ([keepForUse]), so the route fills that and
+  /// pauses rather than filling storage; null if it keeps none.
+  BigNum? stopFor(BodyState to, String resourceId) {
+    final keep = keepForUse(to, resourceId);
+    return keep > const BigNum.zero() ? keep : null;
+  }
+
   bool hasShip(BodyState body) =>
       stock(body, r.cargoShipResource) >= BigNum.from(1);
 
@@ -650,6 +658,9 @@ final class _View {
       }
       if (host == null) continue;
       for (final MapEntry(key: id, value: need) in goods.entries) {
+        // A route opened for an earlier, cheaper stage pauses too soon.
+        final raise = _raiseStop(host, id);
+        if (raise != null && stock(host, id) < need) return raise;
         if (covered(host, id)) continue;
         final sources = [
           for (final o in owned)
@@ -682,7 +693,27 @@ final class _View {
           id,
           rate,
           math.max(1, ships),
+          stopAtDestination: stopFor(host, id),
         );
+      }
+    }
+    return null;
+  }
+
+  /// A raise of the stop level of the faction's route bringing
+  /// [resourceId] to [to] up to [stopFor], when it pauses below that; null
+  /// if no route needs one.
+  Command? _raiseStop(BodyState to, String resourceId) {
+    final want = stopFor(to, resourceId);
+    if (want == null) return null;
+    for (final rt in s.routes) {
+      if (rt.ownerId != factionId ||
+          rt.toBodyId != to.id ||
+          rt.resourceId != resourceId) {
+        continue;
+      }
+      if (rt.stopAtDestination case final stop? when stop < want) {
+        return UpdateRouteCommand(factionId, rt.id, stopAtDestination: want);
       }
     }
     return null;
@@ -710,6 +741,7 @@ final class _View {
       ship,
       BigNum.from(_trickleRate),
       1,
+      stopAtDestination: BigNum.from(_shipsSent),
     );
   }
 
@@ -947,6 +979,11 @@ final class _View {
 
   /// A route bringing up to [rate] per second of [resourceId] to [to] from
   /// [routeSource], with enough cargo ships for the rate if it has them.
+  ///
+  /// It runs without a stop level: the rate already matches what [to]
+  /// uses, and [to]'s auto-sell sells the rest there. (A stop at
+  /// [stopFor] leaves more on the source body and moves day-14 income
+  /// past the one-resource share the balance targets allow.)
   Command? _route(String resourceId, BodyState to, BigNum rate) {
     final from = routeSource(resourceId, to);
     if (from == null) return null;
@@ -1277,6 +1314,7 @@ final class _View {
           ship,
           BigNum.from(_trickleRate),
           1,
+          stopAtDestination: BigNum.from(_shipsSent),
         ),
       );
     }
@@ -1445,6 +1483,7 @@ final class _View {
           id,
           BigNum.from(_trickleRate),
           1,
+          stopAtDestination: n,
         ),
       );
     }

@@ -169,6 +169,13 @@ share.
 - `casual` plays like `balanced` but issues at most 15 commands per check-in
   (auto-sell rules aside), a stand-in for a player with a few minutes.
 
+The bots build with `autoCrew` off and staff buildings themselves, habitats
+first. Routes they open to move cargo ships, build parts or a megaproject
+stage's goods carry a `stopAtDestination`, so they pause once the destination
+has enough; the balanced bot raises a gathering route's stop level with
+`updateRoute` when a later stage needs more. Routes feeding a factory run
+without one.
+
 Every bot works the contracts board: it holds a contract's goods back from
 auto-sell, delivers what a body holds beyond its own needs, and discards a
 contract on a resource it neither makes nor holds.

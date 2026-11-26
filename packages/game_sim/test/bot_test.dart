@@ -70,7 +70,45 @@ final class _Counter implements Bot {
   }
 }
 
+/// Plays like [inner], keeping every route it opens.
+final class _Routes implements Bot {
+  _Routes(this.inner);
+
+  final Bot inner;
+  final List<CreateRouteCommand> created = [];
+
+  @override
+  String get name => inner.name;
+
+  @override
+  List<Command> decide(GameEngine e, GameState s, String factionId) {
+    final cmds = inner.decide(e, s, factionId);
+    created.addAll(cmds.whereType<CreateRouteCommand>());
+    return cmds;
+  }
+}
+
 void main() {
+  test('routes moving cargo ships or build parts stop once they are there', () {
+    final bot = _Routes(BalancedBot());
+    runBotSession(_engine(), bot, seed: 1, hours: 168);
+    final ships = [
+      for (final c in bot.created)
+        if (c.resourceId == 'cargo_ship') c,
+    ];
+    expect(ships, isNotEmpty);
+    for (final c in ships) {
+      expect(c.stopAtDestination, BigNum.from(2));
+    }
+    // A habitat's module comes one at a time.
+    final modules = [
+      for (final c in bot.created)
+        if (c.resourceId == 'habitat_module') c.stopAtDestination,
+    ];
+    expect(modules, isNotEmpty);
+    expect(modules, everyElement(BigNum.from(1)));
+  });
+
   test('greedy bot makes progress in 24h', () {
     final e = _engine();
     final startCredits = e.newGame(1).factions.single.credits;
@@ -203,6 +241,32 @@ void main() {
         }
       });
     }
+
+    test("is gathered by a route that pauses at the stage's need", () {
+      final e = _engine();
+      final s = stocked(e);
+      final kora = s.body('kora')..stock.remove('hull_plate');
+      s.body('hollow_reach')
+        ..ownerId = 'player'
+        ..stock['hull_plate'] = BigNum.from(100)
+        ..stock['cargo_ship'] = BigNum.from(2);
+      final route = BalancedBot()
+          .decide(e, s, 'player')
+          .whereType<CreateRouteCommand>()
+          .singleWhere((c) => c.resourceId == 'hull_plate');
+      expect(route.toBodyId, kora.id);
+      expect(route.stopAtDestination, greaterThanOrEqualTo(BigNum.from(60)));
+
+      // A route paused below the stage's need is raised, not left waiting.
+      expect(e.apply(s, route), isA<CommandOk>());
+      final rt = s.routes.single..stopAtDestination = BigNum.from(1);
+      final raise = BalancedBot()
+          .decide(e, s, 'player')
+          .whereType<UpdateRouteCommand>()
+          .single;
+      expect(raise.routeId, rt.id);
+      expect(raise.stopAtDestination, route.stopAtDestination);
+    });
 
     test('is not started when the goods are short', () {
       final e = _engine();
