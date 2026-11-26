@@ -170,16 +170,15 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   ];
   final stockBefore = [for (final b in owned) Map.of(b.stock)];
   final holdingsBefore = _holdings(copy, factionId);
-  // The tick computes crew efficiency from the state it starts in.
+  // The tick computes crew efficiency from the state it starts in, so the
+  // crew shortage is read from that state too.
   final crewEff = crewEfficiency(copy, c, factionId);
+  final crewNeck = _crewShortage(copy, c, factionId, owned, crewEff);
 
   GameEngine(c).tick(copy, _sampleSeconds);
 
   final bodies = <BodyFlow>[];
-  final bottlenecks = <(int, Bottleneck)>[
-    if (_crewShortage(copy, c, factionId, owned, crewEff) case final neck?)
-      (0, neck),
-  ];
+  final bottlenecks = <(int, Bottleneck)>[if (crewNeck != null) (0, crewNeck)];
   for (final (i, body) in owned.indexed) {
     final produced = <String, BigNum>{};
     final consumed = <String, BigNum>{};
@@ -225,7 +224,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
 /// The crew-shortage bottleneck of [factionId], whose bodies are [owned],
 /// or null when its crew efficiency [crewEff] is 1.
 ///
-/// [s] is the state the sample tick started from, so the crew counts match
+/// [s] must be the state before the sample tick, so the crew counts match
 /// [crewEff].
 Bottleneck? _crewShortage(
   GameState s,

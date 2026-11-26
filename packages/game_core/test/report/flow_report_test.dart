@@ -190,4 +190,25 @@ void main() {
     s.faction('player').baseCrew = 3;
     expect(buildFlowReport(s, c, 'player').bottlenecks, isEmpty);
   });
+
+  test('crew shortage counts crew as the sample tick started', () {
+    // The habitat ran at 0 last step, so it houses no one yet; fed now, it
+    // runs fully during the sample tick, which must not change the counts.
+    s.faction('player').baseCrew = 2;
+    kora.buildings.add(BuildingState(id: 'h1', defId: 'habitat', crew: 1));
+    for (final id in ['food', 'water', 'oxygen']) {
+      kora.stock[id] = n(10);
+    }
+    final b = buildFlowReport(
+      s,
+      c,
+      'player',
+    ).bottlenecks.singleWhere((b) => b.kind == BottleneckKind.crewShortage);
+    expect(
+      b.message,
+      'Your empire is short on crew: '
+      'habitats and base crew support 2 of 4 assigned',
+    );
+    expect(b.runFraction, closeTo(0.5, 1e-12));
+  });
 }
