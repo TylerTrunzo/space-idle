@@ -92,6 +92,42 @@ void main() {
     });
   });
 
+  test('away catches up offline and summarizes it', () {
+    final r = _runner();
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'copper_ore',
+      'keepAtLeast': '0',
+    });
+    final out = r.handle({'cmd': 'away', 'seconds': 100000});
+    expect(out['ok'], isTrue, reason: '$out');
+    expect(out['secondsAway'], 100000.0);
+    expect(out['secondsSimulated'], 43200.0);
+    expect(out['time'], 43200.0);
+    expect(r.state.time, 43200.0);
+    final credits = out['creditsGained']! as Map;
+    expect(
+      BigNum.fromJson(credits['value']! as String),
+      greaterThan(BigNum.zero()),
+    );
+    expect(credits['display'], isA<String>());
+    expect((out['stockGained']! as Map)['steel'], isA<Map<String, Object?>>());
+    expect((out['totalWasted']! as Map)['value'], isA<String>());
+    expect(out['milestonesReached'], [
+      {'id': 'first_steel', 'name': 'First Foundry'},
+      {'id': 'credits_10k', 'name': 'Ten Thousand Credits'},
+    ]);
+    expect(out['topBottlenecks'], isA<List<Object?>>());
+  });
+
+  test('away needs a number of seconds', () {
+    final r = _runner();
+    expect(r.handle({'cmd': 'away'})['error'], 'badCommand');
+    expect(r.handle({'cmd': 'away', 'seconds': 'x'})['error'], 'badCommand');
+    expect(r.state.time, 0);
+  });
+
   test('invalid command returns ok:false with error name', () {
     final out = _runner().handle({
       'cmd': 'build',

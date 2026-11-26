@@ -4,7 +4,15 @@ import 'dart:io';
 import 'package:game_core/game_core.dart';
 
 /// Command names that are not game commands.
-const _metaCommands = {'advance', 'report', 'state', 'save', 'load', 'costs'};
+const _metaCommands = {
+  'advance',
+  'away',
+  'report',
+  'state',
+  'save',
+  'load',
+  'costs',
+};
 
 /// Command names `Command.fromJson` understands.
 const _gameCommands = {
@@ -27,6 +35,15 @@ Map<String, Object?> _num(BigNum v) => {
 
 Map<String, Object?> _nums(Map<String, BigNum> m) => {
   for (final e in m.entries) e.key: _num(e.value),
+};
+
+Map<String, Object?> _bottleneck(Bottleneck n) => {
+  'kind': n.kind.name,
+  'bodyId': n.bodyId,
+  'buildingId': n.buildingId,
+  'resourceId': n.resourceId,
+  'runFraction': n.runFraction,
+  'message': n.message,
 };
 
 Map<String, Object?> _fail(String error, String message) => {
@@ -94,6 +111,7 @@ final class ScriptRunner {
   Map<String, Object?> _meta(String cmd, Map<String, Object?> line) =>
       switch (cmd) {
         'advance' => _advance(line),
+        'away' => _away(line),
         'report' => _report(),
         'state' => _state(),
         'save' => _save(line),
@@ -114,6 +132,36 @@ final class ScriptRunner {
       return _fail('badCommand', '${e.message}');
     }
     return {'ok': true, 'time': state.time};
+  }
+
+  /// Simulates the player being away for `seconds` with
+  /// [GameEngine.catchUpOffline], offline cap included, and returns its
+  /// summary.
+  Map<String, Object?> _away(Map<String, Object?> line) {
+    final s = line['seconds'];
+    if (s is! num) {
+      return _fail('badCommand', 'field "seconds" must be a number');
+    }
+    final OfflineSummary sum;
+    try {
+      sum = engine.catchUpOffline(state, s.toDouble());
+    } on ArgumentError catch (e) {
+      return _fail('badCommand', '${e.message}');
+    }
+    final names = {for (final m in engine.content.milestones) m.id: m.name};
+    return {
+      'ok': true,
+      'time': state.time,
+      'secondsAway': sum.secondsAway,
+      'secondsSimulated': sum.secondsSimulated,
+      'creditsGained': _num(sum.creditsGained),
+      'stockGained': _nums(sum.stockGained),
+      'totalWasted': _num(sum.totalWasted),
+      'milestonesReached': [
+        for (final id in sum.milestonesReached) {'id': id, 'name': names[id]},
+      ],
+      'topBottlenecks': [for (final n in sum.topBottlenecks) _bottleneck(n)],
+    };
   }
 
   Map<String, Object?> _report() {
@@ -146,17 +194,7 @@ final class ScriptRunner {
             ],
           },
       ],
-      'bottlenecks': [
-        for (final n in r.bottlenecks)
-          {
-            'kind': n.kind.name,
-            'bodyId': n.bodyId,
-            'buildingId': n.buildingId,
-            'resourceId': n.resourceId,
-            'runFraction': n.runFraction,
-            'message': n.message,
-          },
-      ],
+      'bottlenecks': [for (final n in r.bottlenecks) _bottleneck(n)],
     };
   }
 

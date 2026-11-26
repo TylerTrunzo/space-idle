@@ -38,6 +38,7 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 | `{"cmd":"report"}` | Per-second production, use, net flow and waste per body, credits per second, each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
 | `{"cmd":"costs"}` | Next upgrade cost of every track of every building, and the next claim cost |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
+| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h) and shows the away summary, with credits and stock gained, units wasted, milestones reached and the top bottlenecks |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
 
 A bottleneck in `report` has a `kind`: `input` (a building is short of
@@ -74,10 +75,11 @@ Brine (`state` only lists bodies you own; the ids are `cinder`, `hollow_reach`,
 
 The game is balanced for a player who checks in about 4 times a day for a few
 minutes (spec §6.7). To play like that, act for a few game minutes (advance in
-small steps of 10 to 60 s while you act), then advance the rest of the 6 hours in
-one go: `{"cmd":"advance","seconds":21420}` after 180 s of play. The real game caps
-offline progress at 12 h, but `advance` in the simulator has no cap, so do not skip
-more than 12 h at once if you want the real-game experience.
+small steps of 10 to 60 s while you act), then step away for the rest of the 6
+hours: `{"cmd":"away","seconds":21420}` after 180 s of play. `away` works like
+closing the game: it caps the time at 12 h, as the real game does, and shows the
+summary you would see on coming back. `advance` has no cap, so do not skip more
+than 12 h at once with it if you want the real-game experience.
 
 Write down the game time (from `state`) whenever something notable happens.
 

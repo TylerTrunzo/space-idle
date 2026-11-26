@@ -14,6 +14,10 @@ Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`
 `factionId` defaults to the player. Meta commands:
 
 - `{"cmd":"advance","seconds":N}` run the simulation
+- `{"cmd":"away","seconds":N}` simulate the player being away for N seconds
+  (offline catch-up, capped at the offline limit) and print the away summary:
+  seconds away and simulated, credits and stock gained, units wasted,
+  milestones reached and the top bottlenecks
 - `{"cmd":"report"}` per-second flows and bottlenecks
 - `{"cmd":"state"}` time, credits, owned bodies and their stock
 - `{"cmd":"costs"}` upgrade costs of the player's buildings and the next claim cost
