@@ -206,6 +206,7 @@ void main() {
           toBodyId: 'hollow_reach',
           resourceId: 'steel',
           amount: n(5),
+          departAt: 0,
           arriveAt: 10,
           fromBodyId: 'kora',
           ownerId: 'player',

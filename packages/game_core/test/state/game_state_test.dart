@@ -51,9 +51,12 @@ void main() {
       ..shipments.add(
         Shipment(
           routeId: 'r1',
+          fromBodyId: 'kora',
           toBodyId: 'brine',
+          ownerId: 'player',
           resourceId: 'iron_ore',
           amount: BigNum.parse('5'),
+          departAt: 2.25,
           arriveAt: 20.25,
         ),
       );

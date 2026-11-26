@@ -164,13 +164,11 @@ final class SaveCodec {
       if (!bodyIds.contains(sh.toBodyId)) {
         return 'shipment on ${sh.routeId}: unknown body ${sh.toBodyId}';
       }
-      final from = sh.fromBodyId;
-      if (from != null && !bodyIds.contains(from)) {
-        return 'shipment on ${sh.routeId}: unknown body $from';
+      if (!bodyIds.contains(sh.fromBodyId)) {
+        return 'shipment on ${sh.routeId}: unknown body ${sh.fromBodyId}';
       }
-      final owner = sh.ownerId;
-      if (owner != null && !s.factions.any((f) => f.id == owner)) {
-        return 'shipment on ${sh.routeId}: unknown faction $owner';
+      if (!s.factions.any((f) => f.id == sh.ownerId)) {
+        return 'shipment on ${sh.routeId}: unknown faction ${sh.ownerId}';
       }
       if (!resource(sh.resourceId)) {
         return 'shipment on ${sh.routeId}: unknown resource ${sh.resourceId}';

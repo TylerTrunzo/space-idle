@@ -314,59 +314,63 @@ final class Shipment {
   /// Creates a shipment.
   Shipment({
     required this.routeId,
+    required this.fromBodyId,
     required this.toBodyId,
+    required this.ownerId,
     required this.resourceId,
     required this.amount,
+    required this.departAt,
     required this.arriveAt,
-    this.fromBodyId,
-    this.ownerId,
   });
 
   /// Restores a shipment written by [toJson].
   factory Shipment.fromJson(Map<String, Object?> j) => Shipment(
     routeId: j['routeId']! as String,
+    fromBodyId: j['fromBodyId']! as String,
     toBodyId: j['toBodyId']! as String,
+    ownerId: j['ownerId']! as String,
     resourceId: j['resourceId']! as String,
     amount: BigNum.fromJson(j['amount']! as String),
+    departAt: (j['departAt']! as num).toDouble(),
     arriveAt: (j['arriveAt']! as num).toDouble(),
-    fromBodyId: j['fromBodyId'] as String?,
-    ownerId: j['ownerId'] as String?,
   );
 
   /// Route that sent it.
   final String routeId;
 
+  /// Source body id, where the goods return if the destination is lost.
+  final String fromBodyId;
+
   /// Destination body id.
   final String toBodyId;
+
+  /// Faction that sent it; it outlives the route's removal.
+  final String ownerId;
 
   /// Resource carried.
   final String resourceId;
 
-  /// Units carried.
-  final BigNum amount;
+  /// Units carried; grows while later sends merge into it (see
+  /// `stepLogistics`).
+  BigNum amount;
+
+  /// Game time in seconds at which it left; later sends within
+  /// `shipmentMergeSeconds` of this join it.
+  final double departAt;
 
   /// Game time in seconds at which it arrives.
   final double arriveAt;
 
-  /// Source body id, where the goods return if the destination is lost.
-  ///
-  /// Null in saves written before this field existed.
-  final String? fromBodyId;
-
-  /// Faction that sent it; it outlives the route's removal.
-  ///
-  /// Null in saves written before this field existed.
-  final String? ownerId;
-
   /// Serializes this shipment.
   Map<String, Object?> toJson() => {
     'routeId': routeId,
+    'fromBodyId': fromBodyId,
     'toBodyId': toBodyId,
+    'ownerId': ownerId,
     'resourceId': resourceId,
     'amount': amount.toJson(),
+    'departAt': departAt,
     'arriveAt': arriveAt,
-    'fromBodyId': fromBodyId,
-    'ownerId': ownerId,
   };
 }
 

@@ -104,9 +104,12 @@ void main() {
     Shipment shipment({String to = 'brine', String resource = 'iron_ore'}) =>
         Shipment(
           routeId: 'r1',
+          fromBodyId: 'kora',
           toBodyId: to,
+          ownerId: 'player',
           resourceId: resource,
           amount: BigNum.parse('1'),
+          departAt: 0,
           arriveAt: 5,
         );
 
@@ -169,6 +172,29 @@ void main() {
     test('shipment resource', () {
       expectUnknown((s) => s.shipments.add(shipment(resource: 'nope')));
     });
+  });
+
+  test('decode rejects a shipment without its source, owner or departure', () {
+    for (final field in ['fromBodyId', 'ownerId', 'departAt']) {
+      final m = fresh()
+        ..['shipments'] = [
+          {
+            'routeId': 'r1',
+            'fromBodyId': 'kora',
+            'toBodyId': 'brine',
+            'ownerId': 'player',
+            'resourceId': 'iron_ore',
+            'amount': '1',
+            'departAt': 0,
+            'arriveAt': 5,
+          }..remove(field),
+        ];
+      expect(
+        err(SaveCodec.decode(jsonEncode(m), content)).kind,
+        SaveErrorKind.missingField,
+        reason: field,
+      );
+    }
   });
 
   test('decode rejects missing fields', () {
