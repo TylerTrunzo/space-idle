@@ -78,6 +78,31 @@ void main() {
     );
   });
 
+  test('auto-sell keeps a full offline step of what a body uses', () {
+    final e = _engine();
+    final s = e.newGame(1);
+    final kora = s.body('kora');
+    final smelter = kora.buildings.firstWhere((b) => b.defId == 'smelter');
+    // Fast enough that a minute of its ore is more than a quarter of storage.
+    smelter.levels[UpgradeTrack.speed] = 25;
+    final perSec = fullRateFlow(
+      e.content,
+      kora,
+      smelter,
+      1,
+      crewEfficiency(s, e.content, 'player'),
+    ).inputs['iron_ore']!;
+    final cap = storageCap(s, e.content, kora);
+    expect(perSec.mulDouble(60), greaterThan(cap.mulDouble(0.25)));
+    expect(perSec.mulDouble(60), lessThan(cap));
+
+    final rule = GreedyBot()
+        .decide(e, s, 'player')
+        .whereType<SetAutoSellCommand>()
+        .firstWhere((c) => c.bodyId == 'kora' && c.resourceId == 'iron_ore');
+    expect(rule.keepAtLeast!.toDouble(), closeTo(perSec.toDouble() * 60, 1e-6));
+  });
+
   test('bots name themselves', () {
     expect(GreedyBot().name, 'greedy');
     expect(BalancedBot().name, 'balanced');

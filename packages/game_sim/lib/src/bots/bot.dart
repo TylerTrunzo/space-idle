@@ -96,8 +96,10 @@ const double _trickleRate = 0.01;
 const int _shipsSent = 2;
 
 /// Game seconds per step of [GameEngine.catchUpOffline] (the default step
-/// of [GameEngine.advance]): storage must hold a step's output, or the rest
-/// is wasted before auto-sell runs.
+/// of [GameEngine.advance]). Inputs made in a step are not used until the
+/// next, so a body must hold a full step of its buildings' demand or they
+/// starve while the player is away; [_View.keep] holds that much back from
+/// auto-sell.
 const double _offlineStepSeconds = 60;
 
 /// Share of demand below which a route counts as too small.
@@ -328,9 +330,12 @@ final class _View {
       def(b).kind == BuildingKind.habitat ||
       lifeSupport.any((id) => makes(b, id));
 
-  /// Units of [resourceId] kept on [body]: a share of storage when a
-  /// building there uses it, a route ships it, or it pays for builds,
-  /// routes or claims; otherwise none.
+  /// Units of [resourceId] kept on [body] when a building there uses it, a
+  /// route ships it, or it pays for builds, routes or claims; otherwise
+  /// none.
+  ///
+  /// The larger of a share of storage and one offline step of what the
+  /// body's buildings use, at most the storage cap.
   BigNum keep(BodyState body, String resourceId) {
     final used =
         resourceId == r.cargoShipResource ||
@@ -340,9 +345,17 @@ final class _View {
           (rt) => rt.fromBodyId == body.id && rt.resourceId == resourceId,
         ) ||
         c.buildings.values.any((d) => d.buildCost.containsKey(resourceId));
-    return used
-        ? storageCap(s, c, body).mulDouble(_keepShareOfCap)
-        : const BigNum.zero();
+    if (!used) return const BigNum.zero();
+    final cap = storageCap(s, c, body);
+    var demand = const BigNum.zero();
+    for (final b in body.buildings) {
+      final need = flowOf(body, b).inputs[resourceId];
+      if (need != null) demand = demand + need;
+    }
+    return cap
+        .mulDouble(_keepShareOfCap)
+        .max(demand.mulDouble(_offlineStepSeconds))
+        .min(cap);
   }
 
   /// Adds or updates one auto-sell rule so every sellable resource in stock
@@ -911,48 +924,23 @@ final class _View {
     return share;
   }
 
-  /// Units per second of [resourceId] that [body] can still sell beyond
-  /// its current surplus: storage above [keep] holds one offline step of
-  /// output, and anything more is wasted at the cap.
-  double headroom(BodyState body, String resourceId) =>
-      (storageCap(s, c, body) - keep(body, resourceId)).toDouble() /
-          _offlineStepSeconds -
-      math.max(0.0, surplus(body, resourceId));
-
-  /// Credits per second that [extra] flow on [body] adds: outputs that fit
-  /// in [headroom] less the inputs used, both scaled by the share of the
+  /// Credits per second that [extra] flow on [body] adds: its outputs at
+  /// market price less the inputs used, both scaled by the share of the
   /// extra input demand that spare supply meets.
+  ///
+  /// Every output is worth its price because [autoSell] sells all surplus
+  /// and the engine auto-sells before it clamps stock to the storage cap,
+  /// so nothing a body makes is lost to the cap.
   double gain(BodyState body, BuildingFlow extra) {
     final share = supplied(body, extra.inputs);
-    var v = 0.0;
-    for (final MapEntry(key: id, value: n) in extra.outputs.entries) {
-      final sold = math.min(
-        n.toDouble() * share,
-        math.max(0.0, headroom(body, id)),
-      );
-      v += sold * price(s, c, id).toDouble();
-    }
-    return v - _worth(extra.inputs) * share;
-  }
-
-  /// Credits per second that [addedCap] more storage on [body] would save
-  /// from waste.
-  double storageGain(BodyState body, double addedCap) {
-    var v = 0.0;
-    for (final id in c.resources.keys) {
-      final over = -headroom(body, id);
-      if (over <= 0) continue;
-      v +=
-          math.min(over, addedCap / _offlineStepSeconds) *
-          price(s, c, id).toDouble();
-    }
-    return v;
+    return value(extra) * share;
   }
 
   /// The purchase adding the most credits per second per credit that the
   /// faction can pay while keeping [reserve] credits: speed, efficiency and
-  /// capacity upgrades, new extractors and factories, and depots. See
-  /// [gain] and [storageGain].
+  /// capacity upgrades (for their extra crew slot) and new extractors and
+  /// factories. See [gain]. Storage is not bought: auto-sell keeps stock
+  /// under the cap.
   Command? grow({required BigNum reserve}) {
     final budget = faction.credits - reserve;
     if (budget <= const BigNum.zero()) return null;
@@ -974,29 +962,18 @@ final class _View {
     }
 
     for (final body in owned) {
-      var bonus = 0.0;
-      var capacityLevels = 0;
-      for (final b in body.buildings) {
-        bonus += def(b).storageBonus;
-        capacityLevels += b.levels[UpgradeTrack.capacity]!;
-      }
-      final storagePerLevel =
-          r.baseStorageCap * (1 + bonus) * r.capacityStoragePerLevel;
-
       for (final b in body.buildings) {
         final d = def(b);
         final ups = d.upgrades;
         if (ups.containsKey(UpgradeTrack.capacity) &&
-            d.kind != BuildingKind.habitat) {
-          // More storage always; one more crew slot when crew is free and
-          // this building runs freely with every slot filled.
-          var g = storageGain(body, storagePerLevel);
-          if (freeCrew >= 1 &&
-              b.crew > 0 &&
-              b.lastLimitReason == null &&
-              b.crew >= maxCrew(r, d, b)) {
-            g += gain(body, _scaledFlow(flowOf(body, b), 1 / b.crew));
-          }
+            d.kind != BuildingKind.habitat &&
+            freeCrew >= 1 &&
+            b.crew > 0 &&
+            b.lastLimitReason == null &&
+            b.crew >= maxCrew(r, d, b)) {
+          // One more crew slot, worth it when crew is free and this
+          // building runs freely with every slot filled.
+          final g = gain(body, _scaledFlow(flowOf(body, b), 1 / b.crew));
           consider(
             UpgradeCommand(factionId, b.id, UpgradeTrack.capacity),
             body,
@@ -1038,17 +1015,8 @@ final class _View {
       for (final d in c.buildings.values) {
         switch (d.kind) {
           case BuildingKind.warehouse:
-            consider(
-              BuildCommand(factionId, body.id, d.id),
-              body,
-              d.buildCost,
-              storageGain(
-                body,
-                r.baseStorageCap *
-                    d.storageBonus *
-                    (1 + r.capacityStoragePerLevel * capacityLevels),
-              ),
-            );
+            // Auto-sell keeps stock under the cap; storage earns nothing.
+            continue;
           case BuildingKind.extractor || BuildingKind.factory:
             if (freeCrew < 1) continue;
             for (final dep in buildDeposits(d, body)) {
