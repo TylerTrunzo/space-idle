@@ -403,6 +403,36 @@ void main() {
       }
     });
 
+    test('step invariance with the smelter fed from auto-sold ore', () {
+      // Auto-sell on iron ore must leave the smelter its input for the
+      // next step, however long the step.
+      GameState run(double maxStep) {
+        final s = engine.newGame(1);
+        engine
+          ..apply(s, SetAutoSellCommand('player', 'kora', 'iron_ore', n(0)))
+          ..apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)))
+          ..advance(s, 3600, maxStep: maxStep);
+        return s;
+      }
+
+      final fine = run(1);
+      final coarse = run(60);
+      final cf = fine.faction('player').credits.toDouble();
+      final cc = coarse.faction('player').credits.toDouble();
+      expect(
+        (cf - cc).abs(),
+        lessThanOrEqualTo(0.02 * cf),
+        reason: '$cf vs $cc',
+      );
+      for (final s in [fine, coarse]) {
+        final smelter = s
+            .body('kora')
+            .buildings
+            .firstWhere((b) => b.defId == 'smelter');
+        expect(smelter.lastRunFraction, 1);
+      }
+    });
+
     test('30-day jump finishes with finite, non-negative stocks', () {
       final (e, s) = fullEmpire();
       e.advance(s, 30 * 86400);
