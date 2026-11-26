@@ -167,8 +167,9 @@ final class SaveCodec {
         // Above 2^53 an id number is not exact on the web, and past 64 bits
         // it does not parse at all; no engine-made id gets near either.
         final n = int.tryParse(m.group(1)!);
-        if (n == null || n > _maxIdNumber)
+        if (n == null || n > _maxIdNumber) {
           return '$kind id $id: number too large';
+        }
         highestSuffix = math.max(highestSuffix, n);
       }
       return null;
