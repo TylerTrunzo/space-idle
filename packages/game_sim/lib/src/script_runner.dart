@@ -145,6 +145,7 @@ final class ScriptRunner {
       'bottlenecks': [
         for (final n in r.bottlenecks)
           {
+            'kind': n.kind.name,
             'bodyId': n.bodyId,
             'buildingId': n.buildingId,
             'resourceId': n.resourceId,

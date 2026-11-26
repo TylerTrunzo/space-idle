@@ -1,0 +1,155 @@
+# Playtesting the economy (stage 1)
+
+This guide is for a subagent playtester. You play the headless simulator
+(`game_sim`) in a persona, then write a short report in plain language. Stage 1
+has only the economy: one star system, one faction (you), production chains,
+crew and habitats, cargo routes, the market and claiming bodies. There are no AI
+factions, no diplomacy and no war yet.
+
+## Setup
+
+From the repository root:
+
+```
+export PATH=/opt/flutter/bin:$PATH
+dart pub get
+dart run game_sim:game_sim check --content content   # {"ok":true} if content is valid
+```
+
+## Playing by hand
+
+The simulator reads one JSON object per line from stdin (or `--script file.jsonl`)
+and writes one JSON line back for each. Keep a script file of the lines you send so
+that anyone can replay your game exactly:
+
+```
+dart run game_sim:game_sim --seed 1 --script my_game.jsonl
+```
+
+For an interactive session, pipe lines in, or run the command and type them.
+Replies are `{"ok":true,...}` or `{"ok":false,"error":"...","message":"..."}`.
+Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
+
+### Meta commands (look and wait)
+
+| Line | What it does |
+|---|---|
+| `{"cmd":"state"}` | Game time, credits, the bodies you own and their stock |
+| `{"cmd":"report"}` | Per-second production, use, net flow and waste per body, each building's run fraction and crew, and the bottlenecks, worst first |
+| `{"cmd":"costs"}` | Next upgrade cost of every track of every building, and the next claim cost |
+| `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
+| `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
+
+A bottleneck in `report` has a `kind`: `input` (a building is short of
+`resourceId`), `noCrew`, or `crewShortage` (habitats and base crew support fewer
+crew than you have assigned, so every crewed building slows down).
+
+### Game commands (act)
+
+`factionId` defaults to you. Amounts that can grow large (`ratePerSecond`,
+`amount`, `keepAtLeast`) are strings, such as `"0.5"` or `"1e3"`. Crew and ship
+counts are plain integers.
+
+| Line | What it does |
+|---|---|
+| `{"cmd":"build","bodyId":"kora","defId":"mine","depositResourceId":"silicon"}` | Build; extractors name the deposit they mine. The reply has the new `createdId` |
+| `{"cmd":"assignCrew","buildingId":"b4","crew":1}` | Set a building's crew (an absolute count) |
+| `{"cmd":"upgrade","buildingId":"b1","track":"speed"}` | Buy one level of `speed`, `efficiency` or `capacity` |
+| `{"cmd":"setAutoSell","bodyId":"kora","resourceId":"steel","keepAtLeast":"100"}` | Sell everything above 100 automatically; `null` removes the rule |
+| `{"cmd":"sell","bodyId":"kora","resourceId":"steel","amount":"50"}` | Sell once |
+| `{"cmd":"createRoute","fromBodyId":"kora","toBodyId":"brine","resourceId":"circuit","ratePerSecond":"0.2","cargoShips":1}` | Ship goods between your bodies; the cargo ships come from the source body's stock |
+| `{"cmd":"removeRoute","routeId":"r1"}` | Close a route; its ships return to the source |
+| `{"cmd":"claimBody","bodyId":"brine","sourceBodyId":"kora"}` | Claim an unowned body; after the first claim it also takes outpost kits from the source body |
+| `{"cmd":"demolish","buildingId":"b4"}` | Remove a building for half its credit cost back |
+
+Starting position: you own Kora with an iron mine (`b1`), a copper mine (`b2`) and
+a smelter (`b3`), 250 credits and 40 iron ore. Nothing sells until you sell it or
+set auto-sell. The other bodies in the system are Cinder, Hollow Reach, Vastmere and
+Brine (`state` only lists bodies you own; the ids are `cinder`, `hollow_reach`,
+`vastmere`, `brine`). Building types, recipes and prices are in `content/*.json`.
+
+### Playing to a schedule
+
+The game is balanced for a player who checks in about 4 times a day for a few
+minutes (spec §6.7). To play like that, act for a few game minutes (advance in
+small steps of 10 to 60 s while you act), then advance the rest of the 6 hours in
+one go: `{"cmd":"advance","seconds":21420}` after 180 s of play. The real game caps
+offline progress at 12 h, but `advance` in the simulator has no cap, so do not skip
+more than 12 h at once if you want the real-game experience.
+
+Write down the game time (from `state`) whenever something notable happens.
+
+## Bot runs
+
+Bots play the same schedule automatically and print a balance report:
+
+```
+dart run game_sim:game_sim bot --bot balanced --hours 168 --seed 1 --format md
+dart run game_sim:game_sim bot --bot greedy --hours 24 --format json
+```
+
+- `greedy` buys the cheapest affordable upgrade or building each decision.
+- `balanced` fixes the worst bottlenecks, claims bodies, auto-sells surplus, works
+  toward the next milestone (and housing when crew runs out), and spends the rest on
+  the best return.
+
+The report shows when each milestone was first seen (check-in index and hours),
+dead zones (check-ins where the bot found nothing to do), resources never produced
+or never used, the final stock and credits, and the worst bottleneck at each
+check-in. `docs/balance/stage1-baseline.md` is the balanced 168 h baseline; use it to
+compare your experience against the bot's, and rerun it after any content change.
+
+## Personas
+
+Play one persona per session (spec §5.2). Stay in character: a casual player does
+not read the JSON content files to plan ahead; an optimizer does.
+
+- **Optimizer.** You want the fastest possible growth. Read the content files, work
+  out ratios, plan chains, check `report` and `costs` often, and push for every
+  milestone as early as you can. Look for dominant strategies, exploits, upgrades
+  that are never worth buying, and anything that makes the numbers stop growing.
+- **Casual, 4 times a day.** You check in about every 6 hours for 2 to 5 minutes of
+  game time and want each visit to have something worth doing. Use `state` and
+  `report` on arrival as a "while you were away" summary, fix the top one or two
+  bottlenecks, buy what you can, and leave. Play at least 7 in-game days (28
+  check-ins). Note visits where nothing was worth doing, and visits that needed more
+  than a few minutes to sort out.
+- **Warmonger.** War arrives in stage 4, so for now play an aggressive expander:
+  claim bodies as early as possible and build toward what an army would need (hull
+  plates, fuel, circuits, cargo ships). Report whether expanding fast is fun or
+  punishing, what you would want to attack or defend, and anything in the economy
+  that would make war pointless or mandatory later.
+
+## Report template
+
+Write the report in plain language, under about a page. Use game time (hours since
+start) for anything that happened at a moment.
+
+```
+# Playtest report: <persona>, seed <n>, <hours played> h
+
+## Summary
+Two or three sentences: how it felt overall and the single biggest issue.
+
+## What was fun
+- ...
+
+## What was boring
+- ... (with game times: "12 h to 30 h: nothing to do but wait for credits")
+
+## Stuck points
+- <game time>: what you were trying to do, why you could not, how (or whether) you
+  got unstuck.
+
+## Numbers that felt off
+- <thing>: what it is, what you expected, why. ("Speed level 30 on the iron mine
+  costs more than a whole day of income but adds almost nothing.")
+
+## Bugs
+- What happened, what you expected, and the exact command lines to reproduce it,
+  starting from a new game: the `--seed` and the script lines (or a save file
+  path).
+
+## Suggestions
+- Optional: changes you would try first, in content (`content/*.json`) or rules.
+```

@@ -120,7 +120,7 @@ void main() {
     });
     expect(home.name, 'Kora');
     expect(content.galaxy.factions, [player]);
-    expect(player.baseCrew, 10);
+    expect(player.baseCrew, 20);
     expect(player.buildings.map((b) => (b.defId, b.depositResourceId)), [
       ('mine', 'iron_ore'),
       ('mine', 'copper_ore'),

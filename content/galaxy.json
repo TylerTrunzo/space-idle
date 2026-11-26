@@ -51,7 +51,7 @@
       "isPlayer": true,
       "homeBodyId": "kora",
       "credits": "250",
-      "baseCrew": 10,
+      "baseCrew": 20,
       "buildings": [
         {"defId": "mine", "depositResourceId": "iron_ore", "crew": 1},
         {"defId": "mine", "depositResourceId": "copper_ore", "crew": 1},

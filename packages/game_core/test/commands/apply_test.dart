@@ -9,19 +9,29 @@ void main() {
   final content = shippedContent();
   BigNum n(num v) => BigNum.from(v);
 
-  GameState fresh() => newGameState(content, 1);
+  // The crew counts below assume 10 base crew, whatever the shipped
+  // content currently starts with.
+  GameState fresh() =>
+      newGameState(content, 1)..faction('player').baseCrew = 10;
 
-  /// Applies [cmd], expects success, and returns the created id.
-  String? expectOk(GameState s, Command cmd) {
-    final r = applyCommand(s, content, cmd);
+  /// Applies [cmd] under [using] (default the shipped content), expects
+  /// success, and returns the created id.
+  String? expectOk(GameState s, Command cmd, {Content? using}) {
+    final r = applyCommand(s, using ?? content, cmd);
     expect(r, isA<CommandOk>(), reason: r is CommandFailed ? r.message : '');
     return (r as CommandOk).createdId;
   }
 
-  /// Applies [cmd], expects [error], and checks the state did not change.
-  void expectFails(GameState s, Command cmd, CommandError error) {
+  /// Applies [cmd] under [using] (default the shipped content), expects
+  /// [error], and checks the state did not change.
+  void expectFails(
+    GameState s,
+    Command cmd,
+    CommandError error, {
+    Content? using,
+  }) {
     final before = jsonEncode(s.toJson());
-    final r = applyCommand(s, content, cmd);
+    final r = applyCommand(s, using ?? content, cmd);
     expect(r, isA<CommandFailed>().having((f) => f.error, 'error', error));
     expect(jsonEncode(s.toJson()), before);
   }
@@ -391,14 +401,16 @@ void main() {
 
   group('claimBody', () {
     test('first body costs credits only; second needs 1 outpost kit', () {
+      // Shipped content with the claim growth these numbers assume.
+      final c4 = withClaimGrowth(content, 4);
       final s = fresh();
       s.faction('player').credits = n(30000);
-      expect(claimCost(s, content, 'player'), {'credits': n(5000)});
-      expectOk(s, ClaimBodyCommand('player', 'brine', 'kora'));
+      expect(claimCost(s, c4, 'player'), {'credits': n(5000)});
+      expectOk(s, ClaimBodyCommand('player', 'brine', 'kora'), using: c4);
       expect(s.body('brine').ownerId, 'player');
       expect(s.faction('player').credits, n(25000));
 
-      expect(claimCost(s, content, 'player'), {
+      expect(claimCost(s, c4, 'player'), {
         'credits': n(20000),
         'outpost_kit': n(1),
       });
@@ -406,9 +418,14 @@ void main() {
         s,
         ClaimBodyCommand('player', 'hollow_reach', 'kora'),
         CommandError.cannotAfford,
+        using: c4,
       );
       s.body('kora').stock['outpost_kit'] = n(1);
-      expectOk(s, ClaimBodyCommand('player', 'hollow_reach', 'kora'));
+      expectOk(
+        s,
+        ClaimBodyCommand('player', 'hollow_reach', 'kora'),
+        using: c4,
+      );
       expect(s.body('hollow_reach').ownerId, 'player');
       expect(s.faction('player').credits, n(5000));
       expect(s.body('kora').stock['outpost_kit'], n(0));
@@ -504,4 +521,35 @@ void main() {
       throwsFormatException,
     );
   });
+}
+
+/// [c] with its rules' claim growth set to [growth].
+Content withClaimGrowth(Content c, double growth) {
+  final r = c.rules;
+  return Content(
+    rules: RulesDef(
+      speedPerLevel: r.speedPerLevel,
+      speedMilestoneEvery: r.speedMilestoneEvery,
+      speedMilestoneMult: r.speedMilestoneMult,
+      efficiencyPerLevel: r.efficiencyPerLevel,
+      efficiencyFloor: r.efficiencyFloor,
+      capacityCrewPerLevel: r.capacityCrewPerLevel,
+      capacityStoragePerLevel: r.capacityStoragePerLevel,
+      baseStorageCap: r.baseStorageCap,
+      offlineCapSeconds: r.offlineCapSeconds,
+      marketFloor: r.marketFloor,
+      marketRecoverySeconds: r.marketRecoverySeconds,
+      claimBaseCredits: r.claimBaseCredits,
+      claimGrowth: growth,
+      outpostKitResource: r.outpostKitResource,
+      shipCapacityPerSecond: r.shipCapacityPerSecond,
+      cargoShipResource: r.cargoShipResource,
+      baseTravelSeconds: r.baseTravelSeconds,
+    ),
+    resources: c.resources,
+    buildings: c.buildings,
+    bodyTypes: c.bodyTypes,
+    galaxy: c.galaxy,
+    milestones: c.milestones,
+  );
 }

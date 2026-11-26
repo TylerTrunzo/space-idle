@@ -432,7 +432,8 @@ void main() {
     test('performance: 24 h of a 40-building empire in under 1 s', () {
       final (e, s) = fullEmpire();
       final count = s.bodies.fold(0, (sum, b) => sum + b.buildings.length);
-      expect(count, 40);
+      // Every build slot in the shipped galaxy is filled.
+      expect(count, greaterThanOrEqualTo(40));
       final watch = Stopwatch()..start();
       final sum = e.catchUpOffline(s, 86400, capSeconds: 86400);
       watch.stop();

@@ -11,7 +11,7 @@
   "marketFloor": 0.2,
   "marketRecoverySeconds": 3600,
   "claimBaseCredits": "5e3",
-  "claimGrowth": 4,
+  "claimGrowth": 120,
   "outpostKitResource": "outpost_kit",
   "shipCapacityPerSecond": 2,
   "cargoShipResource": "cargo_ship",
