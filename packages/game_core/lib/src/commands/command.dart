@@ -184,7 +184,7 @@ sealed class Command {
       'deliverContract' => DeliverContractCommand(
         f,
         _str(j, 'contractId'),
-        _str(j, 'bodyId'),
+        _optStr(j, 'bodyId'),
         _big(j, 'amount'),
       ),
       'discardContract' => DiscardContractCommand(f, _str(j, 'contractId')),
@@ -693,10 +693,10 @@ final class SetAutoPayReserveCommand extends Command {
 }
 
 /// Delivers up to [amount] of a contract's resource from an owned body's
-/// stock to the faction's contract, in whole units (rounded down; an
-/// amount below 1 fails with [CommandError.invalidAmount]); partial
-/// deliveries add up, and the reward is paid when the last unit is
-/// delivered (see `stepContracts`).
+/// stock, or with no [bodyId] from every owned body, to the faction's
+/// contract, in whole units (rounded down; an amount below 1 fails with
+/// [CommandError.invalidAmount]); partial deliveries add up, and the
+/// reward is paid when the last unit is delivered (see `stepContracts`).
 final class DeliverContractCommand extends Command {
   /// Creates a deliver-contract command.
   const DeliverContractCommand(
@@ -709,11 +709,14 @@ final class DeliverContractCommand extends Command {
   /// Contract on the faction's board to deliver to.
   final String contractId;
 
-  /// Owned body whose stock supplies the goods.
-  final String bodyId;
+  /// Owned body whose stock supplies the goods; null for every body the
+  /// faction owns, the one holding the most first (ties by body id), so an
+  /// order spread over several bodies takes one command.
+  final String? bodyId;
 
   /// Units to deliver; above zero, clamped to what the contract still
-  /// wants and to the stock held, which must not be empty.
+  /// wants and to the stock held, which must hold a whole unit (on some
+  /// owned body, with no [bodyId]).
   final BigNum amount;
 
   @override
@@ -722,7 +725,7 @@ final class DeliverContractCommand extends Command {
   @override
   Map<String, Object?> get _fields => {
     'contractId': contractId,
-    'bodyId': bodyId,
+    'bodyId': ?bodyId,
     'amount': amount.toJson(),
   };
 }

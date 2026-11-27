@@ -386,8 +386,9 @@ final class AutoPayReserveSet extends CommandOutcome {
 }
 
 /// A `DeliverContractCommand` delivered [delivered] units of [resourceId]
-/// from [bodyId] to contract [contractId], [totalDelivered] of its
-/// [quantity] in all.
+/// to contract [contractId], [totalDelivered] of its [quantity] in all:
+/// from [bodyId], or, for a delivery from every body ([bodyId] null), from
+/// the bodies [fromBodies] lists.
 ///
 /// When that [completed] it, [rewardPaid] credits were paid (also in
 /// [gained]), the contract left the board, and its slot refills; the
@@ -396,6 +397,7 @@ final class ContractProgress extends CommandOutcome {
   /// Creates the outcome.
   ContractProgress({
     required this.bodyId,
+    required Map<String, BigNum> fromBodies,
     required this.contractId,
     required this.resourceId,
     required this.delivered,
@@ -403,10 +405,18 @@ final class ContractProgress extends CommandOutcome {
     required this.quantity,
     this.rewardPaid,
     this.nextContractAt,
-  }) : super(spent: {resourceId: delivered}, gained: {'credits': ?rewardPaid});
+  }) : fromBodies = Map.unmodifiable(fromBodies),
+       super(spent: {resourceId: delivered}, gained: {'credits': ?rewardPaid});
 
+  /// The body the goods came from, or null for a delivery from every body,
+  /// whose units [fromBodies] gives by body.
   @override
-  final String bodyId;
+  final String? bodyId;
+
+  /// Body id to the whole units of [resourceId] taken from it, in the order
+  /// they were taken (the fullest first); one entry with [bodyId] when it
+  /// is set. They add up to [delivered].
+  final Map<String, BigNum> fromBodies;
 
   /// The contract delivered to.
   final String contractId;

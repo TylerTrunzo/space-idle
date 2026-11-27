@@ -732,6 +732,103 @@ void main() {
       expect(player(s).credits, credits + k.rewardCredits);
     });
 
+    group('one delivery from every body', () {
+      test('takes what each holds, the fullest first, in one command', () {
+        final s = steelFlood(content);
+        final brine = s.body('brine')..ownerId = 'player';
+        final kora = s.body('kora');
+        final k = postOn(s, 'steel', 1500, reward: 9000);
+        kora.stock['steel'] = n(400);
+        brine.stock['steel'] = n(1200.5);
+        final credits = player(s).credits;
+        final r = e.apply(
+          s,
+          DeliverContractCommand('player', k.id, null, n(1e9)),
+        );
+        final o = (r as CommandOk).outcome! as ContractProgress;
+        expect(o.bodyId, isNull);
+        expect(o.fromBodies, {'brine': n(1200), 'kora': n(300)});
+        expect(o.fromBodies.keys, ['brine', 'kora'], reason: 'fullest first');
+        expect(o.delivered, n(1500));
+        expect(o.spent, {'steel': n(1500)});
+        expect(o.rewardPaid, n(9000));
+        expect(player(s).contracts, isEmpty);
+        expect(player(s).credits, credits + n(9000));
+        expect(brine.stock['steel'], n(0.5));
+        expect(kora.stock['steel'], n(100));
+      });
+
+      test('up to the amount asked, leaving the order open', () {
+        final s = steelFlood(content);
+        final brine = s.body('brine')..ownerId = 'player';
+        s.body('kora').stock['steel'] = n(400);
+        brine.stock['steel'] = n(300);
+        final k = postOn(s, 'steel', 1500);
+        final o =
+            (e.apply(s, DeliverContractCommand('player', k.id, null, n(500)))
+                        as CommandOk)
+                    .outcome!
+                as ContractProgress;
+        expect(o.fromBodies, {'kora': n(400), 'brine': n(100)});
+        expect(o.totalDelivered, n(500));
+        expect(o.rewardPaid, isNull);
+      });
+
+      test('ties go by body id, so it is deterministic', () {
+        final s = steelFlood(content);
+        s.body('brine')
+          ..ownerId = 'player'
+          ..stock['steel'] = n(300);
+        s.body('kora').stock['steel'] = n(300);
+        final k = postOn(s, 'steel', 400);
+        final o =
+            (e.apply(s, DeliverContractCommand('player', k.id, null, n(400)))
+                        as CommandOk)
+                    .outcome!
+                as ContractProgress;
+        expect(o.fromBodies.keys, ['brine', 'kora']);
+        expect(o.fromBodies, {'brine': n(300), 'kora': n(100)});
+      });
+
+      test('fails, changing nothing, when no owned body holds a whole '
+          'unit', () {
+        final s = steelFlood(content);
+        s.body('brine').ownerId = 'player';
+        s.body('kora').stock['steel'] = n(0.5);
+        // An unowned body's stock does not count.
+        s.body('cinder').stock['steel'] = n(900);
+        final k = postOn(s, 'steel', 400);
+        fails(
+          s,
+          DeliverContractCommand('player', k.id, null, n(10)),
+          CommandError.invalidAmount,
+        );
+        fails(
+          s,
+          DeliverContractCommand('player', k.id, null, n(0)),
+          CommandError.invalidAmount,
+        );
+        fails(
+          s,
+          DeliverContractCommand('player', 'c999', null, n(10)),
+          CommandError.unknownContract,
+        );
+      });
+
+      test('an explicit body says where its goods came from', () {
+        final s = steelFlood(content);
+        s.body('kora').stock['steel'] = n(50);
+        final k = postOn(s, 'steel', 100);
+        final o =
+            (e.apply(s, DeliverContractCommand('player', k.id, 'kora', n(20)))
+                        as CommandOk)
+                    .outcome!
+                as ContractProgress;
+        expect(o.bodyId, 'kora');
+        expect(o.fromBodies, {'kora': n(20)});
+      });
+    });
+
     test('auto-sell holds an order larger than one store on several '
         'bodies, the fullest first, each up to its cap', () {
       final s = steelFlood(content);
@@ -1642,6 +1739,7 @@ void main() {
     test('commands round trip through JSON', () {
       for (final cmd in <Command>[
         DeliverContractCommand('player', 'c7', 'kora', n(12.5)),
+        DeliverContractCommand('player', 'c7', null, n(12.5)),
         const DiscardContractCommand('player', 'c7'),
       ]) {
         final back = Command.fromJson(cmd.toJson());
@@ -1651,6 +1749,11 @@ void main() {
       expect(
         DeliverContractCommand('p', 'c1', 'kora', n(1)).toJson()['cmd'],
         'deliverContract',
+      );
+      // From every body: no bodyId at all, so old command logs read alike.
+      expect(
+        DeliverContractCommand('p', 'c1', null, n(1)).toJson(),
+        isNot(contains('bodyId')),
       );
       expect(
         const DiscardContractCommand('p', 'c1').toJson()['cmd'],
