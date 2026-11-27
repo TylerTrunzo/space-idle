@@ -51,7 +51,9 @@ ProjectView projectView(GameController c, ProjectState p) {
   final done = span <= 0 ? 1.0 : (s.time - p.startedAt) / span;
   String body(String id) =>
       s.bodies.where((b) => b.id == id).firstOrNull?.name ?? id;
-  final level = (s.faction(c.playerId).megaprojectLevels[p.targetId] ?? 0) + 1;
+  // The project's own faction's level: another faction's stage is its own.
+  final owner = s.factions.where((f) => f.id == p.factionId).firstOrNull;
+  final level = (owner?.megaprojectLevels[p.targetId] ?? 0) + 1;
   return ProjectView(
     id: p.id,
     kind: p.kind,

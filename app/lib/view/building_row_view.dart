@@ -172,8 +172,9 @@ final class RowContext {
   final Map<String, Bottleneck> bottlenecks;
 
   /// While the faction's housing falls short of its assigned crew, the
-  /// line a crewed building held back by nothing else shows; else null.
-  /// The shortage names no building, so the per-building lookup misses it.
+  /// line a crewed building that housing holds back shows when no
+  /// bottleneck names it; else null. The shortage names no building, so
+  /// the per-building lookup misses it.
   final String? crewShort;
 }
 
@@ -196,6 +197,7 @@ BuildingRowView buildingRowView(
       m?[id] ?? const BigNum.zero();
   final fraction = runsRecipe(def) ? _fraction(b, status) : 1.0;
   final neck = ctx.bottlenecks[b.id];
+  final housing = ctx.crewShort != null && _shortOfHousing(def, b, status);
   final most = maxCrew(c.rules, def, b);
   return BuildingRowView(
     id: b.id,
@@ -222,12 +224,12 @@ BuildingRowView buildingRowView(
     severity: switch (fraction) {
       <= 0 => Severity.stopped,
       < 1 => Severity.warning,
-      // A building a bottleneck names is held back, whatever its share.
-      _ => neck == null ? Severity.ok : Severity.warning,
+      // Held back by a bottleneck or by housing, whatever its share.
+      _ => neck == null && !housing ? Severity.ok : Severity.warning,
     },
     problem: neck != null
         ? bottleneckText(s, c, playerId, neck)
-        : (fraction < 1 && b.crew > 0 ? ctx.crewShort : null),
+        : (housing ? ctx.crewShort : null),
     upgrades: {
       for (final t in UpgradeTrack.values)
         if (def.upgrades.containsKey(t)) t: _upgrade(c, b, t, ctx),
@@ -245,6 +247,24 @@ double _fraction(BuildingState b, BuildingStatus? status) {
   final supply = status?.runFraction ?? b.lastRunFraction;
   final output = status?.effectiveFraction ?? supply;
   return (supply < output ? supply : output).clamp(0.0, 1.0);
+}
+
+/// Whether housing holds [b] back: it makes less than its own crew would
+/// with every input it got, `runFraction × crew / base slots`, the gap
+/// being the faction's crew efficiency. Compared against what the building
+/// wants, not 1, since capacity crew lifts that above 1; and false for a
+/// building with no crew or no slots, so crew is never blamed where it is
+/// not the cause.
+bool _shortOfHousing(BuildingDef def, BuildingState b, BuildingStatus? st) {
+  if (b.crew <= 0 || def.crewSlots <= 0) return false;
+  if (st case BuildingStatus(
+    runFraction: final run?,
+    effectiveFraction: final out?,
+  )) {
+    final wants = run * b.crew / def.crewSlots;
+    return out < wants * (1 - 1e-9);
+  }
+  return false;
 }
 
 UpgradeButtonView _upgrade(

@@ -191,6 +191,33 @@ void main() {
       expect(row.problem, isNotNull);
     });
 
+    test('a capacity-crewed building short of housing is not ok', () {
+      // Two crew on a 1-slot smelter (a capacity level) lift its output
+      // share above 1, so "below 1" missed the housing shortfall.
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      c.run(const UpgradeCommand(_p, 'b3', UpgradeTrack.capacity));
+      c.run(const AssignCrewCommand(_p, 'b3', 2));
+      final kora = c.state.body('kora');
+      kora.stock['iron_ore'] = BigNum.from(1e6);
+      kora.stock['copper_ore'] = BigNum.from(1e6);
+      final assigned = crewTotals(c.state, content, _p).assigned;
+      c.state.faction(_p).baseCrew = assigned - 1;
+      c.tickSeconds(5);
+
+      final smelter = _row(bodyView(c, 'kora')!, 'Smelter');
+      expect(smelter.crew, 2);
+      expect(smelter.severity, Severity.warning);
+      expect(smelter.problem, startsWith('Short of crew: '));
+    });
+
+    test('a full crew with no housing shortfall gets no crew blame', () {
+      // Everyone housed: no crewShortage, so no crew text anywhere.
+      c.tickSeconds(5);
+      for (final row in bodyView(c, 'kora')!.buildings) {
+        expect(row.problem ?? '', isNot(startsWith('Short of crew')));
+      }
+    });
+
     test('a building held back only by a crew shortage says so', () {
       // Housing for 1 crew with 3 assigned: every crewed building runs at
       // a third, and only the faction-wide crewShortage names a cause.
@@ -219,7 +246,7 @@ void main() {
       final b = BuildingState(
         id: 'b_rival',
         defId: 'smelter',
-        crew: 0,
+        crew: 1, // crew to take out, so the canRemoveCrew gate shows
         levels: {for (final t in UpgradeTrack.values) t: 0},
       );
       body.buildings.add(b);
