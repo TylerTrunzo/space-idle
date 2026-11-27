@@ -350,7 +350,8 @@ void main() {
       'Started an extra build slot on Kora for 50K credits; done in 1h',
     );
     final again = r.handle({'cmd': 'expandSlots', 'bodyId': 'kora'});
-    expect(again['error'], 'projectInProgress');
+    // While it runs, a start pays for the next level, which Kora lacks.
+    expect(again['error'], 'cannotAfford');
   });
 
   test('state lists running projects with time left, soonest first', () {

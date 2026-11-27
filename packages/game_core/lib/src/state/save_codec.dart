@@ -429,20 +429,19 @@ final class SaveCodec {
   }
 
   /// What is wrong with what [f] has delivered toward [m]'s next stage, or
-  /// null if nothing is: every amount a key of that stage's cost, at least
-  /// zero and at most the cost, something still owed, no stage under way
-  /// and a level below the highest.
+  /// null if nothing is: every amount a key of the cost of the stage
+  /// deliveries pay for (`megaprojectDeliveryLevel`: the one after a stage
+  /// under way), at least zero and at most the cost, and a level below the
+  /// highest. Complete progress is valid only while a stage is under way,
+  /// which the paid-for stage follows.
   static String? _invalidProgress(
     GameState s,
     Content c,
     FactionState f,
     MegaprojectDef m,
   ) {
-    final level = f.megaprojectLevels[m.id] ?? 0;
+    final level = megaprojectDeliveryLevel(s, f.id, m);
     if (level >= maxMegaprojectLevel) return 'past level $maxMegaprojectLevel';
-    if (megaprojectStageOf(s, f.id, m.id) != null) {
-      return 'while a stage is under way';
-    }
     final cost = megaprojectCost(c, m, level);
     for (final MapEntry(key: id, value: v)
         in f.megaprojectProgress[m.id]!.entries) {
@@ -452,7 +451,8 @@ final class SaveCodec {
         return 'of $id is $v, outside [0, $need]';
       }
     }
-    if (megaprojectRemaining(s, c, f.id, m).isEmpty) {
+    if (megaprojectStageOf(s, f.id, m.id) == null &&
+        megaprojectRemaining(s, c, f.id, m).isEmpty) {
       return 'complete with no stage started';
     }
     return null;

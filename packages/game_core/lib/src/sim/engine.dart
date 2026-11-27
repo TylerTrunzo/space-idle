@@ -23,6 +23,7 @@ final class CompletedProject {
     required this.kind,
     required this.targetId,
     required this.name,
+    this.level,
   });
 
   /// What the project did.
@@ -33,6 +34,10 @@ final class CompletedProject {
 
   /// Display name of [targetId].
   final String name;
+
+  /// For a megaproject stage, the level it brought the megaproject to;
+  /// null for other kinds.
+  final int? level;
 }
 
 /// What happened to the player while the game was closed.
@@ -49,7 +54,9 @@ final class OfflineSummary {
     required List<String> milestonesReached,
     required List<Bottleneck> topBottlenecks,
     required List<CompletedProject> projectsCompleted,
-  }) : stockGained = Map.unmodifiable(stockGained),
+    List<String> contractsPosted = const [],
+  }) : contractsPosted = List.unmodifiable(contractsPosted),
+       stockGained = Map.unmodifiable(stockGained),
        milestonesReached = List.unmodifiable(milestonesReached),
        topBottlenecks = List.unmodifiable(topBottlenecks),
        projectsCompleted = List.unmodifiable(projectsCompleted);
@@ -74,14 +81,20 @@ final class OfflineSummary {
 
   /// The return in one line for the player, such as "Away 4d 2h; 12h
   /// counted (cap); +1.2M credits", or "Away 3h; +36K credits" when the
-  /// whole absence counted.
+  /// whole absence counted, then the highest level each megaproject
+  /// reached while away, such as "; Orbital Station reached level 3".
   String get headline {
     final counted = capped
         ? '; ${formatDuration(secondsSimulated)} counted (cap)'
         : '';
     final sign = creditsGained.isNegative ? '' : '+';
+    final levels = <String, (String, int)>{};
+    for (final p in projectsCompleted) {
+      if (p.level case final level?) levels[p.targetId] = (p.name, level);
+    }
     return 'Away ${formatDuration(secondsAway)}$counted; '
-        '$sign${formatNumber(creditsGained)} credits';
+        '$sign${formatNumber(creditsGained)} credits'
+        '${[for (final (name, level) in levels.values) '; $name reached level $level'].join()}';
   }
 
   /// Resource id to the change in the player's stock summed over the bodies
@@ -109,8 +122,13 @@ final class OfflineSummary {
   final List<Bottleneck> topBottlenecks;
 
   /// The player's projects that completed while away, in the order they
-  /// completed (`finishAt`, then the order they were started).
+  /// completed (`finishAt`, then the order they were started), stages that
+  /// started while away included (`stepProjects`).
   final List<CompletedProject> projectsCompleted;
+
+  /// Ids of the contracts posted to the player's board while away, in the
+  /// order they were posted; they are on the board.
+  final List<String> contractsPosted;
 }
 
 /// Step of [GameEngine.catchUpOffline] and default step of
@@ -246,8 +264,14 @@ final class GameEngine {
     final stockBefore = factionStock(s, player.id);
     final creditsBefore = player.credits;
     final reachedBefore = Set.of(player.reachedMilestones);
-    final projectsBefore = runningProjects(s, player.id);
+    final contractsBefore = {for (final k in player.contracts) k.id};
     final awayFrom = s.time;
+    // Stages can start while away, as a stage paid for in full follows the
+    // one under way, so completions are noted tick by tick.
+    var running = runningProjects(s, player.id);
+    final completed = <ProjectState>[];
+    final levels = Map.of(player.megaprojectLevels);
+    final stageLevels = <ProjectState, int>{};
 
     var wasted = const BigNum.zero();
     _advance(s, simulated, _offlineStepSeconds, () {
@@ -257,6 +281,15 @@ final class GameEngine {
           wasted = wasted + v;
         }
       }
+      final now = runningProjects(s, player.id);
+      for (final p in running) {
+        if (now.contains(p)) continue;
+        completed.add(p);
+        if (p.kind == ProjectKind.megaprojectStage) {
+          stageLevels[p] = levels[p.targetId] = (levels[p.targetId] ?? 0) + 1;
+        }
+      }
+      running = now;
     });
 
     final stockAfter = factionStock(s, player.id);
@@ -295,16 +328,18 @@ final class GameEngine {
             m.id,
       ],
       topBottlenecks: [for (final (_, b) in necks.take(topBottleneckCount)) b],
-      // Nothing starts a project while away, so those gone have completed,
-      // and in this order.
       projectsCompleted: [
-        for (final p in projectsBefore)
-          if (!s.projects.contains(p))
-            CompletedProject(
-              kind: p.kind,
-              targetId: p.targetId,
-              name: projectTargetName(s, content, p),
-            ),
+        for (final p in completed)
+          CompletedProject(
+            kind: p.kind,
+            targetId: p.targetId,
+            name: projectTargetName(s, content, p),
+            level: stageLevels[p],
+          ),
+      ],
+      contractsPosted: [
+        for (final k in player.contracts)
+          if (!contractsBefore.contains(k.id)) k.id,
       ],
     );
   }

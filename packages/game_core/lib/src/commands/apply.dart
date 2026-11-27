@@ -953,7 +953,12 @@ CommandResult _startMegaprojectStage(
   if (short != null) return short;
 
   _pay(f, body, owed);
-  return CommandOk(createdId: _startStage(s, f, def).id);
+  f.megaprojectProgress[def.id] = megaprojectCost(
+    c,
+    def,
+    megaprojectDeliveryLevel(s, f.id, def),
+  );
+  return _paidInFull(s, c, f, def);
 }
 
 CommandResult _deliverToMegaproject(
@@ -969,7 +974,7 @@ CommandResult _deliverToMegaproject(
   if (cmd.amounts.isEmpty) {
     return _fail(CommandError.invalidAmount, 'Nothing to deliver');
   }
-  final cost = megaprojectCost(c, def, f.megaprojectLevels[def.id] ?? 0);
+  final cost = megaprojectCost(c, def, megaprojectDeliveryLevel(s, f.id, def));
   final owed = megaprojectRemaining(s, c, f.id, def);
   for (final MapEntry(key: id, value: amount) in cmd.amounts.entries) {
     if (id != _credits && !c.resources.containsKey(id)) {
@@ -1026,13 +1031,28 @@ CommandResult _deliverToMegaproject(
   if (megaprojectRemaining(s, c, f.id, def).isNotEmpty) {
     return const CommandOk();
   }
+  return _paidInFull(s, c, f, def);
+}
+
+/// The result once [f] has paid for its next stage of [def] in full: the
+/// stage starts now, or, while one is under way, waits in
+/// `megaprojectProgress` and starts when that one completes
+/// (`stepProjects`).
+CommandOk _paidInFull(
+  GameState s,
+  Content c,
+  FactionState f,
+  MegaprojectDef def,
+) {
+  if (megaprojectStageOf(s, f.id, def.id) != null) return const CommandOk();
   return CommandOk(createdId: _startStage(s, f, def).id);
 }
 
 /// Why a stage command on megaproject [megaprojectId] from body [bodyId]
 /// cannot go ahead, or null if it can: an unknown megaproject or body, a
-/// body [f] does not own, a host body type [f] owns none of, a stage under
-/// way or the highest level reached.
+/// body [f] does not own, a host body type [f] owns none of, the next
+/// stage already paid for while one is under way, or the highest level
+/// reached.
 CommandFailed? _checkMegaproject(
   GameState s,
   Content c,
@@ -1053,25 +1073,26 @@ CommandFailed? _checkMegaproject(
   final host = def.hostBodyType;
   if (host != null &&
       !s.bodies.any((b) => b.ownerId == f.id && b.typeId == host)) {
+    final name = c.bodyTypes[host]!.name;
     return _fail(
       CommandError.wrongBodyType,
-      '${def.name} is built at a ${c.bodyTypes[host]!.name}, and you own '
-      'none',
+      '${def.name} is built at ${_article(name).toLowerCase()} $name, and '
+      'you own none',
     );
   }
-  final running = megaprojectStageOf(s, f.id, def.id);
-  if (running != null) {
-    return _fail(
-      CommandError.projectInProgress,
-      'A stage of ${def.name} is already under way '
-      '(${_left(s, running)} left)',
-    );
-  }
-  final level = f.megaprojectLevels[def.id] ?? 0;
+  final level = megaprojectDeliveryLevel(s, f.id, def);
   if (level >= SaveCodec.maxMegaprojectLevel) {
     return _fail(
       CommandError.invalidAmount,
       '${def.name} is at its highest level (${SaveCodec.maxMegaprojectLevel})',
+    );
+  }
+  final running = megaprojectStageOf(s, f.id, def.id);
+  if (running != null && megaprojectStageQueued(s, c, f.id, def)) {
+    return _fail(
+      CommandError.projectInProgress,
+      '${def.name} level ${level + 1} is paid for; it starts when level '
+      '$level is done (${_left(s, running)} left)',
     );
   }
   return null;

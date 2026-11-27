@@ -193,14 +193,23 @@ void main() {
       fails(poor, start, CommandError.cannotAfford);
     });
 
-    test('a second stage of the same megaproject is in progress', () {
+    test('while a stage runs, pays for the next one, which then waits', () {
       final s = stocked();
       ok(s, start);
       for (final id in station.baseCost.keys) {
         if (id != 'credits') s.body('kora').stock[id] = n(1e6);
       }
+      // Level 2's cost: the stage after the one under way.
+      expect(ok(s, start), isNull);
+      expect(s.projects, hasLength(1));
+      expect(megaprojectRemaining(s, content, 'player', station), isEmpty);
+      expect(megaprojectStageQueued(s, content, 'player', station), isTrue);
       final msg = fails(s, start, CommandError.projectInProgress);
-      expect(msg, contains('Orbital Station'));
+      expect(
+        msg,
+        'Orbital Station level 2 is paid for; it starts when level 1 is '
+        'done (2h left)',
+      );
     });
 
     test('other checks', () {
@@ -461,9 +470,10 @@ void main() {
         ),
         contains('Hull Plate'),
       );
-      // A stage under way takes no deliveries.
+      // Once the stage after one under way is paid for, it takes no more.
       ok(s, deliver('kora', {...goods(), 'credits': credits0()}));
-      s.body('kora').stock.addAll(goods());
+      s.body('kora').stock.addAll(goods(3));
+      ok(s, deliver('kora', {...goods(3), 'credits': credits0().mulDouble(3)}));
       fails(s, deliver('kora', goods()), CommandError.projectInProgress);
       final top = twoBodies()..body('kora').stock.addAll(goods());
       top.faction('player').megaprojectLevels['orbital_station'] =
@@ -511,6 +521,132 @@ void main() {
         }),
         throwsFormatException,
       );
+    });
+  });
+
+  group('deliveries while a stage runs', () {
+    DeliverToMegaprojectCommand deliver(Map<String, BigNum> amounts) =>
+        DeliverToMegaprojectCommand(
+          'player',
+          'orbital_station',
+          'kora',
+          amounts,
+        );
+
+    /// Level [level]'s cost, goods only.
+    Map<String, BigNum> goods(int level) => {
+      for (final MapEntry(:key, :value) in megaprojectCost(
+        content,
+        station,
+        level,
+      ).entries)
+        if (key != 'credits') key: value,
+    };
+
+    BigNum credits(int level) =>
+        megaprojectCost(content, station, level)['credits']!;
+
+    test('count toward the level after the one being built', () {
+      final s = stocked();
+      ok(s, start);
+      expect(megaprojectDeliveryLevel(s, 'player', station), 1);
+      expect(
+        megaprojectRemaining(s, content, 'player', station),
+        megaprojectCost(content, station, 1),
+      );
+      s.body('kora').stock['hull_plate'] = n(1e6);
+      expect(ok(s, deliver({'hull_plate': n(1e6)})), isNull);
+      expect(s.faction('player').megaprojectProgress['orbital_station'], {
+        'hull_plate': goods(1)['hull_plate'],
+      });
+      expect(s.projects, hasLength(1));
+      // Part-paid, the next stage does not start when this one completes.
+      e.advance(s, 7260);
+      expect(s.faction('player').megaprojectLevels['orbital_station'], 1);
+      expect(s.projects, isEmpty);
+      expect(megaprojectDeliveryLevel(s, 'player', station), 1);
+      expect(
+        megaprojectRemaining(s, content, 'player', station).keys,
+        isNot(contains('hull_plate')),
+      );
+      // The final delivery starts it at once, as before.
+      s.body('kora').stock.addAll(goods(1));
+      expect(
+        ok(s, deliver({...goods(1), 'credits': credits(1)})),
+        startsWith('p'),
+      );
+      expect(s.projects.single.startedAt, s.time);
+    });
+
+    test(
+      'paid in full, the next stage starts as the running one completes',
+      () {
+        final s = stocked();
+        ok(s, start);
+        final first = s.projects.single;
+        e.advance(s, 600);
+        s.body('kora').stock.addAll(goods(1));
+        expect(ok(s, deliver({...goods(1), 'credits': credits(1)})), isNull);
+        expect(s.projects.single, same(first));
+        e.advance(s, 7200 - 600);
+        // Due exactly at the end of that tick: it completes in the next.
+        e.tick(s, 1);
+        expect(s.faction('player').megaprojectLevels['orbital_station'], 1);
+        final queued = s.projects.single;
+        expect(queued.kind, ProjectKind.megaprojectStage);
+        expect(queued.startedAt, first.finishAt);
+        expect(
+          queued.finishAt,
+          closeTo(first.finishAt + megaprojectStageSeconds(station, 1), 1e-9),
+        );
+        expect(s.faction('player').megaprojectProgress, isEmpty);
+        e.advance(s, queued.finishAt - s.time);
+        e.tick(s, 1);
+        expect(s.faction('player').megaprojectLevels['orbital_station'], 2);
+        expect(s.projects, isEmpty);
+      },
+    );
+
+    test('a catch-up across two chained stages matches live play', () {
+      GameState queuedTwice() {
+        final s = stocked();
+        ok(s, start);
+        s.body('kora').stock.addAll(goods(1));
+        ok(s, deliver({...goods(1), 'credits': credits(1)}));
+        return s;
+      }
+
+      final away = queuedTwice();
+      final sum = e.catchUpOffline(away, 6 * 3600);
+      final live = queuedTwice();
+      e.advance(live, 6 * 3600, maxStep: 1);
+      final steps = queuedTwice();
+      e.advance(steps, 6 * 3600);
+      // Same 60 s ticks: the same state, byte for byte.
+      expect(encode(away), encode(steps));
+      for (final x in [away, live]) {
+        expect(x.faction('player').megaprojectLevels['orbital_station'], 2);
+        expect(x.projects, isEmpty);
+      }
+      expect(
+        [for (final p in sum.projectsCompleted) (p.kind, p.targetId, p.level)],
+        [
+          (ProjectKind.megaprojectStage, 'orbital_station', 1),
+          (ProjectKind.megaprojectStage, 'orbital_station', 2),
+        ],
+      );
+      expect(sum.headline, endsWith('; Orbital Station reached level 2'));
+    });
+
+    test('a tick longer than both stages completes the chain', () {
+      final s = stocked();
+      ok(s, start);
+      s.body('kora').stock.addAll(goods(1));
+      ok(s, deliver({...goods(1), 'credits': credits(1)}));
+      e.tick(s, 20000);
+      e.tick(s, 1);
+      expect(s.faction('player').megaprojectLevels['orbital_station'], 2);
+      expect(s.projects, isEmpty);
     });
   });
 
@@ -789,6 +925,23 @@ void main() {
       }
     });
 
+    test('progress toward the next level while a stage is under way loads, '
+        'complete or not', () {
+      final next = megaprojectCost(content, station, 1);
+      for (final progress in [
+        {'hull_plate': '1'},
+        {
+          for (final MapEntry(:key, :value) in next.entries)
+            key: value.toJson(),
+        },
+      ]) {
+        final r = decode(
+          save(projects: [stage()], progress: {'orbital_station': progress}),
+        );
+        expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+      }
+    });
+
     final invalid = <String, Map<String, Object?>>{
       'a negative level': save(levels: {'orbital_station': -1}),
       'a level above 1000': save(levels: {'orbital_station': 1001}),
@@ -829,7 +982,20 @@ void main() {
           },
         },
       ),
-      'progress while a stage is under way': save(
+      'progress past the next level cost while a stage is under way': save(
+        projects: [stage()],
+        progress: {
+          'orbital_station': {
+            'hull_plate': megaprojectCost(
+              content,
+              station,
+              1,
+            )['hull_plate']!.mulDouble(1.5).toJson(),
+          },
+        },
+      ),
+      'progress past the highest level while its last stage is under way': save(
+        levels: {'orbital_station': 999},
         projects: [stage()],
         progress: {
           'orbital_station': {'hull_plate': '1'},

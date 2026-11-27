@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import '../content/content.dart';
 import '../state/game_state.dart';
+import '../state/save_codec.dart';
+import 'megaprojects.dart';
 
 /// Seconds a claim [factionId] starts now takes.
 ///
@@ -33,21 +35,24 @@ ProjectState? projectOn(GameState s, ProjectKind kind, String targetId) {
 }
 
 /// Starts a [kind] project for [factionId] on [targetId] that takes
-/// [seconds] from now, and returns it. The caller has already paid for it.
+/// [seconds] from [startAt] (default now), and returns it. The caller has
+/// already paid for it.
 ProjectState startProject(
   GameState s,
   String factionId,
   ProjectKind kind,
   String targetId,
-  double seconds,
-) {
+  double seconds, {
+  double? startAt,
+}) {
+  final from = startAt ?? s.time;
   final p = ProjectState(
     id: s.newId('p'),
     factionId: factionId,
     kind: kind,
     targetId: targetId,
-    startedAt: s.time,
-    finishAt: s.time + seconds,
+    startedAt: from,
+    finishAt: from + seconds,
   );
   s.projects.add(p);
   return p;
@@ -73,30 +78,40 @@ String projectTargetName(GameState s, Content c, ProjectState p) =>
 
 /// Completes every project with `finishAt <= s.time`, in `finishAt` order,
 /// ties in the order they were started, and applies its effect once: it
-/// leaves [GameState.projects] before the effect.
+/// leaves [GameState.projects] before the effect. Returns them in that
+/// order.
+///
+/// A megaproject stage whose next stage was paid for in full while it ran
+/// starts that one as it completes, timed from its `finishAt`, so the
+/// chain runs the same however long the ticks; one that is itself due by
+/// now completes too, in a later round.
 ///
 /// The engine runs it in every tick, before time moves on, so a project
 /// due at exactly the end of a tick completes at the start of the next,
 /// as a shipment lands.
-void stepProjects(GameState s, Content c) {
-  final due = [
-    for (final p in s.projects)
-      if (p.finishAt <= s.time) p,
-  ];
-  if (due.isEmpty) return;
-  due.sort(_byFinish);
-  s.projects.removeWhere((p) => p.finishAt <= s.time);
-  for (final p in due) {
-    switch (p.kind) {
-      case ProjectKind.claim:
-        _completeClaim(s, p);
-      case ProjectKind.expandSlots:
-        _completeExpandSlots(s, p);
-      case ProjectKind.megaprojectStage:
-        _completeMegaprojectStage(s, p);
-      case ProjectKind.survey:
-        _completeSurvey(s, p);
+List<ProjectState> stepProjects(GameState s, Content c) {
+  final done = <ProjectState>[];
+  while (true) {
+    final due = [
+      for (final p in s.projects)
+        if (p.finishAt <= s.time) p,
+    ];
+    if (due.isEmpty) return done;
+    due.sort(_byFinish);
+    s.projects.removeWhere((p) => p.finishAt <= s.time);
+    for (final p in due) {
+      switch (p.kind) {
+        case ProjectKind.claim:
+          _completeClaim(s, p);
+        case ProjectKind.expandSlots:
+          _completeExpandSlots(s, p);
+        case ProjectKind.megaprojectStage:
+          _completeMegaprojectStage(s, c, p);
+        case ProjectKind.survey:
+          _completeSurvey(s, p);
+      }
     }
+    done.addAll(due);
   }
 }
 
@@ -135,8 +150,27 @@ void _completeExpandSlots(GameState s, ProjectState p) {
   s.body(p.targetId).extraSlots++;
 }
 
-/// Raises [p]'s faction's level of its megaproject by one.
-void _completeMegaprojectStage(GameState s, ProjectState p) {
-  final levels = s.faction(p.factionId).megaprojectLevels;
-  levels[p.targetId] = (levels[p.targetId] ?? 0) + 1;
+/// Raises [p]'s faction's level of its megaproject by one, then starts
+/// the next stage at [p]'s finish if it was paid for in full meanwhile
+/// (`megaprojectRemaining`), clearing what was delivered toward it.
+void _completeMegaprojectStage(GameState s, Content c, ProjectState p) {
+  final f = s.faction(p.factionId);
+  final levels = f.megaprojectLevels;
+  final level = (levels[p.targetId] ?? 0) + 1;
+  levels[p.targetId] = level;
+  final m = c.megaprojects[p.targetId]!;
+  if (!f.megaprojectProgress.containsKey(m.id) ||
+      level >= SaveCodec.maxMegaprojectLevel ||
+      megaprojectRemaining(s, c, f.id, m).isNotEmpty) {
+    return;
+  }
+  f.megaprojectProgress.remove(m.id);
+  startProject(
+    s,
+    f.id,
+    ProjectKind.megaprojectStage,
+    m.id,
+    megaprojectStageSeconds(m, level),
+    startAt: p.finishAt,
+  );
 }

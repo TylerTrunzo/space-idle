@@ -330,11 +330,13 @@ final class FactionState {
   /// megaproject's bonuses for good (see `bonusesFor`).
   final Map<String, int> megaprojectLevels;
 
-  /// Megaproject id to what has been delivered toward its next stage, in
-  /// first-delivered order: each cost key (`credits` or a resource id) to
-  /// the amount handed over, at most the stage's cost. The stage starts,
-  /// and its entry goes, once every key is delivered in full; absent means
-  /// nothing delivered yet. See `DeliverToMegaprojectCommand`.
+  /// Megaproject id to what has been delivered toward its next stage (the
+  /// one after a stage under way), in first-delivered order: each cost key
+  /// (`credits` or a resource id) to the amount handed over, at most the
+  /// stage's cost. The stage starts, and its entry goes, once every key is
+  /// delivered in full, or, while a stage is under way, when that one
+  /// completes; absent means nothing delivered yet. See
+  /// `DeliverToMegaprojectCommand`.
   final Map<String, Map<String, BigNum>> megaprojectProgress;
 
   /// Its contracts board, in the order they were posted; at most

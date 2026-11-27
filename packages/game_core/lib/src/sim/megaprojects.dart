@@ -123,11 +123,23 @@ Map<String, BigNum> megaprojectCost(Content c, MegaprojectDef m, int level) {
   };
 }
 
-/// What [factionId] still owes toward the next stage of [m]: each entry
-/// of its next level's [megaprojectCost] less what has been delivered
-/// toward it (`FactionState.megaprojectProgress`), in cost order; entries
-/// delivered in full are left out, so it is empty once nothing is owed. A
-/// faction that does not exist owes level 0's full cost.
+/// The level from which the stage [factionId]'s deliveries to [m] pay
+/// for starts: its level of [m], or one more while a stage of [m] is under
+/// way, since that stage is paid for and deliveries go to the one after
+/// it. A faction that does not exist is at level 0.
+int megaprojectDeliveryLevel(GameState s, String factionId, MegaprojectDef m) {
+  final level = _levelsOf(s, factionId)?[m.id] ?? 0;
+  return megaprojectStageOf(s, factionId, m.id) == null ? level : level + 1;
+}
+
+/// What [factionId] still owes toward the stage of [m] its deliveries pay
+/// for (from [megaprojectDeliveryLevel]): each entry of that level's
+/// [megaprojectCost] less what has been delivered toward it
+/// (`FactionState.megaprojectProgress`), in cost order; entries delivered
+/// in full are left out, so it is empty once nothing is owed. While a
+/// stage is under way, that is the stage after it, which starts when the
+/// one under way completes if it is paid for in full by then. A faction
+/// that does not exist owes level 0's full cost.
 Map<String, BigNum> megaprojectRemaining(
   GameState s,
   Content c,
@@ -138,7 +150,7 @@ Map<String, BigNum> megaprojectRemaining(
   for (final x in s.factions) {
     if (x.id == factionId) f = x;
   }
-  final level = f?.megaprojectLevels[m.id] ?? 0;
+  final level = megaprojectDeliveryLevel(s, factionId, m);
   final got = f?.megaprojectProgress[m.id] ?? const <String, BigNum>{};
   return {
     for (final MapEntry(key: id, value: need) in megaprojectCost(
@@ -150,6 +162,21 @@ Map<String, BigNum> megaprojectRemaining(
           when left > const BigNum.zero())
         id: left,
   };
+}
+
+/// Whether [factionId]'s next stage of [m] is paid for in full while one
+/// is still under way, so it starts when that one completes.
+bool megaprojectStageQueued(
+  GameState s,
+  Content c,
+  String factionId,
+  MegaprojectDef m,
+) {
+  if (megaprojectStageOf(s, factionId, m.id) == null) return false;
+  final f = s.factions.where((x) => x.id == factionId).firstOrNull;
+  return f != null &&
+      f.megaprojectProgress.containsKey(m.id) &&
+      megaprojectRemaining(s, c, factionId, m).isEmpty;
 }
 
 /// Seconds the stage that takes [m] from [level] to `level + 1` takes:

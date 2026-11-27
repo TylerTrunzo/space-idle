@@ -546,7 +546,8 @@ final class ExpandSlotsCommand extends Command {
 /// [DeliverToMegaprojectCommand] of whatever `megaprojectRemaining` lists.
 /// With nothing delivered yet that is the whole level's cost
 /// (`megaprojectCost`). The faction's level rises by one when the stage
-/// completes, after `megaprojectStageSeconds`.
+/// completes, after `megaprojectStageSeconds`. While a stage is under way
+/// it pays for the one after, which then starts as that one completes.
 final class StartMegaprojectStageCommand extends Command {
   /// Creates a start-megaproject-stage command.
   const StartMegaprojectStageCommand(
@@ -581,7 +582,13 @@ final class StartMegaprojectStageCommand extends Command {
 /// completes the last cost entry starts the stage's timer at once, as a
 /// megaproject-stage project, and clears the progress. A megaproject with a
 /// host body type takes deliveries only while the faction owns a body of
-/// that type. While a stage is under way, no deliveries are taken.
+/// that type; the goods may come from any owned body.
+///
+/// While a stage is under way, deliveries go to the stage after it
+/// (`megaprojectRemaining`); once that is paid for in full it waits, and
+/// starts as the stage under way completes (`stepProjects`), its timer
+/// running from then. Until it starts, further deliveries fail with
+/// [CommandError.projectInProgress].
 final class DeliverToMegaprojectCommand extends Command {
   /// Creates a deliver-to-megaproject command.
   const DeliverToMegaprojectCommand(
@@ -715,10 +722,12 @@ enum CommandError {
   routeInvalid,
 
   /// The same timed work is already under way: a claim of the body, an
-  /// extra build slot on it, or a stage of the faction's megaproject.
+  /// extra build slot on it, a survey of it, or, for a megaproject, a
+  /// stage with the next one already paid for.
   projectInProgress,
 
-  /// The body is not of the type the megaproject must be built on.
+  /// The megaproject is built at a body type (`MegaprojectDef.hostBodyType`)
+  /// of which the faction owns no body.
   wrongBodyType,
 
   /// The faction's contracts board has no contract with that id.

@@ -700,6 +700,8 @@ void main() {
         [for (final k in f.contracts) k.postedAt],
         [at + refill, at + refill * 2, at + refill * 3],
       );
+      expect(away.contractsPosted, [for (final k in f.contracts) k.id]);
+      expect(e.catchUpOffline(s, 3600).contractsPosted, isEmpty);
     });
 
     test('a refill queued behind others waits its turn', () {

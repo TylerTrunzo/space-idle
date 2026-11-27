@@ -742,12 +742,14 @@ final class MegaprojectDef {
   /// Display name.
   final String name;
 
-  /// Id of the [BodyTypeDef] a stage must be built on, or null for any
-  /// owned body.
+  /// Id of the [BodyTypeDef] it is built at, or null for none: the faction
+  /// must own a body of that type to deliver to a stage, though the goods
+  /// may come from any body it owns.
   final String? hostBodyType;
 
   /// Cost of the first stage, level 0: the key `credits` or a resource id,
-  /// to an amount above zero. Goods come from the host body's stock.
+  /// to an amount above zero. Goods come from the stock of any owned body
+  /// that delivers them.
   final Map<String, BigNum> baseCost;
 
   /// Cost multiplier per level already reached; at least 1. See
