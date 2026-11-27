@@ -34,11 +34,12 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 
 | Line | What it does |
 |---|---|
-| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, stop level and whether they are paused, and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
-| `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what selling one second's net output earns, not a stockpile being sold down), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
+| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, stop level, whether they are paused, cargo in flight (`inFlight`) and travel time, every auto-sell rule with what it keeps back (`"keeps 7.8K (keepAtLeast 30 + 7.77K local use)"`), the contracts board and its future refills (a refill already due but waiting for something to ask for is counted in `contractsDue`, not shown as "0s"), and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
+| `{"cmd":"catalog"}` | Every building type: its cost, crew slots, what it takes and makes a second at its base level with full crew (an extractor at richness 1), housing or storage it adds, and which of your bodies can take one now (`canBuildOn`: a free slot and, for an extractor, a deposit it mines, with the rate there) |
+| `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what auto-sell earns a second in steady play: goods made from a stock nothing refills, and stock above an auto-sell keep, do not count, and a short run of play confirms it; it matches what a few hours away earn), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
 | `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), the survey cost and time, the next extra build slot on each body you own, and each megaproject's next level (`cost`, plus `stillNeeded` once part of it is delivered). Anything you cannot start right now says why instead of a cost, such as `"busy: an extra slot arrives in 25m"` or `"busy: level 3 is paid for and starts when level 2 is done, in 1h"` |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
-| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h, more with Orbital Station levels) and shows the away summary: a one-line `headline` ("Away 4d 2h; 12h counted (cap); +1.2M credits"), the cap and whether you passed it (`capSeconds`, `capped`), credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks, those costing the most credits an hour first, each marked "ongoing since Xh" if it was already there when you left, the projects that completed with a line for each (`message`, such as "Brine claimed" or "Orbital Station reached level 3", and `level` for a megaproject stage; the headline names the level too), and the contracts posted while you were away (`contractsPosted`) |
+| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h, more with Orbital Station levels) and shows the away summary: a one-line `headline` ("Away 4d 2h; 12h counted (cap); +1.2M credits"), the cap and whether you passed it (`capSeconds`, `capped`), credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks, those costing the most credits an hour first, each marked `"ongoing": "for 3h 10m"` (how long it has held) if it was already there when you left, the projects that completed with a line for each (`message`, such as "Brine claimed" or "Orbital Station reached level 3", and `level` for a megaproject stage; the headline names the level too), and the contracts posted while you were away (`contractsPosted`) |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
 
 `advance` and `away` step the engine the same way (60 s ticks; every chain on a
@@ -52,9 +53,12 @@ crew than its base slots, such as "Circuit Fab on Kora is understaffed: 1 of
 2 crew"), `crewShortage` (habitats and base crew support fewer
 crew than you have assigned, so every crewed building slows down), or
 `storageFull` (a body's store of `resourceId` is at its cap and output is being
-wasted). Each bottleneck also has `firstSeenAt` (game time since when it has
-held without a break) and `lostCreditsPerHour` (what a full store or a starved
-building costs an hour at current prices; null for the other kinds).
+wasted), or `noSales` ("Nothing is being sold: turn on auto-sell or sell goods":
+you make goods that sell and have no auto-sell rule). Each bottleneck also has
+`firstSeenAt` (game time since when it has held without a break) and
+`lostCreditsPerHour` (what a full store or a starved building costs an hour at
+current prices, or for `noSales` what your net production would sell for; null
+for the other kinds).
 
 ### Game commands (act)
 
@@ -64,12 +68,12 @@ counts are plain integers.
 
 | Line | What it does |
 |---|---|
-| `{"cmd":"build","bodyId":"kora","defId":"mine","depositResourceId":"silicon"}` | Build; extractors name the deposit they mine. The new building takes free crew up to its base slots (add `"autoCrew":false` to leave it empty). The reply has the new `createdId` and says how much crew it took |
+| `{"cmd":"build","bodyId":"kora","defId":"mine","depositResourceId":"silicon"}` | Build; extractors name the deposit they mine. The new building takes free crew up to its base slots (add `"autoCrew":false` to leave it empty). The reply has the new `createdId`, says how much crew it took and gives its whole recipe a second (`"At full crew it uses 0.0333 Steel and 0.0133 Circuit a second and makes 0.00333 Cargo Ship a second"`, also as `inputsPerSec` and `outputsPerSec`) |
 | `{"cmd":"assignCrew","buildingId":"b4","crew":1}` | Set a building's crew (an absolute count) |
 | `{"cmd":"upgrade","buildingId":"b1","track":"speed"}` | Buy one level of `speed`, `efficiency` or `capacity` |
 | `{"cmd":"setAutoSell","bodyId":"kora","resourceId":"steel","keepAtLeast":"100"}` | Sell everything above 100 automatically; `null` removes the rule |
 | `{"cmd":"sell","bodyId":"kora","resourceId":"steel","amount":"50"}` | Sell once |
-| `{"cmd":"createRoute","fromBodyId":"kora","toBodyId":"brine","resourceId":"circuit","ratePerSecond":"0.2","cargoShips":1,"stopAtDestination":"500"}` | Ship goods between your bodies; the cargo ships come from the source body's stock. `stopAtDestination` is optional: the route pauses while Brine holds 500 (cargo in flight counts), so it never overfills |
+| `{"cmd":"createRoute","fromBodyId":"kora","toBodyId":"brine","resourceId":"circuit","ratePerSecond":"0.2","cargoShips":1,"stopAtDestination":"500"}` | Ship goods between your bodies; the cargo ships come from the source body's stock. `stopAtDestination` is optional: the stock Brine keeps. The route pauses while Brine holds 500 once what is on its way, less what Brine's buildings use during the trip, has landed: a long trip keeps enough in flight that Brine never runs dry, and Brine settles near 500. A level above Brine's storage cap is cut to the cap, and the reply says so |
 | `{"cmd":"updateRoute","routeId":"r1","ratePerSecond":"1","cargoShips":2,"stopAtDestination":"800"}` | Change a route's rate, ships or stop level (name any of them; the rest stay). `"removeStopAtDestination":true` takes the stop level off |
 | `{"cmd":"moveShips","fromBodyId":"kora","toBodyId":"brine","count":2}` | Send cargo ships to another of your bodies in the system; they land after the normal travel time |
 | `{"cmd":"removeRoute","routeId":"r1"}` | Close a route; its ships return to the source |
@@ -81,6 +85,10 @@ counts are plain integers.
 | `{"cmd":"startMegaprojectStage","megaprojectId":"orbital_station","bodyId":"kora"}` | Deliver everything the next level still needs from one body at once |
 | `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora","amount":"500"}` / `{"cmd":"discardContract","contractId":"c12"}` | Work the contracts board (`state.contracts`): deliveries add up and the reward is paid with the last unit; a discard costs nothing. The reply says when the next contract arrives (the soonest refill) |
 
+Deliveries to contracts and megaprojects move whole units (rounded down; less
+than 1 is refused), and what is still owed is always whole, so delivering the
+amount shown completes it.
+
 A successful command reply lists what it `spent` and `gained` (credits, and
 `body/resource` amounts). `build`, `claimBody`, `survey`, `expandSlots`,
 `demolish`, `createRoute`, `updateRoute`, `moveShips`, the megaproject and
@@ -88,8 +96,11 @@ the contract commands also say in a `message` what they did, with ids (a
 first claim's says it needed no kits). A command on a body whose claim is
 still under way fails with `stillClaiming` and the time left ("Brine is
 still being claimed (25m left)"). A `depositMissing` error lists the deposits the body has, an
-unknown building type lists the buildings the body can take, and a claim
-short of outpost kits says which building makes them and from what.
+unknown building type lists the buildings the body can take with each one's
+cost, a claim short of outpost kits says which building makes them and from
+what, an upgrade track the building lacks fails with `noSuchTrack`, and a crew
+request while crew is over-assigned says by how much. Moved ships can be used
+at the arrival time the reply gave.
 
 Things worth knowing:
 
@@ -103,8 +114,9 @@ Things worth knowing:
   makes).
 - Auto-sell never sells what the buildings on that body need for the next
   tick, or the next 10 seconds if the tick is shorter (route cargo lands in
-  lots about 10 s apart), so it is safe on an input with `keepAtLeast` 0. A
-  route out of a body takes its share before auto-sell sells the rest.
+  lots about 10 s apart), so it is safe on an input with `keepAtLeast` 0;
+  `state.autoSell` shows each rule's buffer. A route out of a body takes its
+  share before auto-sell sells the rest.
 - The market pays less as you sell more of one good, but never pays less in
   total for selling more. Raw goods bottom out very low; refined goods and
   components hold their price better, so refining and diversifying pays.

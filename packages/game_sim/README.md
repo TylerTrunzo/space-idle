@@ -48,14 +48,24 @@ level 3 … it starts when level 2 is done" while a stage runs), or fails with
 permanent bonus.
 
 A new building takes free crew up to its base crew slots (fewer if fewer are
-free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew"`);
-`"autoCrew":false` on `build` leaves it empty.
+free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew. At full
+crew it uses 0.0333 Steel and 0.0133 Circuit a second and makes 0.00333
+Cargo Ship a second"`, the recipe also as `inputsPerSec` and
+`outputsPerSec`); `"autoCrew":false` on `build` leaves it empty. Deliveries to
+contracts and megaprojects move whole units: amounts are rounded down, below
+1 is refused, and what is still owed is whole.
 
 Routes move one resource between two of the player's bodies in one system,
 using cargo ships from the source body's stock. `createRoute` takes an optional
-`"stopAtDestination":"500"`: the route pauses while the destination holds 500,
-counting its cargo still in flight, so it never overshoots, and resumes once the
-destination uses some up. `{"cmd":"updateRoute","routeId":"r4",
+`"stopAtDestination":"500"`, the stock the destination keeps: the route
+pauses while the destination would hold 500 once its cargo in flight, less
+what the destination's buildings use at full supply during the trip
+(`routeUseInTransit`), has landed, and resumes once the destination uses some
+up. So a long trip keeps enough in flight that the destination never runs dry
+and settles near its level, and 60 s steps move what 1 s steps do. A level
+above the destination's storage cap is cut to the cap; the reply ends "The
+stop level was cut to Brine's storage cap: stock above it is wasted". Moved
+ships and landed cargo can be used at the arrival time a reply gave. `{"cmd":"updateRoute","routeId":"r4",
 "ratePerSecond":"2","cargoShips":3,"stopAtDestination":"800"}` changes any of
 the three and keeps the rest (more ships are taken from the source body, fewer go
 back to it); `"removeStopAtDestination":true` takes the stop level off.
@@ -68,7 +78,8 @@ of the source's stock before auto-sell sells there, so a rule with `keepAtLeast`
 Some bodies are hidden until surveyed. A hidden body is not in `state` or
 `costs`, and every command but `survey` treats it as `unknownBody`. `state`
 counts them as `unsurveyedSignals` (`systemId`, `name`, `count`) in each system
-where the player owns a body, a survey under way included.
+where the player owns a body, leaving out any under survey; a survey project in
+`state` names its target "an unsurveyed body" and gives no `targetId`.
 `{"cmd":"survey","sourceBodyId":"kora"}` pays `costs.survey` (survey drones
 from the source body, plus credits) and starts a survey project of a few hours
 on the next signal in the source body's system (in content order, skipping one
@@ -77,7 +88,8 @@ the body shows up and can be claimed. With none left it fails with
 `alreadySurveyed`, and with every one already under survey with
 `projectInProgress`. A `bodyId` names the body instead (ids of hidden bodies
 are in `content/galaxy.json`, `"hidden": true`); an unknown id fails with
-`unknownBody`, a surveyed one with `alreadySurveyed`.
+`unknownBody`, one in another system with `routeInvalid` (checked first), a
+surveyed one with `alreadySurveyed`.
 
 The Veyra Exchange posts up to 3 contracts on the player's board. They never
 expire. `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
@@ -100,7 +112,7 @@ commands:
   passed it (`capped`), credits and stock gained, units wasted to
   storage caps, milestones reached and the top bottlenecks, those losing the
   most credits an hour first; one that was there before the absence says
-  `"ongoing": "ongoing since 12.0h"` (game hours); the projects that
+  how long it has held, `"ongoing": "for 3h 10m"`; the projects that
   completed (`projectsCompleted`: `kind`, `targetId`, `name`, `level` for a
   megaproject stage, and a `message` such as `"Orbital Station reached level
   3"`, which the headline also ends with), stages that started while away
@@ -111,12 +123,18 @@ commands:
   every megaproject (`megaprojects`: `id`, `name`, `level`), the contracts
   board (`contracts`: `id`, `issuer`, `resourceId`, `resource` name,
   `quantity`, `delivered`, `reward` in credits) and when its empty slots
-  refill (`contractRefills`: `at` and `timeLeft`), the unsurveyed signals of
+  refill (`contractRefills`: `at` and `timeLeft`; a refill already due, which
+  waits for something a contract can ask for, is counted in `contractsDue`
+  instead), the unsurveyed signals of
   each system the player has a body in (`unsurveyedSignals`), every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
-  player's routes (`stopAtDestination`, null for none, and `paused`, true
-  while the destination plus the route's cargo in flight hold at least that
-  much), its running projects soonest first (`kind`, `targetId`,
+  player's routes (`stopAtDestination`, null for none, `paused`, true while
+  the destination would hold that much once its cargo in flight, less what
+  it uses during the trip, lands, `inFlight` and `travelTime`), its
+  auto-sell rules (`autoSell`: `bodyId`, `resourceId`, `keepAtLeast`,
+  `localUse`, `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
+  7.77K local use)"`), its running projects soonest first (`kind`, `targetId`
+  but for a survey of a hidden body,
   `name`, `startedAt`, `finishAt`, `secondsLeft` and `timeLeft` such as
   `"1h 30m"`), and price and saturation of the goods the player holds
 - `{"cmd":"costs"}` upgrade costs of the player's buildings (a track that
@@ -131,8 +149,14 @@ commands:
   runs). What cannot be started now says why instead of a cost: `"busy: an
   extra slot arrives in 25m"`, `"busy: every unsurveyed signal is being
   surveyed"`, `"busy: every body left is being claimed"`, `"busy: level 3 is
-  paid for and starts when level 2 is done, in 1h"`, or `"nothing left to
-  survey"`
+  paid for and starts when level 2 is done, in 1h"`, `"busy: level 50, its
+  highest, is under way, done in 1h"`, or `"nothing left to survey"`
+- `{"cmd":"catalog"}` every building type in content order: `cost`,
+  `crewSlots`, `inputsPerSec` and `outputsPerSec` at its base level with full
+  crew (an extractor's for each resource it mines at richness 1), `housing`
+  or `storageBonus` when it adds some, and `canBuildOn`: the player's bodies
+  with a free build slot that can take one now, an extractor's with the
+  `deposits` it can mine there and their `outputPerSec`
 - `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}`
 
 `advance` and `away` tick the engine the same way, in 60 s steps; within a
@@ -142,7 +166,10 @@ caps the time at the offline limit and summarizes it.
 
 Replies are `{"ok":true,...}` or `{"ok":false,"error":"...","message":"..."}`.
 Error messages are plain sentences with display names: an unknown building
-type lists what the body can build (`"Mine (mine), Smelter (smelter), ..."`),
+type lists what the body can build with each one's cost (`"Mine (mine, 100
+credits), Smelter (smelter, 150 credits), ..."`), an upgrade track the
+building lacks is `noSuchTrack`, "Needs 1 more crew" says how many crew are
+assigned beyond what housing supports when that is why none is free,
 and a claim short of outpost kits says what makes them (`"An Outpost Kit
 Assembler makes 1 Outpost Kit from 6 Hull Plate, 12 Fuel and 6 Circuit"`).
 Numbers appear as `{"value":"2.41e6","display":"2.41M"}`.
@@ -159,10 +186,12 @@ Examples:
 `creditsPerSec`, and for each building its `runFraction` (input supply),
 `effectiveFraction` (run fraction × crew / base slots × crew efficiency) and
 actual `inputs` and `outputs`. The rates are steady-state rates: cargo on
-routes counts as arriving at the rate it is sent, and `creditsPerSec` is
-what auto-selling one second's net production earns, not a stockpile being
-sold down, so it matches what a stretch of `advance` earns while nothing
-changes. `state` also gives the player's crew totals (`base`, `supported`,
+routes counts as arriving at the rate it is sent. `creditsPerSec` is what
+auto-sell earns a second in steady play, the lower of two estimates: every
+building held to the inputs it can get without drawing stock down, and what
+a short run of play (5 min, then 10 min measured) earns. Goods made from a
+stock nothing refills, and stock above an auto-sell keep, do not count, so
+it matches what hours away earn (within 1% from day-7 bot states). `state` also gives the player's crew totals (`base`, `supported`,
 `assigned`, `free`, which is never below 0, and `overAssigned`, the crew
 assigned beyond what housing supports).
 
@@ -171,12 +200,14 @@ Bottlenecks in `report` carry a `kind`: `input` (short of `resourceId`),
 base slots; the building's `limitReason` is `understaffed` too),
 `crewShortage` (habitats and base crew support fewer crew than
 are assigned, so every crewed building slows; `bodyId` and `buildingId` are
-null), or `storageFull` (`resourceId` is at the body's storage cap and
-output is being wasted; `buildingId` is null). Each also gives
-`firstSeenAt`, the game time since which it has held without a break, and
-`lostCreditsPerHour`, an estimate at current prices of what it costs (the
-wasted units for `storageFull`, the output not made for `input`; null for
-the other kinds).
+null), `storageFull` (`resourceId` is at the body's storage cap and
+output is being wasted; `buildingId` is null), or `noSales` (goods with a
+price are made and no owned body has an auto-sell rule: "Nothing is being
+sold: turn on auto-sell or sell goods"; `bodyId` and `buildingId` are null).
+Each also gives `firstSeenAt`, the game time since which it has held without
+a break, and `lostCreditsPerHour`, an estimate at current prices of what it
+costs (the wasted units for `storageFull`, the output not made for `input`,
+the net production left unsold for `noSales`; null for the other kinds).
 
 ## Bot runs
 
