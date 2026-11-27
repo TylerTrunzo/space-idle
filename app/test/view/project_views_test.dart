@@ -140,6 +140,25 @@ void main() {
       },
     );
 
+    test('the bonus describes the stage the cost lines are for', () {
+      final def = content.megaprojects['orbital_station']!;
+      var station = _mp(c, 'orbital_station');
+      expect(station.nextBonus, megaprojectBonusText(def, 1));
+      expect(station.runningBonus, isNull);
+
+      _enrich(c);
+      c.run(const StartMegaprojectStageCommand(_p, 'orbital_station', 'kora'));
+      station = _mp(c, 'orbital_station');
+      // Lines are for level 2's stage now; level 1's is under way.
+      expect(station.deliveryLevel, 1);
+      expect(
+        station.lines.map((l) => l.needed),
+        megaprojectCost(content, def, 1).values.map(formatNumber),
+      );
+      expect(station.nextBonus, megaprojectBonusText(def, 2));
+      expect(station.runningBonus, megaprojectBonusText(def, 1));
+    });
+
     test('a running stage and the queued one after it', () {
       _enrich(c);
       c.run(const StartMegaprojectStageCommand(_p, 'orbital_station', 'kora'));

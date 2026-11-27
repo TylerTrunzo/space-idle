@@ -136,6 +136,7 @@ final class MegaprojectView {
     required this.level,
     required this.deliveryLevel,
     required this.nextBonus,
+    required this.runningBonus,
     required this.lines,
     required this.running,
     required this.queued,
@@ -158,8 +159,13 @@ final class MegaprojectView {
   /// while a stage is under way.
   final int deliveryLevel;
 
-  /// What its bonuses add up to one level on, such as "storage +20%".
+  /// What its bonuses add up to once the stage [lines] are for completes
+  /// (level [deliveryLevel] + 1), such as "storage +20%".
   final String nextBonus;
+
+  /// What they add up to once the stage under way completes (level
+  /// [level] + 1); null when none is under way.
+  final String? runningBonus;
 
   /// The cost lines of the stage deliveries pay for.
   final List<MegaprojectLine> lines;
@@ -206,7 +212,8 @@ MegaprojectView _megaproject(GameController c, MegaprojectDef m) {
     name: m.name,
     level: level,
     deliveryLevel: at,
-    nextBonus: megaprojectBonusText(m, level + 1),
+    nextBonus: megaprojectBonusText(m, at + 1),
+    runningBonus: stage == null ? null : megaprojectBonusText(m, level + 1),
     lines: [
       for (final MapEntry(key: id, value: need) in megaprojectCost(
         content,
