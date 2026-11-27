@@ -59,8 +59,10 @@ typedef SteadyIncome = ({
 /// the next hours ([settledSaturation]), not today's: right after a large
 /// upgrade spree the market has not caught up with the new volume yet.
 /// And both readings count the megaproject stages under way that finish
-/// within the short run as done, their bonuses (market depth among them)
-/// paid for.
+/// within the short run as done: the measured run with every bonus they
+/// bring, the steady reading with their market depth alone (in the prices
+/// its sales settle at; its flows are worked out before, at today's
+/// production bonuses).
 ///
 /// Credits auto-paid to megaprojects come out of those sales, so they are
 /// shown as a share of [SteadyIncome.creditsPerSec]: when the steady
@@ -132,8 +134,9 @@ SteadyIncome _saleRevenuePerSec(
   GameState market,
 ) {
   // The megaproject stages under way that finish within the run count as
-  // done: their bonuses (market depth among them) are paid for, and the
-  // prices settle at them.
+  // done: the measured run plays with all their bonuses, and the steady
+  // sales settle at their market depth (the steady flows, already worked
+  // out, keep today's production bonuses).
   for (final copy in [s, market]) {
     _completeStagesWithin(copy, c, factionId, _warmUpSeconds + _measureSeconds);
   }
@@ -142,8 +145,11 @@ SteadyIncome _saleRevenuePerSec(
   // with the new volume, and today's prices would overstate what the next
   // hours earn. The measured run starts from today's market; it plays
   // only a few minutes, so its prices are today's or a little below.
+  // Today's saturation from [s], whose market no sample step has moved, so
+  // what a sample second sold (or an open contract held back) plays no
+  // part.
   for (final MapEntry(key: id, value: sat) in settledSaturation(
-    market,
+    s,
     c,
     factionId,
     steady,

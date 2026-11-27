@@ -348,12 +348,7 @@ void main() {
         ),
       );
       f.contractRefillAt.addAll([1e9, 1e9]);
-      // The same, but for the second of sales the sample step makes,
-      // which the contract holds back: it moves the market a hair.
-      expect(
-        buildFlowReport(s, c, 'player').creditsPerSec.toDouble(),
-        closeTo(without.toDouble(), without.toDouble() * 1e-6),
-      );
+      expect(buildFlowReport(s, c, 'player').creditsPerSec, without);
       expect(f.contracts, hasLength(1), reason: 'the state is untouched');
     });
 
