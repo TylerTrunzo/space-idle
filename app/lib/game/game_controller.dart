@@ -122,7 +122,7 @@ class GameController extends ChangeNotifier {
   double _sinceAutosave = 0;
   FlowReport? _flow;
   String? _lastError;
-  OfflineSummary? _pendingAwaySummary;
+  final List<OfflineSummary> _pendingAwaySummaries = [];
   Timer? _timer;
   bool _disposed = false;
 
@@ -139,9 +139,16 @@ class GameController extends ChangeNotifier {
   /// Message of the last failed [run], cleared by the next success.
   String? get lastError => _lastError;
 
-  /// What happened while the player was away at least [awaySummarySeconds];
-  /// the UI shows it, then calls [clearAwaySummary].
-  OfflineSummary? get pendingAwaySummary => _pendingAwaySummary;
+  /// Every catch-up of at least [awaySummarySeconds] not yet seen, oldest
+  /// first. Several build up when the app is backgrounded again before the
+  /// away dialog is dismissed; the dialog shows them combined, then calls
+  /// [clearAwaySummary]. Unmodifiable.
+  List<OfflineSummary> get pendingAwaySummaries =>
+      List.unmodifiable(_pendingAwaySummaries);
+
+  /// The most recent of [pendingAwaySummaries], or null when there is none.
+  OfflineSummary? get pendingAwaySummary =>
+      _pendingAwaySummaries.isEmpty ? null : _pendingAwaySummaries.last;
 
   /// Loads the save slot and catches it up, or starts a new game.
   ///
@@ -271,9 +278,9 @@ class GameController extends ChangeNotifier {
     _timer = null;
   }
 
-  /// Drops the away summary once the player has seen it.
+  /// Drops every pending away summary once the player has seen them.
   void clearAwaySummary() {
-    _pendingAwaySummary = null;
+    _pendingAwaySummaries.clear();
     _notify();
   }
 
@@ -304,7 +311,7 @@ class GameController extends ChangeNotifier {
 
   /// Simulates the wall time since [_syncedAt], capped by the engine; a
   /// clock set back simulates nothing. Returns the summary when the gap
-  /// earns one, which also becomes [pendingAwaySummary].
+  /// earns one, which is also added to [pendingAwaySummaries].
   OfflineSummary? _catchUp() {
     final now = _clock.now();
     final away = _secondsBetween(_syncedAt, now);
@@ -313,7 +320,8 @@ class GameController extends ChangeNotifier {
     final summary = engine.catchUpOffline(_state, away);
     _flow = null;
     if (away < awaySummarySeconds) return null;
-    return _pendingAwaySummary = summary;
+    _pendingAwaySummaries.add(summary);
+    return summary;
   }
 
   void _replace(GameState state) {
@@ -322,7 +330,7 @@ class GameController extends ChangeNotifier {
     _syncedAt = _clock.now();
     _canWrite = true;
     _lastError = null;
-    _pendingAwaySummary = null;
+    _pendingAwaySummaries.clear();
     _sinceAutosave = 0;
     _notify();
   }

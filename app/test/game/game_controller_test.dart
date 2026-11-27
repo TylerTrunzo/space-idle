@@ -212,7 +212,35 @@ void main() {
 
       c.clearAwaySummary();
       expect(c.pendingAwaySummary, isNull);
+      expect(c.pendingAwaySummaries, isEmpty);
       expect(notified, 1);
+    });
+
+    test('two catch-ups before a clear keep both summaries in order', () async {
+      await _playAndClose(store, clock);
+      clock.advance(const Duration(hours: 2));
+      final c = _controller(store, clock);
+      await c.start();
+      clock.advance(const Duration(minutes: 10));
+      await c.resume();
+
+      expect(c.pendingAwaySummaries.map((s) => s.secondsSimulated), [
+        7200,
+        600,
+      ]);
+      expect(c.pendingAwaySummary, same(c.pendingAwaySummaries.last));
+
+      c.clearAwaySummary();
+      expect(c.pendingAwaySummaries, isEmpty);
+    });
+
+    test('pendingAwaySummaries cannot be changed from outside', () async {
+      await _playAndClose(store, clock);
+      clock.advance(const Duration(hours: 2));
+      final c = _controller(store, clock);
+      await c.start();
+
+      expect(() => c.pendingAwaySummaries.clear(), throwsUnsupportedError);
     });
 
     test(
