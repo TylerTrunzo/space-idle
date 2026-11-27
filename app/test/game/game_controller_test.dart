@@ -27,6 +27,16 @@ GameController _controller(MemorySaveStore store, FakeClock clock) =>
 String _storedSave(MemorySaveStore store) =>
     (jsonDecode(store.text!) as Map<String, Object?>)['save']! as String;
 
+/// Epoch milliseconds past `DateTime`'s ±8.64e15 range (the review probe).
+const _outOfRangeMs = 9999999999999999;
+
+/// A stored envelope around a valid new game, with [savedAt] as given
+/// (left out when null).
+String _envelope({required Object? savedAt}) => jsonEncode({
+  'savedAt': ?savedAt,
+  'save': SaveCodec.encode(GameEngine(content).newGame(1)),
+});
+
 /// Starts a new game in [store] at [clock]'s time and lets it run [played]
 /// seconds before it is saved, as a session that then closes.
 Future<double> _playAndClose(
@@ -163,6 +173,21 @@ void main() {
         expect(store.writes, 0);
       },
     );
+
+    test('a savedAt outside the DateTime range fails to load', () async {
+      store.text = _envelope(savedAt: _outOfRangeMs);
+
+      final result = await _controller(store, clock).start();
+      expect(
+        result,
+        isA<LoadFailed>().having(
+          (r) => r.reason,
+          'reason',
+          contains('savedAt'),
+        ),
+      );
+      expect(store.writes, 0);
+    });
   });
 
   group('commands', () {
@@ -326,6 +351,23 @@ void main() {
       expect(await c.importSave(exported), isA<Imported>());
       expect(SaveCodec.encode(c.state), exported);
       expect(_storedSave(store), exported);
+    });
+
+    test('importing an envelope whose savedAt is out of range fails', () async {
+      final c = _controller(store, clock);
+      await c.start();
+      final before = SaveCodec.encode(c.state);
+
+      final result = await c.importSave(_envelope(savedAt: _outOfRangeMs));
+      expect(
+        result,
+        isA<ImportFailed>().having(
+          (r) => r.reason,
+          'reason',
+          contains('savedAt'),
+        ),
+      );
+      expect(SaveCodec.encode(c.state), before);
     });
 
     test('import also takes a whole stored envelope', () async {

@@ -335,6 +335,11 @@ class GameController extends ChangeNotifier {
       saveText = json['save'] as String;
       final ms = json['savedAt'];
       if (ms is int) {
+        // DateTime throws outside ±8.64e15 ms; a foreign or hand-edited
+        // envelope must fail to load, not crash.
+        if (ms.abs() > _maxEpochMs) {
+          return const _Bad('the save\'s savedAt time is out of range');
+        }
         savedAt = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
       } else if (envelopeOnly) {
         return const _Bad('the save has no savedAt time');
@@ -347,6 +352,9 @@ class GameController extends ChangeNotifier {
       SaveError(:final kind, :final message) => _Bad('${kind.name}: $message'),
     };
   }
+
+  /// Largest epoch milliseconds a [DateTime] can hold, either side of 1970.
+  static const int _maxEpochMs = 8640000000000000;
 
   static double _secondsBetween(DateTime from, DateTime to) =>
       to.difference(from).inMicroseconds / Duration.microsecondsPerSecond;
