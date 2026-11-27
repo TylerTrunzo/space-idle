@@ -20,7 +20,11 @@ import 'production.dart';
 /// ([FlowReport.steadyProducedPerSec], gross of what they use, never fed
 /// from a stock nothing refills) is at least the template's `minQuantity /
 /// quantitySeconds` a second, so neither a trickle nor a stockpile gets
-/// an order. The template is drawn
+/// an order. Of those, only the goods worth an order are drawn from
+/// ([_worthChoosing]): the largest order the faction could be asked for
+/// sells for at least `quantityIncomeSecondsMin` of its income at today's
+/// price; when none is, the three whose largest order is worth most. The
+/// template is drawn
 /// first among those with such a resource, then the resource, each in
 /// proportion to its weight: 1 for most goods, the template's
 /// [ContractTemplateDef.lifeSupportWeight] for what a habitat consumes, so
@@ -84,7 +88,7 @@ void stepContracts(GameState s, Content c, double now) {
         break;
       }
       final made = report ??= buildFlowReport(s, c, f.id);
-      final choices = [
+      final steady = [
         for (final (t, ids) in candidates)
           if ([
                 for (final id in ids)
@@ -93,7 +97,9 @@ void stepContracts(GameState s, Content c, double now) {
               case final ok when ok.isNotEmpty)
             (t, ok),
       ];
-      if (choices.isEmpty) break;
+      if (steady.isEmpty) break;
+      final income = incomeBasis(s, c, made);
+      final choices = _worthChoosing(s, c, f, steady, made, income);
       final lifeSupport = _lifeSupport(c);
       double weight(ContractTemplateDef t, String id) =>
           lifeSupport.contains(id) ? t.lifeSupportWeight : 1;
@@ -108,7 +114,6 @@ void stepContracts(GameState s, Content c, double now) {
       final resourceId = _draw(rng, resources, (id) => weight(template, id));
       final roll = rng.nextDouble();
       s.rngState = rng.state;
-      final income = incomeBasis(s, c, made);
       final quantity = _quantity(
         s,
         c,
@@ -336,6 +341,33 @@ BigNum _quantity(
   BigNum rate,
   double roll,
 ) {
+  final ceiling = _ceiling(s, c, f, t, rate);
+  final seconds =
+      t.quantityIncomeSecondsMin +
+      (t.quantityIncomeSecondsMax - t.quantityIncomeSecondsMin) * roll;
+  // Every market's price is above zero: its floor is.
+  var q = twoSignificantFigures(
+    income.mulDouble(seconds) / price(s, c, resourceId),
+  );
+  if (ceiling != null) q = q.min(ceiling);
+  // Deliveries move whole units, so the quantity is whole, at least 1.
+  return q.max(t.minQuantity).floor().max(BigNum.from(1));
+}
+
+/// The most units of a resource a contract from [t] may ask [f] for,
+/// given its steady gross production [rate] of it: the least of the
+/// storage caps of [f]'s bodies summed,
+/// [ContractTemplateDef.quantityProductionSecondsMax] of [rate], and
+/// [ContractTemplateDef.maxQuantity] × (1 + [f]'s levels of the
+/// megaprojects that [MegaprojectDef.scalesContracts], summed), rounded
+/// down to two significant figures; null when none applies.
+BigNum? _ceiling(
+  GameState s,
+  Content c,
+  FactionState f,
+  ContractTemplateDef t,
+  BigNum rate,
+) {
   BigNum? stores;
   for (final b in s.bodies) {
     if (b.ownerId != f.id) continue;
@@ -353,16 +385,72 @@ BigNum _quantity(
   ]) {
     if (v != null) ceiling = ceiling == null ? v : ceiling.min(v);
   }
-  final seconds =
-      t.quantityIncomeSecondsMin +
-      (t.quantityIncomeSecondsMax - t.quantityIncomeSecondsMin) * roll;
-  // Every market's price is above zero: its floor is.
-  var q = twoSignificantFigures(
-    income.mulDouble(seconds) / price(s, c, resourceId),
-  );
-  if (ceiling != null) q = q.min(_twoFiguresDown(ceiling));
-  // Deliveries move whole units, so the quantity is whole, at least 1.
-  return q.max(t.minQuantity).floor().max(BigNum.from(1));
+  return ceiling == null || ceiling.isZero ? ceiling : _twoFiguresDown(ceiling);
+}
+
+/// Goods a fallback draws from when no good is worth an order: the most
+/// valuable few.
+const int _fallbackGoods = 3;
+
+/// Of [steady], each template with the resources [f] makes fast enough
+/// for it, those worth an order: whose achievable quantity ([_ceiling] at
+/// their steady gross rate in [report]) sells, at the current price, for
+/// at least the template's `quantityIncomeSecondsMin` of [income]. So a
+/// contract can always ask for goods worth 10 minutes of play; a cheap
+/// bulk good late in the game, of which the faction can store only
+/// seconds of income, is not asked for.
+///
+/// When none is, the [_fallbackGoods] template and resource pairs whose
+/// achievable quantity sells for most (in template then resource order on
+/// a tie), so a board still fills; their orders pay the reward floor.
+/// Templates and resources keep their order.
+List<(ContractTemplateDef, List<String>)> _worthChoosing(
+  GameState s,
+  Content c,
+  FactionState f,
+  List<(ContractTemplateDef, List<String>)> steady,
+  FlowReport report,
+  BigNum income,
+) {
+  // Each pair with what its achievable quantity sells for (null: no
+  // ceiling, so any quantity can be asked) and whether that is enough.
+  final valued = <({ContractTemplateDef t, String id, BigNum? worth, bool ok})>[
+    for (final (t, ids) in steady)
+      for (final id in ids)
+        if (_ceiling(s, c, f, t, report.steadyProducedPerSec(id))
+            case final most)
+          if (most == null ? null : most * price(s, c, id) case final worth)
+            (
+              t: t,
+              id: id,
+              worth: worth,
+              ok:
+                  worth == null ||
+                  worth >= income.mulDouble(t.quantityIncomeSecondsMin),
+            ),
+  ];
+  var pick = [
+    for (final v in valued)
+      if (v.ok) v,
+  ];
+  if (pick.isEmpty) {
+    // Every pair has a ceiling here, so a worth.
+    final ranked = [...valued.indexed]
+      ..sort((x, y) {
+        final byWorth = y.$2.worth!.compareTo(x.$2.worth!);
+        return byWorth != 0 ? byWorth : x.$1.compareTo(y.$1);
+      });
+    pick = [for (final (_, v) in ranked.take(_fallbackGoods)) v];
+  }
+  return [
+    for (final (t, ids) in steady)
+      if ([
+            for (final id in ids)
+              if (pick.any((v) => identical(v.t, t) && v.id == id)) id,
+          ]
+          case final kept when kept.isNotEmpty)
+        (t, kept),
+  ];
 }
 
 /// [v], positive, rounded down to two significant figures.

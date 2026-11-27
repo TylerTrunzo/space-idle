@@ -149,8 +149,10 @@ Things worth knowing:
   your income at today's price (the larger of what auto-sell earns and what
   your steady production is worth, so selling by hand counts too), but never
   more than a day of what you make of it, nor more than your bodies can store
-  together: fill one from several bodies.
-  They pay 3× that sale value, at least 5 minutes and at most 1 hour of your
+  together: fill one from several bodies. Only goods a full order of which is
+  worth 10 minutes of income are asked for; when none is, the three worth
+  most are.
+  They pay 3× that sale value, at least 30 minutes and at most 1 hour of your
   income, never less than 1.5× the sale value nor 500 credits. So an order is
   a choice: sell the goods, or give them up for about twice their worth. The
   very first one has no cap and pays at least 7,500, enough for your first

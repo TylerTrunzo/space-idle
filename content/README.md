@@ -28,10 +28,16 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   ships, made a few dozen at a time, would otherwise be asked for in thousands), nor more than your
   bodies can store together (an order can be filled from several; auto-sell holds its goods back on
   the fullest body with a rule for the good first, each up to its cap), nor less than `minQuantity`.
+  A good is asked for only if its largest possible order (the least of what your bodies store
+  together and a day of what you make of it) sells today for at least `quantityIncomeSecondsMin` of
+  your income, so an order is never for a good worth only seconds of play. When no good you make is
+  worth that, as late in the game when markets are deep in saturation and storage holds minutes of
+  income at most, the order is for one of the three goods whose largest order is worth most, and
+  pays at least the reward floor.
   Templates may still set a `maxQuantity` (× 1 + your levels of the megaprojects with
   `scalesContracts`); the shipped ones do not, as it cut late orders to a sliver of income. It pays
   `rewardMultiplier` (3) times what its goods sell for at today's price, at least
-  `rewardIncomeSeconds` (5 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it
+  `rewardIncomeSeconds` (30 min; what a fallback order pays) and at most `rewardCapIncomeSeconds` (1 h) of your income when it
   is posted, both at least `minRewardCredits` (500), and never less than `minRewardMultiplier`
   (1.5) times the sale value, cap or not, in whole credits. Income here is the larger of what
   auto-sell earns a second and the value of what your buildings steadily make beyond what they use,

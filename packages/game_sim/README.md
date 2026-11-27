@@ -122,8 +122,9 @@ supply (a good made at a trickle, or only from a stockpile nothing refills,
 gets none), as much as sells for 10 to 30 minutes of income at today's price
 (the larger of auto-sale income and the value of steady net production), at
 most a day of what they make of it and what the player's bodies store
-together, and pays 3× that sale value,
-between 5 minutes and 1 hour of income and never below 1.5× the sale value,
+together (only goods whose largest such order is worth 10 minutes of income
+are asked for, or, when none is, the three worth most), and pays 3× that sale value,
+between 30 minutes and 1 hour of income and never below 1.5× the sale value,
 at least 500 credits, in whole credits; the first contract ever posted has
 no cap and pays at least 7,500 (see `content/README.md`). `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
 "amount":"500"}` delivers up to `amount` of the contract's resource from the

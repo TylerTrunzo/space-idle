@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
@@ -102,7 +103,7 @@ void main() {
         // 1 to 3 h of production, longer for higher tiers.
         expect(t.quantitySeconds, inInclusiveRange(3600, 10800));
         // 10 to 30 minutes of income at sale value, paid 3 times over, at
-        // least 1.5 times; at least 5 minutes and at most an hour of it.
+        // least 1.5 times; at least 30 minutes and at most an hour of it.
         expect(t.quantityIncomeSecondsMin, 600);
         expect(t.quantityIncomeSecondsMax, 1800);
         // But never a day's worth of what is made: habitat modules.
@@ -110,7 +111,7 @@ void main() {
         expect(t.maxQuantity, isNull, reason: 'storage caps the size');
         expect(t.rewardMultiplier, 3);
         expect(t.minRewardMultiplier, 1.5);
-        expect(t.rewardIncomeSeconds, 300);
+        expect(t.rewardIncomeSeconds, 1800);
         expect(t.rewardCapIncomeSeconds, 3600);
         expect(t.lifeSupportWeight, 0.25);
         expect(t.minRewardCredits > const BigNum.zero(), isTrue);
@@ -912,7 +913,163 @@ void main() {
       expect(player(s).contractsPosted, 2);
       final second = player(s).contracts.last;
       expect(second.rewardCredits <= income.mulDouble(3600 * 1.01), isTrue);
-      expect(second.rewardCredits >= income.mulDouble(300 * 0.99), isTrue);
+      expect(second.rewardCredits >= income.mulDouble(1800 * 0.99), isTrue);
+    });
+
+    group('goods are chosen by what an order of them can be worth', () {
+      /// What [id]'s largest order sells for now: the least of the stores
+      /// of [s]'s player summed and a day of its steady gross rate, at the
+      /// current price.
+      BigNum achievable(GameState s, Content c, FlowReport r, String id) {
+        var stores = const BigNum.zero();
+        for (final b in s.bodies) {
+          if (b.ownerId == 'player') stores = stores + storageCap(s, c, b);
+        }
+        return stores.min(r.steadyProducedPerSec(id).mulDouble(86400)) *
+            price(s, c, id);
+      }
+
+      /// The contracts [s] posts from [rngs] RNG states, one refill due
+      /// in each.
+      List<ContractState> posts(GameState s, Content c, {int rngs = 20}) {
+        final out = <ContractState>[];
+        for (var i = 0; i < rngs; i++) {
+          final x = s.copy()
+            ..rngState = Rng.fromState(s.rngState).state ^ (i * 7919 + 1);
+          player(x).contractRefillAt
+            ..clear()
+            ..add(x.time);
+          stepContracts(x, c, x.time);
+          out.addAll(player(x).contracts);
+        }
+        return out;
+      }
+
+      test('only goods whose largest order is worth 10 minutes of income are '
+          'asked for', () {
+        final s = e.newGame(1);
+        final kora = s.body('kora');
+        for (var i = 0; i < 5; i++) {
+          kora.buildings.add(
+            BuildingState(id: s.newId('b'), defId: 'depot', crew: 0)
+              ..levels[UpgradeTrack.capacity] = 20,
+          );
+        }
+        final f = player(s)..contractsPosted = 1;
+        f.contracts.clear();
+        f.lifetimeProduced
+          ..clear()
+          ..['copper_ore'] = n(1)
+          ..['steel'] = n(1);
+        // Copper ore at its floor: a whole store of it is worth nothing.
+        s.market.saturation['copper_ore'] = marketFloorOf(
+          content,
+          'copper_ore',
+        );
+        final r = buildFlowReport(s, content, 'player');
+        final income = incomeBasis(s, content, r);
+        final tenMinutes = income.mulDouble(600);
+        expect(achievable(s, content, r, 'copper_ore') < tenMinutes, isTrue);
+        expect(achievable(s, content, r, 'steel') >= tenMinutes, isTrue);
+        final posted = posts(s, content);
+        expect(posted, hasLength(20));
+        expect({for (final k in posted) k.resourceId}, {'steel'});
+        for (final k in posted) {
+          final sale = k.quantity * price(s, content, 'steel');
+          expect(sale >= tenMinutes.mulDouble(0.95), isTrue);
+        }
+      });
+
+      test('when no good is worth that, the three worth most are asked for, '
+          'at the 30-minute reward floor at least', () {
+        // No order can be worth 10^7 s of income.
+        final c = steelOnly(
+          (t) => t
+            ..['quantityIncomeSecondsMin'] = 1e7
+            ..['quantityIncomeSecondsMax'] = 1e7,
+        );
+        final s = GameEngine(c).newGame(1);
+        s
+            .body('kora')
+            .buildings
+            .add(BuildingState(id: s.newId('b'), defId: 'wire_mill', crew: 1));
+        final f = player(s)..contractsPosted = 1;
+        f.contracts.clear();
+        f.lifetimeProduced
+          ..clear()
+          ..addAll({
+            for (final id in ['iron_ore', 'copper_ore', 'steel', 'copper_wire'])
+              id: n(1),
+          });
+        final r = buildFlowReport(s, c, 'player');
+        final income = incomeBasis(s, c, r);
+        // Kora's 1,000 of each at its base price: steel, wire, copper ore,
+        // then iron ore.
+        final worth = {
+          for (final id in ['iron_ore', 'copper_ore', 'steel', 'copper_wire'])
+            id: achievable(s, c, r, id),
+        };
+        expect(worth['iron_ore']! < worth['copper_ore']!, isTrue);
+        final posted = posts(s, c, rngs: 30);
+        expect(
+          {for (final k in posted) k.resourceId},
+          {'steel', 'copper_wire', 'copper_ore'},
+        );
+        for (final k in posted) {
+          expect(k.rewardCredits >= income.mulDouble(1800).floor(), isTrue);
+        }
+      });
+
+      test("on the round-4 optimizer's day-11 state, no store of any good "
+          'is worth 10 minutes, so the orders are for the three goods worth '
+          'most, between 1.5 times their sale value and the cap', () {
+        // Its seed-1 save at 264 h: 106K of storage and 1.74M a second of
+        // income, with copper ore at 0.01.
+        final s =
+            (SaveCodec.decode(
+                      File(
+                        'test/fixtures/optimizer_r4_d11.json',
+                      ).readAsStringSync(),
+                      content,
+                    )
+                    as SaveOk)
+                .state;
+        final f = player(s);
+        expect(f.contractsPosted, greaterThan(0));
+        f.contracts.clear();
+        final r = buildFlowReport(s, content, 'player');
+        final income = incomeBasis(s, content, r);
+        // Every good an order may ask for: priced, made, and made fast
+        // enough for its template.
+        final worth = <String, BigNum>{
+          for (final t in content.contractTemplates.values)
+            for (final res in content.resources.values)
+              if (res.tier >= t.minTier &&
+                  res.tier <= t.maxTier &&
+                  !res.basePrice.isZero &&
+                  (f.lifetimeProduced[res.id] ?? const BigNum.zero()) >
+                      const BigNum.zero() &&
+                  r.steadyProducedPerSec(res.id) >=
+                      t.minQuantity.mulDouble(1 / t.quantitySeconds))
+                res.id: achievable(s, content, r, res.id),
+        };
+        // The stated reason for the fallback: nothing reaches 10 minutes.
+        final best = worth.values.reduce((a, b) => a.max(b));
+        expect(best < income.mulDouble(600), isTrue, reason: '$best');
+        final posted = posts(s, content, rngs: 6);
+        expect(posted, isNotEmpty);
+        final top =
+            (worth.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
+                .take(3)
+                .map((e) => e.key)
+                .toSet();
+        for (final k in posted) {
+          expect(top, contains(k.resourceId));
+          final sale = k.quantity * price(s, content, k.resourceId);
+          expect(k.rewardCredits >= sale.mulDouble(1.5).floor(), isTrue);
+          expect(k.rewardCredits <= income.mulDouble(3600), isTrue);
+        }
+      });
     });
 
     test('the round-4 optimizer shape: a cheap bulk good is asked for in a '
@@ -956,8 +1113,8 @@ void main() {
         );
         expect(k.rewardCredits >= sale.mulDouble(1.5).floor(), isTrue);
         expect(k.rewardCredits <= income.mulDouble(3600), isTrue);
-        // Well above the 5-minute floor: the order is worth its goods.
-        expect(k.rewardCredits > income.mulDouble(300 * 1.5), isTrue);
+        // At least the 30-minute floor: three times 10 or more minutes.
+        expect(k.rewardCredits >= income.mulDouble(1800), isTrue);
       }
     });
 
