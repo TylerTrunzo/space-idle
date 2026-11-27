@@ -110,10 +110,10 @@ AutoDeliveries stepMegaprojectAuto(
 /// or queued), in whole credits, the odd ones to the first in content
 /// order; a share a megaproject cannot use, owing less, goes on to the
 /// others in another round. So every credit-fed megaproject progresses,
-/// whatever its place in content order, and credits never go below the
-/// reserve. Each payment is a [DeliverToMegaprojectCommand]: a stage paid
-/// in full starts (or waits), and the next one, owing credits again, joins
-/// the later rounds.
+/// whatever its place in content order, and credits never end below the
+/// reserve (float residue of the payments included). Each payment is a
+/// [DeliverToMegaprojectCommand]: a stage paid in full starts (or waits),
+/// and the next one, owing credits again, joins the later rounds.
 ///
 /// The engine runs it after the market, so a step pays in what was earned
 /// up to the minute, whatever its length. Payments are made as at the
@@ -289,6 +289,12 @@ void _payCredits(
         }
       }
       if (!moved) break;
+    }
+    // Whole credits taken from a [BigNum] mantissa can leave a hair (a few
+    // parts in 1e12) under the reserve; that residue was never there to
+    // pay, so the reserve is what is left.
+    if (f.credits < f.autoPayReserve && got.values.any((g) => g.isNotEmpty)) {
+      f.credits = f.autoPayReserve;
     }
     for (final m in fed) {
       if (got[m.id]!.isNotEmpty) (out[f.id] ??= {})[m.id] = got[m.id]!;

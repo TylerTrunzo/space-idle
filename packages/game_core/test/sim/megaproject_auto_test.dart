@@ -648,6 +648,31 @@ void main() {
         expect(stepMegaprojectCredits(s, content, 60), isEmpty);
       });
 
+      test('credits never end below the reserve, float residue '
+          'included', () {
+        // BigNum keeps a mantissa, so 200,001 less 200,000 paid can leave a
+        // hair under a reserve of 1.
+        const owed = [1, 7, 500, 1e5, 1e6];
+        for (final a in owed) {
+          for (final b in owed) {
+            for (final reserve in [0, 1, 1000, 123457]) {
+              for (final spare in [0, 1, 2, 3, 99, 5000, 2e5, 9e6]) {
+                final s = both({'orbital_station': a, 'mass_driver': b});
+                final f = s.faction('player')
+                  ..autoPayReserve = n(reserve)
+                  ..credits = n(reserve + spare);
+                stepMegaprojectCredits(s, content, 60);
+                expect(
+                  f.credits >= n(reserve),
+                  isTrue,
+                  reason: '$a, $b, $reserve + $spare: ${f.credits} left',
+                );
+              }
+            }
+          }
+        }
+      });
+
       test('1 s and 60 s steps pay both alike, never below the reserve', () {
         GameState run(double step) {
           final s = both({'orbital_station': 4e6, 'mass_driver': 4e6});
