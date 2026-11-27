@@ -3,8 +3,8 @@ import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/theme.dart';
-import 'package:space_idle/ui/map/star_map_painter.dart';
 import 'package:space_idle/ui/map/map_transform.dart';
+import 'package:space_idle/ui/map/star_map_painter.dart';
 import 'package:space_idle/ui/map/star_map_scene.dart';
 
 /// The home screen: the player's home system, drawn from the game state.
@@ -180,12 +180,13 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
             minScale: _minScale,
             maxScale: _maxScale,
             // The viewer never zooms out past the point where the margin-
-            // inflated child fills the viewport, so 0.5x needs at least half
-            // a viewport each side. A whole one leaves slack, and being
-            // finite it keeps the map from being panned out of reach.
+            // inflated child fills the viewport. Half a viewport each side
+            // doubles the boundary, so that floor is exactly minScale, 0.5x;
+            // being finite, it also keeps the map from being panned out of
+            // reach.
             boundaryMargin: EdgeInsets.symmetric(
-              horizontal: size.width,
-              vertical: size.height,
+              horizontal: size.width / 2,
+              vertical: size.height / 2,
             ),
             child: SizedBox.fromSize(
               size: size,

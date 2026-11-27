@@ -8,9 +8,9 @@ import 'package:space_idle/game/content_source.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/game/save_store.dart';
 import 'package:space_idle/theme.dart';
+import 'package:space_idle/ui/map/map_transform.dart';
 import 'package:space_idle/ui/map/star_map.dart';
 import 'package:space_idle/ui/map/star_map_painter.dart';
-import 'package:space_idle/ui/map/map_transform.dart';
 import 'package:space_idle/ui/map/star_map_scene.dart';
 
 import 'map/map_fixtures.dart';
