@@ -15,6 +15,7 @@ import '../sim/survey.dart';
 import '../state/game_state.dart';
 import '../state/save_codec.dart';
 import 'command.dart';
+import 'outcome.dart';
 
 /// Key of the credits entry in a cost map; every other key is a resource id.
 const _credits = 'credits';
@@ -398,7 +399,16 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
     crew: crew,
   );
   body.buildings.add(b);
-  return CommandOk(createdId: b.id);
+  return CommandOk(
+    createdId: b.id,
+    outcome: Built(
+      bodyId: body.id,
+      buildingId: b.id,
+      defId: def.id,
+      crew: crew,
+      spent: def.buildCost,
+    ),
+  );
 }
 
 CommandResult _demolish(
@@ -413,9 +423,17 @@ CommandResult _demolish(
   final (body, b) = found!;
 
   final paid = c.buildings[b.defId]!.buildCost[_credits];
-  if (paid != null) f.credits = f.credits + paid.mulDouble(0.5);
+  final refund = paid?.mulDouble(0.5);
+  if (refund != null) f.credits = f.credits + refund;
   body.buildings.remove(b);
-  return const CommandOk();
+  return CommandOk(
+    outcome: Demolished(
+      bodyId: body.id,
+      buildingId: b.id,
+      defId: b.defId,
+      gained: {_credits: ?refund},
+    ),
+  );
 }
 
 CommandResult _assignCrew(
@@ -447,8 +465,15 @@ CommandResult _assignCrew(
     );
   }
 
+  final previous = b.crew;
   b.crew = cmd.crew;
-  return const CommandOk();
+  return CommandOk(
+    outcome: CrewAssigned(
+      buildingId: b.id,
+      previousCrew: previous,
+      crew: b.crew,
+    ),
+  );
 }
 
 CommandResult _upgrade(
@@ -488,7 +513,15 @@ CommandResult _upgrade(
 
   _pay(f, body, cost);
   b.levels[cmd.track] = b.levels[cmd.track]! + 1;
-  return const CommandOk();
+  return CommandOk(
+    outcome: Upgraded(
+      bodyId: body.id,
+      buildingId: b.id,
+      track: cmd.track,
+      level: b.levels[cmd.track]!,
+      spent: cost,
+    ),
+  );
 }
 
 /// The failure if [from] and [to], bodies in sight of [f], are not a pair
@@ -570,7 +603,10 @@ CommandResult _createRoute(
     stopAtDestination: cmd.stopAtDestination,
   );
   s.routes.add(r);
-  return CommandOk(createdId: r.id);
+  return CommandOk(
+    createdId: r.id,
+    outcome: RouteCreated(bodyId: from.id, routeId: r.id, spent: ships),
+  );
 }
 
 /// [f]'s route [id], or the failure if there is none or another faction
@@ -649,7 +685,14 @@ CommandResult _updateRoute(
   if (rate != null) r.ratePerSecond = rate;
   if (stop != null) r.stopAtDestination = stop;
   if (cmd.removeStopAtDestination) r.stopAtDestination = null;
-  return const CommandOk();
+  return CommandOk(
+    outcome: RouteUpdated(
+      bodyId: from.id,
+      routeId: r.id,
+      spent: {if (extra > 0) shipId: BigNum.from(extra)},
+      gained: {if (extra < 0) shipId: BigNum.from(-extra)},
+    ),
+  );
 }
 
 CommandResult _moveShips(
@@ -673,6 +716,7 @@ CommandResult _moveShips(
 
   _pay(f, from, ships);
   final id = s.newId('m');
+  final arriveAt = s.time + travelSeconds(s, c, from, to);
   s.shipments.add(
     Shipment(
       routeId: id,
@@ -682,10 +726,20 @@ CommandResult _moveShips(
       resourceId: c.rules.cargoShipResource,
       amount: BigNum.from(cmd.count),
       departAt: s.time,
-      arriveAt: s.time + travelSeconds(s, c, from, to),
+      arriveAt: arriveAt,
     ),
   );
-  return CommandOk(createdId: id);
+  return CommandOk(
+    createdId: id,
+    outcome: ShipsSent(
+      bodyId: from.id,
+      shipmentId: id,
+      toBodyId: to.id,
+      count: cmd.count,
+      arriveAt: arriveAt,
+      spent: ships,
+    ),
+  );
 }
 
 CommandResult _removeRoute(
@@ -702,7 +756,13 @@ CommandResult _removeRoute(
   from.stock[ships] =
       (from.stock[ships] ?? const BigNum.zero()) + BigNum.from(r.cargoShips);
   s.routes.remove(r);
-  return const CommandOk();
+  return CommandOk(
+    outcome: RouteRemoved(
+      bodyId: from.id,
+      routeId: r.id,
+      gained: {ships: BigNum.from(r.cargoShips)},
+    ),
+  );
 }
 
 CommandResult _sell(GameState s, Content c, FactionState f, SellCommand cmd) {
@@ -723,8 +783,15 @@ CommandResult _sell(GameState s, Content c, FactionState f, SellCommand cmd) {
     );
   }
 
-  sell(s, c, f.id, body.id, cmd.resourceId, cmd.amount);
-  return const CommandOk();
+  final sale = sell(s, c, f.id, body.id, cmd.resourceId, cmd.amount);
+  return CommandOk(
+    outcome: Sold(
+      bodyId: body.id,
+      resourceId: cmd.resourceId,
+      amount: sale.sold,
+      revenue: sale.revenue,
+    ),
+  );
 }
 
 CommandResult _setAutoSell(
@@ -763,7 +830,13 @@ CommandResult _setAutoSell(
       ),
     );
   }
-  return const CommandOk();
+  return CommandOk(
+    outcome: AutoSellSet(
+      bodyId: body.id,
+      resourceId: cmd.resourceId,
+      keepAtLeast: keep,
+    ),
+  );
 }
 
 CommandResult _claim(
@@ -811,7 +884,7 @@ CommandResult _claim(
   final seconds = claimSeconds(s, c, f.id);
   _pay(f, source, cost);
   final p = startProject(s, f.id, ProjectKind.claim, target.id, seconds);
-  return CommandOk(createdId: p.id);
+  return _started(source, p, cost, noKitsNeeded: !cost.containsKey(kit));
 }
 
 /// The next body to survey in [source]'s system: the first in content
@@ -896,8 +969,27 @@ CommandResult _survey(
     hidden.id,
     surveySeconds(c),
   );
-  return CommandOk(createdId: p.id);
+  return _started(source, p, cost);
 }
+
+/// The result of starting project [p], paid [cost] from [payer].
+CommandOk _started(
+  BodyState payer,
+  ProjectState p,
+  Map<String, BigNum> cost, {
+  bool noKitsNeeded = false,
+}) => CommandOk(
+  createdId: p.id,
+  outcome: ProjectStarted(
+    bodyId: payer.id,
+    projectId: p.id,
+    kind: p.kind,
+    targetId: p.targetId,
+    finishAt: p.finishAt,
+    noKitsNeeded: noKitsNeeded,
+    spent: cost,
+  ),
+);
 
 CommandResult _expandSlots(
   GameState s,
@@ -935,7 +1027,7 @@ CommandResult _expandSlots(
     body.id,
     c.rules.expandSlotsSeconds,
   );
-  return CommandOk(createdId: p.id);
+  return _started(body, p, cost);
 }
 
 CommandResult _startMegaprojectStage(
@@ -958,7 +1050,7 @@ CommandResult _startMegaprojectStage(
     def,
     megaprojectDeliveryLevel(s, f.id, def),
   );
-  return _paidInFull(s, c, f, def);
+  return _delivered(s, c, f, def, body, owed);
 }
 
 CommandResult _deliverToMegaproject(
@@ -1028,24 +1120,51 @@ CommandResult _deliverToMegaproject(
     // full delivery lands on the cost exactly, float residue aside.
     got[id] = take[id] == owed[id] ? cost[id]! : total.min(cost[id]!);
   }
-  if (megaprojectRemaining(s, c, f.id, def).isNotEmpty) {
-    return const CommandOk();
-  }
-  return _paidInFull(s, c, f, def);
+  return _delivered(s, c, f, def, body, take);
 }
 
-/// The result once [f] has paid for its next stage of [def] in full: the
-/// stage starts now, or, while one is under way, waits in
-/// `megaprojectProgress` and starts when that one completes
-/// (`stepProjects`).
-CommandOk _paidInFull(
+/// The result of [f] handing [delivered] from [body] to [def]'s stage
+/// being paid for. Once that is paid in full, the stage starts now, or,
+/// while one is under way, waits in `megaprojectProgress` and starts when
+/// that one completes (`stepProjects`).
+CommandOk _delivered(
   GameState s,
   Content c,
   FactionState f,
   MegaprojectDef def,
+  BodyState body,
+  Map<String, BigNum> delivered,
 ) {
-  if (megaprojectStageOf(s, f.id, def.id) != null) return const CommandOk();
-  return CommandOk(createdId: _startStage(s, f, def).id);
+  final level = megaprojectDeliveryLevel(s, f.id, def) + 1;
+  final remaining = megaprojectRemaining(s, c, f.id, def);
+  final running = megaprojectStageOf(s, f.id, def.id);
+  if (remaining.isNotEmpty || running != null) {
+    return CommandOk(
+      outcome: MegaprojectDelivered(
+        bodyId: body.id,
+        megaprojectId: def.id,
+        level: level,
+        delivered: delivered,
+        remaining: remaining,
+        queued: remaining.isEmpty,
+        finishAt: remaining.isEmpty ? running!.finishAt : null,
+      ),
+    );
+  }
+  final p = _startStage(s, f, def);
+  return CommandOk(
+    createdId: p.id,
+    outcome: MegaprojectDelivered(
+      bodyId: body.id,
+      megaprojectId: def.id,
+      level: level,
+      delivered: delivered,
+      remaining: remaining,
+      stageStarted: true,
+      projectId: p.id,
+      finishAt: p.finishAt,
+    ),
+  );
 }
 
 /// Why a stage command on megaproject [megaprojectId] from body [bodyId]
@@ -1156,7 +1275,8 @@ CommandResult _deliverContract(
   final amount = cmd.amount.min(held).min(k.remaining);
   body.take(k.resourceId, amount);
   k.delivered = k.delivered + amount;
-  if (k.delivered >= k.quantity) {
+  final done = k.delivered >= k.quantity;
+  if (done) {
     k.delivered = k.quantity;
     f.credits = f.credits + k.rewardCredits;
     f.lifetimeCredits = f.lifetimeCredits + k.rewardCredits;
@@ -1164,7 +1284,18 @@ CommandResult _deliverContract(
     f.contracts.remove(k);
     freeContractSlot(f, c, s.time);
   }
-  return const CommandOk();
+  return CommandOk(
+    outcome: ContractProgress(
+      bodyId: body.id,
+      contractId: k.id,
+      resourceId: k.resourceId,
+      delivered: amount,
+      totalDelivered: k.delivered,
+      quantity: k.quantity,
+      rewardPaid: done ? k.rewardCredits : null,
+      nextContractAt: done ? f.contractRefillAt.firstOrNull : null,
+    ),
+  );
 }
 
 CommandResult _discardContract(
@@ -1178,7 +1309,14 @@ CommandResult _discardContract(
 
   f.contracts.remove(k);
   freeContractSlot(f, c, s.time);
-  return const CommandOk();
+  return CommandOk(
+    outcome: ContractDiscarded(
+      contractId: k.id,
+      resourceId: k.resourceId,
+      quantity: k.quantity,
+      nextContractAt: f.contractRefillAt.firstOrNull,
+    ),
+  );
 }
 
 /// Time left on project [p], such as `25m`.

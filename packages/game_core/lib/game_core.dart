@@ -3,6 +3,7 @@ library;
 
 export 'src/commands/apply.dart';
 export 'src/commands/command.dart';
+export 'src/commands/outcome.dart';
 export 'src/content/content.dart';
 export 'src/num/big_num.dart';
 export 'src/num/change.dart';

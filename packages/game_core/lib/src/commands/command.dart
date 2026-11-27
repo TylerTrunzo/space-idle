@@ -1,5 +1,6 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
+import 'outcome.dart';
 
 String _str(Map<String, Object?> j, String k) {
   final v = j[k];
@@ -742,12 +743,16 @@ sealed class CommandResult {
 /// The command was applied.
 final class CommandOk extends CommandResult {
   /// Creates a success result.
-  const CommandOk({this.createdId});
+  const CommandOk({this.createdId, this.outcome});
 
   /// Id of the building, route, ship move or project the command created,
   /// if any. A ship move's id is the `Shipment.routeId` of the ships in
   /// flight.
   final String? createdId;
+
+  /// What the command did, as data; `applyCommand` always gives one, of
+  /// the kind its command has (see [CommandOutcome]).
+  final CommandOutcome? outcome;
 }
 
 /// The command was rejected and the state left unchanged.
