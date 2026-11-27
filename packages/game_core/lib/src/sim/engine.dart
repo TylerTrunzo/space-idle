@@ -200,6 +200,9 @@ final class GameEngine {
     final stageLevels = <ProjectState, int>{};
 
     final wasted = <String, BigNum>{};
+    // Body id to resource id to what the cap cut there, and when it first
+    // did, for the summary's bottlenecks.
+    final wastedAt = <String, Map<String, (BigNum, double)>>{};
     final autoDelivered = <String, Map<String, BigNum>>{};
     _advance(s, simulated, _offlineStepSeconds, (fed) {
       addDeliveries(autoDelivered, fed[player.id] ?? const {});
@@ -207,6 +210,10 @@ final class GameEngine {
         if (b.ownerId != player.id) continue;
         for (final MapEntry(key: id, value: v) in b.wastedThisStep.entries) {
           wasted[id] = (wasted[id] ?? const BigNum.zero()) + v;
+          if (v <= const BigNum.zero()) continue;
+          final on = wastedAt[b.id] ??= {};
+          final (was, since) = on[id] ?? (const BigNum.zero(), s.time);
+          on[id] = (was + v, since);
         }
       }
       final now = runningProjects(s, player.id);
@@ -238,11 +245,19 @@ final class GameEngine {
       wastedValue = wastedValue + v * price(s, content, id);
     }
     final report = buildFlowReport(s, content, player.id);
+    final before = {
+      for (final b in reportBefore.groupedBottlenecks) b.groupKey: b,
+    };
+    final necks = _withAwayWaste(
+      s,
+      report.groupedBottlenecks,
+      wastedAt,
+      simulated,
+      before,
+    );
     final top = [
-      for (final (_, b) in _ranked(report.bottlenecks).take(topBottleneckCount))
-        b,
+      for (final (_, b) in _ranked(necks).take(topBottleneckCount)) b,
     ];
-    final before = {for (final b in reportBefore.bottlenecks) b.key: b};
     return OfflineSummary(
       awayFrom: awayFrom,
       secondsSimulated: simulated,
@@ -263,7 +278,7 @@ final class GameEngine {
       ongoing: [
         for (final b in top)
           if (b.firstSeenAt < awayFrom)
-            _ongoing(b, before[b.key]?.lostCreditsPerHour),
+            _ongoing(b, before[b.groupKey]?.lostCreditsPerHour),
       ],
       projectsCompleted: [
         for (final p in completed)
@@ -287,6 +302,67 @@ final class GameEngine {
         for (final m in content.megaprojects.keys) m: ?autoDelivered[m],
       },
     );
+  }
+
+  /// [necks], a report's [FlowReport.groupedBottlenecks] on return, with
+  /// what the cap cut while away ([wastedAt], body id to resource id to
+  /// the units and when they were first cut) as storage-full entries: the
+  /// units' value at [s]'s prices spread over the [seconds] simulated, an
+  /// hour. Where the report shows that store full too, its entry takes
+  /// the larger loss; otherwise a new entry follows the report's, bodies
+  /// and resources in the order first cut, first seen when the cut began
+  /// unless [before] (the report as the absence began, by
+  /// [Bottleneck.groupKey]) had it already.
+  ///
+  /// So waste that came and went while away, which a report on return may
+  /// not see, competes for the top bottlenecks with the rest.
+  List<Bottleneck> _withAwayWaste(
+    GameState s,
+    List<Bottleneck> necks,
+    Map<String, Map<String, (BigNum, double)>> wastedAt,
+    double seconds,
+    Map<String, Bottleneck> before,
+  ) {
+    if (wastedAt.isEmpty || seconds <= 0) return necks;
+    final out = [...necks];
+    final at = {for (final (i, b) in out.indexed) b.groupKey: i};
+    for (final MapEntry(key: bodyId, value: cut) in wastedAt.entries) {
+      for (final MapEntry(key: id, value: (units, since)) in cut.entries) {
+        final lost = (units * price(s, content, id)).mulDouble(3600 / seconds);
+        if (lost <= const BigNum.zero()) continue;
+        final key = bottleneckKey(
+          BottleneckKind.storageFull.name,
+          bodyId,
+          null,
+          id,
+        );
+        if (at[key] case final i?) {
+          final shown = out[i].lostCreditsPerHour;
+          if (shown == null || lost > shown) {
+            out[i] = out[i].copyWith(lostCreditsPerHour: lost);
+          }
+          continue;
+        }
+        final body = s.body(bodyId).name;
+        at[key] = out.length;
+        out.add(
+          Bottleneck(
+            kind: BottleneckKind.storageFull,
+            bodyId: bodyId,
+            buildingId: null,
+            resourceId: id,
+            runFraction: 0,
+            message:
+                '$body storage filled up with '
+                '${content.resources[id]!.name} while you were away: '
+                'output was wasted',
+            firstSeenAt: before[key]?.firstSeenAt ?? since,
+            lostCreditsPerHour: lost,
+          ),
+        );
+      }
+    }
+    return out;
   }
 
   /// [necks] with their report index, ranked for [OfflineSummary]: a crew
@@ -319,7 +395,7 @@ final class GameEngine {
   static OngoingBottleneck _ongoing(Bottleneck b, BigNum? lostBefore) {
     final lost = b.lostCreditsPerHour;
     return OngoingBottleneck(
-      key: b.key,
+      key: b.groupKey,
       since: b.firstSeenAt,
       lostBefore: lostBefore,
       worseThanBefore:

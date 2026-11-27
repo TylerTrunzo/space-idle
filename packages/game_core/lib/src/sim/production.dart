@@ -95,11 +95,17 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// [crewEfficiencyOf] fixes the crew efficiency of the factions it names
 /// for this step instead, with no settling: the report uses it to see what
 /// full staffing would make.
+///
+/// [runCaps], building id to a run fraction and the input that holds it
+/// there, holds the buildings it names to at most that fraction, short of
+/// that input where it binds: the report uses it to run a short sample
+/// step at the share of their inputs a full step would give them.
 void stepProduction(
   GameState s,
   Content c,
   double dt, {
   Map<String, double> crewEfficiencyOf = const {},
+  Map<String, RunCap> runCaps = const {},
 }) {
   for (final f in s.factions) {
     final bodies = [
@@ -107,9 +113,21 @@ void stepProduction(
         if (b.ownerId == f.id) b,
     ];
     if (bodies.isEmpty) continue;
-    _stepFaction(s, c, f, bodies, dt, fixed: crewEfficiencyOf[f.id]);
+    _stepFaction(
+      s,
+      c,
+      f,
+      bodies,
+      dt,
+      fixed: crewEfficiencyOf[f.id],
+      caps: runCaps,
+    );
   }
 }
+
+/// The most of full rate a building may run at in one [stepProduction]
+/// step, and the input (a resource id) that holds it there.
+typedef RunCap = ({double fraction, String inputId});
 
 /// Crew efficiencies [_stepFaction] tells apart.
 const double _crewTolerance = 1e-9;
@@ -137,6 +155,7 @@ void _stepFaction(
   List<BodyState> bodies,
   double dt, {
   double? fixed,
+  Map<String, RunCap> caps = const {},
 }) {
   final bonuses = bonusesFor(s, c, f.id);
   var assigned = 0;
@@ -146,7 +165,7 @@ void _stepFaction(
     }
   }
   List<_BodyRun> run(double crewEff) => [
-    for (final body in bodies) _runBody(c, body, dt, crewEff, bonuses),
+    for (final body in bodies) _runBody(c, body, dt, crewEff, bonuses, caps),
   ];
   // How far the share of crew a run's habitats house is off [crewEff].
   double gap(List<_BodyRun> runs, double crewEff) {
@@ -426,9 +445,13 @@ BigNum netProductionRate(
 
 /// One building's planned run this step.
 final class _Run {
-  _Run(this.b, this.flow);
+  _Run(this.b, this.flow, this.cap);
 
   final BuildingState b;
+
+  /// The most it may run at this step, if anything holds it to less than
+  /// its inputs allow.
+  final RunCap? cap;
 
   /// Inputs and outputs at full input supply.
   final BuildingFlow flow;
@@ -484,6 +507,7 @@ _BodyRun _runBody(
   double dt,
   double crewEff,
   EmpireBonuses bonuses,
+  Map<String, RunCap> caps,
 ) {
   final depth = recipeDepth(c);
   final habitats = <_Run>[];
@@ -494,6 +518,7 @@ _BodyRun _runBody(
     final run = _Run(
       b,
       fullRateFlow(c, body, b, dt, crewEff, bonuses: bonuses),
+      caps[b.id],
     );
     (def.kind == BuildingKind.habitat ? habitats : others).add(run);
   }
@@ -703,6 +728,10 @@ void _runGroup(
     }
     final b = run.b;
     final def = c.buildings[b.defId]!;
+    if (run.cap case final cap? when cap.fraction < f) {
+      f = cap.fraction;
+      limit = cap.inputId;
+    }
     if (b.crew == 0 && !runsWithoutCrew(def)) {
       run
         ..fraction = 0

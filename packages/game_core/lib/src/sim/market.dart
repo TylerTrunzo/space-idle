@@ -427,6 +427,27 @@ final class DeliveryKeeps {
     _zero,
   ).keeps;
 
+  /// Whole units of [resourceId] on [body] that auto-delivery leaves there
+  /// only for its auto-sell rule's `keepAtLeast`: what [spare] would give
+  /// with that at zero, less what it gives; zero when the keep holds back
+  /// nothing.
+  BigNum heldByKeepAtLeast(BodyState body, String resourceId) {
+    if ((_keepAtLeast[body.id]?[resourceId] ?? _zero) <= _zero) return _zero;
+    final held = body.stock[resourceId] ?? _zero;
+    final without = _keep(
+      _cache.cap(body),
+      _zero,
+      _cache.use(body, _horizon),
+      resourceId,
+      _hold(body, resourceId),
+      _zero,
+    ).keeps;
+    final free = (held - without).floor();
+    if (free < _one) return _zero;
+    final kept = free - spare(body, resourceId).max(_zero);
+    return kept < _one ? _zero : kept;
+  }
+
   BigNum _hold(BodyState body, String id) =>
       _holds[body.id]?[id] ?? _rest[body.id]?[id] ?? _zero;
 }

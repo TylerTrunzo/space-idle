@@ -237,6 +237,126 @@ void main() {
     expect(fresh.ongoingFor(dry), isNull);
   });
 
+  group('bottlenecks by cause', () {
+    /// A new game with [presses] plate presses on Kora, all short of the
+    /// 0.2 steel a second the smelter makes; the plates and copper ore
+    /// auto-sell.
+    GameState starved(int presses) {
+      final s = e.newGame(1);
+      s.faction('player').baseCrew = 40;
+      for (final id in ['hull_plate', 'copper_ore']) {
+        e.apply(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+      }
+      for (var i = 0; i < presses; i++) {
+        s
+            .body('kora')
+            .buildings
+            .add(
+              BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+            );
+      }
+      e.advance(s, 60);
+      return s;
+    }
+
+    bool shortOfSteel(Bottleneck b) =>
+        b.kind == BottleneckKind.input && b.resourceId == 'steel';
+
+    test('17 presses short of steel are one entry, their losses summed', () {
+      // Round-4 casual bug 2: 17 identical dock rows filled the top 3.
+      final s = starved(17);
+      final r = buildFlowReport(s, c, 'player');
+      final each = r.bottlenecks.where(shortOfSteel).toList();
+      expect(each, hasLength(17));
+      final group = r.groupedBottlenecks.where(shortOfSteel).single;
+      expect(group.count, 17);
+      expect(group.buildingId, isNull);
+      expect(group.buildingIds, [for (final b in each) b.buildingId]);
+      final total = each.fold(
+        0.0,
+        (t, b) => t + b.lostCreditsPerHour!.toDouble(),
+      );
+      expect(
+        group.lostCreditsPerHour!.toDouble(),
+        closeTo(total, total * 1e-9),
+      );
+      final sum = e.catchUpOffline(s, 3600);
+      expect(sum.topBottlenecks.where(shortOfSteel).single.count, 17);
+      final keys = [for (final b in sum.topBottlenecks) b.groupKey];
+      expect(keys.toSet(), hasLength(keys.length));
+    });
+
+    test('the groups rank the same after 1 s steps as after 60 s ones', () {
+      final a = starved(17);
+      final b = a.copy();
+      e.advance(a, 600);
+      e.advance(b, 600, maxStep: 1);
+      List<String> ranked(GameState s) => [
+        for (final n in buildFlowReport(s, c, 'player').groupedBottlenecks)
+          n.groupKey,
+      ];
+      expect(ranked(b), ranked(a));
+    });
+
+    test('a full store that costs more outranks the group', () {
+      final s = starved(17);
+      final kora = s.body('kora');
+      // The copper mine, sped up and with no rule selling its ore, wastes
+      // it at a full store.
+      kora.buildings
+              .firstWhere((b) => b.id == 'b2')
+              .levels[UpgradeTrack.speed] =
+          60;
+      kora.stock['copper_ore'] = storageCap(s, c, kora);
+      s
+          .faction('player')
+          .autoSell
+          .removeWhere((r) => r.resourceId == 'copper_ore');
+      final sum = e.catchUpOffline(s, 3600);
+      final kinds = [for (final b in sum.topBottlenecks) b.kind];
+      expect(kinds.indexOf(BottleneckKind.storageFull), 0);
+      expect(kinds, contains(BottleneckKind.input));
+      final full = sum.topBottlenecks.first;
+      final group = sum.topBottlenecks.firstWhere(shortOfSteel);
+      expect(full.lostCreditsPerHour! > group.lostCreditsPerHour!, isTrue);
+    });
+
+    test('what the cap cut while away is in the top 3 when it is the most, '
+        'though no store is full on return', () {
+      // Round-4 casual bug 2: 1.29B wasted while away, never shown.
+      final s = starved(17);
+      // A lot of 100K steel lands on Kora 10 minutes in: what passes the
+      // cap is cut, and the presses have used the rest by the return.
+      s.shipments.add(
+        Shipment(
+          routeId: 'move',
+          fromBodyId: 'brine',
+          toBodyId: 'kora',
+          ownerId: 'player',
+          resourceId: 'steel',
+          amount: n(1e5),
+          departAt: s.time,
+          arriveAt: s.time + 600,
+        ),
+      );
+      final sum = e.catchUpOffline(s, 3600);
+      expect(
+        buildFlowReport(s, c, 'player').bottlenecks.map((b) => b.kind),
+        isNot(contains(BottleneckKind.storageFull)),
+      );
+      final top = sum.topBottlenecks.first;
+      expect(top.kind, BottleneckKind.storageFull);
+      expect((top.bodyId, top.resourceId), ('kora', 'steel'));
+      // The value cut, an hour, over the hour away.
+      expect(
+        top.lostCreditsPerHour!.toDouble(),
+        closeTo(sum.wastedValue.toDouble(), sum.wastedValue.toDouble() * 0.01),
+      );
+      expect(top.firstSeenAt, greaterThan(sum.awayFrom));
+      expect(sum.ongoingFor(top), isNull);
+    });
+  });
+
   group('next goal', () {
     test('is the milestone the current rates reach soonest', () {
       final s = e.newGame(1);
@@ -262,16 +382,68 @@ void main() {
         if (id != 'credits') s.body('kora').stock[id] = v;
       }
       e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+      // A credit paid by hand: the player is funding it.
+      f.megaprojectProgress['orbital_station'] = {'credits': n(1)};
       final sum = e.catchUpOffline(s, 60);
       final goal = sum.nextGoal! as MegaprojectGoal;
       expect(goal.megaprojectId, 'orbital_station');
       expect(goal.level, 1);
       expect(goal.remaining, megaprojectRemaining(s, c, 'player', station));
-      final short = cost['credits']! - f.credits;
+      final short = cost['credits']! - n(1) - f.credits;
       expect(
         goal.etaSeconds,
         closeTo((short / sum.creditsPerSecAfter).toDouble(), 1e-6),
       );
+    });
+
+    test('skips a megaproject owed credits that nothing pays', () {
+      // Round-4 optimizer: with credit auto-pay turned off and nothing
+      // paid by hand, the next goal still named the station.
+      final s = e.newGame(1);
+      final f = s.faction('player');
+      final station = c.megaprojects['orbital_station']!;
+      for (final MapEntry(key: id, value: v) in megaprojectCost(
+        c,
+        station,
+        0,
+      ).entries) {
+        if (id != 'credits') s.body('kora').stock[id] = v;
+      }
+      e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+      // Goods go in on their own; credits do not.
+      e.apply(
+        s,
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          true,
+          false,
+        ),
+      );
+      e.advance(s, 120);
+      expect(megaprojectRemaining(s, c, 'player', station).keys, ['credits']);
+      NextGoal? goal() =>
+          nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'));
+      // The milestone the rates reach soonest instead.
+      expect(goal(), isA<MilestoneGoal>());
+      // Nor once every milestone is reached.
+      f.reachedMilestones.addAll([for (final m in c.milestones) m.id]);
+      expect(goal(), isNull);
+      // With a credit paid by hand it is the player's goal again.
+      f.megaprojectProgress[station.id]!['credits'] = n(1);
+      expect((goal()! as MegaprojectGoal).megaprojectId, station.id);
+      f.megaprojectProgress[station.id]!.remove('credits');
+      // And with credit auto-pay on.
+      e.apply(
+        s,
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          true,
+          true,
+        ),
+      );
+      expect((goal()! as MegaprojectGoal).megaprojectId, station.id);
     });
 
     test('is never a megaproject still locked', () {
@@ -288,6 +460,10 @@ void main() {
         if (id != 'credits') s.body('kora').stock[id] = v;
       }
       e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+      // Both take credits on their own, so both are the player's goals.
+      for (final m in ['orbital_station', 'mass_driver']) {
+        e.apply(s, SetMegaprojectAutoCommand('player', m, false, true));
+      }
       e.advance(s, 60);
       final report = buildFlowReport(s, c, 'player');
       expect(
@@ -512,9 +688,9 @@ void main() {
 
     test('has no ETA for a stage whose goods are not being made', () {
       final s = e.newGame(1);
-      s.faction('player').reachedMilestones.addAll([
-        for (final m in c.milestones) m.id,
-      ]);
+      s.faction('player')
+        ..reachedMilestones.addAll([for (final m in c.milestones) m.id])
+        ..megaprojectProgress['orbital_station'] = {'credits': n(1)};
       final sum = e.catchUpOffline(s, 60);
       final goal = sum.nextGoal! as MegaprojectGoal;
       expect(goal.etaSeconds, isNull);
@@ -546,7 +722,9 @@ void main() {
     e.apply(s, const AssignCrewCommand('player', 'b1', 0));
     e.advance(s, 60);
     kora.stock['iron_ore'] = n(0.2);
-    s.faction('player').credits = n(1e7);
+    s.faction('player')
+      ..credits = n(1e7)
+      ..megaprojectProgress['orbital_station'] = {'credits': n(1)};
     final claim = e.apply(
       s,
       const ClaimBodyCommand('player', 'hollow_reach', 'kora'),

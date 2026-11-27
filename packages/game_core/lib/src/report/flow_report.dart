@@ -9,6 +9,7 @@ import '../sim/logistics.dart';
 import '../sim/market.dart';
 import '../sim/megaprojects.dart';
 import '../sim/production.dart';
+import '../sim/step_cache.dart';
 import '../state/game_state.dart';
 import 'steady_revenue.dart';
 
@@ -126,6 +127,16 @@ enum BottleneckKind {
   /// The faction's buildings make goods that sell, but it has no auto-sell
   /// rule on any body it owns, so nothing sells unless it sells by hand.
   noSales,
+
+  /// Auto-delivery hands a megaproject a good the faction auto-sells, a
+  /// tenth or more of what would otherwise sell of it
+  /// ([Bottleneck.shareOfSales]): income it does not earn.
+  megaprojectDiversion,
+
+  /// A megaproject fed goods on its own still owes a good, and a body holds
+  /// some that auto-delivery leaves there only because of its auto-sell
+  /// rule's `keepAtLeast` ([Bottleneck.heldByKeep]).
+  keepBlocksDelivery,
 }
 
 /// Something running below full rate, and why: a building, a body's full
@@ -141,30 +152,66 @@ final class Bottleneck {
     required this.message,
     this.firstSeenAt = 0,
     this.lostCreditsPerHour,
+    this.count = 1,
+    this.buildingIds = const [],
+    this.megaprojectId,
+    this.shareOfSales,
+    this.heldByKeep,
   });
 
   /// What holds it back.
   final BottleneckKind kind;
 
-  /// Body the building or store is on; null for
-  /// [BottleneckKind.crewShortage] and [BottleneckKind.noSales], which are
-  /// faction-wide.
+  /// Body the building or store is on, or that holds the good for
+  /// [BottleneckKind.keepBlocksDelivery]; null for
+  /// [BottleneckKind.crewShortage], [BottleneckKind.noSales] and
+  /// [BottleneckKind.megaprojectDiversion], which are faction-wide.
   final String? bodyId;
 
-  /// The held-back building; null for [BottleneckKind.crewShortage],
-  /// [BottleneckKind.storageFull] and [BottleneckKind.noSales].
+  /// The held-back building; null for the kinds about no one building, and
+  /// for a group of more than one ([groupBottlenecks]).
   final String? buildingId;
 
-  /// The input a building is short of ([BottleneckKind.input]) or the
-  /// resource being wasted ([BottleneckKind.storageFull]); otherwise null.
+  /// The input a building is short of ([BottleneckKind.input]), the
+  /// resource being wasted ([BottleneckKind.storageFull]), or the good a
+  /// megaproject takes or is kept from ([BottleneckKind.megaprojectDiversion],
+  /// [BottleneckKind.keepBlocksDelivery]); otherwise null.
   final String? resourceId;
 
+  /// Buildings it stands for, at least 1: more than one once
+  /// [groupBottlenecks] puts together the buildings held back by the same
+  /// cause on one body; 1 for the kinds about no building.
+  final int count;
+
+  /// Ids of the buildings it stands for, in report order; empty for the
+  /// kinds about no building.
+  final List<String> buildingIds;
+
+  /// The megaproject that takes the good ([BottleneckKind.megaprojectDiversion])
+  /// or is kept from it ([BottleneckKind.keepBlocksDelivery]); otherwise
+  /// null.
+  final String? megaprojectId;
+
+  /// For [BottleneckKind.megaprojectDiversion], the share of what would
+  /// sell of the good that goes to the megaproject instead, in
+  /// `[0.1, 1]`: what it takes a second over that plus what auto-sell
+  /// sells of it, both valued at current prices; otherwise null.
+  final double? shareOfSales;
+
+  /// For [BottleneckKind.keepBlocksDelivery], the whole units on the body
+  /// that auto-delivery would hand over, up to what is owed, but for the
+  /// rule's `keepAtLeast`; otherwise null.
+  final BigNum? heldByKeep;
+
   /// Share of full rate achieved, in `[0, 1)`: a building's run fraction,
-  /// for [BottleneckKind.understaffed] its crew over its base slots;
-  /// for [BottleneckKind.crewShortage] the faction's crew efficiency; for
-  /// [BottleneckKind.storageFull] the share of the body's own output of the
-  /// resource that it kept (0 when only arriving cargo was wasted); 0 for
-  /// [BottleneckKind.noSales].
+  /// for [BottleneckKind.understaffed] its crew over its base slots (a
+  /// group's lowest); for [BottleneckKind.crewShortage] the faction's crew
+  /// efficiency; for [BottleneckKind.storageFull] the share of the body's
+  /// own output of the resource that it kept (0 when only arriving cargo
+  /// was wasted, or in an away summary when only the absence wasted it);
+  /// for [BottleneckKind.megaprojectDiversion] the share that still sells,
+  /// `1 − shareOfSales`; 0 for [BottleneckKind.noSales] and
+  /// [BottleneckKind.keepBlocksDelivery].
   final double runFraction;
 
   /// Plain-English description using display names, such as
@@ -178,15 +225,18 @@ final class Bottleneck {
 
   /// Estimated credits it costs an hour, at current market prices, where
   /// that can be worked out: for [BottleneckKind.storageFull] the wasted
-  /// units' value; for [BottleneckKind.input] the value of the output the
-  /// building does not make; for [BottleneckKind.noSales] the value of
-  /// the faction's net production of goods that sell; for
-  /// [BottleneckKind.crewShortage] what full staffing would add to the
-  /// faction's net production, more output less the extra inputs it
-  /// draws, leaving out output a full store would cut (zero when none of
-  /// its crewed buildings runs). The input figure is gross: the starved
-  /// building's lost output, not net of the inputs it would use. Null for
-  /// the other kinds.
+  /// units' value (in an away summary, the larger of that and what the
+  /// absence wasted there an hour); for [BottleneckKind.input] the value
+  /// of the output the building does not make; for
+  /// [BottleneckKind.noSales] the value of the faction's net production of
+  /// goods that sell; for [BottleneckKind.crewShortage] what full staffing
+  /// would add to the faction's net production, more output less the
+  /// extra inputs it draws, leaving out output a full store would cut
+  /// (zero when none of its crewed buildings runs); for
+  /// [BottleneckKind.megaprojectDiversion] what the goods the megaproject
+  /// takes would sell for. The input figure is gross: the starved
+  /// building's lost output, not net of the inputs it would use. A group's
+  /// is the sum of its members'. Null for the other kinds.
   final BigNum? lostCreditsPerHour;
 
   /// Restores a bottleneck written by [toJson].
@@ -202,11 +252,30 @@ final class Bottleneck {
       final String v => BigNum.fromJson(v),
       _ => null,
     },
+    // Absent in bottlenecks from before grouping: one building or none.
+    count: (j['count'] as int?) ?? 1,
+    buildingIds: switch (j['buildingIds']) {
+      final List<Object?> ids => ids.cast<String>(),
+      _ => [?j['buildingId'] as String?],
+    },
+    megaprojectId: j['megaprojectId'] as String?,
+    shareOfSales: (j['shareOfSales'] as num?)?.toDouble(),
+    heldByKeep: switch (j['heldByKeep']) {
+      final String v => BigNum.fromJson(v),
+      _ => null,
+    },
   );
 
   /// [kind], [bodyId], [buildingId] and [resourceId] as one key, as in
   /// [SeenBottleneck.key].
   String get key => bottleneckKey(kind.name, bodyId, buildingId, resourceId);
+
+  /// Its cause as one key: [kind], [bodyId], [resourceId] and
+  /// [megaprojectId], but not the building. [groupBottlenecks] puts those
+  /// with the same one together, and an away summary matches a group
+  /// before and after the absence by it ([OfflineSummary.ongoingFor]).
+  String get groupKey =>
+      bottleneckKey(kind.name, bodyId, megaprojectId, resourceId);
 
   /// This bottleneck as JSON, null fields left out.
   Map<String, Object?> toJson() => {
@@ -218,9 +287,16 @@ final class Bottleneck {
     'message': message,
     'firstSeenAt': firstSeenAt,
     'lostCreditsPerHour': ?lostCreditsPerHour?.toJson(),
+    'count': count,
+    if (buildingIds.isNotEmpty) 'buildingIds': buildingIds,
+    'megaprojectId': ?megaprojectId,
+    'shareOfSales': ?shareOfSales,
+    'heldByKeep': ?heldByKeep?.toJson(),
   };
 
-  Bottleneck _with({double? firstSeenAt, BigNum? lostCreditsPerHour}) =>
+  /// This bottleneck with [firstSeenAt] and [lostCreditsPerHour] replaced
+  /// where given.
+  Bottleneck copyWith({double? firstSeenAt, BigNum? lostCreditsPerHour}) =>
       Bottleneck(
         kind: kind,
         bodyId: bodyId,
@@ -230,7 +306,80 @@ final class Bottleneck {
         message: message,
         firstSeenAt: firstSeenAt ?? this.firstSeenAt,
         lostCreditsPerHour: lostCreditsPerHour ?? this.lostCreditsPerHour,
+        count: count,
+        buildingIds: buildingIds,
+        megaprojectId: megaprojectId,
+        shareOfSales: shareOfSales,
+        heldByKeep: heldByKeep,
       );
+
+  Bottleneck _with({double? firstSeenAt, BigNum? lostCreditsPerHour}) =>
+      copyWith(
+        firstSeenAt: firstSeenAt,
+        lostCreditsPerHour: lostCreditsPerHour,
+      );
+}
+
+/// [necks] put together by cause ([Bottleneck.groupKey]: kind, body,
+/// resource and megaproject), each group where its first member was:
+/// [Bottleneck.count] and [Bottleneck.buildingIds] add up, as do the
+/// credits lost an hour (null only when every member's is), the run
+/// fraction is the lowest, the time first seen the earliest, and
+/// [Bottleneck.heldByKeep] and [Bottleneck.shareOfSales] the sum and the
+/// largest. A group of one is its member as it was; a larger group names
+/// no one building ([Bottleneck.buildingId] null) and keeps its first
+/// member's message, which a display can rebuild from the typed fields.
+///
+/// So 17 docks on one body short of the same input are one entry whose
+/// loss is the 17 losses summed, and a cause that costs more on its own
+/// is not hidden behind them.
+List<Bottleneck> groupBottlenecks(List<Bottleneck> necks) {
+  final groups = <String, List<Bottleneck>>{};
+  for (final b in necks) {
+    (groups[b.groupKey] ??= []).add(b);
+  }
+  return [
+    for (final members in groups.values)
+      if (members.length == 1) members.single else _merge(members),
+  ];
+}
+
+/// [members], two or more with one [Bottleneck.groupKey], as one entry.
+Bottleneck _merge(List<Bottleneck> members) {
+  final first = members.first;
+  BigNum? lost;
+  var run = first.runFraction;
+  var since = first.firstSeenAt;
+  var count = 0;
+  BigNum? held;
+  double? share;
+  for (final b in members) {
+    if (b.lostCreditsPerHour case final v?) {
+      lost = (lost ?? const BigNum.zero()) + v;
+    }
+    run = math.min(run, b.runFraction);
+    since = math.min(since, b.firstSeenAt);
+    count += b.count;
+    if (b.heldByKeep case final v?) {
+      held = (held ?? const BigNum.zero()) + v;
+    }
+    if (b.shareOfSales case final v?) share = math.max(share ?? v, v);
+  }
+  return Bottleneck(
+    kind: first.kind,
+    bodyId: first.bodyId,
+    buildingId: null,
+    resourceId: first.resourceId,
+    runFraction: run,
+    message: first.message,
+    firstSeenAt: since,
+    lostCreditsPerHour: lost,
+    count: count,
+    buildingIds: [for (final b in members) ...b.buildingIds],
+    megaprojectId: first.megaprojectId,
+    shareOfSales: share,
+    heldByKeep: held,
+  );
 }
 
 /// A faction's resource flows and bottlenecks, per second.
@@ -250,8 +399,12 @@ final class FlowReport {
     required (Map<String, BigNum>, Map<String, BigNum>) Function() steady,
     required List<Bottleneck> bottlenecks,
     Map<String, BigNum> prices = const {},
+    List<Bottleneck> keepBlocks = const [],
+    List<Bottleneck> Function(SteadyIncome income)? diversions,
   }) : _income = income,
        _steady = steady,
+       _keepBlocks = List.unmodifiable(keepBlocks),
+       _diversions = diversions,
        _prices = Map.unmodifiable(prices),
        bodies = List.unmodifiable(bodies),
        empireNet = Map.unmodifiable(empireNet),
@@ -339,8 +492,30 @@ final class FlowReport {
   /// Everything held back, lowest run fraction first, then in report order:
   /// goods made with nothing selling them ([BottleneckKind.noSales]) and a
   /// crew shortage first, then each body's buildings in order followed by
-  /// its full stores in content resource order.
+  /// its full stores in content resource order. One entry per building;
+  /// [groupedBottlenecks] has them by cause, with the megaproject kinds.
   final List<Bottleneck> bottlenecks;
+
+  final List<Bottleneck> _keepBlocks;
+
+  final List<Bottleneck> Function(SteadyIncome income)? _diversions;
+
+  /// [bottlenecks] grouped by cause ([groupBottlenecks]), in their order,
+  /// then the goods a keep holds back from a megaproject that still owes
+  /// them ([BottleneckKind.keepBlocksDelivery]), megaprojects in content
+  /// order, then the goods auto-delivery takes from sales
+  /// ([BottleneckKind.megaprojectDiversion]), as [autoDeliveredPerSec]
+  /// lists them.
+  ///
+  /// The diversions come from the same short run of play as
+  /// [creditsPerSec], so the first read of this works that out too. The
+  /// megaproject kinds are not tracked over time: their
+  /// [Bottleneck.firstSeenAt] is the report's own time.
+  late final List<Bottleneck> groupedBottlenecks = [
+    ...groupBottlenecks(bottlenecks),
+    ..._keepBlocks,
+    ...?_diversions?.call(_measured),
+  ];
 
   /// Units of [resourceId] the faction's buildings make a second, summed
   /// over its bodies ([BodyFlow.producedPerSec]): their output at the run
@@ -373,6 +548,164 @@ final class FlowReport {
 /// Seconds of the sample step the rates are measured over.
 const double _sampleSeconds = 1;
 
+/// Game seconds of a full step, the engine's catch-up step: the window
+/// over which a building fed by cargo lots is given its share of them.
+const double _fullStepSeconds = 60;
+
+/// Body id to resource id to the units a second cargo brings [factionId]'s
+/// bodies on average, for each store its routes or shipments feed: the
+/// larger of two readings.
+///
+/// - What is on its way and there, spread over the trip: each route's
+///   cargo in flight over its trip ([travelSeconds]), as a route's
+///   pipeline holds one trip of what it delivers, plus the store's stock
+///   and shipments of no route over the longest of those trips (a full
+///   step when there is none). It does not jump as a lot lands: the lot
+///   moves from in flight into the store. A store whose stock and cargo
+///   together never pass its cap reads one cap's worth a trip, either
+///   side of a landing.
+/// - What the routes send: each route without a stop level, or with
+///   nothing in flight, at the rate the probe step saw it send
+///   ([routeFlow], route id to units sent in [_sampleSeconds]); each with
+///   a stop level and lots in flight by those lots over its trip, as what
+///   it sends in a second swings with the room its store has just then.
+///   This one is right for a route its rate or its source holds back, as
+///   a step shorter than its lots can leave the first reading short.
+///
+/// A store holding more than its buildings use at full supply over the
+/// longest trip is not waiting on its lots: its stock lasts until the next
+/// ones land, so the first reading counts it in full, over a full step.
+Map<String, Map<String, BigNum>> _cargoSupply(
+  GameState s,
+  Content c,
+  String factionId,
+  Map<String, BigNum> routeFlow,
+) {
+  final routes = {
+    for (final r in s.routes)
+      if (r.ownerId == factionId &&
+          s.body(r.toBodyId).ownerId == factionId &&
+          s.body(r.fromBodyId).ownerId == factionId)
+        r.id: r,
+  };
+  final inFlight = <String, BigNum>{};
+  // Body id to resource id to cargo in flight of no route.
+  final loose = <String, Map<String, BigNum>>{};
+  void add(
+    Map<String, Map<String, BigNum>> into,
+    String b,
+    String id,
+    BigNum v,
+  ) {
+    final got = into[b] ??= {};
+    got[id] = (got[id] ?? const BigNum.zero()) + v;
+  }
+
+  for (final sh in s.shipments) {
+    if (sh.ownerId != factionId) continue;
+    if (s.body(sh.toBodyId).ownerId != factionId) continue;
+    if (routes.containsKey(sh.routeId)) {
+      inFlight[sh.routeId] =
+          (inFlight[sh.routeId] ?? const BigNum.zero()) + sh.amount;
+    } else {
+      add(loose, sh.toBodyId, sh.resourceId, sh.amount);
+    }
+  }
+  // Body id to resource id to the two readings' route parts, and the
+  // longest trip into the store.
+  final piped = <String, Map<String, BigNum>>{};
+  final sending = <String, Map<String, BigNum>>{};
+  final trips = <String, Map<String, double>>{};
+  for (final r in routes.values) {
+    final trip = travelSeconds(s, c, s.body(r.fromBodyId), s.body(r.toBodyId));
+    final on = trips[r.toBodyId] ??= {};
+    on[r.resourceId] = math.max(on[r.resourceId] ?? 0, trip);
+    final lots = inFlight[r.id] ?? const BigNum.zero();
+    final pipe = lots.mulDouble(1 / trip);
+    add(piped, r.toBodyId, r.resourceId, pipe);
+    add(
+      sending,
+      r.toBodyId,
+      r.resourceId,
+      r.stopAtDestination != null && lots > const BigNum.zero()
+          ? pipe
+          : (routeFlow[r.id] ?? const BigNum.zero()).mulDouble(
+              1 / _sampleSeconds,
+            ),
+    );
+  }
+  for (final MapEntry(key: b, value: got) in loose.entries) {
+    for (final id in got.keys) {
+      add(piped, b, id, const BigNum.zero());
+    }
+  }
+  final cache = StepCache(s, c);
+  BigNum perSec(String b, String id, BigNum pipe) {
+    final body = s.body(b);
+    final trip = trips[b]?[id] ?? _fullStepSeconds;
+    final held = body.stock[id] ?? const BigNum.zero();
+    final loaded = loose[b]?[id] ?? const BigNum.zero();
+    final use = cache.use(body, trip)[id] ?? const BigNum.zero();
+    final stocked = held > use
+        ? held.mulDouble(1 / _fullStepSeconds) + loaded.mulDouble(1 / trip)
+        : (held + loaded).mulDouble(1 / trip);
+    return (pipe + stocked).max(sending[b]?[id] ?? const BigNum.zero());
+  }
+
+  return {
+    for (final MapEntry(key: b, value: got) in piped.entries)
+      b: {
+        for (final MapEntry(key: id, value: v) in got.entries)
+          id: perSec(b, id, v),
+      },
+  };
+}
+
+/// Building id to the share of full rate a full step of [window] seconds
+/// from [s] runs it at, each store [supply] lists ([_cargoSupply]) holding
+/// [window] seconds of it instead of its stock and nothing in flight, for
+/// [factionId]'s buildings held back by one of those inputs; at crew
+/// efficiency [crewEff] when given, else the faction's own. Played on a
+/// copy.
+///
+/// A store fed by lots holds a lot just after one lands and nothing just
+/// before: a short step sees either, a full one the share of the lots the
+/// buildings get. So the sample step's buildings run at no more than this
+/// ([stepProduction]'s `runCaps`), and a report a few seconds before a lot
+/// lands reads as one a few seconds after.
+Map<String, RunCap> _fullStepCaps(
+  GameState s,
+  Content c,
+  String factionId,
+  Map<String, Map<String, BigNum>> supply,
+  double window,
+  double? crewEff,
+) {
+  if (supply.isEmpty) return const {};
+  final m = s.copy()..shipments.clear();
+  for (final MapEntry(key: id, value: got) in supply.entries) {
+    final body = m.body(id);
+    for (final MapEntry(key: res, value: v) in got.entries) {
+      body.stock[res] = v.mulDouble(window);
+    }
+  }
+  stepProduction(
+    m,
+    c,
+    window,
+    crewEfficiencyOf: crewEff == null ? const {} : {factionId: crewEff},
+  );
+  return {
+    for (final body in m.bodies)
+      if (body.ownerId == factionId)
+        for (final b in body.buildings)
+          if (b.lastLimitReason case final why? when why.startsWith('input:'))
+            if (why.substring('input:'.length) case final id
+                when supply[body.id]?.containsKey(id) ?? false)
+              b.id: (fraction: b.lastRunFraction, inputId: id),
+  };
+}
+
 /// Reports [factionId]'s per-second flows and bottlenecks.
 ///
 /// The rates are steady-state rates: what one second of play moves once
@@ -384,7 +717,12 @@ const double _sampleSeconds = 1;
 /// - Cargo flows steadily: each route's cargo lands at its destination
 ///   at the rate the route sends it (measured by a first pass over another
 ///   copy), while cargo already in flight, which lands in lumps, is left
-///   out.
+///   out as such. A building held back by an input cargo brings runs at
+///   no more than the share a full 60 s step of its store's average
+///   supply gives it ([_cargoSupply]: what is there and on its way, spread
+///   over the trip), with a second of that supply there for it; so a
+///   report just before a lot lands reads as one just after, and neither
+///   shows a store that refills each minute as empty or full.
 /// - Auto-sell sells only what the step added to a body's stock, never
 ///   stock built up before it, such as the step's demand kept back by a
 ///   long tick that a 1 s step no longer needs.
@@ -407,8 +745,28 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   stepProduction(probe, c, _sampleSeconds);
   final playedEff = crewEfficiency(probe, c, factionId);
   final routeFlow = sendCargo(probe, c, _sampleSeconds);
+  // Cargo lands in lots, so a store a route feeds can be empty a second
+  // before a lot lands and full a second after: the sample step runs such
+  // buildings at the share a full step of their average supply gives them.
+  final window = math.max(_fullStepSeconds, c.rules.shipmentMergeSeconds);
+  final supply = _cargoSupply(s, c, factionId, routeFlow);
+  Map<String, RunCap> capsAt([double? crewEff]) =>
+      _fullStepCaps(s, c, factionId, supply, window, crewEff);
 
   final copy = s.copy()..shipments.clear();
+  // A second of that supply is there for the sample step's buildings, as
+  // held already (so it nets to zero) and kept from auto-sell; only what
+  // fits below the cap, so none is wasted.
+  for (final MapEntry(key: id, value: got) in supply.entries) {
+    final body = copy.body(id);
+    final cap = storageCap(copy, c, body);
+    for (final MapEntry(key: res, value: v) in got.entries) {
+      final held = body.stock[res] ?? const BigNum.zero();
+      final room = cap - held;
+      final more = v.mulDouble(_sampleSeconds).min(room);
+      if (more > const BigNum.zero()) body.stock[res] = held + more;
+    }
+  }
   final owned = [
     for (final b in copy.bodies)
       if (b.ownerId == factionId) b,
@@ -440,10 +798,10 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   // With a crew shortage, the same production step on a copy at full
   // staffing shows what the shortage costs.
   final staffed = crewNeck == null ? null : copy.copy();
-  stepProduction(copy, c, _sampleSeconds);
+  stepProduction(copy, c, _sampleSeconds, runCaps: capsAt());
   final crewLost = staffed == null
       ? null
-      : _staffingGain(s, c, factionId, staffed, copy);
+      : _staffingGain(s, c, factionId, staffed, copy, capsAt(1));
   // The efficiency the sample step settled on, which its run fractions
   // go with.
   final settledEff = crewEfficiency(copy, c, factionId);
@@ -571,6 +929,18 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   // Steady flows take no stock into account, so the played copy gives the
   // state's; worked out once, for credits per second and steady rates.
   SteadyFlows? steady;
+  // Prices as the report is built, for goods fed to megaprojects.
+  final prices = {
+    for (final m in c.megaprojects.values)
+      if (s.faction(factionId).megaprojectAuto[m.id]?.goods ?? false)
+        for (final id in m.baseCost.keys)
+          if (id != creditsKey) id: price(s, c, id),
+  };
+  // Goods the faction auto-sells on a body it owns.
+  final autoSold = {
+    for (final r in s.faction(factionId).autoSell)
+      if (s.body(r.bodyId).ownerId == factionId) r.resourceId,
+  };
   SteadyFlows steadyOf() => steady ??= steadyFlows(
     played!,
     c,
@@ -581,13 +951,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   return FlowReport(
     bodies: bodies,
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
-    // Prices as the report is built, for goods fed to megaprojects.
-    prices: {
-      for (final m in c.megaprojects.values)
-        if (s.faction(factionId).megaprojectAuto[m.id]?.goods ?? false)
-          for (final id in m.baseCost.keys)
-            if (id != 'credits') id: price(s, c, id),
-    },
+    prices: prices,
+    keepBlocks: _keepBlocks(s, c, factionId),
+    diversions: (income) => _diversions(c, income, prices, autoSold, s.time),
     income: () {
       final v = saleRevenuePerSec(
         played!,
@@ -609,6 +975,107 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         b._with(firstSeenAt: since[b.key] ?? s.time),
     ],
   );
+}
+
+/// Share of what would sell of a good that auto-delivery must take for a
+/// [BottleneckKind.megaprojectDiversion]: a tenth.
+const double minDiversionShare = 0.1;
+
+/// The [BottleneckKind.megaprojectDiversion]s of [income], the faction's
+/// steady income in the report: for each good a megaproject is handed a
+/// second there that the faction auto-sells ([autoSold]), what it would
+/// sell for at [prices] (resource id to price as the report was built),
+/// against that plus what auto-sell earns of it a second
+/// ([SteadyIncome.soldPerSec]), where that share is [minDiversionShare]
+/// or more; seen at [now].
+List<Bottleneck> _diversions(
+  Content c,
+  SteadyIncome income,
+  Map<String, BigNum> prices,
+  Set<String> autoSold,
+  double now,
+) => [
+  for (final MapEntry(key: m, value: got) in income.deliveredPerSec.entries)
+    for (final MapEntry(key: id, value: rate) in got.entries)
+      if (id != creditsKey && autoSold.contains(id))
+        if (rate * (prices[id] ?? const BigNum.zero()) case final value
+            when value > const BigNum.zero())
+          if ((value / (value + (income.soldPerSec[id] ?? const BigNum.zero())))
+                  .toDouble()
+              case final share when share >= minDiversionShare)
+            Bottleneck(
+              kind: BottleneckKind.megaprojectDiversion,
+              bodyId: null,
+              buildingId: null,
+              resourceId: id,
+              megaprojectId: m,
+              shareOfSales: share,
+              runFraction: 1 - share,
+              lostCreditsPerHour: value.mulDouble(3600),
+              firstSeenAt: now,
+              message:
+                  '${c.megaprojects[m]!.name} takes '
+                  '${math.min(100, (share * 100).round())}% of the '
+                  '${c.resources[id]!.name} that would sell',
+            ),
+];
+
+/// The [BottleneckKind.keepBlocksDelivery]s of [factionId] in [s]: for
+/// each megaproject it feeds goods on its own that takes deliveries and
+/// still owes a good, in content order, each body with an auto-sell rule
+/// on the good, in rule order, whose `keepAtLeast` holds back units that
+/// auto-delivery would hand over ([DeliveryKeeps.heldByKeepAtLeast]), up
+/// to what is owed.
+List<Bottleneck> _keepBlocks(GameState s, Content c, String factionId) {
+  final f = s.faction(factionId);
+  final rules = <(String, String)>{
+    for (final r in f.autoSell)
+      if (r.keepAtLeast > const BigNum.zero() &&
+          s.body(r.bodyId).ownerId == factionId)
+        (r.bodyId, r.resourceId),
+  };
+  if (rules.isEmpty) return const [];
+  final fed = [
+    for (final m in c.megaprojects.values)
+      if ((f.megaprojectAuto[m.id]?.goods ?? false) &&
+          megaprojectTakesDeliveries(s, c, factionId, m))
+        m,
+  ];
+  if (fed.isEmpty) return const [];
+  final goods = {
+    for (final m in fed)
+      for (final id in m.baseCost.keys)
+        if (id != creditsKey) id,
+  }.toList();
+  final keeps = autoDeliveryKeeps(
+    s,
+    StepCache(s, c),
+    f,
+    goods,
+    _fullStepSeconds,
+  );
+  return [
+    for (final m in fed)
+      if (megaprojectRemaining(s, c, factionId, m) case final owed)
+        for (final (bodyId, id) in rules)
+          if (owed[id] case final need? when id != creditsKey)
+            if (keeps.heldByKeepAtLeast(s.body(bodyId), id).min(need.ceil())
+                case final held when held >= BigNum.from(1))
+              Bottleneck(
+                kind: BottleneckKind.keepBlocksDelivery,
+                bodyId: bodyId,
+                buildingId: null,
+                resourceId: id,
+                megaprojectId: m.id,
+                heldByKeep: held,
+                runFraction: 0,
+                firstSeenAt: s.time,
+                message:
+                    '${m.name} still needs ${c.resources[id]!.name}, but '
+                    "${s.body(bodyId).name}'s auto-sell keepAtLeast holds "
+                    'back what it has',
+              ),
+  ];
 }
 
 /// Credits an hour that [perSec] (resource id to units a second) is worth
@@ -764,8 +1231,15 @@ BigNum _staffingGain(
   String factionId,
   GameState staffed,
   GameState actual,
+  Map<String, RunCap> caps,
 ) {
-  stepProduction(staffed, c, _sampleSeconds, crewEfficiencyOf: {factionId: 1});
+  stepProduction(
+    staffed,
+    c,
+    _sampleSeconds,
+    crewEfficiencyOf: {factionId: 1},
+    runCaps: caps,
+  );
   final f = actual.faction(factionId);
   // Body and resource pairs whose extra output goes somewhere.
   // Goods a megaproject is fed on its own go in, from every body, as they
@@ -893,6 +1367,7 @@ Bottleneck? _bottleneck(Content c, BodyState body, BuildingState b) {
       buildingId: b.id,
       resourceId: null,
       runFraction: b.lastRunFraction * b.crew / def.crewSlots,
+      buildingIds: [b.id],
       message: '$where is understaffed: ${b.crew} of ${def.crewSlots} crew',
     );
   } else {
@@ -907,6 +1382,7 @@ Bottleneck? _bottleneck(Content c, BodyState body, BuildingState b) {
     resourceId: resourceId,
     runFraction: b.lastRunFraction,
     message: message,
+    buildingIds: [b.id],
   );
 }
 

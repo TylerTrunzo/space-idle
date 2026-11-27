@@ -918,4 +918,266 @@ void main() {
       );
     });
   });
+
+  group('a store fed by cargo in lumps', () {
+    // A press on b uses 0.5 ore a second; the ore comes from a, 120 s
+    // away, and lands in one lot a minute (shipments merge for 60 s).
+    final content = fx.pressContent();
+    final e = GameEngine(content);
+
+    /// A game whose route a→b sends [rate] ore a second, with [stop] as
+    /// its stop level, played until the lots land steadily.
+    GameState fed({required double rate, double? stop}) {
+      final t = e.newGame(1);
+      t.body('a').stock['ore'] = n(1000);
+      t.body('b')
+        ..ownerId = 'p'
+        ..buildings.add(BuildingState(id: 'press', defId: 'press', crew: 1));
+      t.routes.add(
+        RouteState(
+          id: 'r1',
+          ownerId: 'p',
+          fromBodyId: 'a',
+          toBodyId: 'b',
+          resourceId: 'ore',
+          ratePerSecond: n(rate),
+          cargoShips: 1,
+          stopAtDestination: stop == null ? null : n(stop),
+        ),
+      );
+      e.advance(t, 600);
+      return t;
+    }
+
+    /// The press's run fraction and limit in a report after [steps]
+    /// (seconds each) from [t], on a copy.
+    (double, String?) pressAfter(GameState t, List<double> steps) {
+      final u = t.copy();
+      for (final dt in steps) {
+        e.advance(u, dt);
+      }
+      final st = buildFlowReport(
+        u,
+        content,
+        'p',
+      ).bodies.singleWhere((b) => b.bodyId == 'b').buildings.single;
+      return (st.runFraction, st.limitReason);
+    }
+
+    test('a lot due in 5 s counts as a full step would see it', () {
+      // Round-4 casual bug 1: after `advance 55` the store was empty with a
+      // lot due 5 s later and the route's source spent, so the report
+      // showed 0%; 5 s later, the lot landed, it showed 100%. A full step
+      // from either time runs the press on one lot a minute: 15 of 30.
+      final t = fed(rate: 0.25);
+      t.body('a').stock['ore'] = const BigNum.zero();
+      Shipment lot(GameState u, double due) => Shipment(
+        routeId: 'r1',
+        fromBodyId: 'a',
+        toBodyId: 'b',
+        ownerId: 'p',
+        resourceId: 'ore',
+        amount: n(15),
+        departAt: u.time + due - 120,
+        arriveAt: u.time + due,
+      );
+      final before = t.copy();
+      before.body('b').stock['ore'] = const BigNum.zero();
+      before.shipments
+        ..clear()
+        ..addAll([lot(before, 5), lot(before, 65)]);
+      final after = before.copy()..time += 5;
+      after.body('b').stock['ore'] = n(15);
+      after.shipments.removeAt(0);
+      for (final u in [before, after]) {
+        final (run, limit) = pressAfter(u, const []);
+        expect(run, closeTo(0.5, 1e-9));
+        expect(limit, 'input:ore');
+      }
+    });
+
+    test('a lot a trip, capped by the store, counts the same either side '
+        'of its landing', () {
+      // Round-4 casual: a route can deliver at most the store's cap a trip;
+      // with nothing else in flight the store was dry until the next lot.
+      final t = fed(rate: 0.25);
+      t.body('a').stock['ore'] = const BigNum.zero();
+      final before = t.copy();
+      before.body('b').stock['ore'] = const BigNum.zero();
+      before.shipments
+        ..clear()
+        ..add(
+          Shipment(
+            routeId: 'r1',
+            fromBodyId: 'a',
+            toBodyId: 'b',
+            ownerId: 'p',
+            resourceId: 'ore',
+            amount: n(30),
+            departAt: before.time - 60,
+            arriveAt: before.time + 60,
+          ),
+        );
+      final after = before.copy()..time += 60;
+      after.body('b').stock['ore'] = n(30);
+      after.shipments.clear();
+      // 30 a trip of 120 s for 0.5 a second wanted.
+      for (final u in [before, after]) {
+        final (run, limit) = pressAfter(u, const []);
+        expect(run, closeTo(0.5, 1e-9));
+        expect(limit, 'input:ore');
+      }
+    });
+
+    test('a route short of the use shows the share a full step gets, '
+        'wherever the step ends', () {
+      // 0.25 ore a second for 0.5: a lot of 15 a minute for 30 wanted.
+      final t = fed(rate: 0.25);
+      for (final steps in [
+        [55.0],
+        [60.0],
+        [55.0, 5.0],
+        [30.0],
+      ]) {
+        final (run, limit) = pressAfter(t, steps);
+        expect(run, closeTo(0.5, 0.02), reason: '$steps');
+        expect(limit, 'input:ore', reason: '$steps');
+      }
+    });
+
+    test('a stock that outlasts the trip is not waiting on its lots', () {
+      final t = fed(rate: 0.25);
+      t.body('b').stock['ore'] = n(1000);
+      final (run, limit) = pressAfter(t, const []);
+      expect(run, 1);
+      expect(limit, isNull);
+    });
+
+    test('an away of 14,335 s and of 14,340 s rank the same', () {
+      for (final (rate, stop) in [(1.0, 1.0), (0.25, null)]) {
+        final t = fed(rate: rate, stop: stop);
+        List<String> top(double away) => [
+          for (final b in e.catchUpOffline(t.copy(), away).topBottlenecks)
+            b.key,
+        ];
+        expect(top(14335), top(14340), reason: 'rate $rate');
+      }
+    });
+  });
+
+  group('megaproject bottlenecks', () {
+    const station = 'orbital_station';
+    MegaprojectDef get(String id) => c.megaprojects[id]!;
+
+    /// A new game whose Kora, sped up, makes hull plate that auto-sells,
+    /// with the Orbital Station at [level] fed goods on its own (not
+    /// credits).
+    GameState plating({int level = 10}) {
+      final t = engine.newGame(1);
+      final f = t.faction('player')..megaprojectLevels[station] = level;
+      for (final b in t.body('kora').buildings) {
+        b.levels[UpgradeTrack.speed] = 40;
+      }
+      t
+          .body('kora')
+          .buildings
+          .add(
+            BuildingState(id: t.newId('b'), defId: 'plate_press', crew: 1)
+              ..levels[UpgradeTrack.speed] = 40,
+          );
+      for (final id in ['hull_plate', 'copper_ore']) {
+        engine.apply(t, SetAutoSellCommand('player', 'kora', id, n(0)));
+      }
+      f.megaprojectAuto[station] = const MegaprojectAuto(
+        goods: true,
+        credits: false,
+      );
+      engine.advance(t, 600);
+      return t;
+    }
+
+    test('a megaproject taking a good that would sell is a diversion, '
+        'valued at what it would sell for', () {
+      // Round-4 optimizer, day 11: a megaproject took a top export and
+      // income fell from 1.65M to 1.01M a second, unflagged.
+      final t = plating();
+      final r = buildFlowReport(t, c, 'player');
+      final fed = r.autoDeliveredPerSec[station]!['hull_plate']!;
+      expect(fed > const BigNum.zero(), isTrue);
+      final d = r.groupedBottlenecks.singleWhere(
+        (b) => b.kind == BottleneckKind.megaprojectDiversion,
+      );
+      expect((d.megaprojectId, d.resourceId), (station, 'hull_plate'));
+      expect(d.bodyId, isNull);
+      expect(d.shareOfSales!, greaterThanOrEqualTo(0.1));
+      expect(d.runFraction, closeTo(1 - d.shareOfSales!, 1e-12));
+      expect(
+        d.lostCreditsPerHour!.toDouble(),
+        closeTo(
+          fed.toDouble() * price(t, c, 'hull_plate').toDouble() * 3600,
+          1e-6,
+        ),
+      );
+      // The away summary names it among the top 3.
+      final sum = engine.catchUpOffline(t, 3600);
+      expect(
+        sum.topBottlenecks.map((b) => b.kind),
+        contains(BottleneckKind.megaprojectDiversion),
+      );
+    });
+
+    test('no diversion when the good is not auto-sold, or below a tenth', () {
+      final t = plating();
+      t
+          .faction('player')
+          .autoSell
+          .removeWhere((r) => r.resourceId == 'hull_plate');
+      expect(
+        buildFlowReport(t, c, 'player').groupedBottlenecks.map((b) => b.kind),
+        isNot(contains(BottleneckKind.megaprojectDiversion)),
+      );
+    });
+
+    test("a keepAtLeast that holds back what a megaproject owes says so", () {
+      // Round-4 casual bug 3: Station L4 needed 469 reactor cores while
+      // Cinder held 1K of them under keepAtLeast 1,000.
+      final t = engine.newGame(1);
+      final f = t.faction('player');
+      final cost = megaprojectCost(c, get(station), 0);
+      f
+        ..megaprojectAuto[station] = const MegaprojectAuto(
+          goods: true,
+          credits: false,
+        )
+        ..megaprojectProgress[station] = {
+          'reactor_core': cost['reactor_core']! - n(469),
+        };
+      t.body('kora').stock['reactor_core'] = n(1000);
+      engine.apply(
+        t,
+        SetAutoSellCommand('player', 'kora', 'reactor_core', n(1000)),
+      );
+      final r = buildFlowReport(t, c, 'player');
+      final k = r.groupedBottlenecks.singleWhere(
+        (b) => b.kind == BottleneckKind.keepBlocksDelivery,
+      );
+      expect(
+        (k.bodyId, k.resourceId, k.megaprojectId),
+        ('kora', 'reactor_core', station),
+      );
+      expect(k.heldByKeep, n(469));
+      // Auto-delivery indeed leaves them.
+      engine.advance(t, 60);
+      expect(t.body('kora').stock['reactor_core'], n(1000));
+      // With the keep at 0, nothing is held back and they go in.
+      engine.apply(
+        t,
+        SetAutoSellCommand('player', 'kora', 'reactor_core', n(0)),
+      );
+      expect(
+        buildFlowReport(t, c, 'player').groupedBottlenecks.map((b) => b.kind),
+        isNot(contains(BottleneckKind.keepBlocksDelivery)),
+      );
+    });
+  });
 }

@@ -28,12 +28,16 @@ const double _measureSeconds = 600;
 const double _stepSeconds = 60;
 
 /// What a faction's steady play earns and hands over a second: its
-/// auto-sale credits ([creditsPerSec]) and, per megaproject it feeds on
-/// its own, what goes in a second by cost key ([deliveredPerSec]: `credits`
-/// or a resource id, in the order delivered).
+/// auto-sale credits ([creditsPerSec]); per megaproject it feeds on its
+/// own, what goes in a second by cost key ([deliveredPerSec]: `credits`
+/// or a resource id, in the order delivered); and resource id to the
+/// credits a second its auto-sales of that resource earned in the measured
+/// run ([soldPerSec], before the lower steady figure is taken; empty when
+/// there was no run).
 typedef SteadyIncome = ({
   BigNum creditsPerSec,
   Map<String, Map<String, BigNum>> deliveredPerSec,
+  Map<String, BigNum> soldPerSec,
 });
 
 /// Credits a second [factionId] earns from auto-sales in steady play, the
@@ -127,7 +131,11 @@ SteadyIncome _saleRevenuePerSec(
   );
   final feeds = s.faction(factionId).megaprojectAuto.isNotEmpty;
   if (steadyRevenue <= const BigNum.zero() && !feeds) {
-    return (creditsPerSec: const BigNum.zero(), deliveredPerSec: const {});
+    return (
+      creditsPerSec: const BigNum.zero(),
+      deliveredPerSec: const {},
+      soldPerSec: const {},
+    );
   }
   final measured = measuredSaleRevenue(s, c, factionId);
   final earned = steadyRevenue <= const BigNum.zero()
@@ -153,6 +161,7 @@ SteadyIncome _saleRevenuePerSec(
             id: id == creditsKey ? v.mulDouble(share) : v,
         }),
     }),
+    soldPerSec: measured.soldPerSec,
   );
 }
 
@@ -202,9 +211,17 @@ SteadyIncome measuredSaleRevenue(GameState s, Content c, String factionId) {
 
   play(_warmUpSeconds, measure: false);
   final before = sales();
+  final byGood = Map.of(s.faction(factionId).salesRevenue);
   play(_measureSeconds, measure: true);
   return (
     creditsPerSec: (sales() - before).mulDouble(1 / _measureSeconds),
+    soldPerSec: Map.unmodifiable({
+      for (final MapEntry(key: id, value: v)
+          in s.faction(factionId).salesRevenue.entries)
+        if (v - (byGood[id] ?? const BigNum.zero()) case final d
+            when d > const BigNum.zero())
+          id: d.mulDouble(1 / _measureSeconds),
+    }),
     deliveredPerSec: {
       for (final MapEntry(key: m, value: got) in delivered.entries)
         m: {

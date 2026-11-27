@@ -75,7 +75,7 @@ final class OngoingBottleneck {
   /// [worseThanBefore]: by more than a quarter.
   static const double worseGrowth = 1.25;
 
-  /// The [Bottleneck.key] of the bottleneck.
+  /// The [Bottleneck.groupKey] of the bottleneck.
   final String key;
 
   /// Game time in seconds since which the faction has had it without a
@@ -214,8 +214,11 @@ final class MegaprojectGoal extends NextGoal {
 /// owned, below its highest level, not already paid for); its ETA is the
 /// longest any entry still owed takes (null when one of them is not being
 /// made), with what the faction holds and makes shared out among the
-/// megaprojects as auto-delivery shares it ([megaprojectEtas]). Ties go to
-/// the milestone, then content order.
+/// megaprojects as auto-delivery shares it ([megaprojectEtas]). A stage
+/// still owed credits is left out when credit auto-pay is off for it and
+/// the faction has paid it none since it opened: the player chose not to
+/// fund it, so the soonest milestone or another megaproject comes first.
+/// Ties go to the milestone, then content order.
 NextGoal? nextGoal(
   GameState s,
   Content c,
@@ -277,6 +280,7 @@ NextGoal? nextGoal(
     report,
   ).entries) {
     final m = c.megaprojects[id]!;
+    if (_unfunded(f, c, s, factionId, m)) continue;
     final goal = MegaprojectGoal(
       megaprojectId: id,
       level: megaprojectDeliveryLevel(s, factionId, m) + 1,
@@ -290,6 +294,25 @@ NextGoal? nextGoal(
   if (milestone == null) return stage;
   if (stage == null) return milestone;
   return _sooner(stage.etaSeconds, milestone.etaSeconds) ? stage : milestone;
+}
+
+/// Whether [m]'s stage [f] pays for still owes credits that nothing is
+/// paying: credit auto-pay is off for it and [f] has paid it no credits
+/// since the stage opened. [nextGoal] leaves such a megaproject out, as
+/// the player chose not to fund it yet.
+bool _unfunded(
+  FactionState f,
+  Content c,
+  GameState s,
+  String factionId,
+  MegaprojectDef m,
+) {
+  if (f.megaprojectAuto[m.id]?.credits ?? false) return false;
+  if (!megaprojectRemaining(s, c, factionId, m).containsKey(creditsKey)) {
+    return false;
+  }
+  final paid = f.megaprojectProgress[m.id]?[creditsKey];
+  return paid == null || paid <= const BigNum.zero();
 }
 
 /// Megaproject id to the game seconds until [factionId] has paid, or can
@@ -627,10 +650,14 @@ final class OfflineSummary {
   /// Ids of milestones the player reached while away, in content order.
   final List<String> milestonesReached;
 
-  /// The player's worst bottlenecks after catching up, at most three: a
-  /// crew shortage first whenever it costs credits, then those with an
-  /// estimate of the credits they lose an hour, most first
-  /// ([Bottleneck.lostCreditsPerHour]), then the rest in report order.
+  /// The player's worst bottlenecks after catching up, at most three, by
+  /// cause ([FlowReport.groupedBottlenecks], so one entry stands for every
+  /// building held back the same way on a body), with what the storage cap
+  /// cut while away counted as storage-full entries (its value an hour
+  /// over the time simulated): a crew shortage first whenever it costs
+  /// credits, then those with an estimate of the credits they lose an
+  /// hour, most first ([Bottleneck.lostCreditsPerHour]), then the rest in
+  /// report order.
   final List<Bottleneck> topBottlenecks;
 
   /// The [topBottlenecks] that were there before the absence began, in
@@ -672,7 +699,7 @@ final class OfflineSummary {
   /// began while away.
   OngoingBottleneck? ongoingFor(Bottleneck b) {
     for (final o in ongoing) {
-      if (o.key == b.key) return o;
+      if (o.key == b.groupKey) return o;
     }
     return null;
   }
