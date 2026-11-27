@@ -9,23 +9,18 @@ import 'package:space_idle/ui/map/star_map_scene.dart';
 /// Per-frame motion between game ticks, the moving layer's `repaint`
 /// signal.
 ///
-/// The map's ticker sets it every frame, so shipments glide and signal
-/// markers pulse without rebuilding any widget or repainting the static
-/// layer. With animations disabled it stays at zero: shipments step once a
-/// tick and markers hold still.
+/// The map's ticker sets it every frame while shipments are in flight, so
+/// they glide between ticks without rebuilding any widget or repainting
+/// the static layer. With animations disabled it stays at zero and
+/// shipments step once a tick.
 class MapMotion extends ChangeNotifier {
   /// Wall-clock seconds since the last game tick, 0 to 1.
   double get sinceTick => _sinceTick;
   double _sinceTick = 0;
 
-  /// Signal pulse phase, 0 to 1.
-  double get pulse => _pulse;
-  double _pulse = 0;
-
-  /// Sets both values and repaints.
-  void update({required double sinceTick, required double pulse}) {
+  /// Sets [sinceTick] and repaints.
+  void update({required double sinceTick}) {
     _sinceTick = sinceTick;
-    _pulse = pulse;
     notifyListeners();
   }
 }
@@ -35,14 +30,8 @@ abstract final class _MapColors {
   /// Routes: [Palette.cyan] at 45% alpha.
   static const Color route = Color(0x735FE1FF);
 
-  /// Signal glow levels, [Palette.cyan] from 20% to 50% alpha; the pulse
-  /// picks one, so a frame makes no color.
-  static final List<Color> glow = List.unmodifiable([
-    for (var i = 0; i < _glowLevels; i++)
-      Palette.cyan.withValues(alpha: 0.2 + 0.3 * i / (_glowLevels - 1)),
-  ]);
-
-  static const int _glowLevels = 16;
+  /// The signal marker's faint ring: [Palette.cyan] at 40% alpha.
+  static const Color signal = Color(0x665FE1FF);
 }
 
 /// Draws the parts of a [StarMapScene] that change only at a tick or less:
@@ -78,6 +67,7 @@ class StarMapPainter extends CustomPainter {
   static const Offset _badgeBarTop = Offset(0, -3);
   static const Offset _badgeBarBottom = Offset(0, 0.6);
   static const Offset _badgeDot = Offset(0, 2.8);
+  static const double _signalRadius = 14;
 
   final Paint _fill = Paint()..style = PaintingStyle.fill;
   final Paint _stroke = Paint()
@@ -99,6 +89,14 @@ class StarMapPainter extends CustomPainter {
     _paintRoutes(canvas, t);
     for (final b in scene.bodies) {
       _paintBody(canvas, t, b);
+    }
+    // Signal markers are a still, faint ring (the "?" is a widget
+    // overlay): nothing on the map moves but shipments.
+    _stroke
+      ..color = _MapColors.signal
+      ..strokeWidth = 1.5;
+    for (final s in scene.signals) {
+      canvas.drawCircle(t.toCanvas(s.position), _signalRadius, _stroke);
     }
   }
 
@@ -177,8 +175,7 @@ class StarMapPainter extends CustomPainter {
       !scene.sameStaticLayer(oldDelegate.scene);
 }
 
-/// Draws what moves every frame: shipment dots along their routes and the
-/// signal markers' pulse.
+/// Draws what moves every frame: shipment dots along their routes.
 ///
 /// Repainted by [motion] alone, in its own layer, so a frame repaints only
 /// these few marks. The shipments' curves are mapped to canvas pixels once,
@@ -191,12 +188,9 @@ class MapMotionPainter extends CustomPainter {
     required this.transform,
     required this.motion,
   }) : _ships = _shipsInCanvas(scene, transform),
-       _signals = [
-         for (final s in scene.signals) transform.toCanvas(s.position),
-       ],
        super(repaint: motion);
 
-  /// The scene whose shipments and signals are drawn.
+  /// The scene whose shipments are drawn.
   final StarMapScene scene;
 
   /// Map units to canvas pixels, shared with the hit test.
@@ -206,20 +200,15 @@ class MapMotionPainter extends CustomPainter {
   final MapMotion motion;
 
   static const double _shipRadius = 3;
-  static const double _signalRadius = 14;
 
   /// Per shipment: x0, y0, cx, cy, x1, y1 (canvas px), progress, rate.
   static const int _stride = 8;
 
   final Float64List _ships;
-  final List<Offset> _signals;
 
   final Paint _fill = Paint()
     ..style = PaintingStyle.fill
     ..color = Palette.text;
-  final Paint _stroke = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.5;
 
   static Float64List _shipsInCanvas(StarMapScene scene, MapTransform t) {
     final out = Float64List(scene.shipments.length * _stride);
@@ -259,20 +248,11 @@ class MapMotionPainter extends CustomPainter {
         _fill,
       );
     }
-    if (_signals.isEmpty) return;
-    // Faint and slowly breathing.
-    final wave = 0.5 + 0.5 * math.sin(2 * math.pi * motion.pulse);
-    final glow = _MapColors.glow;
-    _stroke.color = glow[(wave * (glow.length - 1)).round()];
-    for (final at in _signals) {
-      canvas.drawCircle(at, _signalRadius, _stroke);
-    }
   }
 
   @override
   bool shouldRepaint(MapMotionPainter oldDelegate) =>
       oldDelegate.transform != transform ||
       oldDelegate.motion != motion ||
-      !listEquals(oldDelegate.scene.shipments, scene.shipments) ||
-      !listEquals(oldDelegate.scene.signals, scene.signals);
+      !listEquals(oldDelegate.scene.shipments, scene.shipments);
 }

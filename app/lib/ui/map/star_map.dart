@@ -45,7 +45,6 @@ class StarMap extends StatefulWidget {
 class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   static const double _minScale = 0.5;
   static const double _maxScale = 3;
-  static const Duration _pulsePeriod = Duration(seconds: 2);
 
   final MapMotion _motion = MapMotion();
   final TransformationController _zoom = TransformationController();
@@ -123,26 +122,20 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
     _frameAt = elapsed;
     final since =
         (elapsed - _tickAt).inMicroseconds / Duration.microsecondsPerSecond;
-    _motion.update(
-      sinceTick: since.clamp(0.0, 1.0),
-      pulse:
-          (elapsed.inMicroseconds % _pulsePeriod.inMicroseconds) /
-          _pulsePeriod.inMicroseconds,
-    );
+    _motion.update(sinceTick: since.clamp(0.0, 1.0));
   }
 
-  /// Runs the ticker only while something moves and motion is allowed.
+  /// Runs the ticker only while shipments are in flight and motion is
+  /// allowed: nothing else on the map moves.
   void _syncTicker() {
-    final animate =
-        _animationsAllowed &&
-        (_scene.shipments.isNotEmpty || _scene.signals.isNotEmpty);
+    final animate = _animationsAllowed && _scene.shipments.isNotEmpty;
     if (animate && !_ticker.isActive) {
       _frameAt = Duration.zero;
       _tickAt = Duration.zero;
       _ticker.start();
     } else if (!animate && _ticker.isActive) {
       _ticker.stop();
-      _motion.update(sinceTick: 0, pulse: 0);
+      _motion.update(sinceTick: 0);
     }
   }
 

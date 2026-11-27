@@ -270,13 +270,14 @@ final class StarMapScene {
   final double extent;
 
   /// Whether [other] draws the same static layer: star, orbits, bodies,
-  /// routes and extent, whatever its shipments and signals.
+  /// routes, signal markers and extent, whatever its shipments.
   bool sameStaticLayer(StarMapScene other) =>
       other.starRadius == starRadius &&
       other.extent == extent &&
       listEquals(other.orbitRadii, orbitRadii) &&
       listEquals(other.bodies, bodies) &&
-      listEquals(other.routes, routes);
+      listEquals(other.routes, routes) &&
+      listEquals(other.signals, signals);
 
   @override
   bool operator ==(Object other) =>

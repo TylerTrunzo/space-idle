@@ -188,6 +188,18 @@ void main() {
     expect(ids, hasLength(2));
   });
 
+  testWidgets('signals alone schedule no frames: their marker is static', (
+    tester,
+  ) async {
+    // A new game: unsurveyed signals, no shipments.
+    final c = _controller();
+    expect(c.state.shipments, isEmpty);
+    await tester.pumpWidget(_app(c));
+    expect(find.bySemanticsLabel(RegExp('^Unsurveyed signal')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
   testWidgets('an idle map schedules no frames', (tester) async {
     // No shipments, every body surveyed (no signal), no project running.
     final c = _controller();
@@ -321,7 +333,7 @@ void main() {
       expect(scene.shipments, isNotEmpty);
       expect(scene.signals, isNotEmpty);
       expect(scene.bodies.any((b) => b.bottleneck), isTrue);
-      final motion = MapMotion()..update(sinceTick: 0.5, pulse: 0.3);
+      final motion = MapMotion()..update(sinceTick: 0.5);
       addTearDown(motion.dispose);
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
