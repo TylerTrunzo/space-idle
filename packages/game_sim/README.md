@@ -215,8 +215,9 @@ routes counts as arriving at the rate it is sent. `creditsPerSec` is what
 auto-sell earns a second in steady play, the lower of two estimates: every
 building held to the inputs it can get without drawing stock down, and what
 a short run of play (5 min, then 10 min measured) earns. Goods made from a
-stock nothing refills, and stock above an auto-sell keep, do not count, so
-it matches what hours away earn (within 1% from day-7 bot states). `state` also gives the player's crew totals (`base`, `supported`,
+stock nothing refills, and stock above an auto-sell keep, do not count, and
+what auto-sell holds back for open contracts is left out (it fills once and
+then sells), so it matches what hours away earn (within 1% from day-7 bot states). `state` also gives the player's crew totals (`base`, `supported`,
 `assigned`, `free`, which is never below 0, and `overAssigned`, the crew
 assigned beyond what housing supports).
 
