@@ -342,7 +342,7 @@ void main() {
     }
     expect(
       content.milestones.where((m) => m.condition is CreditsEarnedCondition),
-      hasLength(11),
+      hasLength(15),
     );
     expect(
       content.milestones.where((m) => m.condition is ProducedCondition),
@@ -351,8 +351,8 @@ void main() {
   });
 
   group('milestones', () {
-    test('there are about forty, with unique names', () {
-      expect(content.milestones.length, inInclusiveRange(38, 45));
+    test('there are over fifty, with unique names', () {
+      expect(content.milestones.length, inInclusiveRange(50, 60));
       expect(
         content.milestones.map((m) => m.name).toSet(),
         hasLength(content.milestones.length),
@@ -430,7 +430,7 @@ void main() {
       ('smelter', null),
     ]);
     expect(content.rules.claimBaseCredits, BigNum.from(5000));
-    expect(content.milestones, hasLength(42));
+    expect(content.milestones, hasLength(56));
   });
 
   group('hidden bodies', () {

@@ -16,7 +16,7 @@
   "claimKitsBase": 5,
   "claimKitsPerOwned": 5,
   "slotBaseCredits": "5e4",
-  "slotGrowth": 2.5,
+  "slotGrowth": 2.0,
   "outpostKitResource": "outpost_kit",
   "shipCapacityPerSecond": 10,
   "cargoShipResource": "cargo_ship",

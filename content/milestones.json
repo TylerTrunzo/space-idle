@@ -14,6 +14,7 @@
   {"id": "first_reactor_core", "name": "Fusion Heart", "condition": {"type": "produced", "resource": "reactor_core", "amount": "1"}},
   {"id": "first_survey_drone", "name": "Eyes Outward", "condition": {"type": "produced", "resource": "survey_drone", "amount": "1"}},
   {"id": "own_5_bodies", "name": "Whole System", "condition": {"type": "bodiesOwned", "count": 5}},
+  {"id": "credits_30m", "name": "Thirty Million", "condition": {"type": "creditsEarned", "amount": "3e7"}},
   {"id": "credits_100m", "name": "Hundred Million", "condition": {"type": "creditsEarned", "amount": "1e8"}},
   {"id": "first_station_segment", "name": "Orbital Foundations", "condition": {"type": "produced", "resource": "station_segment", "amount": "1"}},
   {"id": "credits_300m", "name": "Three Hundred Million", "condition": {"type": "creditsEarned", "amount": "3e8"}},
@@ -40,5 +41,18 @@
   {"id": "wire_flow", "name": "Copper River", "condition": {"type": "productionRate", "resource": "copper_wire", "perSec": "20"}},
   {"id": "plate_flow", "name": "Armor Line", "condition": {"type": "productionRate", "resource": "hull_plate", "perSec": "5"}},
   {"id": "wafer_flow", "name": "Glass Tide", "condition": {"type": "productionRate", "resource": "silicon_wafer", "perSec": "10"}},
-  {"id": "food_flow", "name": "Full Tables", "condition": {"type": "productionRate", "resource": "food", "perSec": "20"}}
+  {"id": "food_flow", "name": "Full Tables", "condition": {"type": "productionRate", "resource": "food", "perSec": "20"}},
+  {"id": "credits_3b", "name": "Three Billion", "condition": {"type": "creditsEarned", "amount": "3e9"}},
+  {"id": "credits_30b", "name": "Thirty Billion", "condition": {"type": "creditsEarned", "amount": "3e10"}},
+  {"id": "credits_300b", "name": "Three Hundred Billion", "condition": {"type": "creditsEarned", "amount": "3e11"}},
+  {"id": "station_4", "name": "Busy Harbor", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 4}},
+  {"id": "station_6", "name": "Sky Bazaar", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 6}},
+  {"id": "station_8", "name": "Crown of Lights", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 8}},
+  {"id": "station_10", "name": "City Above", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 10}},
+  {"id": "driver_1", "name": "First Launch", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 1}},
+  {"id": "driver_3", "name": "Steady Volleys", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 3}},
+  {"id": "driver_5", "name": "Rail to the Sky", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 5}},
+  {"id": "segment_flow", "name": "Assembly in Orbit", "condition": {"type": "productionRate", "resource": "station_segment", "perSec": "0.03"}},
+  {"id": "steel_flow", "name": "Iron Tide", "condition": {"type": "productionRate", "resource": "steel", "perSec": "20"}},
+  {"id": "wire_flow_150", "name": "Copper Flood", "condition": {"type": "productionRate", "resource": "copper_wire", "perSec": "150"}}
 ]

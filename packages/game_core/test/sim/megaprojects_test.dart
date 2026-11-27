@@ -15,9 +15,16 @@ Map<String, Object?> stationJson() => (shippedBundle()['megaprojects']! as List)
     .cast<Map<String, Object?>>()
     .firstWhere((m) => m['id'] == 'orbital_station');
 
-/// The shipped content with its megaprojects file replaced by [megaprojects].
+/// The shipped content with its megaprojects file replaced by
+/// [megaprojects], less the milestones on any other megaproject.
 Content contentWithMegaprojects(List<Map<String, Object?>> megaprojects) {
+  final ids = {for (final m in megaprojects) m['id']};
   final b = shippedBundle()..['megaprojects'] = megaprojects;
+  (b['milestones']! as List).removeWhere((m) {
+    final condition = (m as Map<String, Object?>)['condition']! as Map;
+    return condition['type'] == 'megaprojectLevel' &&
+        !ids.contains(condition['megaproject']);
+  });
   return switch (Content.fromBundle(b)) {
     ContentOk(:final content) => content,
     ContentInvalid(:final errors) => throw StateError('$errors'),
