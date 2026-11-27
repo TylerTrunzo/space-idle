@@ -49,4 +49,23 @@ void main() {
     };
     cases.forEach((v, s) => expect(formatDuration(v), s, reason: '$v'));
   });
+
+  test('rounds down or up on request, so progress never reads as done', () {
+    // Round-4 casual bug 4: "30K of 30K" while 1 unit was owed.
+    String down(num v) =>
+        formatNumber(BigNum.from(v), rounding: NumberRounding.down);
+    String up(num v) =>
+        formatNumber(BigNum.from(v), rounding: NumberRounding.up);
+    expect(down(29999), '29.9K');
+    expect(down(999.9), '999');
+    expect(down(999999), '999K');
+    expect(down(30000), '30K');
+    expect(down(2.999), '2.99');
+    expect(up(1), '1');
+    expect(up(1001), '1.01K');
+    expect(up(0.001), '0.01');
+    expect(up(999.1), '1K');
+    expect(up(30000), '30K');
+    expect(down(-29999), '-29.9K');
+  });
 }

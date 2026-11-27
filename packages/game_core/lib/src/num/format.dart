@@ -25,34 +25,60 @@ String _trim(String s) {
   return s.substring(0, end);
 }
 
-/// Rounds [x] to [d] decimals, halves away from zero.
-double _roundTo(double x, int d) {
-  final f = d == 0 ? 1.0 : (d == 1 ? 10.0 : 100.0);
-  // The relative nudge absorbs mantissa*10^k error (9.995*100 = 999.4999...).
-  return (x * f * (1 + 1e-12)).roundToDouble() / f;
+/// How [formatNumber] rounds to three significant digits.
+enum NumberRounding {
+  /// To the nearest, halves away from zero.
+  nearest,
+
+  /// Toward zero: what is delivered or held, so it never reads as more.
+  down,
+
+  /// Away from zero: what is still owed, so it never reads as less.
+  up,
 }
 
-/// Rounds [x] (in `[0, 1000]`) to three significant digits.
-double _round3(double x) {
+/// Rounds [x] (not negative) to [d] decimals the [mode] way.
+double _roundTo(double x, int d, NumberRounding mode) {
+  final f = d == 0 ? 1.0 : (d == 1 ? 10.0 : 100.0);
+  // The relative nudge absorbs mantissa*10^k error (9.995*100 = 999.4999...).
+  return switch (mode) {
+        NumberRounding.nearest => (x * f * (1 + 1e-12)).roundToDouble(),
+        NumberRounding.down => (x * f * (1 + 1e-12)).floorToDouble(),
+        NumberRounding.up => (x * f * (1 - 1e-12)).ceilToDouble(),
+      } /
+      f;
+}
+
+/// Rounds [x] (in `[0, 1000]`) to three significant digits the [mode] way.
+double _round3(double x, NumberRounding mode) {
   var d = x < 10 ? 2 : (x < 100 ? 1 : 0);
-  var r = _roundTo(x, d);
+  var r = _roundTo(x, d, mode);
   // Rounding can promote to the next digit band (9.996 -> 10.00).
   if (d > 0 && r >= (d == 2 ? 10 : 100)) {
     d--;
-    r = _roundTo(x, d);
+    r = _roundTo(x, d, mode);
   }
   return r;
 }
 
 /// Formats [v] for display: plain up to 999, suffixed (`K`..`Dc`) with three
 /// significant digits up to 1e36, scientific notation beyond.
-String formatNumber(BigNum v) {
+///
+/// [rounding] picks how the digits are rounded: to the nearest by default;
+/// [NumberRounding.down] for progress such as units delivered, so 29,999
+/// of 30K reads "29.9K", not "30K"; [NumberRounding.up] for what is still
+/// owed, so a part of a unit owed never reads as nothing. Either is applied
+/// to the size, the sign kept.
+String formatNumber(
+  BigNum v, {
+  NumberRounding rounding = NumberRounding.nearest,
+}) {
   if (v.isZero) return '0';
   final sign = v.isNegative ? '-' : '';
   final abs = v.isNegative ? -v : v;
 
   if (abs.exponent < 3) {
-    final r = _round3(abs.toDouble());
+    final r = _round3(abs.toDouble(), rounding);
     if (r < 1000) {
       final s = _trim(r.toStringAsFixed(r < 10 ? 2 : (r < 100 ? 1 : 0)));
       return s == '0' ? '0' : '$sign$s';
@@ -62,7 +88,7 @@ String formatNumber(BigNum v) {
 
   var group = abs.exponent ~/ 3;
   if (group < _suffixes.length) {
-    var scaled = _round3(abs.mantissa * _pow10(abs.exponent % 3));
+    var scaled = _round3(abs.mantissa * _pow10(abs.exponent % 3), rounding);
     if (scaled >= 1000) {
       scaled = 1;
       group++;
