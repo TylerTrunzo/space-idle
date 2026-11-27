@@ -126,13 +126,13 @@ void main() {
     });
 
     test('a route curve bends off the straight line, and back again', () {
-      const curve = MapCurve.between(Offset(0, 0), Offset(4, 0));
+      final curve = MapCurve.between(Offset(0, 0), Offset(4, 0));
       expect(curve.at(0), const Offset(0, 0));
       expect(curve.at(1), const Offset(4, 0));
       expect(curve.at(0.5).dx, closeTo(2, 1e-9));
       expect(curve.at(0.5).dy.abs(), greaterThan(0.1));
       // The way back bends to the other side, so both directions show.
-      const back = MapCurve.between(Offset(4, 0), Offset(0, 0));
+      final back = MapCurve.between(Offset(4, 0), Offset(0, 0));
       expect(back.at(0.5).dy.sign, -curve.at(0.5).dy.sign);
     });
 

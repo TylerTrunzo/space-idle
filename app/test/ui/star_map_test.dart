@@ -54,11 +54,11 @@ double _shipmentProgress(WidgetTester tester) {
     find.byWidgetPredicate(
       (w) =>
           w is CustomPaint &&
-          w.painter is StarMapPainter &&
-          (w.painter! as StarMapPainter).scene.shipments.isNotEmpty,
+          w.painter is MapMotionPainter &&
+          (w.painter! as MapMotionPainter).scene.shipments.isNotEmpty,
     ),
   );
-  final painter = paint.painter! as StarMapPainter;
+  final painter = paint.painter! as MapMotionPainter;
   final ship = painter.scene.shipments.first;
   return ship.progress + ship.progressPerSecond * painter.motion.sinceTick;
 }
@@ -263,63 +263,137 @@ void main() {
     expect(selected, ['kora']);
   });
 
-  test('the painter paints a route, a shipment, a badge, an arc and a '
-      'signal straight onto a canvas', () {
-    final state = GameEngine(content).newGame(1);
-    // An hour in, Kora's stores are full: a bottleneck badge.
-    GameEngine(content).advance(state, 3600);
-    addRouteAndShipment(state, departIn: -25, tripSeconds: 100);
-    state.projects.add(
-      ProjectState(
-        id: 'p1',
-        factionId: 'player',
-        kind: ProjectKind.claim,
-        targetId: 'cinder',
-        startedAt: state.time - 10,
-        finishAt: state.time + 10,
-      ),
-    );
-    final scene = buildStarMapScene(
+  group('painters', () {
+    const size = Size(360, 640);
+    late StarMapScene scene;
+    late MapTransform t;
+
+    StarMapScene build(GameState state) => buildStarMapScene(
       state,
       content,
       'player',
       buildFlowReport(state, content, 'player'),
     );
-    expect(scene.shipments, isNotEmpty);
-    expect(scene.bodies.any((b) => b.bottleneck), isTrue);
-    const size = Size(360, 640);
-    final motion = MapMotion()..update(sinceTick: 0.5, pulse: 0.3);
-    final painter = StarMapPainter(
-      scene: scene,
-      transform: MapTransform.fit(size, scene.extent),
-      motion: motion,
-      selectedId: 'kora',
-    );
-    final recorder = ui.PictureRecorder();
-    painter.paint(Canvas(recorder), size);
-    recorder.endRecording().dispose();
 
-    expect(
-      painter.shouldRepaint(
+    setUp(() {
+      final state = GameEngine(content).newGame(1);
+      // An hour in, Kora's stores are full: a bottleneck badge.
+      GameEngine(content).advance(state, 3600);
+      addRouteAndShipment(state, departIn: -25, tripSeconds: 100);
+      state.projects.add(
+        ProjectState(
+          id: 'p1',
+          factionId: 'player',
+          kind: ProjectKind.claim,
+          targetId: 'cinder',
+          startedAt: state.time - 10,
+          finishAt: state.time + 10,
+        ),
+      );
+      scene = build(state);
+      t = MapTransform.fit(size, scene.extent);
+    });
+
+    test('both layers paint a route, a shipment, a badge, an arc and a '
+        'signal straight onto a canvas', () {
+      expect(scene.shipments, isNotEmpty);
+      expect(scene.signals, isNotEmpty);
+      expect(scene.bodies.any((b) => b.bottleneck), isTrue);
+      final motion = MapMotion()..update(sinceTick: 0.5, pulse: 0.3);
+      addTearDown(motion.dispose);
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      StarMapPainter(
+        scene: scene,
+        transform: t,
+        selectedId: 'kora',
+      ).paint(canvas, size);
+      MapMotionPainter(
+        scene: scene,
+        transform: t,
+        motion: motion,
+      ).paint(canvas, size);
+      recorder.endRecording().dispose();
+    });
+
+    test(
+      'the static layer repaints on a new selection, not on equal input',
+      () {
+        final painter = StarMapPainter(
+          scene: scene,
+          transform: t,
+          selectedId: 'kora',
+        );
+        expect(
+          painter.shouldRepaint(
+            StarMapPainter(scene: scene, transform: t, selectedId: 'kora'),
+          ),
+          isFalse,
+        );
+        expect(
+          painter.shouldRepaint(
+            StarMapPainter(scene: scene, transform: t, selectedId: 'cinder'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('shipments moving on repaint only the moving layer', () {
+      final moved = StarMapScene(
+        starRadius: scene.starRadius,
+        orbitRadii: scene.orbitRadii,
+        bodies: scene.bodies,
+        routes: scene.routes,
+        shipments: [
+          for (final s in scene.shipments)
+            MapShipment(s.curve, s.progress + 0.01, s.progressPerSecond),
+        ],
+        signals: scene.signals,
+        extent: scene.extent,
+      );
+      expect(
         StarMapPainter(
           scene: scene,
-          transform: MapTransform.fit(size, scene.extent),
+          transform: t,
+        ).shouldRepaint(StarMapPainter(scene: moved, transform: t)),
+        isFalse,
+      );
+      final motion = MapMotion();
+      addTearDown(motion.dispose);
+      expect(
+        MapMotionPainter(
+          scene: scene,
+          transform: t,
           motion: motion,
-          selectedId: 'kora',
+        ).shouldRepaint(
+          MapMotionPainter(scene: moved, transform: t, motion: motion),
         ),
+        isTrue,
+      );
+    });
+  });
+
+  testWidgets('the static and moving layers each have a RepaintBoundary', (
+    tester,
+  ) async {
+    final c = _controller();
+    addRouteAndShipment(c.state, departIn: -25, tripSeconds: 100);
+    await tester.pumpWidget(_app(c));
+
+    Finder layer<T>() =>
+        find.byWidgetPredicate((w) => w is CustomPaint && w.painter is T);
+    RepaintBoundary boundaryOf(Finder f) => tester.widget<RepaintBoundary>(
+      find.ancestor(of: f, matching: find.byType(RepaintBoundary)).first,
+    );
+    expect(layer<StarMapPainter>(), findsOneWidget);
+    expect(layer<MapMotionPainter>(), findsOneWidget);
+    expect(
+      identical(
+        boundaryOf(layer<StarMapPainter>()),
+        boundaryOf(layer<MapMotionPainter>()),
       ),
       isFalse,
-    );
-    expect(
-      painter.shouldRepaint(
-        StarMapPainter(
-          scene: scene,
-          transform: MapTransform.fit(size, scene.extent),
-          motion: motion,
-          selectedId: 'cinder',
-        ),
-      ),
-      isTrue,
     );
   });
 }

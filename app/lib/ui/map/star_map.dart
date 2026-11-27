@@ -196,17 +196,32 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
                       behavior: HitTestBehavior.opaque,
                       onTapUp: (d) => _onTap(d.localPosition, scene, t),
                       child: ExcludeSemantics(
-                        child: RepaintBoundary(
-                          child: CustomPaint(
-                            painter: StarMapPainter(
-                              scene: scene,
-                              transform: t,
-                              motion: _motion,
-                              selectedId: widget.selectedId,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Two layers: the static one repaints at most
+                            // once a tick, the moving one every frame.
+                            RepaintBoundary(
+                              child: CustomPaint(
+                                painter: StarMapPainter(
+                                  scene: scene,
+                                  transform: t,
+                                  selectedId: widget.selectedId,
+                                ),
+                                isComplex: true,
+                              ),
                             ),
-                            isComplex: true,
-                            willChange: animate,
-                          ),
+                            RepaintBoundary(
+                              child: CustomPaint(
+                                painter: MapMotionPainter(
+                                  scene: scene,
+                                  transform: t,
+                                  motion: _motion,
+                                ),
+                                willChange: animate,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

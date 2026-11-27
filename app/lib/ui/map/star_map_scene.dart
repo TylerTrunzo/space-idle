@@ -60,8 +60,8 @@ abstract final class MapLayout {
 /// directions of a pair of routes show.
 @immutable
 final class MapCurve {
-  /// The curve between two points.
-  const MapCurve.between(this.from, this.to);
+  /// The curve between two points; its [control] is worked out once here.
+  MapCurve.between(this.from, this.to) : control = _controlFor(from, to);
 
   /// Share of the chord length the curve bows out at its control point.
   static const double bend = 0.2;
@@ -73,7 +73,9 @@ final class MapCurve {
   final Offset to;
 
   /// The control point: the chord's midpoint pushed off to the left.
-  Offset get control {
+  final Offset control;
+
+  static Offset _controlFor(Offset from, Offset to) {
     final d = to - from;
     return (from + to) / 2 + Offset(-d.dy, d.dx) * bend;
   }
@@ -266,6 +268,15 @@ final class StarMapScene {
 
   /// Radius around the star the map fits to the screen.
   final double extent;
+
+  /// Whether [other] draws the same static layer: star, orbits, bodies,
+  /// routes and extent, whatever its shipments and signals.
+  bool sameStaticLayer(StarMapScene other) =>
+      other.starRadius == starRadius &&
+      other.extent == extent &&
+      listEquals(other.orbitRadii, orbitRadii) &&
+      listEquals(other.bodies, bodies) &&
+      listEquals(other.routes, routes);
 
   @override
   bool operator ==(Object other) =>
