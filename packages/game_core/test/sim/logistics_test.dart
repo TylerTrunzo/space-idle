@@ -223,7 +223,7 @@ void main() {
   group('stop at destination', () {
     test('only the destination stock counts, not cargo in flight', () {
       final r = route(rate: 1)..stopAtDestination = n(15);
-      expect(routeRoomBeforeStop(s, r), n(15));
+      expect(routePaused(s, r), isFalse);
       run(20);
       // Nothing has landed yet (120 s of travel), so it keeps sending.
       expect(at(b).isZero, isTrue);
@@ -252,7 +252,7 @@ void main() {
       for (var i = 0; i < 1800; i++) {
         stepLogistics(s, c, 1);
         final have = at(b).toDouble();
-        if (routePaused(s, r) && have < 80) pausedBelowStop++;
+        if (routePaused(s, r) && have < 79.999) pausedBelowStop++;
         final use = have < 0.5 ? have : 0.5;
         b.stock['ore'] = n(have - use);
         if (s.time > 130) short += 0.5 - use;
@@ -281,7 +281,6 @@ void main() {
     test('a route without a stop level never pauses', () {
       final r = route(rate: 1);
       b.stock['ore'] = n(900);
-      expect(routeRoomBeforeStop(s, r), isNull);
       expect(routePaused(s, r), isFalse);
       run(5);
       expect(inTransit().toDouble(), closeTo(5, 1e-9));

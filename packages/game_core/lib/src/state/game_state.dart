@@ -664,7 +664,7 @@ final class RouteState {
   /// Destination stock at which the route pauses, above zero, or null to
   /// send without stopping. Only the destination's stock counts, not cargo
   /// in flight, so the destination may end up above it by what was in
-  /// flight when it got there (see `routeRoomBeforeStop`). The route
+  /// flight when it got there (see `routePaused`). The route
   /// commands keep it to the destination's storage cap.
   BigNum? stopAtDestination;
 

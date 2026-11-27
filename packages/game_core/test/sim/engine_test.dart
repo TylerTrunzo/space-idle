@@ -965,6 +965,36 @@ void main() {
       expect(coarse, closeTo(live, live * 0.02));
     });
 
+    test('a route with a stop level earns the same at 60 s steps', () {
+      // The route from Kora pauses while Hollow Reach holds 200 iron ore,
+      // far less than its smelters use in a minute: a 60 s step must not
+      // cut what the route sends to the room left below the stop.
+      final (e, s) = routeFedEmpire();
+      e.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(100),
+          50,
+          stopAtDestination: n(200),
+        ),
+      );
+      e.advance(s, 600, maxStep: 1);
+      BigNum earned(double step) {
+        final t = s.copy();
+        e.advance(t, 6 * 3600, maxStep: step);
+        return t.faction('player').credits - s.faction('player').credits;
+      }
+
+      final live = earned(1).toDouble();
+      final coarse = earned(60).toDouble();
+      expect(live, greaterThan(0));
+      expect(coarse, closeTo(live, live * 0.02));
+    });
+
     test('catch-up ticks like advance', () {
       final (e, s) = fullEmpire();
       final away = s.copy();
