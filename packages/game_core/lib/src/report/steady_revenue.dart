@@ -9,6 +9,7 @@ import '../sim/market.dart';
 import '../sim/megaproject_auto.dart';
 import '../sim/megaprojects.dart';
 import '../sim/production.dart';
+import '../sim/projects.dart';
 import '../sim/step_cache.dart';
 import '../state/game_state.dart';
 
@@ -53,6 +54,13 @@ typedef SteadyIncome = ({
 /// those, but cannot tell goods made from a stock nothing refills from
 /// goods made from steady supply. The lower of the two is what the empire
 /// keeps earning.
+///
+/// The steady sales are valued at the prices the market settles at over
+/// the next hours ([settledSaturation]), not today's: right after a large
+/// upgrade spree the market has not caught up with the new volume yet.
+/// And both readings count the megaproject stages under way that finish
+/// within the short run as done, their bonuses (market depth among them)
+/// paid for.
 ///
 /// Credits auto-paid to megaprojects come out of those sales, so they are
 /// shown as a share of [SteadyIncome.creditsPerSec]: when the steady
@@ -123,6 +131,25 @@ SteadyIncome _saleRevenuePerSec(
   SteadyFlows steady,
   GameState market,
 ) {
+  // The megaproject stages under way that finish within the run count as
+  // done: their bonuses (market depth among them) are paid for, and the
+  // prices settle at them.
+  for (final copy in [s, market]) {
+    _completeStagesWithin(copy, c, factionId, _warmUpSeconds + _measureSeconds);
+  }
+  // The steady sales are valued at the prices the market settles at over
+  // the next hours: right after an upgrade spree it has not yet caught up
+  // with the new volume, and today's prices would overstate what the next
+  // hours earn. The measured run starts from today's market; it plays
+  // only a few minutes, so its prices are today's or a little below.
+  for (final MapEntry(key: id, value: sat) in settledSaturation(
+    market,
+    c,
+    factionId,
+    steady,
+  ).entries) {
+    market.market.saturation[id] = sat;
+  }
   final steadyRevenue = steadySaleRevenue(
     c,
     factionId,
@@ -312,6 +339,97 @@ BigNum steadySaleRevenue(
   final before = f.credits;
   stepMarket(market, c, 1, limits: limits);
   return f.credits - before;
+}
+
+/// Completes [factionId]'s megaproject stages under way that finish
+/// within [seconds] of `s.time` ([stepProjects], a paid-for next stage
+/// starting as it would), leaving the time as it was: for a copy the
+/// steady income is worked out on, whose bonuses (market depth among
+/// them) are then the ones the faction has paid for and gets within the
+/// run.
+void _completeStagesWithin(
+  GameState s,
+  Content c,
+  String factionId,
+  double seconds,
+) {
+  final now = s.time;
+  s.time = now + seconds;
+  try {
+    stepProjects(
+      s,
+      c,
+      only: (p) =>
+          p.factionId == factionId && p.kind == ProjectKind.megaprojectStage,
+    );
+  } finally {
+    s.time = now;
+  }
+}
+
+/// Game seconds over which [settledSaturation] averages the market's
+/// approach to its settled price: five recovery times, by which a market
+/// has all but settled, and about as long as a player is away between two
+/// check-ins.
+double _settleHorizon(Content c) => 5 * c.rules.marketRecoverySeconds;
+
+/// Resource id to the saturation the credits a second are valued at, for
+/// each resource [factionId]'s steady auto-sales sell, in sorted id order:
+/// the average, over [_settleHorizon] from now, of the market's approach
+/// from today's saturation to the one steady selling settles it at.
+///
+/// What is left over a second with every flow steady ([steady]) on a body
+/// with an auto-sell rule on it is sold for good, at `rate`; steady
+/// selling holds the market at `1 / (1 + rate × marketRecoverySeconds /
+/// depth)`, `depth` being the faction's [marketDepthFor], no lower than
+/// its floor ([marketFloorOf]), and the gap to it closes by a factor e
+/// every `1 / (1 / marketRecoverySeconds + rate / depth)` seconds (see
+/// `stepMarket`). So right after an upgrade spree, before the market has
+/// caught up with the new volume, the figure is what the next hours earn,
+/// not today's prices.
+///
+/// Goods a megaproject the faction feeds goods on its own still owes are
+/// left out (their sales depend on what auto-delivery leaves), as are
+/// those it sells nothing of steadily. [s] gives the rules, bodies,
+/// bonuses and today's market; it is not changed.
+Map<String, double> settledSaturation(
+  GameState s,
+  Content c,
+  String factionId,
+  SteadyFlows steady,
+) {
+  final f = s.faction(factionId);
+  final fed = {
+    for (final m in c.megaprojects.values)
+      if ((f.megaprojectAuto[m.id]?.goods ?? false) &&
+          megaprojectTakesDeliveries(s, c, factionId, m))
+        ...megaprojectRemaining(s, c, factionId, m).keys,
+  };
+  final rate = <String, BigNum>{};
+  final seen = <String>{};
+  for (final rule in f.autoSell) {
+    if (s.body(rule.bodyId).ownerId != factionId) continue;
+    if (fed.contains(rule.resourceId)) continue;
+    final key = _key(rule.bodyId, rule.resourceId);
+    if (!seen.add(key)) continue;
+    final spare = steady._netByBody[key];
+    if (spare == null || spare <= const BigNum.zero()) continue;
+    rate[rule.resourceId] =
+        (rate[rule.resourceId] ?? const BigNum.zero()) + spare;
+  }
+  final recovery = c.rules.marketRecoverySeconds;
+  final horizon = _settleHorizon(c);
+  double averaged(String id) {
+    // Share of the saturation steady selling cuts a second.
+    final cut = rate[id]!.toDouble() / marketDepthFor(s, c, factionId, id);
+    final settled = math.max(marketFloorOf(c, id), 1 / (1 + cut * recovery));
+    final now = s.market.saturation[id] ?? 1;
+    final tau = 1 / (1 / recovery + cut);
+    return settled +
+        (now - settled) * tau / horizon * (1 - math.exp(-horizon / tau));
+  }
+
+  return {for (final id in rate.keys.toList()..sort()) id: averaged(id)};
 }
 
 /// One building's full-rate flow a second, and the share of it it runs at.

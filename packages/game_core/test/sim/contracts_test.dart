@@ -924,7 +924,15 @@ void main() {
       });
 
       test('a tiny income pays minRewardCredits, never nothing', () {
-        final c = lavish();
+        // Steel sells at settled prices, so the floor is set above what an
+        // hour of the starting income earns.
+        final c = steelOnly(
+          (t) => t
+            ..['rewardMultiplier'] = 1e6
+            ..['rewardIncomeSeconds'] = 600
+            ..['rewardCapIncomeSeconds'] = 3600
+            ..['minRewardCredits'] = '1e6',
+        );
         final s = e.newGame(1);
         final f = player(s);
         f.contractsPosted = 1;
@@ -941,9 +949,9 @@ void main() {
         }
         final income = basis(s, c);
         expect(income > const BigNum.zero(), isTrue);
-        expect(income.mulDouble(3600) < n(500), isTrue, reason: '$income');
+        expect(income.mulDouble(3600) < n(1e6), isTrue, reason: '$income');
         stepContracts(s, c, 0);
-        expect(f.contracts.single.rewardCredits, n(500));
+        expect(f.contracts.single.rewardCredits, n(1e6));
       });
     });
 

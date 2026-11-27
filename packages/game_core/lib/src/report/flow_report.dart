@@ -420,7 +420,8 @@ final class FlowReport {
   /// Credits the faction earns per second in steady state: the auto-sale
   /// revenue of its net production once stocks stop moving, with every
   /// building held to the inputs it can get without drawing stock down,
-  /// and no more than a short run of play earns (`saleRevenuePerSec`).
+  /// valued at the prices the market settles at over the next hours, and
+  /// no more than a short run of play earns (`saleRevenuePerSec`).
   /// Stock drawn down by consumers, or sold from above an auto-sell keep,
   /// does not count; commands (sales, contracts) are not part of it.
   ///

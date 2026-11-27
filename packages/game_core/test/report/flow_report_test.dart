@@ -348,7 +348,12 @@ void main() {
         ),
       );
       f.contractRefillAt.addAll([1e9, 1e9]);
-      expect(buildFlowReport(s, c, 'player').creditsPerSec, without);
+      // The same, but for the second of sales the sample step makes,
+      // which the contract holds back: it moves the market a hair.
+      expect(
+        buildFlowReport(s, c, 'player').creditsPerSec.toDouble(),
+        closeTo(without.toDouble(), without.toDouble() * 1e-6),
+      );
       expect(f.contracts, hasLength(1), reason: 'the state is untouched');
     });
 
@@ -929,6 +934,31 @@ void main() {
         closeTo(0.2 / 3, 0.2 / 3 * 0.01),
       );
     });
+  });
+
+  test('credits per second value sales at the prices they settle at', () {
+    // Round-4 optimizer: right after an upgrade spree the report showed
+    // 87.2K a second and the next 2.5 h earned 72K: prices take a while to
+    // fall to the new volume.
+    final kora = s.body('kora');
+    engine.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+    kora.buildings.firstWhere((b) => b.id == 'b2').levels[UpgradeTrack.speed] =
+        40;
+    expect(s.market.saturation['copper_ore'] ?? 1, 1);
+    final shown = buildFlowReport(s, c, 'player').creditsPerSec.toDouble();
+    final away = engine.catchUpOffline(s.copy(), 9000);
+    final earned = away.creditsEarned.toDouble() / 9000;
+    expect(shown, closeTo(earned, earned * 0.08));
+    // At today's full price it would read several times as much.
+    final made = buildFlowReport(
+      s,
+      c,
+      'player',
+    ).netProducedPerSec('copper_ore');
+    expect(
+      (made * price(s, c, 'copper_ore')).toDouble(),
+      greaterThan(earned * 3),
+    );
   });
 
   group('a store fed by cargo in lumps', () {
