@@ -57,7 +57,8 @@ what it keeps (local use, its auto-sell rule's `keepAtLeast`, open contract
 needs); with `creditReserve`, the credits above it (leave it out for no
 credits). `"goods":false` without a reserve clears it. It may be set while
 the megaproject is locked. Between minutes auto-sell holds back what a fed
-megaproject still needs, so deliveries are the same for any step size.
+megaproject still needs, up to the storage cap, and what a body holds of it
+above the cap goes in at once, so deliveries are the same for any step size.
 
 A new building takes free crew up to its base crew slots (fewer if fewer are
 free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew. At full

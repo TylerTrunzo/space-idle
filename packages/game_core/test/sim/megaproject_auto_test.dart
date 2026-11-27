@@ -500,6 +500,53 @@ void main() {
       expect(OfflineSummary.fromJson(old).autoDelivered, isEmpty);
     });
 
+    test('a body making more than it can store a minute feeds as much in 1 '
+        's steps as in 60 s steps', () {
+      GameState fast() {
+        final s = economy();
+        final kora = s.body('kora');
+        // A smelter at speed level 75 makes about 2K steel a second, far
+        // past Kora's cap in a minute, from ore stocked above the cap.
+        kora.buildings
+                .firstWhere((b) => b.defId == 'smelter')
+                .levels[UpgradeTrack.speed] =
+            75;
+        kora.stock['iron_ore'] = n(1e8);
+        // Every good but steel already in, for the first two levels.
+        s.faction('player')
+          ..credits = n(1e15)
+          ..megaprojectProgress['mass_driver'] = {
+            for (final MapEntry(key: id, value: v) in megaprojectCost(
+              content,
+              driver,
+              0,
+            ).entries)
+              if (id != 'credits' && id != 'steel') id: v,
+          };
+        ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', true, n(0)));
+        return s;
+      }
+
+      final live = fast();
+      final ticks = fast();
+      e.advance(live, 600, maxStep: 1);
+      e.advance(ticks, 600);
+      expect(
+        [for (final p in live.projects) (p.targetId, p.startedAt, p.finishAt)],
+        [for (final p in ticks.projects) (p.targetId, p.startedAt, p.finishAt)],
+      );
+      expect(live.projects, isNotEmpty);
+      expect(
+        megaprojectStageQueued(live, content, 'player', driver),
+        megaprojectStageQueued(ticks, content, 'player', driver),
+      );
+      final want = progress(ticks)['steel']?.toDouble() ?? 0;
+      expect(
+        progress(live)['steel']?.toDouble() ?? 0,
+        closeTo(want, want * 0.02 + 1),
+      );
+    });
+
     test('a catch-up is the same as 60 s steps, to the unit', () {
       final ticks = economy();
       final away = economy();

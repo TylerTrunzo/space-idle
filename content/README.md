@@ -49,7 +49,8 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Auto-delivery.** A megaproject can be fed on its own (`setMegaprojectAuto`): every game minute
   each body hands over what the stage still needs above what it keeps (its buildings' use over the
   step, its auto-sell rule's `keepAtLeast`, and what open contracts still need), and credits go in
-  above a reserve you set (none without one). Between minutes auto-sell holds those goods back.
+  above a reserve you set (none without one). Between minutes auto-sell holds those goods back, up
+  to the storage cap; what a body holds of them above its cap goes in at once.
 
 ## Building niches
 
