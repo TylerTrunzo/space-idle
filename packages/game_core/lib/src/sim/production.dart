@@ -293,26 +293,37 @@ BuildingFlow fullRateFlow(
   double crewEff, {
   EmpireBonuses bonuses = EmpireBonuses.none,
 }) {
-  final known = _flows[b];
-  if (known != null && known.matches(c, body, b, dt, crewEff, bonuses)) {
+  final known = b.flowMemo;
+  if (known is _KnownFlow && known.matches(c, body, b, dt, crewEff, bonuses)) {
     return known.flow;
   }
   final flow = _flowOf(c, body, b, dt, crewEff, bonuses);
-  _flows[b] = _KnownFlow(c, body, b, dt, crewEff, bonuses, (
+  final memo = _KnownFlow(c, body, b, dt, crewEff, bonuses, (
     inputs: UnmodifiableMapView(flow.inputs),
     outputs: UnmodifiableMapView(flow.outputs),
   ));
-  return _flows[b]!.flow;
+  b.flowMemo = memo;
+  return memo.flow;
 }
 
-/// Each building's last [fullRateFlow].
-final _flows = Expando<_KnownFlow>('flows');
+/// The richness of the deposit extractor [b] on [body] mines, or null for
+/// a building that mines none: all a flow reads of its body.
+double? _richnessFor(BodyState body, BuildingState b) {
+  final id = b.depositResourceId;
+  if (id == null) return null;
+  for (final d in body.deposits) {
+    if (d.resourceId == id) return d.richness;
+  }
+  return null;
+}
 
-/// A [fullRateFlow] and everything it was worked out from.
+/// A [fullRateFlow] and everything it was worked out from. Kept with the
+/// building ([BuildingState.flowMemo]) and its copies, so a copy of the
+/// state reuses it while nothing it depends on differs.
 final class _KnownFlow {
   _KnownFlow(
     this.content,
-    this.body,
+    BodyState body,
     BuildingState b,
     this.dt,
     this.crewEff,
@@ -320,20 +331,19 @@ final class _KnownFlow {
     this.flow,
   ) : defId = b.defId,
       deposit = b.depositResourceId,
-      deposits = body.deposits,
+      richness = _richnessFor(body, b),
       crew = b.crew,
       speed = b.levels[UpgradeTrack.speed]!,
       efficiency = b.levels[UpgradeTrack.efficiency]!,
       capacity = b.levels[UpgradeTrack.capacity]!;
 
   final Content content;
-  final BodyState body;
   final double dt;
   final double crewEff;
   final EmpireBonuses bonuses;
   final String defId;
   final String? deposit;
-  final List<DepositDef> deposits;
+  final double? richness;
   final int crew;
   final int speed;
   final int efficiency;
@@ -352,14 +362,13 @@ final class _KnownFlow {
       crewEff == this.crewEff &&
       identical(bonuses, this.bonuses) &&
       identical(c, content) &&
-      identical(body, this.body) &&
-      identical(body.deposits, deposits) &&
       b.crew == crew &&
       b.defId == defId &&
       b.depositResourceId == deposit &&
       b.levels[UpgradeTrack.speed] == speed &&
       b.levels[UpgradeTrack.efficiency] == efficiency &&
-      b.levels[UpgradeTrack.capacity] == capacity;
+      b.levels[UpgradeTrack.capacity] == capacity &&
+      _richnessFor(body, b) == richness;
 }
 
 /// [fullRateFlow], worked out.

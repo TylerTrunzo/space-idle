@@ -584,6 +584,11 @@ final class BuildingState {
   /// until they first run, get their crew as the batch of commands ends.
   bool awaitingCrew;
 
+  /// The engine's memo of this building's last full-rate flow
+  /// (`fullRateFlow`): not saved, handed on to a [copy], and checked
+  /// against everything the flow depends on before it is used.
+  Object? flowMemo;
+
   /// Serializes this building.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -606,7 +611,7 @@ final class BuildingState {
     lastRunFraction: lastRunFraction,
     lastLimitReason: lastLimitReason,
     awaitingCrew: awaitingCrew,
-  );
+  )..flowMemo = flowMemo;
 }
 
 /// A planet, moon, or belt and what is built on it.

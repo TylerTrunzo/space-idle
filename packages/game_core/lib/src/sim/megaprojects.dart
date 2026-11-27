@@ -110,14 +110,23 @@ EmpireBonuses bonusesFor(GameState s, Content c, String? factionId) {
     }
     if (same) return cached;
   }
-  final bonuses = _bonusesAt(c, levels);
-  _bonusCache[levels] = (c, [for (final m in ms) levels[m.id] ?? 0], bonuses);
+  final at = [for (final m in ms) levels[m.id] ?? 0];
+  // The same levels give the same totals, one object for all of them, so
+  // copies of a state share their bonuses and what is kept with them.
+  final byLevels = _byLevels[c] ??= {};
+  final bonuses = byLevels[at.join(',')] ??= _bonusesAt(c, levels);
+  _bonusCache[levels] = (c, at, bonuses);
   return bonuses;
 }
 
 /// A faction's levels map to the content, the levels (in content order)
 /// and the [bonusesFor] totals they were last worked out for.
 final _bonusCache = Expando<(Content, List<int>, EmpireBonuses)>('bonuses');
+
+/// Per content, the levels in content order, joined by commas, to their
+/// [bonusesFor] totals. Levels only ever rise, a step at a time, so it
+/// stays small.
+final _byLevels = Expando<Map<String, EmpireBonuses>>('bonusesByLevels');
 
 /// [bonusesFor] a faction at megaproject [levels].
 EmpireBonuses _bonusesAt(Content c, Map<String, int> levels) {
