@@ -690,6 +690,7 @@ void main() {
     final r = _runner();
     expect(r.handle({'cmd': 'state'})['megaprojects'], [
       {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 0},
+      {'id': 'mass_driver', 'name': 'Mass Driver', 'level': 0},
     ]);
     stockStation(r);
     final out = r.handle({
@@ -727,6 +728,7 @@ void main() {
     expect(away['headline'], endsWith('; Orbital Station reached level 1'));
     expect(r.handle({'cmd': 'state'})['megaprojects'], [
       {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 1},
+      {'id': 'mass_driver', 'name': 'Mass Driver', 'level': 0},
     ]);
   });
 
@@ -757,7 +759,7 @@ void main() {
       ),
     );
     final shown =
-        (r.handle({'cmd': 'state'})['megaprojects']! as List).single as Map;
+        (r.handle({'cmd': 'state'})['megaprojects']! as List).first as Map;
     expect((shown['delivered'] as Map).keys, ['hull_plate']);
     expect((shown['stillNeeded'] as Map).keys, [
       for (final k in cost.keys)
@@ -777,7 +779,7 @@ void main() {
     expect(rest['createdId'], startsWith('p'));
     expect(rest['message'], endsWith('; level 1 started, done in 2h'));
     final after =
-        (r.handle({'cmd': 'state'})['megaprojects']! as List).single as Map;
+        (r.handle({'cmd': 'state'})['megaprojects']! as List).first as Map;
     expect(after.containsKey('delivered'), isFalse);
   });
 

@@ -111,6 +111,7 @@ final class _Loader {
               'stageSeconds',
               'stageSecondsGrowth',
               'bonusesPerLevel',
+              'requiresMegaproject',
             },
             _megaproject,
           )
@@ -861,9 +862,24 @@ final class _Loader {
       }
       bonuses.add(bonus);
     }
+    final requires = <String, int>{};
+    final rawRequires = f.object('requiresMegaproject', optional: true);
+    if (rawRequires != null) {
+      final r = _Fields(
+        this,
+        '${f.path}.requiresMegaproject',
+        rawRequires,
+        rawRequires.keys.toSet(),
+      );
+      for (final other in rawRequires.keys) {
+        final level = r.integer(other, min: 1);
+        if (level != null) requires[other] = level;
+      }
+    }
     if (_errors.length > before) return null;
     return MegaprojectDef(
       id: id,
+      requiresMegaproject: requires,
       name: name!,
       hostBodyType: hostBodyType,
       baseCost: baseCost!,
@@ -1161,7 +1177,29 @@ final class _Loader {
       for (final r in m.baseCost.keys) {
         if (r != _credits) _needResource('$path.baseCost', r);
       }
+      for (final other in m.requiresMegaproject.keys) {
+        if (!megaprojects.containsKey(other)) {
+          err('$path.requiresMegaproject', "unknown megaproject '$other'");
+        }
+      }
+      if (_needsItself(m, megaprojects)) {
+        err('$path.requiresMegaproject', 'can never open: it needs itself');
+      }
     }
+  }
+
+  /// Whether [m]'s requirements lead back to [m], through any number of
+  /// other megaprojects, so it never opens.
+  bool _needsItself(MegaprojectDef m, Map<String, MegaprojectDef> all) {
+    final seen = <String>{};
+    final todo = [...m.requiresMegaproject.keys];
+    while (todo.isNotEmpty) {
+      final id = todo.removeLast();
+      if (id == m.id) return true;
+      if (!seen.add(id)) continue;
+      todo.addAll(all[id]?.requiresMegaproject.keys ?? const []);
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------- graph

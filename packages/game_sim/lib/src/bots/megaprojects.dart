@@ -9,9 +9,11 @@ extension _Megaprojects on _View {
   /// uses it.
   BigNum stageNeed(String resourceId) => _owedToStages(resourceId);
 
-  /// Whether deliveries to [m] can go on: the stage they pay for is below
-  /// the highest level ([megaprojectDeliveryLevel]).
+  /// Whether deliveries to [m] can go on: it is open
+  /// ([megaprojectLockedBy]) and the stage they pay for is below the
+  /// highest level ([megaprojectDeliveryLevel]).
   bool _deliverable(MegaprojectDef m) =>
+      megaprojectLockedBy(s, c, factionId, m) == null &&
       megaprojectDeliveryLevel(s, factionId, m) < SaveCodec.maxMegaprojectLevel;
 
   /// One delivery toward the stage being paid for of the first

@@ -764,8 +764,10 @@ final class MegaprojectDef {
     required this.stageSeconds,
     required this.stageSecondsGrowth,
     required List<BonusDef> bonusesPerLevel,
+    Map<String, int> requiresMegaproject = const {},
   }) : baseCost = Map.unmodifiable(baseCost),
-       bonusesPerLevel = List.unmodifiable(bonusesPerLevel);
+       bonusesPerLevel = List.unmodifiable(bonusesPerLevel),
+       requiresMegaproject = Map.unmodifiable(requiresMegaproject);
 
   /// Unique id.
   final String id;
@@ -797,6 +799,11 @@ final class MegaprojectDef {
 
   /// Bonuses each level grants, in content order; at least one.
   final List<BonusDef> bonusesPerLevel;
+
+  /// Other megaprojects' ids to the level of each a faction must reach
+  /// before it can deliver to this one, in content order; empty for none.
+  /// See `megaprojectLockedBy`.
+  final Map<String, int> requiresMegaproject;
 }
 
 /// A kind of order a neutral exchange posts on a faction's contracts board:

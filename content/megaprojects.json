@@ -18,5 +18,25 @@
       {"kind": "offlineCapSeconds", "amount": 3600},
       {"kind": "marketDepthMultiplier", "amount": 1.2}
     ]
+  },
+  {
+    "id": "mass_driver",
+    "name": "Mass Driver",
+    "requiresMegaproject": {"orbital_station": 2},
+    "baseCost": {
+      "credits": "4e6",
+      "steel": "20000",
+      "hull_plate": "5000",
+      "copper_wire": "20000",
+      "water": "10000",
+      "food": "2000"
+    },
+    "costGrowth": 2.5,
+    "stageSeconds": 7200,
+    "stageSecondsGrowth": 1.15,
+    "bonusesPerLevel": [
+      {"kind": "productionSpeedMultiplier", "amount": 1.1, "appliesToMaxTier": 1},
+      {"kind": "marketDepthMultiplier", "amount": 1.1, "appliesToMaxTier": 1}
+    ]
   }
 ]

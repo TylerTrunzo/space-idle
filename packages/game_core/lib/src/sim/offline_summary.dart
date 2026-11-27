@@ -3,7 +3,6 @@ import '../num/big_num.dart';
 import '../num/format.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
-import '../state/save_codec.dart';
 import 'crew.dart';
 import 'megaprojects.dart';
 import 'milestones.dart';
@@ -210,8 +209,8 @@ final class MegaprojectGoal extends NextGoal {
 /// credits held and earned (at [FlowReport.creditsPerSec]), units made
 /// (the gross rate), stock held (the empire's net rate) and time without
 /// waste (while nothing is wasted). A stage counts while the faction can
-/// pay toward it (the host body type owned, below its highest level, not
-/// already paid for); its ETA is the longest any entry still owed takes,
+/// pay toward it ([megaprojectTakesDeliveries]: open, the host body type
+/// owned, below its highest level, not already paid for); its ETA is the longest any entry still owed takes,
 /// after what the faction holds now, at those rates (null when one of
 /// them is not being made). Ties go to the milestone, then content order.
 NextGoal? nextGoal(
@@ -277,13 +276,8 @@ NextGoal? nextGoal(
   MegaprojectGoal? stage;
   Map<String, BigNum>? held;
   for (final m in c.megaprojects.values) {
-    final host = m.hostBodyType;
-    if (host != null &&
-        !s.bodies.any((b) => b.ownerId == factionId && b.typeId == host)) {
-      continue;
-    }
+    if (!megaprojectTakesDeliveries(s, c, factionId, m)) continue;
     final level = megaprojectDeliveryLevel(s, factionId, m);
-    if (level >= SaveCodec.maxMegaprojectLevel) continue;
     final owed = megaprojectRemaining(s, c, factionId, m);
     if (owed.isEmpty) continue;
     held ??= factionStock(s, factionId);

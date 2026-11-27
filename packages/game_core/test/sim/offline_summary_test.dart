@@ -275,6 +275,33 @@ void main() {
       );
     });
 
+    test('is never a megaproject still locked', () {
+      final s = e.newGame(1);
+      final f = s.faction('player');
+      f.reachedMilestones.addAll([for (final m in c.milestones) m.id]);
+      // Every good of the Mass Driver held; the station's are not made.
+      final driver = c.megaprojects['mass_driver']!;
+      for (final MapEntry(key: id, value: v) in megaprojectCost(
+        c,
+        driver,
+        0,
+      ).entries) {
+        if (id != 'credits') s.body('kora').stock[id] = v;
+      }
+      e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+      e.advance(s, 60);
+      final report = buildFlowReport(s, c, 'player');
+      expect(
+        (nextGoal(s, c, 'player', report)! as MegaprojectGoal).megaprojectId,
+        'orbital_station',
+      );
+      f.megaprojectLevels['orbital_station'] = 2;
+      expect(
+        (nextGoal(s, c, 'player', report)! as MegaprojectGoal).megaprojectId,
+        'mass_driver',
+      );
+    });
+
     test('has no ETA for a stage whose goods are not being made', () {
       final s = e.newGame(1);
       s.faction('player').reachedMilestones.addAll([

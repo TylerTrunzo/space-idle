@@ -743,6 +743,10 @@ enum CommandError {
 
   /// The faction's contracts board has no contract with that id.
   unknownContract,
+
+  /// The megaproject opens only once the faction reaches a level of
+  /// another (`MegaprojectDef.requiresMegaproject`).
+  megaprojectLocked,
 }
 
 /// Outcome of applying a command.

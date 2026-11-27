@@ -137,7 +137,10 @@ void main() {
 
     expect(r.dayEnds.map((d) => d.day), [1, 2]);
     expect(r.dayEnds.last.bodiesOwned, greaterThanOrEqualTo(2));
-    expect(r.dayEnds.last.megaprojectLevels.keys, ['orbital_station']);
+    expect(r.dayEnds.last.megaprojectLevels.keys, [
+      'orbital_station',
+      'mass_driver',
+    ]);
     for (final d in r.days) {
       final total = [
         for (final t in [0, 1, 2, 3]) r.tierShare(d, t),

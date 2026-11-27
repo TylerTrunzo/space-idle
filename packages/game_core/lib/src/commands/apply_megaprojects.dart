@@ -147,7 +147,8 @@ CommandOk _delivered(
 
 /// Why a stage command on megaproject [megaprojectId] from body [bodyId]
 /// cannot go ahead, or null if it can: an unknown megaproject or body, a
-/// body [f] does not own, a host body type [f] owns none of, the next
+/// body [f] does not own, a megaproject not open yet, a host body type [f]
+/// owns none of, the next
 /// stage already paid for while one is under way, or the highest level
 /// reached.
 CommandFailed? _checkMegaproject(
@@ -167,6 +168,17 @@ CommandFailed? _checkMegaproject(
   final body = _findBody(s, f, bodyId);
   if (body == null) return _unknownBody(bodyId);
   if (body.ownerId != f.id) return _notYours(s, f, body);
+  if (megaprojectLockedBy(s, c, f.id, def) case (
+    :final megaprojectId,
+    :final level,
+  )) {
+    final need = c.megaprojects[megaprojectId]!.name;
+    return _fail(
+      CommandError.megaprojectLocked,
+      '${def.name} opens at $need level $level (you have level '
+      '${f.megaprojectLevels[megaprojectId] ?? 0})',
+    );
+  }
   final host = def.hostBodyType;
   if (host != null &&
       !s.bodies.any((b) => b.ownerId == f.id && b.typeId == host)) {

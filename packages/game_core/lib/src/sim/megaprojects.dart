@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
+import '../state/save_codec.dart';
 
 /// The permanent bonuses a faction's megaproject levels add up to.
 ///
@@ -257,6 +258,46 @@ bool megaprojectStageQueued(
   return f != null &&
       f.megaprojectProgress.containsKey(m.id) &&
       megaprojectRemaining(s, c, factionId, m).isEmpty;
+}
+
+/// The first requirement of [m] ([MegaprojectDef.requiresMegaproject],
+/// content order) that [factionId] has not reached: the megaproject and
+/// the level it needs; null once [m] is open to it. A faction that does
+/// not exist is at level 0 of every megaproject.
+({String megaprojectId, int level})? megaprojectLockedBy(
+  GameState s,
+  Content c,
+  String factionId,
+  MegaprojectDef m,
+) {
+  if (m.requiresMegaproject.isEmpty) return null;
+  final levels = _levelsOf(s, factionId) ?? const {};
+  for (final MapEntry(key: id, value: need) in m.requiresMegaproject.entries) {
+    if ((levels[id] ?? 0) < need) return (megaprojectId: id, level: need);
+  }
+  return null;
+}
+
+/// Whether [factionId] can deliver toward [m] now: it is open
+/// ([megaprojectLockedBy]), the faction owns a body of its host type if it
+/// has one, the stage deliveries pay for is below
+/// [SaveCodec.maxMegaprojectLevel], and that stage is not already paid for
+/// while one is under way ([megaprojectStageQueued]).
+bool megaprojectTakesDeliveries(
+  GameState s,
+  Content c,
+  String factionId,
+  MegaprojectDef m,
+) {
+  if (megaprojectLockedBy(s, c, factionId, m) != null) return false;
+  final host = m.hostBodyType;
+  if (host != null &&
+      !s.bodies.any((b) => b.ownerId == factionId && b.typeId == host)) {
+    return false;
+  }
+  return megaprojectDeliveryLevel(s, factionId, m) <
+          SaveCodec.maxMegaprojectLevel &&
+      !megaprojectStageQueued(s, c, factionId, m);
 }
 
 /// Seconds the stage that takes [m] from [level] to `level + 1` takes:

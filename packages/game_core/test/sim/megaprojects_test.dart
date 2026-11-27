@@ -85,7 +85,7 @@ void main() {
 
   group('the shipped Orbital Station', () {
     test('loads with its bonuses and timings', () {
-      expect(content.megaprojects.keys, ['orbital_station']);
+      expect(content.megaprojects.keys, ['orbital_station', 'mass_driver']);
       expect(station.name, 'Orbital Station');
       expect(station.hostBodyType, isNull);
       expect(station.costGrowth, 3);
@@ -114,6 +114,83 @@ void main() {
         if (id == 'credits') continue;
         expect(content.resources[id]!.tier, inInclusiveRange(2, 3));
       }
+    });
+  });
+
+  group('the shipped Mass Driver', () {
+    final driver = content.megaprojects['mass_driver']!;
+    final deliver = DeliverToMegaprojectCommand(
+      'player',
+      'mass_driver',
+      'kora',
+      {'steel': n(1)},
+    );
+
+    test('costs credits and bulk tier 0-2 goods, ×2.5 a level', () {
+      expect(driver.name, 'Mass Driver');
+      expect(driver.hostBodyType, isNull);
+      expect(driver.costGrowth, 2.5);
+      expect(driver.baseCost.keys, [
+        'credits',
+        'steel',
+        'hull_plate',
+        'copper_wire',
+        'water',
+        'food',
+      ]);
+      for (final MapEntry(key: id, value: v) in driver.baseCost.entries) {
+        if (id == 'credits') continue;
+        expect(content.resources[id]!.tier, lessThanOrEqualTo(2), reason: id);
+        expect(v.toDouble(), inInclusiveRange(1e3, 1e5), reason: id);
+      }
+    });
+
+    test('speeds up and deepens the markets of tiers 0 and 1, compounding', () {
+      expect(
+        [
+          for (final b in driver.bonusesPerLevel)
+            (b.kind, b.amount, b.appliesToMaxTier),
+        ],
+        [
+          (BonusKind.productionSpeedMultiplier, 1.1, 1),
+          (BonusKind.marketDepthMultiplier, 1.1, 1),
+        ],
+      );
+    });
+
+    test('opens at Orbital Station level 2', () {
+      expect(driver.requiresMegaproject, {'orbital_station': 2});
+      final s = rich();
+      s.body('kora').stock['steel'] = n(10);
+      for (final level in [0, 1]) {
+        s.faction('player').megaprojectLevels['orbital_station'] = level;
+        expect(megaprojectLockedBy(s, content, 'player', driver), (
+          megaprojectId: 'orbital_station',
+          level: 2,
+        ));
+        expect(
+          megaprojectTakesDeliveries(s, content, 'player', driver),
+          isFalse,
+        );
+        final why = fails(s, deliver, CommandError.megaprojectLocked);
+        expect(
+          why,
+          'Mass Driver opens at Orbital Station level 2 (you have level '
+          '$level)',
+        );
+        fails(
+          s,
+          const StartMegaprojectStageCommand('player', 'mass_driver', 'kora'),
+          CommandError.megaprojectLocked,
+        );
+      }
+      s.faction('player').megaprojectLevels['orbital_station'] = 2;
+      expect(megaprojectLockedBy(s, content, 'player', driver), isNull);
+      expect(megaprojectTakesDeliveries(s, content, 'player', driver), isTrue);
+      ok(s, deliver);
+      expect(s.faction('player').megaprojectProgress['mass_driver'], {
+        'steel': n(1),
+      });
     });
   });
 
@@ -1425,6 +1502,30 @@ void main() {
         'megaprojects.orbital_station.bonusesPerLevel[0].appliesToMaxTier: '
             'must be <= 4',
       ),
+      'a requirement on an unknown megaproject': (
+        {
+          ...stationJson(),
+          'requiresMegaproject': {'dyson': 1},
+        },
+        "megaprojects.orbital_station.requiresMegaproject: unknown "
+            "megaproject 'dyson'",
+      ),
+      'a required level below 1': (
+        {
+          ...stationJson(),
+          'requiresMegaproject': {'orbital_station': 0},
+        },
+        'megaprojects.orbital_station.requiresMegaproject.orbital_station: '
+            'must be >= 1',
+      ),
+      'a megaproject that requires itself': (
+        {
+          ...stationJson(),
+          'requiresMegaproject': {'orbital_station': 1},
+        },
+        'megaprojects.orbital_station.requiresMegaproject: can never open: '
+            'it needs itself',
+      ),
       'unknown field': (
         {...stationJson(), 'colour': 'red'},
         'megaprojects.orbital_station.colour: unknown field',
@@ -1437,6 +1538,30 @@ void main() {
     for (final MapEntry(key: name, value: (m, want)) in bad.entries) {
       test(name, () => expect(errors(m), contains(want)));
     }
+
+    test('two megaprojects that require each other are reported', () {
+      final b = shippedBundle()
+        ..['megaprojects'] = [
+          {
+            ...stationJson(),
+            'requiresMegaproject': {'boost': 1},
+          },
+          {
+            ...stationJson(),
+            'id': 'boost',
+            'requiresMegaproject': {'orbital_station': 1},
+          },
+        ];
+      expect(
+        (Content.fromBundle(b) as ContentInvalid).errors,
+        containsAll([
+          'megaprojects.orbital_station.requiresMegaproject: can never open: '
+              'it needs itself',
+          'megaprojects.boost.requiresMegaproject: can never open: it needs '
+              'itself',
+        ]),
+      );
+    });
 
     test('a duplicate id and a non-list section are reported', () {
       final b = shippedBundle()
