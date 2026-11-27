@@ -17,15 +17,17 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Equipment.** Outpost kits, habitat modules and cargo ships are for use, not trade: markets one unit deep,
   and their makers have no speed or capacity track. Each maker makes a steady 36–72 every 6 h; more
   needs another building. Claims after the first cost 5 + 5 × (bodies owned − 1) kits.
-- **Contracts.** An order asks only for a good your buildings make now, at least `minQuantity /
-  quantitySeconds` a second, so a trickle never gets one. It asks for `quantitySeconds` of what you make
-  of it, gross of what your own buildings use (1 h of bulk goods, 2 h of components, 3 h of advanced
+- **Contracts.** An order asks only for a good your buildings make now from steady supply (never
+  from a stock nothing refills), at least `minQuantity / quantitySeconds` a second, so neither a
+  trickle nor a stockpile gets one. It asks for `quantitySeconds` of what you make of it that way,
+  gross of what your own buildings use (1 h of bulk goods, 2 h of components, 3 h of advanced
   goods), but never more than one of your bodies can store, nor the template's `maxQuantity` (5,000,
   1,000 and 100) × (1 + your megaproject levels summed). It pays 3× the base price per unit, at least
   `rewardIncomeSeconds` (10 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it is
   posted, both at least `minRewardCredits` (500). Income here is the larger of what auto-sell earns
-  a second and the value of what your buildings make beyond what they use, at current prices, so
-  it does not matter which goods you auto-sell or whether you sell by hand. The first contract you
+  a second and the value of what your buildings steadily make beyond what they use, at current
+  prices, so it does not matter which goods you auto-sell or whether you sell by hand, and a
+  stockpile does not raise it. The first contract you
   are ever offered has no cap and pays at least `firstContractMinReward` (7,500, which must cover the
   first claim's 5,000 credits): it is the hook. Habitat goods (food, water, oxygen) weigh
   `lifeSupportWeight` (0.25) in the draw, so orders seldom compete with crew upkeep. Auto-sell holds

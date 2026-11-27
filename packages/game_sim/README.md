@@ -96,9 +96,10 @@ surveyed one with `alreadySurveyed`.
 
 The Veyra Exchange posts up to 3 contracts on the player's board. They never
 expire. Each asks for 1–3 h of what the player's buildings make of a good
-now (a good made at a trickle gets none) and pays 3× its base price, between
-10 minutes and 1 hour of income (the larger of auto-sale income and the value
-of net production), at least 500 credits; the first contract ever posted has
+now from steady supply (a good made at a trickle, or only from a stockpile
+nothing refills, gets none) and pays 3× its base price, between 10 minutes
+and 1 hour of income (the larger of auto-sale income and the value of steady
+net production), at least 500 credits; the first contract ever posted has
 no cap and pays at least 7,500 (see `content/README.md`). `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
 "amount":"500"}` delivers up to `amount` of the contract's resource from the
 body's stock (clamped to what is held and to what the contract still wants;

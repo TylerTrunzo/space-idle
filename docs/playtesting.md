@@ -125,10 +125,11 @@ Things worth knowing:
   that is held on the body with a rule on the good that holds the most of it,
   up to its storage cap. A route out of a body
   takes its share before auto-sell sells the rest.
-- Contracts ask only for goods you make now, about 1 h (bulk), 2 h
-  (components) or 3 h (advanced goods) of what your buildings make, and pay
-  3× the base price, between 10 minutes and 1 hour of your income (the larger
-  of what auto-sell earns and what your production is worth, so selling by
+- Contracts ask only for goods you make now from steady supply (a stockpile
+  nothing refills does not count), about 1 h (bulk), 2 h (components) or 3 h
+  (advanced goods) of what your buildings make that way, and pay 3× the base
+  price, between 10 minutes and 1 hour of your income (the larger of what
+  auto-sell earns and what your steady production is worth, so selling by
   hand counts too) and never less than 500 credits. The very first one has no
   cap and pays at least 7,500, enough for your first claim. Food, water and
   oxygen are asked for less often.
