@@ -103,14 +103,14 @@ Seed 1, 720.0 h, 120 check-ins. Final credits: 452M. Rejected commands: 0.
 
 Days with something new (a milestone, project completion, contract or body) in the first 21: 21 of 21; the worst 7 days in a row had 7.
 
-Days with a milestone or project in the first 21: 10; worst 7 days: 1.
+Days with a milestone or project in the first 21: 9; worst 7 days: 1.
 
 Earned is market sales plus contract rewards; the tier shares are of market sales only.
 
 | Day | New | Milestones | Projects | Contracts total | Bodies | orbital_station | mass_driver | Contracts paid | Earned | Tier 0-1 | Tier 2 | Tier 3 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 10 | 5 | 0 | 5 | 1 | 0 | 0 | 35.3K | 325K | 100% | 0% | 0% |
-| 2 | 7 | 2 | 0 | 10 | 1 | 0 | 0 | 32.7K | 556K | 100% | 0% | 0% |
+| 1 | 11 | 6 | 0 | 5 | 1 | 0 | 0 | 35.3K | 325K | 100% | 0% | 0% |
+| 2 | 6 | 1 | 0 | 10 | 1 | 0 | 0 | 32.7K | 556K | 100% | 0% | 0% |
 | 3 | 9 | 2 | 0 | 17 | 1 | 0 | 0 | 74.6K | 824K | 100% | 0% | 0% |
 | 4 | 5 | 0 | 0 | 22 | 1 | 0 | 0 | 72K | 1.13M | 100% | 0% | 0% |
 | 5 | 7 | 1 | 0 | 28 | 1 | 0 | 0 | 115K | 1.66M | 100% | 0% | 0% |
@@ -126,10 +126,10 @@ Earned is market sales plus contract rewards; the tier shares are of market sale
 | 15 | 6 | 0 | 0 | 88 | 2 | 0 | 0 | 420K | 5.69M | 100% | 0% | 0% |
 | 16 | 6 | 0 | 0 | 94 | 2 | 0 | 0 | 499K | 6.94M | 100% | 0% | 0% |
 | 17 | 6 | 0 | 0 | 100 | 2 | 0 | 0 | 638K | 8.9M | 100% | 0% | 0% |
-| 18 | 7 | 1 | 0 | 106 | 2 | 0 | 0 | 856K | 11.9M | 100% | 0% | 0% |
-| 19 | 8 | 0 | 2 | 112 | 2 | 0 | 0 | 980K | 12.7M | 100% | 0% | 0% |
-| 20 | 6 | 0 | 0 | 118 | 2 | 0 | 0 | 995K | 13.3M | 100% | 0% | 0% |
-| 21 | 7 | 1 | 0 | 124 | 2 | 0 | 0 | 1.2M | 16.7M | 100% | 0% | 0% |
+| 18 | 9 | 1 | 2 | 106 | 2 | 0 | 0 | 856K | 11.9M | 100% | 0% | 0% |
+| 19 | 6 | 0 | 0 | 112 | 2 | 0 | 0 | 980K | 12.7M | 100% | 0% | 0% |
+| 20 | 7 | 1 | 0 | 118 | 2 | 0 | 0 | 995K | 13.3M | 100% | 0% | 0% |
+| 21 | 6 | 0 | 0 | 124 | 2 | 0 | 0 | 1.2M | 16.7M | 100% | 0% | 0% |
 | 22 | 8 | 0 | 2 | 130 | 2 | 0 | 0 | 1.45M | 19.4M | 100% | 0% | 0% |
 | 23 | 6 | 0 | 0 | 136 | 2 | 0 | 0 | 1.5M | 19.4M | 100% | 0% | 0% |
 | 24 | 6 | 0 | 0 | 142 | 2 | 0 | 0 | 1.61M | 27.1M | 100% | 0% | 0% |
@@ -251,8 +251,8 @@ Claims, surveys, extra slots, megaproject stages and contracts, as seen; milesto
 - 420.0 h (day 18): Contract 104 completed
 - 420.0 h (day 18): Contract 105 completed
 - 426.0 h (day 18): Contract 106 completed
-- 432.0 h (day 19): Extra build slot on Kora
-- 432.0 h (day 19): Extra build slot on Brine
+- 432.0 h (day 18): Extra build slot on Kora
+- 432.0 h (day 18): Extra build slot on Brine
 - 432.0 h (day 19): Contract 107 completed
 - 432.0 h (day 19): Contract 108 completed
 - 438.0 h (day 19): Contract 109 completed
