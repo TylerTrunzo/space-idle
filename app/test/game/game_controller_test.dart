@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -51,6 +52,22 @@ final class _FailingWriteStore implements SaveStore {
   @override
   Future<void> write(String text) async {
     if (failWrites) throw StateError('storage full');
+    this.text = text;
+  }
+}
+
+/// A save slot whose read waits until [gate] is completed, as a slow disk.
+final class _SlowReadStore implements SaveStore {
+  final gate = Completer<String?>();
+  String? text;
+  int writes = 0;
+
+  @override
+  Future<String?> read() => gate.future;
+
+  @override
+  Future<void> write(String text) async {
+    writes++;
     this.text = text;
   }
 }
@@ -652,6 +669,61 @@ void main() {
       expect(await c.importSave(SaveCodec.encode(good)), isA<Imported>());
       expect(_storedSave(store), SaveCodec.encode(c.state));
     });
+  });
+
+  group('while start() is reading', () {
+    GameController slow(_SlowReadStore s) => GameController(
+      content: content,
+      store: s,
+      clock: clock,
+      newGameSeed: 7,
+    );
+
+    test(
+      'newGame() waits for the read, then replaces the loaded game',
+      () async {
+        final slowStore = _SlowReadStore();
+        final c = slow(slowStore);
+        final starting = c.start();
+        final replacing = c.newGame();
+        await pumpEventQueue();
+        expect(slowStore.writes, 0);
+
+        slowStore.gate.complete(
+          _envelope(savedAt: clock.now().millisecondsSinceEpoch),
+        );
+        await replacing;
+        expect(await starting, isA<Loaded>());
+        final fresh = SaveCodec.encode(GameEngine(content).newGame(7));
+        expect(SaveCodec.encode(c.state), fresh);
+        final stored =
+            (jsonDecode(slowStore.text!) as Map<String, Object?>)['save'];
+        expect(stored, fresh);
+      },
+    );
+
+    test(
+      'importSave() waits for the read, then replaces the loaded game',
+      () async {
+        final slowStore = _SlowReadStore();
+        final c = slow(slowStore);
+        final imported = SaveCodec.encode(GameEngine(content).newGame(3));
+        final starting = c.start();
+        final importing = c.importSave(imported);
+        await pumpEventQueue();
+        expect(slowStore.writes, 0);
+
+        slowStore.gate.complete(
+          _envelope(savedAt: clock.now().millisecondsSinceEpoch),
+        );
+        expect(await importing, isA<Imported>());
+        expect(await starting, isA<Loaded>());
+        expect(SaveCodec.encode(c.state), imported);
+        final stored =
+            (jsonDecode(slowStore.text!) as Map<String, Object?>)['save'];
+        expect(stored, imported);
+      },
+    );
   });
 
   group('brokenSaveText', () {

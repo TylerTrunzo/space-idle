@@ -176,6 +176,12 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  /// Completes once a [start] already under way has finished; at once if
+  /// none was called.
+  Future<void> _startFinished() async {
+    if (_starting case final pending?) await pending;
+  }
+
   /// [save] where the game in memory is already current ([start],
   /// [resume]): a failed write is reported and play goes on; the next save
   /// retries.
@@ -275,7 +281,10 @@ class GameController extends ChangeNotifier {
   /// Replaces the game with [text]: [SaveCodec] text or a stored envelope.
   ///
   /// The imported game is not caught up: it carries no wall-clock time.
+  /// Waits for a pending [start] first, so the import is never undone by
+  /// the load finishing after it.
   Future<ImportResult> importSave(String text) async {
+    await _startFinished();
     switch (_decode(text, envelopeOnly: false)) {
       case _Bad(:final reason):
         return ImportFailed(reason);
@@ -287,7 +296,9 @@ class GameController extends ChangeNotifier {
   }
 
   /// Replaces the game with a new one and saves it, also over a broken save.
+  /// Waits for a pending [start] first, as [importSave] does.
   Future<void> newGame() async {
+    await _startFinished();
     _replace(engine.newGame(_nextSeed()));
     await save();
   }
