@@ -300,7 +300,7 @@ const Map<String, String> contentJson = {
     "buildCost": {"credits": "1500", "habitat_module": "1"},
     "upgrades": {
       "efficiency": {"baseCredits": "1000", "growth": 1.2},
-      "capacity": {"baseCredits": "900", "growth": 1.2}
+      "capacity": {"baseCredits": "900", "growth": 2.5}
     }
   },
   {
@@ -404,13 +404,13 @@ const Map<String, String> contentJson = {
     "id": "orbital_station",
     "name": "Orbital Station",
     "baseCost": {
-      "credits": "5e6",
+      "credits": "2e7",
       "station_segment": "200",
       "survey_drone": "40",
       "reactor_core": "30",
       "hull_plate": "1500"
     },
-    "costGrowth": 2.5,
+    "costGrowth": 2.0,
     "stageSeconds": 7200,
     "stageSecondsGrowth": 1.15,
     "bonusesPerLevel": [
@@ -426,13 +426,13 @@ const Map<String, String> contentJson = {
     "requiresMegaproject": {"orbital_station": 1},
     "scalesContracts": false,
     "baseCost": {
-      "credits": "2e6",
+      "credits": "8e6",
       "hull_plate": "5000",
       "copper_wire": "20000",
       "water": "10000",
       "silicon_wafer": "2000"
     },
-    "costGrowth": 2.3,
+    "costGrowth": 2.0,
     "stageSeconds": 7200,
     "stageSecondsGrowth": 1.15,
     "bonusesPerLevel": [
@@ -497,7 +497,14 @@ const Map<String, String> contentJson = {
   {"id": "driver_5", "name": "Rail to the Sky", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 5}},
   {"id": "segment_flow", "name": "Assembly in Orbit", "condition": {"type": "productionRate", "resource": "station_segment", "perSec": "0.03"}},
   {"id": "steel_flow", "name": "Iron Tide", "condition": {"type": "productionRate", "resource": "steel", "perSec": "20"}},
-  {"id": "wire_flow_150", "name": "Copper Flood", "condition": {"type": "productionRate", "resource": "copper_wire", "perSec": "150"}}
+  {"id": "wire_flow_150", "name": "Copper Flood", "condition": {"type": "productionRate", "resource": "copper_wire", "perSec": "150"}},
+  {"id": "credits_3t", "name": "Three Trillion", "condition": {"type": "creditsEarned", "amount": "3e12"}},
+  {"id": "credits_10t", "name": "Ten Trillion", "condition": {"type": "creditsEarned", "amount": "1e13"}},
+  {"id": "credits_30t", "name": "Thirty Trillion", "condition": {"type": "creditsEarned", "amount": "3e13"}},
+  {"id": "station_12", "name": "Orbital Commons", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 12}},
+  {"id": "station_15", "name": "Harbor of Stars", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 15}},
+  {"id": "driver_10", "name": "Sustained Fire", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 10}},
+  {"id": "driver_15", "name": "Freight Without Wings", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 15}}
 ]
 ''',
   'resources': r'''[

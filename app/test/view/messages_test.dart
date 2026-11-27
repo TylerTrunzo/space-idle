@@ -374,6 +374,7 @@ void main() {
         AutoPayReserveSet,
         ContractProgress,
         ContractDiscarded,
+        UpgradesBought,
       });
     });
   });
@@ -403,6 +404,21 @@ void _buildingSteps(GameState s, String Function(Command) run) {
       startsWith('Smelter on Kora is at capacity level 1; '),
       endsWith(' crew)'),
     ),
+  );
+  // Buy max: levels bought, what they cost, and why it stopped.
+  final bought = run(BuyUpgradesCommand(_p, BigNum.from(1000)));
+  expect(
+    bought,
+    matches(RegExp(r'^Bought \d+ upgrade levels? on \d+ buildings? for ')),
+  );
+  expect(bought, contains('more than the budget allows'));
+  expect(
+    run(BuyUpgradesCommand(_p, const BigNum.zero())),
+    startsWith('Bought no upgrades: the cheapest costs '),
+  );
+  expect(
+    run(BuyUpgradesCommand(_p, BigNum.from(1e9), maxPurchases: 2)),
+    endsWith('stopped at 2 levels, the most this command buys'),
   );
 }
 

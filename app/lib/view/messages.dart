@@ -303,7 +303,30 @@ final class _Words {
     ContractDiscarded() =>
       'Discarded the contract for ${formatNumber(o.quantity)} '
           '${res(o.resourceId)}; ${nextContract(o.nextContractAt)}',
+    UpgradesBought() => bought(o),
   };
+
+  /// "Bought 3 upgrade levels on 2 buildings for 159 credits; the next
+  /// costs 58.5 credits, more than the budget allows": what a buy-max
+  /// bought and why it stopped, as the CLI says it.
+  String bought(UpgradesBought o) {
+    final next = formatNumber(o.nextCost ?? const BigNum.zero());
+    final why = switch (o.stop) {
+      UpgradeBuyStop.budget =>
+        '${o.levels == 0 ? 'the cheapest' : 'the next'} costs $next credits, '
+            'more than the budget allows',
+      UpgradeBuyStop.maxPurchases =>
+        'stopped at ${o.levels} levels, the most this command buys',
+      UpgradeBuyStop.nothingToBuy => 'nothing is left to upgrade',
+    };
+    if (o.levels == 0) return 'Bought no upgrades: $why';
+    final buildings = {for (final p in o.purchases) p.buildingId}.length;
+    final levels = o.levels == 1
+        ? '1 upgrade level'
+        : '${o.levels} upgrade levels';
+    final on = buildings == 1 ? '1 building' : '$buildings buildings';
+    return 'Bought $levels on $on for ${formatNumber(o.total)} credits; $why';
+  }
 
   static String trackLabel(UpgradeTrack t) => switch (t) {
     UpgradeTrack.speed => 'Speed',
