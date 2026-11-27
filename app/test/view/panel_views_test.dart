@@ -141,22 +141,15 @@ void main() {
       final o = (r as CommandOk).outcome! as UpgradesBought;
       expect(view.levels, o.levels);
       expect(view.cost, formatNumber(o.total));
-      expect(view.confirm, view.share > 0.5);
+      expect(view.price, o.total);
     });
 
     test('with too few credits it buys nothing and says what it costs', () {
       c.state.faction(_p).credits = const BigNum.zero();
       final view = buyMaxView(c);
       expect(view.levels, 0);
+      expect(view.price, const BigNum.zero());
       expect(view.blockedReason, startsWith('the cheapest costs '));
-    });
-
-    test('asks for a confirm when it would spend over half the credits', () {
-      c.state.faction(_p).credits = BigNum.from(80);
-      final view = buyMaxView(c);
-      expect(view.levels, greaterThan(0));
-      expect(view.share, greaterThan(0.5));
-      expect(view.confirm, isTrue);
     });
   });
 

@@ -3,7 +3,6 @@ import 'package:meta/meta.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/view/messages.dart';
 import 'package:space_idle/view/project_views.dart';
-import 'package:space_idle/view/spend_view.dart';
 
 /// The "Expand slots (+1)" row of an owned body.
 @immutable
@@ -70,7 +69,7 @@ ExpandSlotsView? expandSlotsView(GameController c, String bodyId) {
   );
 }
 
-/// What the "Buy max" button would buy now, worked out by running the
+/// What the top bar's "Buy max" would buy now, worked out by running the
 /// real command on a copy of the state: the cheapest upgrade levels on
 /// every owned body's buildings, with all the player's credits as budget.
 @immutable
@@ -80,7 +79,7 @@ final class BuyMaxView {
     required this.levels,
     required this.buildings,
     required this.cost,
-    required this.share,
+    required this.price,
     required this.blockedReason,
   });
 
@@ -93,19 +92,18 @@ final class BuyMaxView {
   /// What they would cost in all, formatted.
   final String cost;
 
-  /// That cost as a share of the credits held, 0 to 1.
-  final double share;
+  /// What they would cost in all, as the budget to buy them with, so
+  /// the buy never spends more than the preview showed.
+  final BigNum price;
 
   /// Why it would buy nothing, such as "the cheapest costs 75 credits,
   /// more than the budget allows"; null when it would buy something.
   final String? blockedReason;
-
-  /// Whether the spend is big enough to confirm first.
-  bool get confirm => share > confirmShare;
 }
 
 /// The Buy max preview from a dry run; [GameController.state] is not
-/// touched.
+/// touched. It copies the state, so the top bar works it out only when
+/// Buy max is tapped.
 BuyMaxView buyMaxView(GameController c) {
   final credits = c.state.faction(c.playerId).credits;
   final copy = c.state.copy();
@@ -119,16 +117,15 @@ BuyMaxView buyMaxView(GameController c) {
       levels: 0,
       buildings: 0,
       cost: '0',
-      share: 0,
+      price: const BigNum.zero(),
       blockedReason: r is CommandFailed ? r.message : 'nothing to buy',
     );
   }
-  final held = credits.toDouble();
   return BuyMaxView(
     levels: o.levels,
     buildings: {for (final p in o.purchases) p.buildingId}.length,
     cost: formatNumber(o.total),
-    share: held <= 0 ? 0 : (o.total.toDouble() / held).clamp(0.0, 1.0),
+    price: o.total,
     blockedReason: o.levels == 0 ? upgradesStopText(o) : null,
   );
 }

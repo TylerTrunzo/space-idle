@@ -445,7 +445,7 @@ void main() {
     });
   });
 
-  group('slots and buy max', () {
+  group('slots', () {
     testWidgets('Expand slots shows its price and time, then counts down', (
       tester,
     ) async {
@@ -457,31 +457,19 @@ void main() {
       expect(find.textContaining('Extra build slot on Kora'), findsOneWidget);
     });
 
-    testWidgets('Buy max shows what it buys, and buys it', (tester) async {
-      c.state.faction(_p).credits = BigNum.from(1e6);
-      c.state.faction(_p).credits = BigNum.from(300);
+    testWidgets('Buy max is in the top bar, not on a body', (tester) async {
       await _pump(tester, c, 'kora');
-      final button = _key('buy-max');
       expect(
-        find.descendant(of: button, matching: find.textContaining('levels')),
-        findsWidgets,
+        find.descendant(
+          of: find.byType(PlanetPanel),
+          matching: find.textContaining('Buy max'),
+        ),
+        findsNothing,
       );
-      await tester.tap(button);
-      await tester.pump();
-      // Over half the credits: a second, inline step.
-      expect(_key('buy-max-confirm'), findsOneWidget);
-      await tester.tap(_key('buy-max-confirm'));
-      await tester.pump();
-      expect(find.textContaining('Bought '), findsOneWidget, reason: 'outcome');
-    });
-
-    testWidgets('Buy max with too few credits says what the next costs', (
-      tester,
-    ) async {
-      c.state.faction(_p).credits = const BigNum.zero();
-      await _pump(tester, c, 'kora');
-      expect(_enabled(tester, _key('buy-max')), isFalse);
-      expect(find.textContaining('the cheapest costs'), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(TopBar), matching: _key('buy-max')),
+        findsOneWidget,
+      );
     });
   });
 
@@ -512,7 +500,17 @@ void main() {
         size: const Size(360, 640),
         textScale: 2,
       );
-      expect(find.byType(DropdownButton<String>), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.byType(DropdownButton<String>),
+        100,
+        scrollable: find
+            .descendant(
+              of: find.byType(PlanetPanel),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       expect(tester.takeException(), isNull);
       await tester.drag(find.byType(PlanetPanel), const Offset(0, -2000));
       await tester.pump();

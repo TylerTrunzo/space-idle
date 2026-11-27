@@ -13,11 +13,12 @@ import 'package:space_idle/view/view_models.dart';
 /// Mission Control for one body: in the phone sheet or the wide side
 /// panel.
 ///
-/// An owned body shows Buy max, its slot expansion, its buildings and the
-/// Build button; an unowned one its deposits and how to claim it. Every
-/// figure comes from the view models and every change goes through the
-/// game controller.
-class PlanetPanel extends StatefulWidget {
+/// An owned body shows its slot expansion, its buildings and the Build
+/// button; an unowned one its deposits and how to claim it. Every figure
+/// comes from the view models and every change goes through the game
+/// controller. (Buy max spends across every body, so it is in the top
+/// bar.)
+class PlanetPanel extends StatelessWidget {
   /// Creates the panel for [bodyId].
   const PlanetPanel({
     super.key,
@@ -36,33 +37,24 @@ class PlanetPanel extends StatefulWidget {
   final VoidCallback? onClose;
 
   @override
-  State<PlanetPanel> createState() => _PlanetPanelState();
-}
-
-class _PlanetPanelState extends State<PlanetPanel> {
-  /// Buy max is waiting for its second, confirming tap.
-  bool _confirmBuyMax = false;
-
-  @override
   Widget build(BuildContext context) {
     final c = ControllerScope.of(context);
-    final view = bodyView(c, widget.bodyId);
+    final view = bodyView(c, bodyId);
     final text = Theme.of(context).textTheme;
     return Material(
       color: Palette.panel,
       shape: const Border(top: BorderSide(color: Palette.border)),
       child: ListView(
-        controller: widget.scroll,
+        controller: scroll,
         padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 24),
         children: [
-          _Header(view: view, bodyId: widget.bodyId, onClose: widget.onClose),
+          _Header(view: view, bodyId: bodyId, onClose: onClose),
           if (view == null)
             Text(
               'Nothing is known about this body yet.',
               style: text.bodyMedium,
             )
           else if (view.owned) ...[
-            _buyMax(context),
             if (expandSlotsView(c, view.id) case final slots?)
               _ExpandSlots(view: slots, bodyId: view.id, bodyName: view.name),
             const Divider(color: Palette.border),
@@ -81,75 +73,6 @@ class _PlanetPanelState extends State<PlanetPanel> {
             ),
           ] else
             ClaimSection(view: view),
-        ],
-      ),
-    );
-  }
-
-  /// Buy max: what it would buy and cost, a second tap above half the
-  /// credits, and the reason when it would buy nothing.
-  Widget _buyMax(BuildContext context) {
-    final c = ControllerScope.of(context);
-    final v = buyMaxView(c);
-    final mono = monoText(Theme.of(context).textTheme.bodyMedium);
-    void buy() {
-      setState(() => _confirmBuyMax = false);
-      runAndReport(
-        context,
-        c,
-        BuyUpgradesCommand(c.playerId, c.state.faction(c.playerId).credits),
-        announce: true,
-      );
-    }
-
-    final levels = v.levels == 1 ? '1 level' : '${v.levels} levels';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          OutlinedButton(
-            key: const ValueKey('buy-max'),
-            onPressed: v.levels == 0
-                ? null
-                : () =>
-                      v.confirm ? setState(() => _confirmBuyMax = true) : buy(),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(text: 'Buy max upgrades  '),
-                  TextSpan(text: '$levels · ${v.cost} credits', style: mono),
-                ],
-              ),
-            ),
-          ),
-          if (v.blockedReason case final why?)
-            Text(
-              'Buy max: $why',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: Palette.muted),
-            ),
-          if (_confirmBuyMax && v.levels > 0)
-            Wrap(
-              spacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  'Spend ${v.cost} of '
-                  '${formatNumber(c.state.faction(c.playerId).credits)} '
-                  'credits on $levels?',
-                ),
-                FilledButton(
-                  key: const ValueKey('buy-max-confirm'),
-                  onPressed: buy,
-                  child: const Text('Buy'),
-                ),
-                TextButton(
-                  onPressed: () => setState(() => _confirmBuyMax = false),
-                  child: const Text('Cancel'),
-                ),
-              ],
-            ),
         ],
       ),
     );
