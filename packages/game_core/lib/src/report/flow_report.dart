@@ -181,9 +181,12 @@ final class Bottleneck {
   /// units' value; for [BottleneckKind.input] the value of the output the
   /// building does not make; for [BottleneckKind.noSales] the value of
   /// the faction's net production of goods that sell; for
-  /// [BottleneckKind.crewShortage] the value of the output its crewed
-  /// buildings do not make at their run fractions against full staffing
-  /// (zero when none of them runs). Null for the other kinds.
+  /// [BottleneckKind.crewShortage] what full staffing would add to the
+  /// faction's net production, more output less the extra inputs it
+  /// draws, leaving out output a full store would cut (zero when none of
+  /// its crewed buildings runs). The input figure is gross: the starved
+  /// building's lost output, not net of the inputs it would use. Null for
+  /// the other kinds.
   final BigNum? lostCreditsPerHour;
 
   /// Restores a bottleneck written by [toJson].
@@ -751,7 +754,9 @@ Map<String, BigNum> _unsoldNet(
 ///
 /// So a building held back by its inputs gains nothing, and goods made
 /// only to be used up on the same body (ore a smelter takes) count only
-/// through what is made from them.
+/// through what is made from them. Nor does more of a good count on a
+/// body whose store of it is full, where nothing sells or ships it: the
+/// tick's storage cap would cut it.
 BigNum _staffingGain(
   GameState s,
   Content c,
@@ -760,17 +765,28 @@ BigNum _staffingGain(
   GameState actual,
 ) {
   stepProduction(staffed, c, _sampleSeconds, crewEfficiencyOf: {factionId: 1});
-  Map<String, BigNum> held(GameState g) {
-    final total = <String, BigNum>{};
-    for (final b in g.bodies) {
-      if (b.ownerId != factionId) continue;
-      _addAll(total, b.stock);
+  final f = actual.faction(factionId);
+  // Body and resource pairs whose extra output goes somewhere.
+  final moved = <(String, String)>{
+    for (final r in f.autoSell) (r.bodyId, r.resourceId),
+    for (final r in actual.routes)
+      if (r.ownerId == factionId) (r.fromBodyId, r.resourceId),
+  };
+  final more = <String, BigNum>{};
+  final now = <String, BigNum>{};
+  for (final (i, b) in actual.bodies.indexed) {
+    if (b.ownerId != factionId) continue;
+    final cap = storageCap(actual, c, b);
+    _addAll(now, b.stock);
+    for (final MapEntry(key: id, value: v) in staffed.bodies[i].stock.entries) {
+      final was = b.stock[id] ?? const BigNum.zero();
+      // Past what the store keeps, more of a good nothing moves is cut.
+      final kept = v > was && !moved.contains((b.id, id))
+          ? v.min(cap.max(was))
+          : v;
+      more[id] = (more[id] ?? const BigNum.zero()) + kept;
     }
-    return total;
   }
-
-  final more = held(staffed);
-  final now = held(actual);
   final gain = <String, BigNum>{
     for (final id in c.resources.keys)
       if (changeBetween(

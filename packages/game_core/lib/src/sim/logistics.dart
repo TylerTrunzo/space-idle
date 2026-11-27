@@ -148,8 +148,7 @@ Map<String, BigNum> _stopTargets(GameState s, Content c, StepCache cache) {
     if (most == null || stop > most) stops[key] = stop;
     final from = s.body(r.fromBodyId);
     final stocked =
-        (from.stock[r.resourceId] ?? const BigNum.zero()) >
-        const BigNum.zero();
+        (from.stock[r.resourceId] ?? const BigNum.zero()) > const BigNum.zero();
     final trip = travelSeconds(s, c, from, s.body(r.toBodyId));
     final best = timedBy[key];
     if (best == null ||

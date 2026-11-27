@@ -602,6 +602,32 @@ void main() {
     expect(b.lostCreditsPerHour!.toDouble(), closeTo(perSec / 3 * 3600, 1e-6));
   });
 
+  test('crew shortage counts nothing a full store would waste', () {
+    // As above, but Kora's copper ore store is full and nothing sells or
+    // ships it: more copper ore would be cut at the cap, so only the steel
+    // counts. With a rule selling it, it counts again.
+    s.faction('player').baseCrew = 2;
+    kora.stock['copper_ore'] = storageCap(s, c, kora);
+    BigNum lost() => held(buildFlowReport(s, c, 'player'))
+        .singleWhere((b) => b.kind == BottleneckKind.crewShortage)
+        .lostCreditsPerHour!;
+    expect(
+      lost().toDouble(),
+      closeTo(0.2 * price(s, c, 'steel').toDouble() / 3 * 3600, 1e-6),
+    );
+    engine.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+    expect(
+      lost().toDouble(),
+      closeTo(
+        (0.32 * price(s, c, 'copper_ore').toDouble() +
+                0.2 * price(s, c, 'steel').toDouble()) /
+            3 *
+            3600,
+        1e-6,
+      ),
+    );
+  });
+
   test('crew shortage loses nothing when no crewed building runs', () {
     // One crew housed for the smelter's two; it has no ore anyway.
     s.faction('player').baseCrew = 1;

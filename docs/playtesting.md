@@ -57,9 +57,11 @@ wasted), or `noSales` ("Nothing is being sold: turn on auto-sell or sell goods":
 you make goods that sell and have no auto-sell rule). Each bottleneck also has
 `firstSeenAt` (game time since when it has held without a break) and
 `lostCreditsPerHour` (what a full store or a starved building costs an hour at
-current prices, for `noSales` what your net production would sell for, for
-`crewShortage` the output your crewed buildings lose against full staffing;
-null for the other kinds).
+current prices, a starved building's figure being its lost output, gross of
+the inputs it would use; for `noSales` what your net production would sell
+for; for `crewShortage` what full staffing would add to your net production,
+more output less the extra inputs it draws, not counting output a full store
+with nothing selling it would waste; null for the other kinds).
 
 ### Game commands (act)
 

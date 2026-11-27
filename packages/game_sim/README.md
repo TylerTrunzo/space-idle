@@ -269,9 +269,12 @@ price are made and no owned body has an auto-sell rule: "Nothing is being
 sold: turn on auto-sell or sell goods"; `bodyId` and `buildingId` are null).
 Each also gives `firstSeenAt`, the game time since which it has held without
 a break, and `lostCreditsPerHour`, an estimate at current prices of what it
-costs (the wasted units for `storageFull`, the output not made for `input`,
-the net production left unsold for `noSales`, the output crewed buildings
-lose against full staffing for `crewShortage`; null for the other kinds).
+costs (the wasted units for `storageFull`; for `input` the output the
+starved building does not make, gross of the inputs it would use; the net
+production left unsold for `noSales`; for `crewShortage` what full staffing
+would add to net production, more output less the extra inputs it draws,
+leaving out output a full store with nothing selling it would waste; null
+for the other kinds).
 
 ## Bot runs
 
