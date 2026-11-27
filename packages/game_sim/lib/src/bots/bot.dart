@@ -74,6 +74,14 @@ final class BalancedBot implements Bot {
   /// Bottlenecks, worst first, the bot tries to fix per planning step.
   static const int bottlenecksConsidered = 3;
 
+  /// Run fraction from which a building short of an input is left as it
+  /// is: a fix there gains little, and growth spends the command better.
+  /// Since the report shows a building cargo feeds at the share a full
+  /// step gives it, rather than full or empty by when a lot lands, many
+  /// run at 80-95% of their supply; chasing those spent a casual
+  /// check-in's few commands for little.
+  static const double inputWorthFixingBelow = 0.7;
+
   @override
   String get name => 'balanced';
 

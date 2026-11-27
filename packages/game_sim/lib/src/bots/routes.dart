@@ -18,11 +18,18 @@ extension _Bottlenecks on _View {
   /// adding it to [tried] when fixed.
   ///
   /// Understaffed buildings are left out: assigning free crew sees to them
-  /// first, and they would crowd out the bottlenecks worth fixing.
+  /// first, and they would crowd out the bottlenecks worth fixing. So are
+  /// buildings short of an input that still run at
+  /// [BalancedBot.inputWorthFixingBelow] or more.
   Command? fixBottleneck(Set<String> tried) {
     for (final neck
         in report!.bottlenecks
-            .where((n) => n.kind != BottleneckKind.understaffed)
+            .where(
+              (n) =>
+                  n.kind != BottleneckKind.understaffed &&
+                  (n.kind != BottleneckKind.input ||
+                      n.runFraction < BalancedBot.inputWorthFixingBelow),
+            )
             .take(BalancedBot.bottlenecksConsidered)) {
       if (neck.kind == BottleneckKind.storageFull) {
         final key = '${neck.bodyId}:store';
