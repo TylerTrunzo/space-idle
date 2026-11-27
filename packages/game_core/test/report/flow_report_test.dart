@@ -675,6 +675,37 @@ void main() {
     );
   });
 
+  test('crew shortage counts a full store\'s good that goes to a '
+      'megaproject on its own', () {
+    // Copper ore fed to the Mass Driver (in this content it asks for some)
+    // goes in from a full store, as it would sell.
+    final b = shippedBundle();
+    final driver = (b['megaprojects']! as List)
+        .cast<Map<String, Object?>>()
+        .firstWhere((m) => m['id'] == 'mass_driver');
+    (driver['baseCost']! as Map<String, Object?>)['copper_ore'] = '1e6';
+    final fed = (Content.fromBundle(b) as ContentOk).content;
+    final e = GameEngine(fed);
+    final t = e.newGame(1);
+    t.faction('player')
+      ..baseCrew = 2
+      ..megaprojectLevels['orbital_station'] = 1;
+    final k = t.body('kora');
+    k.stock['copper_ore'] = storageCap(t, fed, k);
+    BigNum lost() => held(buildFlowReport(t, fed, 'player'))
+        .singleWhere((b) => b.kind == BottleneckKind.crewShortage)
+        .lostCreditsPerHour!;
+    final unfed = lost();
+    e.apply(
+      t,
+      const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+    );
+    expect(
+      lost().toDouble() - unfed.toDouble(),
+      closeTo(0.32 * price(t, fed, 'copper_ore').toDouble() / 3 * 3600, 1e-6),
+    );
+  });
+
   test('crew shortage loses nothing when no crewed building runs', () {
     // One crew housed for the smelter's two; it has no ore anyway.
     s.faction('player').baseCrew = 1;

@@ -87,9 +87,9 @@ final class StepCache {
 
   /// What [body]'s buildings use a second at full supply, at [owner]'s
   /// crew efficiency and [bonuses]: kept with the body from tick to tick
-  /// while none of what it depends on changes (its buildings, their crew
-  /// and levels, the crew efficiency and the bonuses), since that is most
-  /// ticks of a catch-up.
+  /// while none of what it depends on changes (the content, its buildings,
+  /// their crew and levels, the crew efficiency and the bonuses), since
+  /// that is most ticks of a catch-up.
   Map<String, BigNum> _perSecond(
     BodyState body,
     String owner,
@@ -98,6 +98,7 @@ final class StepCache {
     final eff = crewEff(owner);
     final known = _bodyUse[body];
     if (known != null &&
+        identical(known.content, c) &&
         identical(known.bonuses, bonuses) &&
         known.crewEff == eff &&
         known.matches(body)) {
@@ -110,7 +111,7 @@ final class StepCache {
         total[id] = (total[id] ?? const BigNum.zero()) + v;
       }
     }
-    _bodyUse[body] = _BodyUse(bonuses, eff, _BodyUse.signature(body), total);
+    _bodyUse[body] = _BodyUse(c, bonuses, eff, _BodyUse.signature(body), total);
     return total;
   }
 }
@@ -118,8 +119,15 @@ final class StepCache {
 /// A body's buildings' use a second at full supply ([StepCache.use]), and
 /// what it was worked out from.
 final class _BodyUse {
-  _BodyUse(this.bonuses, this.crewEff, this._signature, this.perSecond);
+  _BodyUse(
+    this.content,
+    this.bonuses,
+    this.crewEff,
+    this._signature,
+    this.perSecond,
+  );
 
+  final Content content;
   final EmpireBonuses bonuses;
   final double crewEff;
   final List<Object?> _signature;

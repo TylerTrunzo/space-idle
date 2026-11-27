@@ -755,8 +755,8 @@ Map<String, BigNum> _unsoldNet(
 /// So a building held back by its inputs gains nothing, and goods made
 /// only to be used up on the same body (ore a smelter takes) count only
 /// through what is made from them. Nor does more of a good count on a
-/// body whose store of it is full, where nothing sells or ships it: the
-/// tick's storage cap would cut it.
+/// body whose store of it is full, where nothing sells, ships or feeds it
+/// to a megaproject: the tick's storage cap would cut it.
 BigNum _staffingGain(
   GameState s,
   Content c,
@@ -767,10 +767,21 @@ BigNum _staffingGain(
   stepProduction(staffed, c, _sampleSeconds, crewEfficiencyOf: {factionId: 1});
   final f = actual.faction(factionId);
   // Body and resource pairs whose extra output goes somewhere.
+  // Goods megaprojects are fed on their own go in, from every body, as
+  // they would sell.
+  final fed = {
+    for (final m in c.megaprojects.values)
+      if (f.megaprojectAuto[m.id]?.goods ?? false)
+        for (final id in m.baseCost.keys)
+          if (id != 'credits') id,
+  };
   final moved = <(String, String)>{
     for (final r in f.autoSell) (r.bodyId, r.resourceId),
     for (final r in actual.routes)
       if (r.ownerId == factionId) (r.fromBodyId, r.resourceId),
+    for (final b in actual.bodies)
+      if (b.ownerId == factionId)
+        for (final id in fed) (b.id, id),
   };
   final more = <String, BigNum>{};
   final now = <String, BigNum>{};
