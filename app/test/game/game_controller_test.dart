@@ -583,6 +583,47 @@ void main() {
     });
   });
 
+  group('brokenSaveText', () {
+    test('is null after a normal start', () async {
+      final c = _controller(store, clock);
+      await c.start();
+      expect(c.brokenSaveText, isNull);
+    });
+
+    test('keeps a broken save for export until newGame', () async {
+      store.text = 'not a save';
+      final c = _controller(store, clock);
+      await c.start();
+      expect(c.brokenSaveText, 'not a save');
+
+      c.tickSeconds(40);
+      expect(await c.importSave('nope'), isA<ImportFailed>());
+      expect(c.brokenSaveText, 'not a save');
+
+      await c.newGame();
+      expect(c.brokenSaveText, isNull);
+    });
+
+    test('is dropped by a successful import', () async {
+      store.text = 'not a save';
+      final c = _controller(store, clock);
+      await c.start();
+
+      await c.importSave(SaveCodec.encode(GameEngine(content).newGame(3)));
+      expect(c.brokenSaveText, isNull);
+    });
+
+    test('is null when the store could not be read at all', () async {
+      final c = GameController(
+        content: content,
+        store: _FailingReadStore(),
+        clock: clock,
+      );
+      expect(await c.start(), isA<LoadFailed>());
+      expect(c.brokenSaveText, isNull);
+    });
+  });
+
   test('newGame replaces the game, clears messages and saves', () async {
     final c = _controller(store, clock);
     await c.start();

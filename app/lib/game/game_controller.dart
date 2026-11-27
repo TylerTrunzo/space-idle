@@ -122,6 +122,7 @@ class GameController extends ChangeNotifier {
   double _sinceAutosave = 0;
   FlowReport? _flow;
   String? _lastError;
+  String? _brokenSaveText;
   final List<OfflineSummary> _pendingAwaySummaries = [];
   Timer? _timer;
   bool _disposed = false;
@@ -145,6 +146,12 @@ class GameController extends ChangeNotifier {
   /// [clearAwaySummary]. Unmodifiable.
   List<OfflineSummary> get pendingAwaySummaries =>
       List.unmodifiable(_pendingAwaySummaries);
+
+  /// The stored text [start] could not load, kept so the UI can offer to
+  /// export it; null once [newGame] or a successful [importSave] replaces
+  /// it, and null when the store could not be read at all (nothing to
+  /// export).
+  String? get brokenSaveText => _brokenSaveText;
 
   /// The most recent of [pendingAwaySummaries], or null when there is none.
   OfflineSummary? get pendingAwaySummary =>
@@ -181,6 +188,7 @@ class GameController extends ChangeNotifier {
     }
     switch (_decode(text, envelopeOnly: true)) {
       case _Bad(:final reason):
+        _brokenSaveText = text;
         return LoadFailed(text, reason);
       case _Good(:final state, :final savedAt):
         _state = state;
@@ -329,6 +337,7 @@ class GameController extends ChangeNotifier {
     _flow = null;
     _syncedAt = _clock.now();
     _canWrite = true;
+    _brokenSaveText = null;
     _lastError = null;
     _pendingAwaySummaries.clear();
     _sinceAutosave = 0;
