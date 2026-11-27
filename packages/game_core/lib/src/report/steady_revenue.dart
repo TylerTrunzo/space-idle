@@ -34,6 +34,11 @@ const double _stepSeconds = 60;
 /// stock nothing refills from goods made from steady supply. The lower
 /// of the two is what the empire keeps earning.
 ///
+/// Neither counts the faction's open contracts: what auto-sell holds back
+/// for them fills once and then sells as before, so holding it is not
+/// lost income; and an order just posted must not lower the income that
+/// sizes the next one's reward. Both copies' boards are cleared for it.
+///
 /// [s] is a copy of the state to work from, played forward here; its
 /// buildings, routes and stock must be the state's, though a second's
 /// production may have moved it on. [crewEff] and [bonuses] are the
@@ -48,6 +53,8 @@ BigNum saleRevenuePerSec(
   required EmpireBonuses bonuses,
   required GameState market,
 }) {
+  s.faction(factionId).contracts.clear();
+  market.faction(factionId).contracts.clear();
   final steady = steadySaleRevenue(
     s,
     c,
@@ -139,10 +146,8 @@ BigNum steadySaleRevenue(
     if (spare == null || spare <= const BigNum.zero()) continue;
     if (limits[body.id]?.containsKey(rule.resourceId) ?? false) continue;
     (limits[body.id] ??= {})[rule.resourceId] = spare;
-    // A full keep, as in steady play, plus this second's spare. The keep
-    // counts the contract need as held here: setting stocks may move the
-    // need to another body, whose keep is then never above this one.
-    final keep = autoSellKeep(market, c, rule, 1, asHolder: true).keeps;
+    // A full keep, as in steady play, plus this second's spare.
+    final keep = autoSellKeep(market, c, rule, 1).keeps;
     body.stock[rule.resourceId] = keep.min(storageCap(market, c, body)) + spare;
   }
   if (limits.isEmpty) return const BigNum.zero();

@@ -243,6 +243,9 @@ void main() {
     }
 
     test('credits per second match what a 10 minute advance earns', () {
+      // No board: what a contract holds back is not sold during the
+      // advance, and credits per second leave contracts out.
+      s.faction('player').contractRefillAt.clear();
       autoSellAll();
       engine.advance(s, 4 * 3600);
       final r = buildFlowReport(s, c, 'player');
@@ -266,6 +269,30 @@ void main() {
   });
 
   group('credits per second is steady sale revenue from net production', () {
+    test('goods held back for open contracts still count: the hold fills '
+        'once and is not lost income', () {
+      final f = s.faction('player')..contractRefillAt.clear();
+      for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+        engine.apply(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+      }
+      engine.advance(s, 3600);
+      final without = buildFlowReport(s, c, 'player').creditsPerSec;
+      expect(without > const BigNum.zero(), isTrue);
+      f.contracts.add(
+        ContractState(
+          id: s.newId('c'),
+          templateId: c.contractTemplates.keys.first,
+          resourceId: 'steel',
+          quantity: n(900),
+          rewardCredits: n(1),
+          postedAt: s.time,
+        ),
+      );
+      f.contractRefillAt.addAll([1e9, 1e9]);
+      expect(buildFlowReport(s, c, 'player').creditsPerSec, without);
+      expect(f.contracts, hasLength(1), reason: 'the state is untouched');
+    });
+
     test('goods made from a stock nothing refills do not count', () {
       // Round-3 optimizer bug 3: presses draining a stock earn in the
       // sample but stop once it runs out. Kora's iron mine is idle; the

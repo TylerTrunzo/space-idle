@@ -233,16 +233,13 @@ typedef AutoSellKeep = ({
 ///
 /// The rule sells only what the body holds above [keeps]. The buildings
 /// run at the crew efficiency of the body's owner (full for an unowned
-/// body, whose rules sell nothing). With [asHolder], the contract need is
-/// counted as if this body held it, whichever does: no keep [stepMarket]
-/// works out for the rule is above that one.
+/// body, whose rules sell nothing).
 AutoSellKeep autoSellKeep(
   GameState s,
   Content c,
   AutoSellRule rule,
-  double dt, {
-  bool asHolder = false,
-}) {
+  double dt,
+) {
   final body = s.body(rule.bodyId);
   final owner = body.ownerId;
   final used = _stepDemand(
@@ -251,17 +248,10 @@ AutoSellKeep autoSellKeep(
     math.max(dt, c.rules.shipmentMergeSeconds),
     owner == null ? 1 : crewEfficiency(s, c, owner),
   );
-  final BigNum hold;
-  if (owner == null) {
-    hold = _zero;
-  } else if (asHolder) {
-    final need = _contractNeeds(s.faction(owner))[rule.resourceId] ?? _zero;
-    hold = need.min(storageCap(s, c, body));
-  } else {
-    hold =
-        _contractHolds(s, c, s.faction(owner))[body.id]?[rule.resourceId] ??
-        _zero;
-  }
+  final hold = owner == null
+      ? _zero
+      : _contractHolds(s, c, s.faction(owner))[body.id]?[rule.resourceId] ??
+            _zero;
   return _keep(s, c, body, rule, used, hold);
 }
 
