@@ -321,6 +321,27 @@ final class StarMapScene {
   /// Radius around the star the map fits to the screen.
   final double extent;
 
+  /// Radius around a signal marker the map keeps in view, in map units.
+  static const double signalMargin = 0.6;
+
+  /// What the map draws, in map units: the star, every body's disc and
+  /// every signal marker. The map is fitted to it, labels getting their
+  /// room from the fit's padding.
+  Rect get bounds {
+    var r = Rect.fromCircle(center: Offset.zero, radius: starRadius);
+    for (final b in bodies) {
+      r = r.expandToInclude(
+        Rect.fromCircle(center: b.position, radius: b.radius),
+      );
+    }
+    for (final s in signals) {
+      r = r.expandToInclude(
+        Rect.fromCircle(center: s.position, radius: signalMargin),
+      );
+    }
+    return r;
+  }
+
   /// Whether [other] draws the same static layer: star, orbits, bodies,
   /// routes, signal markers and extent, whatever its shipments.
   bool sameStaticLayer(StarMapScene other) =>

@@ -26,6 +26,25 @@ void main() {
       expect(t.scale, 15); // 300 / (2 x 10)
     });
 
+    test('fitRect fills the limiting side less padding, and centres', () {
+      const bounds = Rect.fromLTRB(-4, -2, 6, 3); // 10 x 5, centre (1, 0.5)
+      // Tall phone: width limits. (412 - 2x32) / 10 = 34.8 px a unit.
+      final tall = MapTransform.fitRect(const Size(412, 700), bounds);
+      expect(tall.scale, closeTo(34.8, 1e-9));
+      expect(tall.toCanvas(bounds.center), const Offset(206, 350));
+      // Wide window: height limits. (300 - 64) / 5 = 47.2.
+      final wide = MapTransform.fitRect(const Size(1280, 300), bounds);
+      expect(wide.scale, closeTo(47.2, 1e-9));
+      expect(wide.toCanvas(bounds.center), const Offset(640, 150));
+      // The rect then sits inside the padding on every side.
+      final r = Rect.fromPoints(
+        wide.toCanvas(bounds.topLeft),
+        wide.toCanvas(bounds.bottomRight),
+      );
+      expect(r.top, closeTo(MapTransform.fitPadding, 1e-9));
+      expect(r.left, greaterThan(MapTransform.fitPadding));
+    });
+
     // Scale 15 px a unit: a 0.5 body is 7.5 px, a 3 body 45 px.
     final t = MapTransform.fit(size, 10);
     final small = _synthetic(radius: 0.5);

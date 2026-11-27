@@ -11,7 +11,27 @@ final class MapTransform {
   /// Creates a transform.
   const MapTransform(this.scale, this.origin);
 
-  /// Fits a circle of radius [extent] map units into [size].
+  /// Pixels [fitRect] keeps clear on each side, for labels.
+  static const double fitPadding = 32;
+
+  /// Fits [bounds] (map units) into [size] less [fitPadding] a side: the
+  /// limiting side decides the scale, so a tall phone uses its width and a
+  /// wide window its height, and [bounds] is centred.
+  factory MapTransform.fitRect(Size size, Rect bounds) {
+    final w = math.max(1.0, size.width - 2 * fitPadding);
+    final h = math.max(1.0, size.height - 2 * fitPadding);
+    final scale = math.min(
+      w / math.max(bounds.width, 1e-6),
+      h / math.max(bounds.height, 1e-6),
+    );
+    return MapTransform(
+      scale,
+      size.center(Offset.zero) - bounds.center * scale,
+    );
+  }
+
+  /// Fits a circle of radius [extent] map units round the star into
+  /// [size].
   factory MapTransform.fit(Size size, double extent) => MapTransform(
     math.min(size.width, size.height) / (2 * extent),
     size.center(Offset.zero),

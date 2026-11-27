@@ -167,7 +167,7 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
-          final t = MapTransform.fit(size, scene.extent);
+          final t = MapTransform.fitRect(size, scene.bounds);
           return InteractiveViewer(
             transformationController: _zoom,
             minScale: _minScale,

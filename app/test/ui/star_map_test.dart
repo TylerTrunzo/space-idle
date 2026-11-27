@@ -254,6 +254,33 @@ void main() {
     expect(selected, ['kora']);
   });
 
+  testWidgets('the map is fitted to its content and centred', (tester) async {
+    tester.view.physicalSize = const Size(412, 915);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_app(_controller()));
+
+    final paint = find.byWidgetPredicate(
+      (w) => w is CustomPaint && w.painter is StarMapPainter,
+    );
+    final painter =
+        tester.widget<CustomPaint>(paint).painter! as StarMapPainter;
+    final size = tester.getSize(paint);
+    expect(painter.transform, MapTransform.fitRect(size, painter.scene.bounds));
+    // The content reaches the padding on its limiting side.
+    final b = painter.scene.bounds;
+    final drawn = Rect.fromPoints(
+      painter.transform.toCanvas(b.topLeft),
+      painter.transform.toCanvas(b.bottomRight),
+    );
+    final limited =
+        (drawn.width - (size.width - 2 * MapTransform.fitPadding)).abs() < 1 ||
+        (drawn.height - (size.height - 2 * MapTransform.fitPadding)).abs() < 1;
+    expect(limited, isTrue);
+    expect(drawn.center.dx, closeTo(size.width / 2, 1e-6));
+    expect(drawn.center.dy, closeTo(size.height / 2, 1e-6));
+  });
+
   testWidgets('the map is in a zoomable viewer from 0.5 to 3', (tester) async {
     await tester.pumpWidget(_app(_controller()));
     final viewer = tester.widget<InteractiveViewer>(

@@ -198,6 +198,22 @@ void main() {
       expect(_body(scene, 'kora').projectProgress, isNull);
     });
 
+    test('bounds hold the star, every disc and every signal marker', () {
+      final scene = _scene(state);
+      final b = scene.bounds;
+      expect(b.contains(Offset.zero), isTrue);
+      for (final body in scene.bodies) {
+        final disc = Rect.fromCircle(
+          center: body.position,
+          radius: body.radius,
+        );
+        expect(b.expandToInclude(disc), b, reason: body.id);
+      }
+      for (final sig in scene.signals) {
+        expect(b.contains(sig.position), isTrue);
+      }
+    });
+
     test('has one signal per system with unsurveyed signals', () {
       final scene = _scene(state);
       final expected = unsurveyedSignals(state, content, 'player', 'veyra');
