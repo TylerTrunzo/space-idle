@@ -646,8 +646,9 @@ Map<String, Map<String, BigNum>> _cargoSupply(
     final trip = trips[b]?[id] ?? _fullStepSeconds;
     final held = body.stock[id] ?? const BigNum.zero();
     final loaded = loose[b]?[id] ?? const BigNum.zero();
-    final use = cache.use(body, trip)[id] ?? const BigNum.zero();
-    final stocked = held > use
+    final stocked =
+        held > const BigNum.zero() &&
+            held > (cache.use(body, trip)[id] ?? const BigNum.zero())
         ? held.mulDouble(1 / _fullStepSeconds) + loaded.mulDouble(1 / trip)
         : (held + loaded).mulDouble(1 / trip);
     return (pipe + stocked).max(sending[b]?[id] ?? const BigNum.zero());
@@ -662,49 +663,72 @@ Map<String, Map<String, BigNum>> _cargoSupply(
   };
 }
 
-/// Building id to the share of full rate a full step of [window] seconds
-/// from [s] runs it at, each store [supply] lists ([_cargoSupply]) holding
-/// [window] seconds of it instead of its stock and nothing in flight, for
-/// [factionId]'s buildings held back by one of those inputs; at crew
-/// efficiency [crewEff] when given, else the faction's own. Played on a
-/// copy.
+/// Building id to the share of full rate a full step from [s] runs it at,
+/// for [factionId]'s buildings that use an input a store [supply] lists
+/// ([_cargoSupply]) cannot keep up with, and the input that holds each
+/// back most; at crew efficiency [crewEff] when given, else the
+/// faction's own now.
 ///
-/// A store fed by lots holds a lot just after one lands and nothing just
-/// before: a short step sees either, a full one the share of the lots the
-/// buildings get. So the sample step's buildings run at no more than this
-/// ([stepProduction]'s `runCaps`), and a report a few seconds before a lot
-/// lands reads as one a few seconds after.
+/// Over a full step a store's buildings share what it gets a second and
+/// what the body itself makes of the input (at its makers' last run
+/// fractions), in proportion to what they use at full rate: each runs at
+/// that over their use, where it is below 1. A store fed by lots holds a
+/// lot just after one lands and nothing just before: a short step sees
+/// either, a full one the share of the lots its buildings get. So the
+/// sample step's buildings run at no more than this ([stepProduction]'s
+/// `runCaps`), and a report a few seconds before a lot lands reads as one
+/// a few seconds after.
 Map<String, RunCap> _fullStepCaps(
   GameState s,
   Content c,
   String factionId,
   Map<String, Map<String, BigNum>> supply,
-  double window,
   double? crewEff,
 ) {
   if (supply.isEmpty) return const {};
-  final m = s.copy()..shipments.clear();
+  final eff = crewEff ?? crewEfficiency(s, c, factionId);
+  final bonuses = bonusesFor(s, c, factionId);
+  final caps = <String, RunCap>{};
   for (final MapEntry(key: id, value: got) in supply.entries) {
-    final body = m.body(id);
-    for (final MapEntry(key: res, value: v) in got.entries) {
-      body.stock[res] = v.mulDouble(window);
+    final body = s.body(id);
+    final use = <String, BigNum>{};
+    final made = <String, BigNum>{};
+    for (final b in body.buildings) {
+      final flow = fullRateFlow(c, body, b, 1, eff, bonuses: bonuses);
+      for (final res in got.keys) {
+        if (flow.inputs[res] case final v?) {
+          use[res] = (use[res] ?? const BigNum.zero()) + v;
+        }
+        if (flow.outputs[res] case final v? when b.lastRunFraction > 0) {
+          made[res] =
+              (made[res] ?? const BigNum.zero()) +
+              v.mulDouble(b.lastRunFraction);
+        }
+      }
+    }
+    // Share of its full-rate use each input short here gets.
+    final share = <String, double>{
+      for (final MapEntry(key: res, value: wanted) in use.entries)
+        if (wanted > const BigNum.zero())
+          if (((got[res]! + (made[res] ?? const BigNum.zero())) / wanted)
+                  .toDouble()
+              case final r when r < 1)
+            res: math.max(0, r),
+    };
+    if (share.isEmpty) continue;
+    for (final b in body.buildings) {
+      if (!runsRecipe(c.buildings[b.defId]!)) continue;
+      RunCap? cap;
+      for (final res in c.buildings[b.defId]!.inputs.keys) {
+        final r = share[res];
+        if (r != null && (cap == null || r < cap.fraction)) {
+          cap = (fraction: r, inputId: res);
+        }
+      }
+      if (cap != null) caps[b.id] = cap;
     }
   }
-  stepProduction(
-    m,
-    c,
-    window,
-    crewEfficiencyOf: crewEff == null ? const {} : {factionId: crewEff},
-  );
-  return {
-    for (final body in m.bodies)
-      if (body.ownerId == factionId)
-        for (final b in body.buildings)
-          if (b.lastLimitReason case final why? when why.startsWith('input:'))
-            if (why.substring('input:'.length) case final id
-                when supply[body.id]?.containsKey(id) ?? false)
-              b.id: (fraction: b.lastRunFraction, inputId: id),
-  };
+  return caps;
 }
 
 /// Reports [factionId]'s per-second flows and bottlenecks.
@@ -749,10 +773,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   // Cargo lands in lots, so a store a route feeds can be empty a second
   // before a lot lands and full a second after: the sample step runs such
   // buildings at the share a full step of their average supply gives them.
-  final window = math.max(_fullStepSeconds, c.rules.shipmentMergeSeconds);
   final supply = _cargoSupply(s, c, factionId, routeFlow);
   Map<String, RunCap> capsAt([double? crewEff]) =>
-      _fullStepCaps(s, c, factionId, supply, window, crewEff);
+      _fullStepCaps(s, c, factionId, supply, crewEff);
 
   final copy = s.copy()..shipments.clear();
   // A second of that supply is there for the sample step's buildings, as
@@ -1043,6 +1066,18 @@ List<Bottleneck> _keepBlocks(GameState s, Content c, String factionId) {
         m,
   ];
   if (fed.isEmpty) return const [];
+  // A rule's body holding a whole unit of a good a fed megaproject owes,
+  // before working out what auto-delivery keeps there.
+  final one = BigNum.from(1);
+  final owing = [
+    for (final m in fed)
+      if (megaprojectRemaining(s, c, factionId, m) case final owed)
+        for (final (bodyId, id) in rules)
+          if (owed[id] case final need? when id != creditsKey)
+            if ((s.body(bodyId).stock[id] ?? const BigNum.zero()) >= one)
+              (m, bodyId, id, need),
+  ];
+  if (owing.isEmpty) return const [];
   final goods = {
     for (final m in fed)
       for (final id in m.baseCost.keys)
@@ -1056,26 +1091,23 @@ List<Bottleneck> _keepBlocks(GameState s, Content c, String factionId) {
     _fullStepSeconds,
   );
   return [
-    for (final m in fed)
-      if (megaprojectRemaining(s, c, factionId, m) case final owed)
-        for (final (bodyId, id) in rules)
-          if (owed[id] case final need? when id != creditsKey)
-            if (keeps.heldByKeepAtLeast(s.body(bodyId), id).min(need.ceil())
-                case final held when held >= BigNum.from(1))
-              Bottleneck(
-                kind: BottleneckKind.keepBlocksDelivery,
-                bodyId: bodyId,
-                buildingId: null,
-                resourceId: id,
-                megaprojectId: m.id,
-                heldByKeep: held,
-                runFraction: 0,
-                firstSeenAt: s.time,
-                message:
-                    '${m.name} still needs ${c.resources[id]!.name}, but '
-                    "${s.body(bodyId).name}'s auto-sell keepAtLeast holds "
-                    'back what it has',
-              ),
+    for (final (m, bodyId, id, need) in owing)
+      if (keeps.heldByKeepAtLeast(s.body(bodyId), id).min(need.ceil())
+          case final held when held >= one)
+        Bottleneck(
+          kind: BottleneckKind.keepBlocksDelivery,
+          bodyId: bodyId,
+          buildingId: null,
+          resourceId: id,
+          megaprojectId: m.id,
+          heldByKeep: held,
+          runFraction: 0,
+          firstSeenAt: s.time,
+          message:
+              '${m.name} still needs ${c.resources[id]!.name}, but '
+              "${s.body(bodyId).name}'s auto-sell keepAtLeast holds "
+              'back what it has',
+        ),
   ];
 }
 
