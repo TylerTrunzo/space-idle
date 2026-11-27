@@ -1,18 +1,8 @@
 part of 'bot.dart';
 
-/// The faction's contracts board: what it still wants and the next
-/// delivery or discard.
+/// The faction's contracts board: the next delivery or discard. The
+/// engine's auto-sell holds back what open contracts still need.
 extension _Contracts on _View {
-  /// Units of [resourceId] the contracts on the faction's board still
-  /// want, summed.
-  BigNum contractNeed(String resourceId) {
-    var total = const BigNum.zero();
-    for (final k in faction.contracts) {
-      if (k.resourceId == resourceId) total = total + k.remaining;
-    }
-    return total;
-  }
-
   /// One step on the faction's contracts board, contracts in board order:
   /// discards a contract on a resource no staffed building makes and no
   /// owned body holds, or delivers what an owned body holds of a contract's

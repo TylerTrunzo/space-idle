@@ -254,96 +254,153 @@ void main() {
   });
 
   group('a megaproject stage', () {
-    /// A new game with [share] of the goods for the next Orbital Station
-    /// stage on Kora, the rest on Hollow Reach (the player's too), and a
-    /// billion credits.
-    GameState stocked(GameEngine e, {double share = 1}) {
+    /// Units of each station good a body holds beyond its share: more
+    /// than the bot keeps there for its own use, a quarter of storage.
+    const spare = 300;
+
+    /// A new game whose next Orbital Station stage already has 90% of
+    /// each good, the rest held [share] on Kora and the rest on Hollow
+    /// Reach (the player's too), each with [spare] more, and a billion
+    /// credits.
+    GameState stocked(GameEngine e, {double share = 0.5}) {
       final s = e.newGame(1)..faction('player').credits = BigNum.from(1e9);
       s.body('hollow_reach').ownerId = 'player';
       final station = e.content.megaprojects['orbital_station']!;
+      final progress =
+          s.faction('player').megaprojectProgress['orbital_station'] = {};
       for (final MapEntry(:key, :value) in megaprojectCost(
         e.content,
         station,
         0,
       ).entries) {
         if (key == 'credits') continue;
-        s.body('kora').stock[key] = value.mulDouble(share);
-        if (share < 1) {
-          s.body('hollow_reach').stock[key] = value.mulDouble(1 - share);
-        }
+        final held = value - value.mulDouble(0.9).floor();
+        progress[key] = value - held;
+        s.body('kora').stock[key] = held.mulDouble(share) + BigNum.from(spare);
+        s.body('hollow_reach').stock[key] =
+            held.mulDouble(1 - share) + BigNum.from(spare);
       }
       return s;
     }
 
+    /// Plays [bot] on [s] for [checkIns] check-ins: a decision, its
+    /// commands applied, then two game minutes, so the engine's
+    /// auto-delivery runs and the casual bot starts a new check-in. Every
+    /// command issued, in order.
+    List<Command> play(GameEngine e, Bot bot, GameState s, int checkIns) {
+      final issued = <Command>[];
+      for (var i = 0; i < checkIns; i++) {
+        for (final cmd in bot.decide(e, s, 'player')) {
+          expect(e.apply(s, cmd), isA<CommandOk>(), reason: '$cmd');
+          issued.add(cmd);
+        }
+        e.advance(s, 120);
+      }
+      return issued;
+    }
+
     for (final bot in [BalancedBot(), CasualBot(), GreedyBot()]) {
-      test('is paid for and started by the ${bot.name} bot', () {
+      test('is fed and started on its own by the ${bot.name} bot', () {
         final e = _engine();
         final s = stocked(e);
-        final cmds = bot.decide(e, s, 'player');
-        final deliveries = cmds.whereType<DeliverToMegaprojectCommand>();
-        expect(deliveries.map((d) => d.bodyId), ['kora', 'kora']);
-        // Goods first, then the credits once every good is in.
-        expect(deliveries.last.amounts.keys, ['credits']);
-        for (final cmd in cmds) {
-          expect(e.apply(s, cmd), isA<CommandOk>());
-        }
+        final issued = play(e, bot, s, 3);
+        // Goods on their own once the station is open, then its credits
+        // once they are all it lacks; none by hand.
+        expect(issued.whereType<DeliverToMegaprojectCommand>(), isEmpty);
+        final settings = issued
+            .whereType<SetMegaprojectAutoCommand>()
+            .where((c) => c.megaprojectId == 'orbital_station')
+            .toList();
+        expect(settings.first.goods, isTrue);
+        expect(settings.first.creditReserve, isNull);
+        expect(settings[1].creditReserve, isNotNull);
         expect(
           megaprojectStageOf(s, 'player', 'orbital_station'),
           isNotNull,
-          reason: '$cmds',
+          reason: '$issued',
+        );
+        // Paid for: its credits stop again.
+        expect(
+          s.faction('player').megaprojectAuto['orbital_station']!.creditReserve,
+          isNull,
         );
       });
     }
 
-    test('goes on being delivered to while a stage runs', () {
+    test('keeps an hour of income when the credits go in on their own', () {
       final e = _engine();
-      final s = stocked(e);
+      final s = e.newGame(1);
+      // Half an hour of play, so auto-sell earns an income.
+      play(e, BalancedBot(), s, 15);
+      s.faction('player').credits = BigNum.from(1e9);
       final station = e.content.megaprojects['orbital_station']!;
-      for (final MapEntry(:key, :value) in megaprojectCost(
+      s.faction('player').megaprojectProgress['orbital_station'] = {
+        for (final MapEntry(:key, :value) in megaprojectCost(
+          e.content,
+          station,
+          0,
+        ).entries)
+          if (key != 'credits') key: value,
+      };
+      final cmd = BalancedBot()
+          .decide(e, s, 'player')
+          .whereType<SetMegaprojectAutoCommand>()
+          .single;
+      final income = buildFlowReport(
+        s,
         e.content,
-        station,
-        1,
-      ).entries) {
-        if (key == 'credits') continue;
-        s.body('hollow_reach').stock[key] = value;
-      }
-      // Drones for the survey the bot starts first.
-      s.body('kora').stock['survey_drone'] =
-          s.body('kora').stock['survey_drone']! + BigNum.from(3);
-      final cmds = BalancedBot().decide(e, s, 'player');
-      for (final cmd in cmds) {
-        expect(e.apply(s, cmd), isA<CommandOk>());
-      }
-      expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNotNull);
-      // Level 2 is paid for in full, and waits for level 1.
+        'player',
+      ).creditsPerSec.toDouble();
+      expect(income, greaterThan(0));
+      expect(cmd.goods, isTrue);
+      expect(cmd.creditReserve!.toDouble(), closeTo(income * 3600, 1));
+    });
+
+    test('a megaproject still locked is not set up', () {
+      final e = _engine();
+      final cmds = BalancedBot().decide(e, e.newGame(1), 'player');
       expect(
-        megaprojectStageQueued(s, e.content, 'player', station),
-        isTrue,
-        reason: '$cmds',
+        cmds.whereType<SetMegaprojectAutoCommand>().map((c) => c.megaprojectId),
+        ['orbital_station'],
       );
     });
 
-    test('is delivered from every body that holds its goods', () {
+    test('goes on being fed while a stage runs', () {
       final e = _engine();
-      final s = stocked(e, share: 0.5);
-      final cmds = BalancedBot().decide(e, s, 'player');
+      final s = stocked(e);
+      play(e, BalancedBot(), s, 3);
+      expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNotNull);
+      // Segments made while level 1 runs go to level 2.
+      s.body('hollow_reach').stock['station_segment'] = BigNum.from(40);
+      play(e, BalancedBot(), s, 1);
+      expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNotNull);
       expect(
-        cmds.whereType<DeliverToMegaprojectCommand>().map((d) => d.bodyId),
-        ['kora', 'hollow_reach', 'kora'],
+        s
+            .faction('player')
+            .megaprojectProgress['orbital_station']!['station_segment'],
+        BigNum.from(40),
       );
-      for (final cmd in cmds) {
-        expect(e.apply(s, cmd), isA<CommandOk>());
-      }
+    });
+
+    test('is fed from every body that holds its goods', () {
+      final e = _engine();
+      // Kora alone does not hold enough segments for the stage.
+      final s = stocked(e)
+        ..body('kora').stock['station_segment'] = BigNum.from(1);
+      play(e, BalancedBot(), s, 3);
       expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNotNull);
     });
 
     test('takes what is held when the goods are short, and waits', () {
       final e = _engine();
-      final s = stocked(e)..body('kora').stock['reactor_core'] = BigNum.from(1);
-      final cmds = BalancedBot().decide(e, s, 'player');
-      for (final cmd in cmds) {
-        expect(e.apply(s, cmd), isA<CommandOk>());
+      // A reactor core short.
+      final s = stocked(e);
+      final cores = s.faction('player').megaprojectProgress['orbital_station']!;
+      cores['reactor_core'] = cores['reactor_core']! - BigNum.from(1);
+      for (final body in ['kora', 'hollow_reach']) {
+        s.body(body).stock.remove('reactor_core');
       }
+      play(e, BalancedBot(), s, 3);
       expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNull);
       final owed = megaprojectRemaining(
         s,
@@ -352,12 +409,15 @@ void main() {
         e.content.megaprojects['orbital_station']!,
       );
       expect(owed.keys, ['credits', 'reactor_core']);
+      // The credits wait in the bank for the goods.
+      expect(
+        s.faction('player').megaprojectAuto['orbital_station']!.creditReserve,
+        isNull,
+      );
     });
 
-    test("auto-sell keeps what the next stage still lacks", () {
+    test('auto-sell holds what a stage fed on its own lacks, once', () {
       final e = _engine();
-      // A rule already set: the bot delivers the segment it holds, then
-      // retunes the rule.
       final s = e.newGame(1)
         ..body('kora').stock['station_segment'] = BigNum.from(1);
       expect(
@@ -377,14 +437,22 @@ void main() {
       s.faction('player').megaprojectProgress['orbital_station'] = {
         'station_segment': need.mulDouble(0.25),
       };
-      final rule = GreedyBot()
-          .decide(e, s, 'player')
-          .whereType<SetAutoSellCommand>()
-          .firstWhere(
-            (c) => c.bodyId == 'kora' && c.resourceId == 'station_segment',
+      for (final cmd in GreedyBot().decide(e, s, 'player')) {
+        expect(e.apply(s, cmd), isA<CommandOk>());
+      }
+      final rule = s
+          .faction('player')
+          .autoSell
+          .singleWhere(
+            (r) => r.bodyId == 'kora' && r.resourceId == 'station_segment',
           );
-      // Three quarters still lacking, less the one segment just delivered.
-      expect(rule.keepAtLeast, need.mulDouble(0.75) - BigNum.from(1));
+      // The bot's rule keeps none for the station: the engine's auto-sell
+      // holds the three quarters still lacking.
+      expect(rule.keepAtLeast, const BigNum.zero());
+      expect(
+        autoSellKeep(s, e.content, rule, 1).megaprojectHold,
+        need.mulDouble(0.75),
+      );
     });
   });
 
@@ -504,25 +572,35 @@ void main() {
       });
     }
 
-    test('a contract it can work toward is kept, its goods held back', () {
+    test('a contract it can work toward is kept, its goods held back '
+        'once', () {
       final e = _engine();
       // Kora makes steel; none spare yet.
       final (s, k) = withContract(e, 'steel', 300);
       final plain = withContract(e, 'iron_ore', 100).$1
         ..faction('player').contracts.clear();
-      SetAutoSellCommand? steelRule(GameState g) => GreedyBot()
-          .decide(e, g, 'player')
-          .whereType<SetAutoSellCommand>()
-          .where((c) => c.bodyId == 'kora' && c.resourceId == 'steel')
-          .firstOrNull;
-      s.body('kora').stock['steel'] = BigNum.from(1);
-      plain.body('kora').stock['steel'] = BigNum.from(1);
-      final cmds = GreedyBot().decide(e, s, 'player');
-      expect(cmds.whereType<DiscardContractCommand>(), isEmpty);
-      expect(cmds.whereType<DeliverContractCommand>(), isEmpty);
+      for (final g in [s, plain]) {
+        g.body('kora').stock['steel'] = BigNum.from(1);
+      }
+      AutoSellRule steelRule(GameState g) {
+        for (final cmd in GreedyBot().decide(e, g, 'player')) {
+          expect(e.apply(g, cmd), isA<CommandOk>());
+        }
+        return g
+            .faction('player')
+            .autoSell
+            .singleWhere((r) => r.bodyId == 'kora' && r.resourceId == 'steel');
+      }
+
+      final rule = steelRule(s);
       expect(s.faction('player').contracts, [k]);
-      final base = steelRule(plain)?.keepAtLeast ?? const BigNum.zero();
-      expect(steelRule(s)!.keepAtLeast, base + BigNum.from(300));
+      // The bot's rule keeps what it keeps without the contract; the
+      // engine's auto-sell holds the contract's 300.
+      expect(rule.keepAtLeast, steelRule(plain).keepAtLeast);
+      expect(
+        autoSellKeep(s, e.content, rule, 1).contractHold,
+        BigNum.from(300),
+      );
     });
   });
 
@@ -565,11 +643,16 @@ void main() {
         final s = withDrones(e)..faction('player').megaprojectProgress.clear();
         final cmds = bot.decide(e, s, 'player');
         expect(cmds.whereType<SurveyCommand>(), isEmpty);
+        // The station takes them on its own, at the next game minute.
+        for (final cmd in cmds) {
+          expect(e.apply(s, cmd), isA<CommandOk>());
+        }
+        e.advance(s, 60);
         expect(
-          cmds.whereType<DeliverToMegaprojectCommand>().expand(
-            (d) => d.amounts.keys,
-          ),
-          contains('survey_drone'),
+          s
+              .faction('player')
+              .megaprojectProgress['orbital_station']?['survey_drone'],
+          BigNum.from(3),
         );
       });
     }

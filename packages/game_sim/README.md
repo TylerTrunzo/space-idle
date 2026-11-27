@@ -293,16 +293,22 @@ they assign what crew is left (from new housing) themselves. Timed things come
 first in a check-in (surveys, claims, contracts, megaproject deliveries), so
 their timers run while the player is away.
 
-- **Megaprojects.** Each bot delivers a stage's goods from every body that
-  holds more than it keeps for its own use, then the credits once every good
-  is in, which starts the timer. They go on delivering while a stage runs,
-  paying for the level after it, which then starts as the running one ends.
-  Auto-sell holds back what the stage being paid for still lacks.
+- **Megaprojects.** Once a megaproject opens, each bot feeds it on its own
+  (`setMegaprojectAuto`): goods from every body, and its credits, above a
+  reserve of an hour of income, only while they are all the stage being paid
+  for still lacks (credits paid in earlier sit idle in a stage still short of
+  goods). The bots deliver by hand only what auto-delivery does not cover.
+  Stages go on being paid for while one runs, the next starting as the
+  running one ends; the engine's auto-sell holds back what a fed stage still
+  lacks. When at today's surplus a good a stage lacks would take more than a
+  day to come, the balanced and casual bots grow its supply, once per
+  megaproject per decision: they feed a maker held back by its inputs (or
+  grow those in turn), else build another maker.
 - **Surveys** take only drones beyond what that stage still lacks.
-- **Contracts** come before the station: the bots hold a contract's goods back
-  from auto-sell, deliver once a body holds enough to finish it (or its store
-  is nearly full), and discard a contract on a resource they neither make nor
-  hold.
+- **Contracts** come before the station: the engine's auto-sell holds a
+  contract's goods back, and the bots deliver once a body holds enough to
+  finish it (or its store is nearly full), and discard a contract on a
+  resource they neither make nor hold.
 - **Routes.** A route feeding buildings carries twice their demand and stops at
   what the destination keeps for them (`stopAtDestination`), so it keeps up as
   they grow without filling the store; the surplus is sold at the source. A

@@ -270,6 +270,9 @@ void main() {
     // 2.5 h away earned 395K a second, presses draining stock.
     final e = _engine();
     final s = _played(e, hours: 168);
+    // Auto-delivery takes credits and changes what sells as stages are
+    // paid for; the report's sales measure is checked without it.
+    s.faction('player').megaprojectAuto.clear();
     final shown = buildFlowReport(
       s,
       e.content,

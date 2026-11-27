@@ -27,7 +27,8 @@ abstract interface class Bot {
 
 /// Buys the cheapest affordable upgrade, building, extra build slot or
 /// claim each decision, after filling free crew slots, working its
-/// contracts, delivering to megaproject stages, surveying and setting
+/// contracts, feeding megaprojects (on their own once open,
+/// [_View.autoDeliver], by hand for the rest), surveying and setting
 /// auto-sell on surplus.
 final class GreedyBot implements Bot {
   @override
@@ -41,6 +42,7 @@ final class GreedyBot implements Bot {
       final housekeeping =
           v.assignFreeCrew() ??
           v.workContracts() ??
+          v.autoDeliver() ??
           v.deliverMegaproject() ??
           v.survey() ??
           v.autoSell();
@@ -57,11 +59,14 @@ final class GreedyBot implements Bot {
 /// crew housing cannot support; start what takes time, so it runs while
 /// the player is away: survey a hidden body with drones the station does
 /// not need ([_View.survey]), claim a body when affordable, deliver to or
-/// discard contracts ([_View.workContracts]) and deliver megaproject goods
-/// from every body ([_View.deliverMegaproject]); fix one of the worst
+/// discard contracts ([_View.workContracts]), have every open megaproject
+/// fed its goods on their own, and its credits once they are all it lacks
+/// ([_View.autoDeliver]), and deliver by hand what that does not cover
+/// ([_View.deliverMegaproject]); fix one of the worst
 /// bottlenecks (an efficiency or speed upgrade on the starving supplier,
 /// another supplier, or a route, grown when too small); auto-sell surplus;
-/// work toward the next milestone, the next megaproject level or more
+/// work toward the next milestone, the next megaproject level (growing the
+/// supply of a good a stage would take more than a day to get) or more
 /// housing when crew runs out, saving credits for it; and with what is
 /// left, buy whatever adds the most credits per second for its price.
 /// New buildings take their crew as they are built (`autoCrew`).
@@ -87,6 +92,8 @@ final class BalancedBot implements Bot {
     // Each bottleneck gets one fix per decision: the 1 s sample cannot see
     // a fix work until stock has had a real step to refill.
     final tried = <String>{};
+    // Megaprojects whose goods got a step toward more supply this decision.
+    final grown = <String>{};
     // Income is read once per decision: working it out plays the economy
     // forward, and a few commands hardly move it.
     double? income;
@@ -97,6 +104,7 @@ final class BalancedBot implements Bot {
         w,
         factionId,
         withReport: true,
+        grown: grown,
         income: () =>
             income ??= math.max(0.0, v.report!.creditsPerSec.toDouble()),
       );
@@ -106,6 +114,7 @@ final class BalancedBot implements Bot {
           v.survey() ??
           v.claim() ??
           v.workContracts() ??
+          v.autoDeliver() ??
           v.deliverMegaproject() ??
           v.fixBottleneck(tried) ??
           v.autoSell();
@@ -203,6 +212,11 @@ const double _feedHeadroom = 2;
 /// shipments rather than steadily.
 const double _demandBufferSeconds = 60;
 
+/// Game seconds within which the goods a megaproject stage still lacks
+/// should come at today's rates; slower, the balanced bot grows the supply
+/// of the slowest ([_Megaprojects._growFor]).
+const double _stageGoodsWithinSeconds = 86400;
+
 /// Share of demand below which a route counts as too small.
 const double _routeSlack = 0.9;
 
@@ -296,7 +310,9 @@ final class _View {
     this.factionId, {
     bool withReport = false,
     double Function()? income,
+    Set<String>? grown,
   }) : _planIncome = income,
+       _grown = grown ?? {},
        owned = [
          for (final b in s.bodies)
            if (b.ownerId == factionId) b,
@@ -318,6 +334,10 @@ final class _View {
   final FlowReport? report;
 
   final double Function()? _planIncome;
+
+  /// Ids of the megaprojects whose goods got a step toward more supply in
+  /// this decision ([_Megaprojects._growFor]); one each per decision.
+  final Set<String> _grown;
 
   /// Credits a second the faction earns, never below zero: what the plan
   /// passed in, else the report's [FlowReport.creditsPerSec].
@@ -570,12 +590,14 @@ final class _View {
       lifeSupport.any((id) => makes(b, id));
 
   /// Units of [resourceId] kept back from auto-sell on [body]: what it
-  /// keeps for its own use ([keepForUse]) plus what the next megaproject
-  /// stages ([stageNeed]) and the faction's contracts ([contractNeed]) still
-  /// want of it, so the goods pile up to be delivered; at most the storage
-  /// cap.
+  /// keeps for its own use ([keepForUse]) plus what the next stages of the
+  /// megaprojects it delivers to by hand ([handStageNeed]) still want of
+  /// it, so the goods pile up to be delivered; at most the storage cap.
+  ///
+  /// The engine's auto-sell already holds back what open contracts and
+  /// megaprojects fed on their own still need, so those are not kept twice.
   BigNum keep(BodyState body, String resourceId) {
-    final want = stageNeed(resourceId) + contractNeed(resourceId);
+    final want = handStageNeed(resourceId);
     final own = keepForUse(body, resourceId);
     if (want.isZero) return own;
     return (own + want).min(storageCap(s, c, body));

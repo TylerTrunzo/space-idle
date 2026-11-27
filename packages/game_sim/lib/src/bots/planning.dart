@@ -112,12 +112,19 @@ extension _Goals on _View {
   /// The next step toward a staffed building that makes [resourceId]:
   /// staffing an idle one, building an extractor on a deposit, or building
   /// a factory once something makes each of its inputs (those first); a
-  /// build slot first when the only bodies that fit are full.
-  _Step ensureMade(String resourceId, [Set<String> visiting = const {}]) {
+  /// build slot first when the only bodies that fit are full. With
+  /// [another], toward one more such building even when one runs already.
+  _Step ensureMade(
+    String resourceId, [
+    Set<String> visiting = const {},
+    bool another = false,
+  ]) {
     if (visiting.length > _maxChainDepth || visiting.contains(resourceId)) {
       return const _Stuck();
     }
-    if (made(resourceId)) return _feed(resourceId, {...visiting, resourceId});
+    if (made(resourceId) && !another) {
+      return _feed(resourceId, {...visiting, resourceId});
+    }
     for (final (_, b) in buildings) {
       if (b.crew == 0 && makes(b, resourceId)) return _staff(b);
     }
@@ -175,28 +182,31 @@ extension _Goals on _View {
       return const _Waiting();
     }
     for (final (body, b) in makers) {
-      final reason = b.lastLimitReason;
-      if (reason == null || !reason.startsWith('input:')) continue;
-      final input = reason.substring('input:'.length);
-      if (visiting.contains(input)) continue;
-      final deeper = {...visiting, input};
-      if (!made(input)) {
-        final step = ensureMade(input, deeper);
-        if (_acts(step)) return step;
-        continue;
-      }
-      if (routeInto(body, input)) {
-        if (_fixInput(body, input) case final fix?) return _Do(fix);
-      } else if (!madeAt(body, input)) {
-        final need = flowOf(body, b).inputs[input]!;
-        if (_route(input, body, need) case final cmd?) return _Do(cmd);
-        final ships = _shipsFor([input], deeper);
-        if (_acts(ships)) return ships;
-      }
-      final upstream = _feed(input, deeper);
-      if (_acts(upstream)) return upstream;
+      final step = _feedMaker(body, b, visiting);
+      if (_acts(step)) return step;
     }
     return const _Waiting();
+  }
+
+  /// The next step toward the input [b] on [body] last ran short of (its
+  /// `lastLimitReason`), as [_feed] takes it; [_Waiting] when it ran short
+  /// of none, or nothing can be done.
+  _Step _feedMaker(BodyState body, BuildingState b, Set<String> visiting) {
+    final reason = b.lastLimitReason;
+    if (reason == null || !reason.startsWith('input:')) return const _Waiting();
+    final input = reason.substring('input:'.length);
+    if (visiting.contains(input)) return const _Waiting();
+    final deeper = {...visiting, input};
+    if (!made(input)) return ensureMade(input, deeper);
+    if (routeInto(body, input)) {
+      if (_fixInput(body, input) case final fix?) return _Do(fix);
+    } else if (!madeAt(body, input)) {
+      final need = flowOf(body, b).inputs[input]!;
+      if (_route(input, body, need) case final cmd?) return _Do(cmd);
+      final ships = _shipsFor([input], deeper);
+      if (_acts(ships)) return ships;
+    }
+    return _feed(input, deeper);
   }
 
   /// [_Waiting] once something makes every one of [inputs], else the first
