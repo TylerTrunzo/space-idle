@@ -1177,7 +1177,14 @@ void main() {
         // at most [rate], Brine (180 s) 2 a second. A target timed by
         // Kora's trip kept Brine's lots too small, and the smelters ran at
         // 76-95%.
-        (double, double, double) supply(double stop, double rate, double step) {
+        // With [mines], Kora holds no ore and makes it with that many
+        // crewed iron mines (0.4 a second each): its route runs dry.
+        (double, double, double) supply(
+          double stop,
+          double rate,
+          double step, {
+          int? mines,
+        }) {
           final s = engine.newGame(1);
           s.faction('player').baseCrew = 100;
           final reach = s.body('hollow_reach')..ownerId = 'player';
@@ -1187,12 +1194,28 @@ void main() {
               BuildingState(id: s.newId('b'), defId: 'smelter', crew: 1),
             );
           }
-          for (final b in s.body('kora').buildings) {
-            b.crew = 0;
+          final kora = s.body('kora');
+          for (final b in kora.buildings) {
+            b.crew =
+                mines != null &&
+                    b.defId == 'mine' &&
+                    b.depositResourceId == 'iron_ore'
+                ? 1
+                : 0;
+          }
+          for (var i = 1; i < (mines ?? 0); i++) {
+            kora.buildings.add(
+              BuildingState(
+                id: s.newId('b'),
+                defId: 'mine',
+                crew: 1,
+                depositResourceId: 'iron_ore',
+              ),
+            );
           }
           for (final from in ['kora', 'brine']) {
             s.body(from)
-              ..stock['iron_ore'] = n(1e6)
+              ..stock['iron_ore'] = n(from == 'kora' && mines != null ? 0 : 1e6)
               ..stock['cargo_ship'] = n(1);
             engine.apply(
               s,
@@ -1223,15 +1246,31 @@ void main() {
           return (used / (1.2 * 6 * 3600), wasted, most);
         }
 
-        for (final (stop, rate) in [
-          (10.0, 0.2),
-          (10.0, 0.4),
-          (10.0, 0.8),
-          (50.0, 0.2),
+        for (final (stop, rate, mines) in <(double, double, int?)>[
+          (10.0, 0.2, null),
+          (10.0, 0.4, null),
+          (10.0, 0.8, null),
+          (50.0, 0.2, null),
+          // Set at 2 a second, but Kora makes only 0.4 or 0.8: it counts
+          // at what it makes, not its setting.
+          (10.0, 2, 1),
+          (10.0, 2, 2),
+          (50.0, 2, 1),
+          (10.0, 2, 3),
         ]) {
-          final (coarse, wasteCoarse, mostCoarse) = supply(stop, rate, 60);
-          final (live, wasteLive, mostLive) = supply(stop, rate, 1);
-          final why = 'stop $stop, Kora $rate';
+          final (coarse, wasteCoarse, mostCoarse) = supply(
+            stop,
+            rate,
+            60,
+            mines: mines,
+          );
+          final (live, wasteLive, mostLive) = supply(
+            stop,
+            rate,
+            1,
+            mines: mines,
+          );
+          final why = 'stop $stop, Kora $rate, mines $mines';
           expect(coarse, greaterThan(0.995), reason: why);
           expect(live, greaterThan(0.995), reason: why);
           expect(coarse, closeTo(live, 0.01), reason: why);

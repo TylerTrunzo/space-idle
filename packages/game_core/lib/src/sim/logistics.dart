@@ -1,6 +1,7 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
+import 'megaprojects.dart';
 import 'production.dart';
 import 'step_cache.dart';
 
@@ -137,9 +138,11 @@ BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) =>
 /// destination's cap. Taking the routes whose source holds some of the
 /// resource nearest first, as [sendCargo] does, that is the one whose
 /// rate brings what they carry together up to what the destination uses
-/// a second; the farthest of them when they never get there, and the
-/// nearest of all when no source holds any. So a near route too slow for
-/// the demand leaves room for the farther ones' longer trips.
+/// a second, each counted at what it can keep sending ([_sustained]);
+/// the farthest of them when they never get there, and the nearest of
+/// all when no source holds any. So a near route too slow for the demand,
+/// or fed by less than it is set to carry, leaves room for the farther
+/// ones' longer trips.
 Map<String, BigNum> _stopTargets(GameState s, Content c, StepCache cache) {
   final stops = <String, BigNum>{};
   final groups = <String, List<(RouteState, double)>>{};
@@ -165,14 +168,12 @@ Map<String, BigNum> _stopTargets(GameState s, Content c, StepCache cache) {
     final use = cache.use(to, 1)[first.resourceId] ?? const BigNum.zero();
     RouteState timedBy = first;
     var carried = const BigNum.zero();
-    for (final (_, (r, _)) in byTrip) {
+    for (final (_, (r, trip)) in byTrip) {
       final from = s.body(r.fromBodyId);
-      if ((from.stock[r.resourceId] ?? const BigNum.zero()) <=
-          const BigNum.zero()) {
-        continue;
-      }
+      final held = from.stock[r.resourceId] ?? const BigNum.zero();
+      if (held <= const BigNum.zero()) continue;
       timedBy = r;
-      carried = carried + r.ratePerSecond.min(routeCapacity(c, r));
+      carried = carried + _sustained(s, c, r, held, trip, cache);
       if (carried >= use) break;
     }
     targets[key] = (stops[key]! + _useInTransit(s, c, timedBy, cache)).min(
@@ -180,6 +181,45 @@ Map<String, BigNum> _stopTargets(GameState s, Content c, StepCache cache) {
     );
   }
   return targets;
+}
+
+/// Units a second route [r] can keep sending: its rate, at most its
+/// capacity, while its source holds [held] of the resource, at least a
+/// trip ([trip] seconds) of that; with less, no more than its source makes
+/// of it a second beyond what its buildings use, at their last run
+/// fractions. So a route set faster than what feeds it counts at what it
+/// carries over time, however short the step that left a little stock.
+BigNum _sustained(
+  GameState s,
+  Content c,
+  RouteState r,
+  BigNum held,
+  double trip,
+  StepCache cache,
+) {
+  final most = r.ratePerSecond.min(routeCapacity(c, r));
+  if (held >= most.mulDouble(trip)) return most;
+  final from = s.body(r.fromBodyId);
+  final owner = from.ownerId;
+  if (owner == null) return const BigNum.zero();
+  var net = const BigNum.zero();
+  for (final b in from.buildings) {
+    if (b.lastRunFraction == 0) continue;
+    final flow = fullRateFlow(
+      c,
+      from,
+      b,
+      1,
+      cache.crewEff(owner),
+      bonuses: bonusesFor(s, c, owner),
+    );
+    net =
+        net +
+        ((flow.outputs[r.resourceId] ?? const BigNum.zero()) -
+                (flow.inputs[r.resourceId] ?? const BigNum.zero()))
+            .mulDouble(b.lastRunFraction);
+  }
+  return most.min(net.max(const BigNum.zero()));
 }
 
 /// [routeRoomBeforeStop] given the shared [targets] ([_stopTargets]) and
