@@ -89,6 +89,61 @@ void main() {
     );
   });
 
+  bool mapTicks(WidgetTester tester) => TickerMode.valuesOf(
+    tester.element(find.byType(StarMap, skipOffstage: false)),
+  ).enabled;
+
+  testWidgets('the map stops animating while the sheet covers it', (
+    tester,
+  ) async {
+    await _boot(tester, size: const Size(400, 800));
+    await tester.tap(find.bySemanticsLabel('Kora, owned'), warnIfMissed: false);
+    await tester.pump();
+    expect(mapTicks(tester), isTrue, reason: 'partly covered');
+
+    // Drag the sheet all the way up, by its title: the sheet's own box
+    // fills the map area, so its centre may be on the map above it.
+    final title = find.descendant(
+      of: find.byKey(Shell.sheetKey),
+      matching: find.text('Kora'),
+    );
+    await tester.drag(title, const Offset(0, -900));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(mapTicks(tester), isFalse, reason: 'fully covered');
+
+    await tester.drag(title, const Offset(0, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(mapTicks(tester), isTrue, reason: 'uncovered again');
+  });
+
+  testWidgets('the map stops animating on another tab', (tester) async {
+    await _boot(tester);
+    expect(mapTicks(tester), isTrue);
+    await tester.tap(find.text('Production').last);
+    await tester.pump();
+    expect(mapTicks(tester), isFalse);
+    await tester.tap(find.text('Map').last);
+    await tester.pump();
+    expect(mapTicks(tester), isTrue);
+  });
+
+  testWidgets('Android back closes the selected body before leaving', (
+    tester,
+  ) async {
+    await _boot(tester, size: const Size(400, 800));
+    await tester.tap(find.bySemanticsLabel('Kora, owned'), warnIfMissed: false);
+    await tester.pump();
+    expect(find.byKey(Shell.sheetKey), findsOneWidget);
+
+    final popped = await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(popped, isTrue, reason: 'the app handled back itself');
+    expect(find.byKey(Shell.sheetKey), findsNothing);
+    expect(find.byType(Shell), findsOneWidget);
+  });
+
   testWidgets('closing the panel clears the selection', (tester) async {
     await _boot(tester, size: const Size(1000, 800));
     await tester.tap(find.bySemanticsLabel('Kora, owned'), warnIfMissed: false);

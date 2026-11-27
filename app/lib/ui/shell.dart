@@ -78,9 +78,19 @@ class _ShellState extends State<Shell> {
   _Tab _tab = _Tab.map;
   String? _selected;
 
+  /// Whether the phone sheet covers the whole map.
+  bool _mapCovered = false;
+
   void _select(String id) => setState(() => _selected = id);
 
-  void _clear() => setState(() => _selected = null);
+  void _clear() => setState(() {
+    _selected = null;
+    _mapCovered = false;
+  });
+
+  void _onCovered(bool covered) {
+    if (covered != _mapCovered) setState(() => _mapCovered = covered);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,38 +98,54 @@ class _ShellState extends State<Shell> {
       selectedId: _selected,
       selectBody: _select,
       clearSelection: _clear,
-      child: AwaySummaryGate(
-        child: Scaffold(
-          body: Column(
-            children: [
-              TopBar(onSettings: () => showSettingsSheet(context)),
-              Expanded(
-                child: IndexedStack(
-                  index: _tab.index,
-                  children: [
-                    for (final t in _Tab.values)
-                      // Only the shown tab's animations run.
-                      TickerMode(enabled: t == _tab, child: _tabBody(t)),
-                  ],
-                ),
+      // Back closes the selected body's panel before it leaves the app.
+      child: PopScope(
+        canPop: _selected == null,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _clear();
+        },
+        child: _frame(context),
+      ),
+    );
+  }
+
+  Widget _frame(BuildContext context) {
+    return AwaySummaryGate(
+      child: Scaffold(
+        body: Column(
+          children: [
+            TopBar(onSettings: () => showSettingsSheet(context)),
+            Expanded(
+              child: IndexedStack(
+                index: _tab.index,
+                children: [
+                  for (final t in _Tab.values)
+                    // Only the shown tab's animations run.
+                    TickerMode(enabled: t == _tab, child: _tabBody(t)),
+                ],
               ),
-            ],
-          ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _tab.index,
-            onDestinationSelected: (i) => setState(() => _tab = _Tab.values[i]),
-            destinations: [
-              for (final t in _Tab.values)
-                NavigationDestination(icon: Icon(t.icon), label: t.label),
-            ],
-          ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab.index,
+          onDestinationSelected: (i) => setState(() => _tab = _Tab.values[i]),
+          destinations: [
+            for (final t in _Tab.values)
+              NavigationDestination(icon: Icon(t.icon), label: t.label),
+          ],
         ),
       ),
     );
   }
 
   Widget _tabBody(_Tab t) => switch (t) {
-    _Tab.map => _MapTab(selectedId: _selected, onSelect: _select),
+    _Tab.map => _MapTab(
+      selectedId: _selected,
+      onSelect: _select,
+      covered: _mapCovered,
+      onCovered: _onCovered,
+    ),
     // Tasks 7 and 8 fill these.
     _Tab.production || _Tab.crew || _Tab.trade => Center(
       key: ValueKey('tab-${t.label}'),
@@ -129,10 +155,24 @@ class _ShellState extends State<Shell> {
 }
 
 class _MapTab extends StatelessWidget {
-  const _MapTab({required this.selectedId, required this.onSelect});
+  const _MapTab({
+    required this.selectedId,
+    required this.onSelect,
+    required this.covered,
+    required this.onCovered,
+  });
+
+  /// Extent from which the sheet counts as covering the map.
+  static const double _fullExtent = 0.99;
 
   final String? selectedId;
   final void Function(String id) onSelect;
+
+  /// Whether the sheet covers the whole map, so its animation can stop.
+  final bool covered;
+
+  /// Reports whether the sheet now covers the whole map.
+  final void Function(bool covered) onCovered;
 
   @override
   Widget build(BuildContext context) {
@@ -161,15 +201,24 @@ class _MapTab extends StatelessWidget {
     }
     return Stack(
       children: [
-        Positioned.fill(child: map),
+        Positioned.fill(
+          // Nothing of the map shows under a full sheet: no need to animate.
+          child: TickerMode(enabled: !covered, child: map),
+        ),
         if (id != null)
-          DraggableScrollableSheet(
-            key: Shell.sheetKey,
-            initialChildSize: 0.45,
-            minChildSize: 0.2,
-            maxChildSize: 1,
-            builder: (context, scroll) =>
-                _PanelPlaceholder(bodyId: id, scroll: scroll),
+          NotificationListener<DraggableScrollableNotification>(
+            onNotification: (n) {
+              onCovered(n.extent >= _fullExtent);
+              return false;
+            },
+            child: DraggableScrollableSheet(
+              key: Shell.sheetKey,
+              initialChildSize: 0.45,
+              minChildSize: 0.2,
+              maxChildSize: 1,
+              builder: (context, scroll) =>
+                  _PanelPlaceholder(bodyId: id, scroll: scroll),
+            ),
           ),
       ],
     );
