@@ -118,9 +118,16 @@ void main() {
       'maxPurchases': 2,
     });
     expect(capped['stop'], 'maxPurchases');
+    // Crew is free and the mines' one slot each is filled: capacity comes
+    // first, the cheaper mine's (b2, one level in: 300 × 1.17) then b1's
+    // (two in: 300 × 1.17²).
+    expect(
+      [for (final u in capped['upgrades']! as List) (u as Map)['track']],
+      ['capacity', 'capacity'],
+    );
     expect(
       capped['message'],
-      'Bought 2 upgrade levels on 2 buildings for ${f(58.5 + 68.445)} '
+      'Bought 2 upgrade levels on 2 buildings for ${f(351 + 410.67)} '
       'credits; stopped at 2 levels, the most this command buys',
     );
   });

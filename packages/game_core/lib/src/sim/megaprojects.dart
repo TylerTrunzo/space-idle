@@ -318,16 +318,22 @@ Map<String, BigNum> megaprojectRemaining(
       m,
       level,
     ).entries)
-      // Rounded up after taking off a part in 1e12 of the cost: less than
-      // that over a whole unit is float residue of the deliveries' sums
-      // (BigNum mantissas), not a unit owed. At a cost of 1.6e7, 5e4 paid
-      // in twice leaves 50,000 and a hair, which would round up to 50,001.
-      if ((need - (got[id] ?? const BigNum.zero()) - need.mulDouble(1e-12))
+      // Rounded up after taking off a part in 1e12 of the cost, at most
+      // half a unit: less than that over a whole unit is float residue of
+      // the deliveries' sums (BigNum mantissas), not a unit owed, and a
+      // whole unit owed is always owed. At a cost of 1.6e7, 5e4 paid in
+      // twice leaves 50,000 and a hair, which would round up to 50,001.
+      if ((need -
+                  (got[id] ?? const BigNum.zero()) -
+                  need.mulDouble(1e-12).min(_halfUnit))
               .ceil()
           case final left when left > const BigNum.zero())
         id: left,
   };
 }
+
+/// Half a unit: the most float residue [megaprojectRemaining] forgives.
+final _halfUnit = BigNum.from(0.5);
 
 /// Whether [factionId]'s next stage of [m] is paid for in full while one
 /// is still under way, so it starts when that one completes.

@@ -108,9 +108,10 @@ void main() {
       // are sold, each at its market's cap: hull plates and circuits earned
       // about 36% each (the Task 8 report). Stage 1.7 task 4's bots feed
       // megaprojects credits as they earn them, and the Mass Driver's sale
-      // bonus covers both: hull plates earn 44-51% on seeds 1-3 (38-41%
-      // at the task's base). The limit was 40%; the controller is asked
-      // to rule on it (task 4 report).
+      // bonus covers both: hull plates earn 44-52% on seeds 1-3 (38-41%
+      // at the task's base). A known concentration, accepted for stage
+      // 1.7 (the limit was 40%) until stage 3's market-wall content (tier
+      // 4 recipes, faction buyers, regional demand) spreads sales out.
       for (final MapEntry(:key, :value) in day14.share.entries) {
         expect(value, lessThanOrEqualTo(0.55), reason: key);
       }
@@ -158,6 +159,27 @@ void main() {
       );
     });
 
+    test('goes no more than 4 days without a new station level, from its '
+        'first to day 21', () {
+      // Findings §4 asked for a level every 3 days; the controller's
+      // ruling on stage 1.7 task 4 accepts gaps of up to 4 with megaproject
+      // costs ×2 a level (a level costs 1-2 days of income by then, so a
+      // 3-day cadence would need income ×5 a week).
+      int level(int day) =>
+          report.dayEnds[day - 1].megaprojectLevels['orbital_station']!;
+      final first = [
+        for (var d = 1; d <= 21; d++)
+          if (level(d) > 0) d,
+      ].first;
+      var gap = 0;
+      var worst = 0;
+      for (var d = first + 1; d <= 21; d++) {
+        gap = level(d) > level(d - 1) ? 0 : gap + 1;
+        worst = math.max(worst, gap);
+      }
+      expect(worst, lessThanOrEqualTo(4), reason: report.toMarkdown());
+    });
+
     test('a Mass Driver level raises its day-14 income by 3% or more', () {
       // Findings §4. One more level's bonus alone, as stage 1.7 task 3
       // measured it: the factor raised so the state's level gives what
@@ -192,6 +214,12 @@ void main() {
     test('earns no more than 15% from contracts on days 1, 7 and 14', () {
       _contractsAtMost(report, 0.15);
     });
+
+    // Findings §4's "no reward above 1 h of income (first excepted)" is
+    // the engine's reward cap, checked at posting, where the income basis
+    // it caps by is known, in game_core's
+    // test/sim/contract_reward_cap_test.dart: a session reads the basis
+    // hours later, when it can have swung severalfold.
   });
 
   // Seed 1 only, to keep the suite quick; docs/balance/ has seeds 1 to 3.

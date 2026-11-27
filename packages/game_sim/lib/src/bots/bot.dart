@@ -128,12 +128,15 @@ final class BalancedBot implements Bot {
   }) => _plan(e, s, factionId, budget: budget).cmds;
 
   /// [plan], with the planning copy as the plan leaves it and the credits
-  /// it saves for its next goal ([_Goals.goalSaving]).
+  /// it saves for its next goal ([_Goals.goalSaving]): read once per
+  /// decision, at its first step, with [withSaving]; otherwise only if
+  /// credit auto-pay's reserve needed it (zero if not).
   ({List<Command> cmds, GameState end, BigNum saving}) _plan(
     GameEngine e,
     GameState s,
     String factionId, {
     int? budget,
+    bool withSaving = false,
   }) {
     // Each bottleneck gets one fix per decision: the 1 s sample cannot see
     // a fix work until stock has had a real step to refill.
@@ -161,6 +164,8 @@ final class BalancedBot implements Bot {
             income ??= math.max(0.0, v.report!.creditsPerSec.toDouble()),
         saving: () => saving ??= v.goalSaving(),
       );
+      // Buy-max leaves the goal's saving whether or not auto-pay reads it.
+      if (withSaving) saving ??= v.goalSaving();
       final quick =
           v.assignFreeCrew() ??
           v.shedCrew() ??
@@ -257,6 +262,7 @@ final class CasualBot implements Bot {
       s,
       factionId,
       budget: commandsPerCheckIn - _used - (buy ? 1 : 0),
+      withSaving: buy,
     );
     final cmds = [
       ...p.cmds,

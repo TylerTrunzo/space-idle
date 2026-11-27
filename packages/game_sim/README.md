@@ -298,7 +298,9 @@ says the slot is empty when no crew is free.
 `buyUpgrades` (`{"cmd":"buyUpgrades","budget":"5e6"}`, optional
 `maxPurchases`, 1 to 2000) is the app's buy-max button: it buys the cheapest
 upgrade level of any building you own, again and again, until the next would
-pass the budget or your credits, ties by building id then track. The reply
+pass the budget or your credits, ties by building id then track. While crew is
+free, a capacity level on a building whose crew slots are all filled comes
+first (the cheapest of those), so the free crew goes to work. The reply
 lists `upgrades` (each building and track: `levels` bought, `level` now,
 `cost`), `stop` (`budget`, `maxPurchases` or `nothingToBuy`) and `nextCost`,
 with a message such as `"Bought 3 upgrade levels on 2 buildings for 159

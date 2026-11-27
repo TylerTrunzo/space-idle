@@ -226,12 +226,25 @@ void main() {
         megaprojectRemaining(s, content, 'player', driver)['credits'],
         BigNum.from(5e4),
       );
-      // A whole credit still owed is still owed.
+      // A whole credit still owed is still owed, at 1.6e7 and past 1e13,
+      // where a part in 1e12 of the cost would be ten credits.
       s.faction('player').megaprojectProgress['mass_driver'] = {
         'credits': cost - BigNum.from(1),
       };
       expect(
         megaprojectRemaining(s, content, 'player', driver)['credits'],
+        BigNum.from(1),
+      );
+      final station = content.megaprojects['orbital_station']!;
+      final big = megaprojectCost(content, station, 19)['credits']!;
+      expect(big > BigNum.from(1e13), isTrue);
+      s.faction('player')
+        ..megaprojectLevels['orbital_station'] = 19
+        ..megaprojectProgress['orbital_station'] = {
+          'credits': big - BigNum.from(1),
+        };
+      expect(
+        megaprojectRemaining(s, content, 'player', station)['credits'],
         BigNum.from(1),
       );
     });

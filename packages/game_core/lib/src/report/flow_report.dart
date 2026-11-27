@@ -1064,7 +1064,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   };
   // Credits per second is worked out only when asked for, on the two
   // copies, which nothing else reads once the report is built; the report
-  // lets go of them once it has, so it holds no state but its own.
+  // lets go of them once it has. One exception: when the income came from
+  // the cache, no steady flows were worked out, so the played copy is kept
+  // for the steady rates for as long as the report lives.
   GameState? played = probe;
   GameState? sold = copy;
   // Steady flows take no stock into account, so the played copy gives the

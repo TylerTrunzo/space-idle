@@ -485,8 +485,7 @@ final class ScriptRunner {
     final buildings = {for (final p in o.purchases) p.buildingId}.length;
     final levels = o.levels == 1
         ? '1 upgrade level'
-        : '${o.levels} upgrade '
-              'levels';
+        : '${o.levels} upgrade levels';
     final on = buildings == 1 ? '1 building' : '$buildings buildings';
     return 'Bought $levels on $on for ${formatNumber(o.total)} credits; $why';
   }

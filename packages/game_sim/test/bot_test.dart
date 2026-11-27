@@ -58,8 +58,9 @@ final class _Counter implements Bot {
   final Map<int, int> perCheckIn = {};
 
   /// Check-in index to the [BuyUpgradesCommand]s issued in it, with the
-  /// credits held when each was issued.
-  final Map<int, List<(BuyUpgradesCommand, BigNum)>> buyMax = {};
+  /// credits held when each applied, whether a megaproject then took
+  /// credits on its own, and the levels it bought.
+  final Map<int, List<(BuyUpgradesCommand, BigNum, bool, int)>> buyMax = {};
 
   @override
   String get name => inner.name;
@@ -75,10 +76,19 @@ final class _Counter implements Bot {
     // commands before it.
     final w = s.copy();
     for (final c in cmds) {
+      final held = w.faction(factionId).credits;
+      final funding = w
+          .faction(factionId)
+          .megaprojectAuto
+          .values
+          .any((a) => a.credits);
+      final r = e.apply(w, c);
       if (c is BuyUpgradesCommand) {
-        (buyMax[i] ??= []).add((c, w.faction(factionId).credits));
+        final levels = r is CommandOk && r.outcome is UpgradesBought
+            ? (r.outcome! as UpgradesBought).levels
+            : 0;
+        (buyMax[i] ??= []).add((c, held, funding, levels));
       }
-      e.apply(w, c);
     }
     return cmds;
   }
@@ -634,16 +644,16 @@ void main() {
     }
     expect(counter.buyMax.keys, [0, 1, 2, 3]);
     for (final buys in counter.buyMax.values) {
-      final (cmd, held) = buys.single;
+      final (cmd, held, _, _) = buys.single;
       expect(cmd.budget, lessThanOrEqualTo(held));
       expect(cmd.budget, greaterThanOrEqualTo(const BigNum.zero()));
     }
-    // Its budget is what is left: the levels it buys are most of what
-    // it spends.
-    final spent = counter.buyMax.values
-        .expand((b) => b)
-        .fold(const BigNum.zero(), (t, b) => t + b.$1.budget);
-    expect(spent > const BigNum.zero(), isTrue);
+    final all = counter.buyMax.values.expand((b) => b).toList();
+    // It buys levels.
+    expect(all.any((b) => b.$4 > 0), isTrue);
+    // It leaves what it saves for a goal (the first claim, on day 1),
+    // with no megaproject taking credits on its own.
+    expect(all.any((b) => !b.$3 && b.$1.budget < b.$2), isTrue);
   });
 
   test('a command rejected while planning ends the plan and is returned', () {
