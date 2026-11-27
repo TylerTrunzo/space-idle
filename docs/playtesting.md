@@ -112,7 +112,11 @@ Things worth knowing:
 - Habitats need no crew. They house crew as long as they get food, water and
   oxygen. Food comes from a hydroponic farm (water and fertilizer, from
   ammonia) or a protein vat (water and hydrogen, which an electrolyzer also
-  makes).
+  makes). Habitats have first claim on their inputs, but a habitat short of
+  one claims only the share of the others it can use, so the farm still gets
+  the water it needs to make the food. Crew work at the share of their number
+  the same tick's housing supports (9.5 housed for 10 crew is 95%), so
+  housing does not swing from tick to tick and `state` and `report` agree.
 - Auto-sell never sells what the buildings on that body need for the next
   tick, or the next 10 seconds if the tick is shorter (route cargo lands in
   lots about 10 s apart), so it is safe on an input with `keepAtLeast` 0;
