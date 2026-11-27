@@ -41,30 +41,27 @@ const double _stepSeconds = 60;
 ///
 /// [s] is a copy of the state to work from, played forward here; its
 /// buildings, routes and stock must be the state's, though a second's
-/// production may have moved it on. [crewEff] and [bonuses] are the
-/// faction's in the state itself. [market] is another copy whose market
-/// is the state's, give or take a second of sales, on which the steady
-/// sales are made; it is changed too.
+/// production may have moved it on. [steady] is the faction's
+/// [steadyFlows] in it. [market] is another copy whose market is the
+/// state's, give or take a second of sales, on which the steady sales are
+/// made; it is changed too.
 BigNum saleRevenuePerSec(
   GameState s,
   Content c,
   String factionId, {
-  required double crewEff,
-  required EmpireBonuses bonuses,
+  required SteadyFlows steady,
   required GameState market,
 }) {
   s.faction(factionId).contracts.clear();
   market.faction(factionId).contracts.clear();
-  final steady = steadySaleRevenue(
-    s,
+  final steadyRevenue = steadySaleRevenue(
     c,
     factionId,
-    crewEff: crewEff,
-    bonuses: bonuses,
+    steady: steady,
     market: market,
   );
-  if (steady <= const BigNum.zero()) return const BigNum.zero();
-  return steady
+  if (steadyRevenue <= const BigNum.zero()) return const BigNum.zero();
+  return steadyRevenue
       .min(measuredSaleRevenue(s, c, factionId))
       .max(const BigNum.zero());
 }
@@ -106,8 +103,27 @@ BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
   return (sales() - before).mulDouble(1 / _measureSeconds);
 }
 
-/// Credits a second [factionId] earns from auto-selling its net production
-/// once its stocks stop moving, with every flow steady.
+/// A faction's flows a second once its stocks stop moving, with every
+/// flow steady (see [steadyFlows]).
+final class SteadyFlows {
+  SteadyFlows._(this._netByBody, this.produced, this.surplus);
+
+  /// Body and resource ([_key]) to what is left over there.
+  final Map<String, BigNum> _netByBody;
+
+  /// Resource id to what the faction's buildings make of it, before
+  /// anything uses it; zero rates left out.
+  final Map<String, BigNum> produced;
+
+  /// Resource id to what is left over of it, summed over the faction's
+  /// bodies: on each body, what its buildings make and routes bring less
+  /// what its buildings use and routes take, where that is above zero;
+  /// zero rates left out.
+  final Map<String, BigNum> surplus;
+}
+
+/// [factionId]'s flows a second with every rate steady, its buildings
+/// working at [crewEff] with [bonuses], the faction's.
 ///
 /// Every building of the faction runs at the share of full rate its
 /// inputs can keep up with from what its body makes and what routes bring
@@ -118,7 +134,18 @@ BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
 /// rest staying at the source. Rates start at full and are lowered round
 /// by round until every input is covered (`supply ≥ demand` on each body),
 /// so the result is the fastest the empire can run without drawing stock
-/// down.
+/// down. Stock plays no part, so the flows of a copy whose stock moved on
+/// are the state's.
+SteadyFlows steadyFlows(
+  GameState s,
+  Content c,
+  String factionId, {
+  required double crewEff,
+  required EmpireBonuses bonuses,
+}) => _steadyNet(s, c, factionId, crewEff, bonuses);
+
+/// Credits a second [factionId] earns from auto-selling its net production
+/// once its stocks stop moving, with every flow steady ([steady]).
 ///
 /// What is left over on a body is its net production; each auto-sell rule
 /// sells that much of its resource a second, once its keep is full
@@ -126,17 +153,14 @@ BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
 /// [stepMarket] would. Stock already above a keep is not counted: it sells
 /// once and is gone.
 ///
-/// The buildings run at [crewEff] with [bonuses], the faction's. [market]
-/// is a copy of [s] the sales are made on; it is changed, [s] is not.
+/// [market] is a copy of the state the sales are made on; it is changed.
 BigNum steadySaleRevenue(
-  GameState s,
   Content c,
   String factionId, {
-  required double crewEff,
-  required EmpireBonuses bonuses,
+  required SteadyFlows steady,
   required GameState market,
 }) {
-  final net = _steadyNet(s, c, factionId, crewEff, bonuses);
+  final net = steady._netByBody;
   final limits = <String, Map<String, BigNum>>{};
   final f = market.faction(factionId);
   for (final rule in f.autoSell) {
@@ -179,10 +203,10 @@ final class _Leg {
 
 String _key(String bodyId, String resourceId) => '$bodyId/$resourceId';
 
-/// Body and resource ([_key]) to what [factionId]'s bodies make and
-/// receive a second less what they use and send, with every rate
-/// balanced as [steadySaleRevenue] describes; zero entries left out.
-Map<String, BigNum> _steadyNet(
+/// [factionId]'s [SteadyFlows]: what its bodies make and receive a second
+/// less what they use and send, by body and resource ([_key]), with every
+/// rate balanced as [steadyFlows] describes; zero entries left out.
+SteadyFlows _steadyNet(
   GameState s,
   Content c,
   String factionId,
@@ -288,10 +312,25 @@ Map<String, BigNum> _steadyNet(
     if (moved < 1e-9) break;
   }
   tally();
-  return {
+  final net = {
     for (final MapEntry(key: key, value: made) in supply.entries)
       if (made - (demand[key] ?? const BigNum.zero()) case final left
           when left > const BigNum.zero())
         key: left,
   };
+  void add(Map<String, BigNum> into, String id, BigNum v) {
+    if (!v.isZero) into[id] = (into[id] ?? const BigNum.zero()) + v;
+  }
+
+  final produced = <String, BigNum>{};
+  for (final run in runs) {
+    for (final MapEntry(key: id, value: v) in run.outputs.entries) {
+      add(produced, id, v.mulDouble(run.share));
+    }
+  }
+  final surplus = <String, BigNum>{};
+  for (final MapEntry(key: key, value: v) in net.entries) {
+    add(surplus, key.substring(key.lastIndexOf('/') + 1), v);
+  }
+  return SteadyFlows._(net, produced, surplus);
 }

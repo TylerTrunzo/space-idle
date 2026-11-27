@@ -349,8 +349,9 @@ void main() {
         ..clear()
         ..add(0);
       final report = buildFlowReport(s, content, f.id);
-      final gross = report.producedPerSec('steel');
+      final gross = report.steadyProducedPerSec('steel');
       expect(gross > const BigNum.zero(), isTrue);
+      expect(gross, report.producedPerSec('steel'), reason: 'steadily fed');
       expect(report.netProducedPerSec('steel') < gross.mulDouble(0.5), isTrue);
       stepContracts(s, content, 0);
       final k = f.contracts.single;
@@ -363,7 +364,7 @@ void main() {
     });
 
     test('the bug-1 shape: a good made before but at a trickle now gets no '
-        'order, and hours of it once it is made', () {
+        'order, nor one fed from a stockpile', () {
       final s = e.newGame(1);
       final f = player(s);
       final kora = s.body('kora');
@@ -383,28 +384,54 @@ void main() {
       expect(f.contractRefillAt, [0], reason: 'the refill waits');
       expect(s.rngState, rng);
 
+      // A stockpile runs the works today, but nothing refills it.
       kora.stock
         ..['magnet'] = n(400)
         ..['circuit'] = n(400)
         ..['fuel'] = n(600);
+      final report = buildFlowReport(s, content, f.id);
+      expect(
+        report.producedPerSec('survey_drone') > const BigNum.zero(),
+        isTrue,
+      );
+      expect(report.steadyProducedPerSec('survey_drone'), const BigNum.zero());
+      stepContracts(s, content, 0);
+      expect(f.contracts, isEmpty);
+    });
+
+    test('hours of what a steadily fed maker makes are asked for', () {
+      // The smelter feeds a plate press about half what it could use.
+      final s = e.newGame(1);
+      s
+          .body('kora')
+          .buildings
+          .add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1));
+      final f = player(s);
+      f.lifetimeProduced
+        ..clear()
+        ..['hull_plate'] = n(1);
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
       final gross = buildFlowReport(
         s,
         content,
         f.id,
-      ).producedPerSec('survey_drone');
+      ).steadyProducedPerSec('hull_plate');
+      expect(gross.toDouble(), closeTo(0.2 / 3, 1e-6));
       stepContracts(s, content, 0);
       final k = f.contracts.single;
-      expect(k.resourceId, 'survey_drone');
       final t = content.contractTemplates[k.templateId]!;
       expect(
         k.quantity,
         twoSignificantFigures(gross.mulDouble(t.quantitySeconds)),
       );
-      expect(k.quantity >= n(50), isTrue, reason: '${k.quantity} drones');
     });
 
     test('a refill waiting on a starved maker is checked again only at '
         'each whole minute of game time, whatever the step', () {
+      // A plate press made plates once; with the mines and smelter
+      // unstaffed it stands idle, until they are staffed again.
       GameState starved() {
         final s = e.newGame(1);
         final kora = s.body('kora');
@@ -412,21 +439,22 @@ void main() {
           b.crew = 0;
         }
         kora.buildings.add(
-          BuildingState(id: s.newId('b'), defId: 'drone_works', crew: 2),
+          BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
         );
         player(s).lifetimeProduced
           ..clear()
-          ..['survey_drone'] = n(2);
+          ..['hull_plate'] = n(2);
         player(s).contractRefillAt
           ..clear()
           ..add(0);
         return s;
       }
 
-      void feed(GameState s) => s.body('kora').stock
-        ..['magnet'] = n(400)
-        ..['circuit'] = n(400)
-        ..['fuel'] = n(600);
+      void feed(GameState s) {
+        for (final b in s.body('kora').buildings) {
+          b.crew = 1;
+        }
+      }
 
       // 1 s steps: fed at 30 s, it is asked for at the next minute.
       final live = starved();
@@ -447,6 +475,97 @@ void main() {
         player(away).contracts.single.resourceId,
         player(live).contracts.single.resourceId,
       );
+    });
+
+    group('a stockpile nothing refills', () {
+      /// Seed 1, an hour of selling everything Kora makes, then a crewed
+      /// drone works, fed from a stockpile of its inputs when [stocked];
+      /// a refill is due and only goods in [made] count as made.
+      GameState played({required bool stocked, required List<String> made}) {
+        final s = e.newGame(1);
+        e.advance(s, 60);
+        for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+          ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        e.advance(s, 3600);
+        final kora = s.body('kora');
+        kora.buildings.add(
+          BuildingState(id: s.newId('b'), defId: 'drone_works', crew: 2),
+        );
+        if (stocked) {
+          kora.stock
+            ..['magnet'] = n(400)
+            ..['circuit'] = n(400)
+            ..['fuel'] = n(600);
+        }
+        final f = player(s);
+        f.contracts.clear();
+        f.contractRefillAt
+          ..clear()
+          ..addAll([s.time, s.time + 1e7, s.time + 2e7]);
+        f.lifetimeProduced
+          ..clear()
+          ..addAll({for (final id in made) id: n(1)});
+        return s;
+      }
+
+      test('does not raise the income basis, nor so a reward', () {
+        // Review probe: 1.646 against 5.646 a second, and a steel order of
+        // 5,925 against 12,960 credits.
+        (BigNum, BigNum) post(bool stocked) {
+          final s = played(stocked: stocked, made: ['steel']);
+          final basis = incomeBasis(
+            s,
+            content,
+            buildFlowReport(s, content, 'player'),
+          );
+          stepContracts(s, content, s.time);
+          return (basis, player(s).contracts.single.rewardCredits);
+        }
+
+        final (plainBasis, plainReward) = post(false);
+        final (stockBasis, stockReward) = post(true);
+        expect(
+          stockBasis.toDouble(),
+          closeTo(plainBasis.toDouble(), plainBasis.toDouble() * 0.01),
+        );
+        expect(
+          stockReward.toDouble(),
+          closeTo(plainReward.toDouble(), plainReward.toDouble() * 0.01),
+        );
+      });
+
+      test("does not make its maker's output eligible", () {
+        final s = played(stocked: true, made: ['survey_drone']);
+        stepContracts(s, content, s.time);
+        expect(player(s).contracts, isEmpty, reason: 'no drone order');
+      });
+
+      test('does not change the quantity of what is made steadily', () {
+        // A plate press fed by the smelter, and in one game also from a
+        // stock of steel.
+        ContractState plates(bool stocked) {
+          final s = e.newGame(1);
+          s
+              .body('kora')
+              .buildings
+              .add(
+                BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+              );
+          if (stocked) s.body('kora').stock['steel'] = n(900);
+          final f = player(s);
+          f.lifetimeProduced
+            ..clear()
+            ..['hull_plate'] = n(1);
+          f.contractRefillAt
+            ..clear()
+            ..add(0);
+          stepContracts(s, content, 0);
+          return f.contracts.single;
+        }
+
+        expect(plates(true).quantity, plates(false).quantity);
+      });
     });
 
     test('a good made below minQuantity / quantitySeconds is not asked '
@@ -796,17 +915,28 @@ void main() {
         return hits / draws;
       }
 
-      /// A new game whose only goods made are [made]; Kora melts ice into
-      /// water and presses plates from stocked steel.
+      /// A new game whose only goods made are [made]; Brine, owned too,
+      /// drills ice and melts it into water, and Kora presses plates from
+      /// its smelter's steel.
       GameState makes(List<String> made) {
         final s = e.newGame(1);
-        final kora = s.body('kora');
-        kora.buildings
-          ..add(BuildingState(id: s.newId('b'), defId: 'ice_melter', crew: 1))
-          ..add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1));
-        kora.stock
-          ..['water_ice'] = n(900)
-          ..['steel'] = n(900);
+        s.body('brine')
+          ..ownerId = 'player'
+          ..buildings.addAll([
+            BuildingState(
+              id: s.newId('b'),
+              defId: 'ice_drill',
+              depositResourceId: 'water_ice',
+              crew: 1,
+            ),
+            BuildingState(id: s.newId('b'), defId: 'ice_melter', crew: 1),
+          ]);
+        s
+            .body('kora')
+            .buildings
+            .add(
+              BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+            );
         final f = player(s);
         f.lifetimeProduced
           ..clear()

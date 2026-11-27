@@ -15,17 +15,19 @@ import 'production.dart';
 /// [Rng] and that refill is used up.
 ///
 /// A contract asks for a resource of a template's tiers that has a base
-/// price, is not already on the board, and that the faction makes now:
-/// its buildings' output of it ([FlowReport.producedPerSec], gross of what
-/// they use) is at least the template's `minQuantity / quantitySeconds`
-/// a second, so a trickle never gets an order. The template is drawn
+/// price, is not already on the board, and that the faction makes now
+/// from steady supply: its buildings' steady output of it
+/// ([FlowReport.steadyProducedPerSec], gross of what they use, never fed
+/// from a stock nothing refills) is at least the template's `minQuantity /
+/// quantitySeconds` a second, so neither a trickle nor a stockpile gets
+/// an order. The template is drawn
 /// first among those with such a resource, then the resource, each in
 /// proportion to its weight: 1 for most goods, the template's
 /// [ContractTemplateDef.lifeSupportWeight] for what a habitat consumes, so
 /// orders seldom compete with crew upkeep; a template weighs as much as
 /// its heaviest resource.
 ///
-/// Its quantity is the gross rate × `quantitySeconds`, rounded to two
+/// Its quantity is that steady gross rate × `quantitySeconds`, rounded to two
 /// significant figures, at most the template's `maxQuantity` × (1 + the
 /// faction's megaproject levels summed) and the largest storage cap among
 /// its bodies (each rounded down to two figures), at least `minQuantity`,
@@ -79,7 +81,7 @@ void stepContracts(GameState s, Content c, double now) {
         for (final (t, ids) in candidates)
           if ([
                 for (final id in ids)
-                  if (made.producedPerSec(id) >= _floorRate(t)) id,
+                  if (made.steadyProducedPerSec(id) >= _floorRate(t)) id,
               ]
               case final ok when ok.isNotEmpty)
             (t, ok),
@@ -103,7 +105,7 @@ void stepContracts(GameState s, Content c, double now) {
         c,
         f,
         template,
-        made.producedPerSec(resourceId),
+        made.steadyProducedPerSec(resourceId),
       );
       f.contractRefillAt.removeAt(0);
       f.contracts.add(
@@ -224,16 +226,18 @@ BigNum _reward(
 
 /// Credits a second a contract's reward is measured against, for the
 /// faction [report] is about: the larger of its steady auto-sale income
-/// ([FlowReport.creditsPerSec]) and what its buildings make beyond what
-/// they use, valued at [s]'s market prices (each resource's positive
-/// [FlowReport.netProducedPerSec] × [price]). So the floor and cap do not
-/// depend on which goods auto-sell: a player who sells by hand, or turns
-/// auto-sell off before a refill, is measured like one who auto-sells.
+/// ([FlowReport.creditsPerSec]) and the value of what is left over with
+/// every flow steady, at [s]'s market prices (each resource's
+/// [FlowReport.steadySurplusPerSec] × [price]). So the floor and cap do
+/// not depend on which goods auto-sell: a player who sells by hand, or
+/// turns auto-sell off before a refill, is measured like one who
+/// auto-sells. And as for credits per second, output fed from a stock
+/// nothing refills does not count, so a stockpile does not raise it.
 BigNum incomeBasis(GameState s, Content c, FlowReport report) {
   var made = const BigNum.zero();
   for (final id in c.resources.keys) {
-    final net = report.netProducedPerSec(id);
-    if (net > const BigNum.zero()) made = made + net * price(s, c, id);
+    final left = report.steadySurplusPerSec(id);
+    if (left > const BigNum.zero()) made = made + left * price(s, c, id);
   }
   return report.creditsPerSec.max(made);
 }

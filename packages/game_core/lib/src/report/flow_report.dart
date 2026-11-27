@@ -235,13 +235,17 @@ final class FlowReport {
   /// Creates a report; the collections are copied unmodifiable.
   ///
   /// [creditsPerSec] is called the first time [FlowReport.creditsPerSec]
-  /// is read, and only then.
+  /// is read, and only then; [steady] the first time a steady rate is
+  /// read: resource id to what the faction's buildings make, and resource
+  /// id to what is left over, with every flow steady.
   FlowReport({
     required List<BodyFlow> bodies,
     required Map<String, BigNum> empireNet,
     required BigNum Function() creditsPerSec,
+    required (Map<String, BigNum>, Map<String, BigNum>) Function() steady,
     required List<Bottleneck> bottlenecks,
   }) : _creditsPerSec = creditsPerSec,
+       _steady = steady,
        bodies = List.unmodifiable(bodies),
        empireNet = Map.unmodifiable(empireNet),
        bottlenecks = List.unmodifiable(bottlenecks);
@@ -267,6 +271,26 @@ final class FlowReport {
   late final BigNum creditsPerSec = _creditsPerSec();
 
   final BigNum Function() _creditsPerSec;
+
+  late final (Map<String, BigNum>, Map<String, BigNum>) _steadyRates =
+      _steady();
+
+  final (Map<String, BigNum>, Map<String, BigNum>) Function() _steady;
+
+  /// Units of [resourceId] the faction's buildings make a second with
+  /// every flow steady: each building held to the share of full rate its
+  /// inputs can keep up with from what is made and what routes bring in
+  /// steadily, never from stock, as in [creditsPerSec]. Gross of what
+  /// buildings use; zero when only a stock nothing refills feeds it.
+  BigNum steadyProducedPerSec(String resourceId) =>
+      _steadyRates.$1[resourceId] ?? const BigNum.zero();
+
+  /// Units of [resourceId] left over a second with every flow steady (see
+  /// [steadyProducedPerSec]): on each of the faction's bodies, what its
+  /// buildings make and routes bring less what its buildings use and
+  /// routes take, where that is above zero, summed.
+  BigNum steadySurplusPerSec(String resourceId) =>
+      _steadyRates.$2[resourceId] ?? const BigNum.zero();
 
   /// Everything held back, lowest run fraction first, then in report order:
   /// goods made with nothing selling them ([BottleneckKind.noSales]) and a
@@ -500,6 +524,16 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   // lets go of them once it has, so it holds no state but its own.
   GameState? played = probe;
   GameState? sold = copy;
+  // Steady flows take no stock into account, so the played copy gives the
+  // state's; worked out once, for credits per second and steady rates.
+  SteadyFlows? steady;
+  SteadyFlows steadyOf() => steady ??= steadyFlows(
+    played!,
+    c,
+    factionId,
+    crewEff: playedEff,
+    bonuses: bonuses,
+  );
   return FlowReport(
     bodies: bodies,
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
@@ -508,13 +542,16 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         played!,
         c,
         factionId,
-        crewEff: playedEff,
-        bonuses: bonuses,
+        steady: steadyOf(),
         market: sold!,
       );
       played = null;
       sold = null;
       return v;
+    },
+    steady: () {
+      final f = steadyOf();
+      return (f.produced, f.surplus);
     },
     bottlenecks: [
       for (final (_, b) in bottlenecks)
