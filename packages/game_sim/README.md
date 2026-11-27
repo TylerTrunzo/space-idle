@@ -140,7 +140,8 @@ commands:
   `headline` such as `"Away 4d 2h; 12h counted (cap); +1.2M credits"`
   (built here from the summary's typed fields; when credits went into
   megaprojects on their own it says what was earned and where it went:
-  `"Away 1h; earned 2.67B credits, 2.11B to Mass Driver, net +560M"`),
+  `"Away 1h; earned 2.67B credits, 2.11B to Mass Driver, net +560M"`; the
+  net is in whole credits, and under one either way reads `+0`),
   seconds away and simulated, the cap (`capSeconds`) and whether the absence
   passed it (`capped`), credits gained, earned (`creditsEarned`: sales and
   contract rewards) and paid in on their own (`creditsPaidIn`), stock
@@ -150,26 +151,36 @@ commands:
   `supported`, `assigned`; when fewer are housed than assigned the headline
   adds `"; Crew short: 41 housed for 67 assigned"`), credits a second before
   and after (`creditsPerSecBefore`, `creditsPerSecAfter`), milestones
-  reached and the top bottlenecks: a crew shortage that costs credits
+  reached and the top 3 bottlenecks, by cause (one entry for every
+  building held back the same way on a body, with `count` and
+  `buildingIds`: `"17 Station Docks on Cinder are running at 40%: not
+  enough Hull Plate"`, its loss the sum of theirs), what the storage cap
+  cut while away counted as `storageFull` entries (its worth an hour over
+  the time simulated) even when no store is full on return, and the
+  megaproject kinds (below): a crew shortage that costs credits
   first, then those losing the most credits an hour; one that was there
   before the absence gives `since` (the game time it began),
   `worseThanBefore` (its loss grew by more than a quarter) and how long it
   has held, `"ongoing": "for 3h 10m, and worse than before"`; one
   `nextGoal`: the milestone the current rates reach soonest, or a
-  megaproject's next stage when that comes sooner (its ETA shares stock
+  megaproject's next stage when that comes sooner (a stage still owed
+  credits counts only while credit auto-pay is on for it or you have paid
+  it some by hand since it opened; its ETA shares stock
   and income out as auto-delivery does: credits above the auto-pay reserve
   split evenly among the megaprojects taking them, goods to those fed
   goods in content order, so a stage paid by hand waits for them) (`kind`,
   `id`, `name`,
   `level` for a stage, `etaSeconds`, null when not in reach, and a
   `message` such as `"Next: First Foundry (Make 30 Steel), 12 of 30, in 1m
-  30s"`); the projects that
+  30s"`, progress rounded down and what is still needed rounded up); the
+  projects that
   completed (`projectsCompleted`: `kind`, `targetId`, `name`, `level` for a
   megaproject stage, and a `message` such as `"Orbital Station reached level
   3"`, which the headline also ends with), stages that started while away
   included; and the contracts posted while away (`contractsPosted`: `id`,
   `resourceId`, `resource`, `quantity`, `reward`)
-- `{"cmd":"report"}` per-second flows and bottlenecks; while a megaproject
+- `{"cmd":"report"}` per-second flows and bottlenecks (by cause, as in
+  `away`); while a megaproject
   is fed on its own, `autoDeliveredPerSec` (per megaproject, credits and
   goods a second) and `autoDeliveredValuePerSec`, apart from
   `creditsPerSec`, which leaves out what goes to megaprojects
@@ -180,7 +191,9 @@ commands:
   (now 0)"` while it is, and `auto` with `goods`, `credits` and a `text`
   when it is fed on its own; `autoPayReserve` beside `credits`), the contracts
   board (`contracts`: `id`, `issuer`, `resourceId`, `resource` name,
-  `quantity`, `delivered`, `reward` in credits) and when its empty slots
+  `quantity`, `delivered` (its display rounded down, so it never reads as
+  the whole while a unit is owed), `reward` in credits) and when its empty
+  slots
   refill (`contractRefills`: `at` and `timeLeft`; a refill already due, which
   waits for something a contract can ask for, is counted in `contractsDue`
   instead), the unsurveyed signals of
@@ -231,6 +244,13 @@ length does not change what is earned. The only difference is that `away`
 caps the time at the offline limit and summarizes it.
 
 Replies are `{"ok":true,...}` or `{"ok":false,"error":"...","message":"..."}`.
+A delivery to a contract that leaves it open says how far it is, rounding
+what is in down and what is owed up: `"Delivered 577 Nickel from Dusk Cairn
+to contract c205 (49.9K of 50K, 1 still owed)"`. A building put up with
+`autoCrew` that got fewer crew than its base slots (as one does alongside
+new habitats, which house no one until they first run) takes free crew
+after the next tick's production; crew that frees up later is yours to
+assign.
 A capacity upgrade on a crewed building fills its new slot from free crew:
 the reply has `crewAdded` and a message such as `"Mine on Kora (b1) is at
 capacity level 1; 1 free crew moved into its new slot (2 of 2 crew)"`, or
@@ -254,9 +274,15 @@ Examples:
 
 `report` gives per-second rates for each owned body, the player's
 `creditsPerSec`, and for each building its `runFraction` (input supply),
-`effectiveFraction` (run fraction × crew / base slots × crew efficiency) and
+`effectiveFraction` (run fraction × crew / base slots × crew efficiency),
+both null for a building that runs no recipe (a depot), and
 actual `inputs` and `outputs`. The rates are steady-state rates: cargo on
-routes counts as arriving at the rate it is sent. `creditsPerSec` is what
+routes counts as arriving at the rate it is sent, and a building cargo
+feeds runs at no more than the share a full 60 s step of its store's
+average supply gives it (what is there and on its way, spread over the
+trip), so a report a few seconds before a lot lands reads as one a few
+seconds after: no false 0% just before, no false 100% just after.
+`creditsPerSec` is what
 auto-sell earns a second in steady play, the lower of two estimates: every
 building held to the inputs it can get without drawing stock down (cargo
 sent round a cycle of routes counts only as far as the cycle's own production
@@ -264,7 +290,13 @@ feeds it, and habitats draw what they draw now), and what
 a short run of play (5 min, then 10 min measured) earns. Goods made from a
 stock nothing refills, and stock above an auto-sell keep, do not count, and
 what auto-sell holds back for open contracts is left out (it fills once and
-then sells), so it matches what hours away earn (within 1% from day-7 bot states). `state` also gives the player's crew totals (`base`, `supported`,
+then sells). The steady sales are valued at the prices the market settles
+at over the next 2.5 h (five recovery times), not today's, so right after a
+large upgrade spree it does not read high while prices catch up, and both
+estimates count megaproject stages under way that finish within the short
+run as done. So it matches what hours away earn (within 1% from day-7 bot
+states; within 1% on the round-4 optimizer's state at 26.5 h, right after a
+578M upgrade spree, where it used to read 21% high). `state` also gives the player's crew totals (`base`, `supported`,
 `assigned`, `free`, which is never below 0, and `overAssigned`, the crew
 assigned beyond what housing supports).
 
@@ -276,15 +308,26 @@ are assigned, so every crewed building slows; `bodyId` and `buildingId` are
 null), `storageFull` (`resourceId` is at the body's storage cap and
 output is being wasted; `buildingId` is null), or `noSales` (goods with a
 price are made and no owned body has an auto-sell rule: "Nothing is being
-sold: turn on auto-sell or sell goods"; `bodyId` and `buildingId` are null).
+sold: turn on auto-sell or sell goods"; `bodyId` and `buildingId` are null),
+`megaprojectDiversion` (auto-delivery hands `megaprojectId` a tenth or more
+of what would otherwise sell of `resourceId`, `shareOfSales`: "Orbital
+Station takes 40% of the Hull Plate that would sell: 1.2M credits an hour
+not earned"), or `keepBlocksDelivery` (a fed megaproject still owes
+`resourceId`, and `bodyId`'s auto-sell `keepAtLeast` holds back
+`heldByKeep` of it from auto-delivery: "Orbital Station still needs Reactor
+Core, but Cinder keeps 469 of it back for its auto-sell keepAtLeast 1K").
+`report` and `away` list them by cause: buildings on one body held back the
+same way are one entry with `count`, `buildingIds` (and `buildingId` null
+when there are several) and their losses summed.
 Each also gives `firstSeenAt`, the game time since which it has held without
 a break, and `lostCreditsPerHour`, an estimate at current prices of what it
 costs (the wasted units for `storageFull`; for `input` the output the
 starved building does not make, gross of the inputs it would use; the net
 production left unsold for `noSales`; for `crewShortage` what full staffing
 would add to net production, more output less the extra inputs it draws,
-leaving out output a full store with nothing selling it would waste; null
-for the other kinds).
+leaving out output a full store with nothing selling it would waste; for
+`megaprojectDiversion` what the goods taken would sell for at current
+prices; null for the other kinds).
 
 ## Bot runs
 
@@ -306,7 +349,8 @@ contracts out), and a Timeline of every completed project and contract.
 
 - `greedy` buys the cheapest affordable upgrade, building, extra slot or
   claim each decision.
-- `balanced` fixes the worst bottlenecks, claims bodies, auto-sells surplus,
+- `balanced` fixes the worst bottlenecks (a building short of an input only
+  below 70%), claims bodies, auto-sells surplus,
   works toward the next milestone (and housing when crew runs out), and
   spends the rest on the best return.
 - `casual` plays like `balanced` but issues at most 15 commands per check-in
