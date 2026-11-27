@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
 import 'package:game_core/src/sim/milestones.dart' show factionStock;
-import 'package:game_core/src/sim/offline_summary.dart' show megaprojectEtas;
+import 'package:game_core/src/sim/offline_summary.dart'
+    show megaprojectEtas, nearReadyStarts;
 import 'package:test/test.dart';
 
 import '../state/helpers.dart';
@@ -821,6 +823,143 @@ void main() {
         // 10 h of saving, then 4 h of plates: about 14 h, not 10.
         expect(actual, greaterThan(13 * 3600));
         expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
+      });
+
+      group('goods near ready with credit auto-pay, next to a credit-fed '
+          'Mass Driver', () {
+        /// The station fed goods near ready and credits at weight 1, owing
+        /// [stationHours] of income and [plateHours] of its press's hull
+        /// plates (which sell until then); the Mass Driver fed credits,
+        /// owing [driverHours] of income. Ten minutes played.
+        GameState start(
+          double income,
+          double plates, {
+          required double stationHours,
+          required double driverHours,
+          required double plateHours,
+        }) {
+          final s = shape({
+            'orbital_station': {
+              'credits': income * stationHours * 3600,
+              'hull_plate': math.max(1, plates * plateHours * 3600),
+            },
+            'mass_driver': {'credits': income * driverHours * 3600},
+          }, credits: 0);
+          s.faction('player').baseCrew += 1;
+          s
+              .body('kora')
+              .buildings
+              .add(
+                BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+              );
+          e
+            ..apply(s, SetAutoSellCommand('player', 'kora', 'hull_plate', n(0)))
+            ..apply(s, SetAutoPayReserveCommand('player', n(0)))
+            ..apply(
+              s,
+              const SetMegaprojectAutoCommand(
+                'player',
+                'mass_driver',
+                credits: true,
+              ),
+            )
+            ..apply(
+              s,
+              const SetMegaprojectAutoCommand(
+                'player',
+                'orbital_station',
+                goods: GoodsFeedMode.nearReady,
+                credits: true,
+              ),
+            )
+            ..advance(s, 600);
+          return s;
+        }
+
+        (double, double) rates() {
+          final r = buildFlowReport(
+            start(1, 1, stationHours: 1e9, driverHours: 1e9, plateHours: 0),
+            c,
+            'player',
+          );
+          return (
+            r.creditsPerSec.toDouble(),
+            r.netProducedPerSec('hull_plate').toDouble(),
+          );
+        }
+
+        /// Seconds of 60 s steps until the station's stage starts, and
+        /// until its goods started going in.
+        (double, double) actual(GameState s) {
+          final from = s.time;
+          double? fed;
+          while (megaprojectStageOf(s, 'player', 'orbital_station') == null) {
+            e.advance(s, 60);
+            final a = s.faction('player').megaprojectAuto['orbital_station']!;
+            if (fed == null && a.feedingLevel != null) fed = s.time - from;
+            expect(s.time - from, lessThan(4e5));
+          }
+          return (s.time - from, fed!);
+        }
+
+        test('the review\'s probe: the Mass Driver is done first, and the '
+            'stage within 15% of a run without commands', () {
+          final (income, made) = rates();
+          expect(income, greaterThan(0));
+          expect(made, greaterThan(0));
+          final s = start(
+            income,
+            made,
+            stationHours: 10,
+            driverHours: 1,
+            plateHours: 2,
+          );
+          expect(
+            s
+                .faction('player')
+                .megaprojectAuto['orbital_station']!
+                .feedingLevel,
+            isNull,
+          );
+          final eta = megaprojectEtas(
+            s,
+            c,
+            'player',
+            buildFlowReport(s, c, 'player'),
+          )['orbital_station'];
+          expect(eta, isNotNull);
+          final (took, _) = actual(s);
+          expect(eta, closeTo(took, took * 0.15), reason: '$eta vs $took');
+        });
+
+        test('the feeding starts when the Mass Driver\'s share frees up, '
+            'not 12 h before the station\'s credits', () {
+          // Owing 14 h and 6 h at equal weights: the Mass Driver is paid
+          // for 12 h in, and then the station owes 8 h, within 12 h of all
+          // the income. Twelve hours before its credits are in would be 8 h.
+          final (income, made) = rates();
+          final s = start(
+            income,
+            made,
+            stationHours: 14,
+            driverHours: 6,
+            plateHours: 1,
+          );
+          final report = buildFlowReport(s, c, 'player');
+          final from = nearReadyStarts(s, c, 'player', report);
+          expect(from.keys, ['orbital_station']);
+          expect(
+            megaprojectEtas(s, c, 'player', report)['orbital_station'],
+            isNotNull,
+          );
+          final (_, fed) = actual(s);
+          expect(fed, greaterThan(11 * 3600));
+          expect(
+            from['orbital_station'],
+            closeTo(fed, fed * 0.15),
+            reason: '${from['orbital_station']} vs $fed',
+          );
+        });
       });
 
       test('a good held for both goes to the first fed it, then what is '

@@ -397,21 +397,22 @@ Map<String, double?> megaprojectEtas(
       note(m, done);
     });
   }
-  // When each megaproject's goods start going in on their own: now for
-  // one fed them now (0), at its near-ready time for one fed near ready
-  // but not yet (null for never), and absent for one fed by hand.
-  final goodsFrom = <String, double?>{};
-  for (final m in owed.keys) {
-    final def = c.megaprojects[m]!;
-    final a = f.megaprojectAuto[m];
-    if (megaprojectGoodsFed(s, f, def)) {
-      goodsFrom[m] = 0;
-    } else if (a?.goods == GoodsFeedMode.nearReady) {
-      final done = owed[m]!.containsKey(creditsKey) ? creditsDone[m] : 0.0;
-      final ahead = a!.credits ? c.rules.nearReadyHorizonSeconds : 0;
-      goodsFrom[m] = done == null ? null : math.max(0, done - ahead);
-    }
-  }
+  // The megaprojects fed goods now, which take them first in content
+  // order; and, for one fed near ready but not yet, when its feeding
+  // starts ([_goodsStarts]).
+  final fedNow = {
+    for (final m in owed.keys)
+      if (megaprojectGoodsFed(s, f, c.megaprojects[m]!)) m,
+  };
+  final goodsFrom = _goodsStarts(
+    s,
+    c,
+    f,
+    owed,
+    fedNow,
+    rateOf(creditsKey),
+    creditsDone,
+  );
 
   final keys = <String>{for (final left in owed.values) ...left.keys};
   for (final key in keys) {
@@ -426,9 +427,11 @@ Map<String, double?> megaprojectEtas(
     for (final first in [true, false]) {
       for (final MapEntry(key: m, value: left) in owed.entries) {
         final need = left[key];
-        if (need == null || (goodsFrom[m] == 0) != first) continue;
-        // One fed near ready but not yet waits for its feeding to start.
-        final start = goodsFrom.containsKey(m) && !first ? goodsFrom[m] : from;
+        if (need == null || fedNow.contains(m) != first) continue;
+        // One fed near ready but not yet waits for its feeding to start,
+        // and then takes what is made: until then its goods sell.
+        final waits = goodsFrom.containsKey(m);
+        final start = waits ? goodsFrom[m] : from;
         double? done;
         var after = pool;
         if (from == null || start == null) {
@@ -437,7 +440,7 @@ Map<String, double?> megaprojectEtas(
           done = math.max(from, start);
           after = pool - need;
         } else {
-          final wait = _eta(need - pool, start == from ? rate : madeRate);
+          final wait = _eta(need - pool, waits ? madeRate : rate);
           done = wait == null ? null : math.max(from, start) + wait;
           after = const BigNum.zero();
         }
@@ -450,6 +453,164 @@ Map<String, double?> megaprojectEtas(
     }
   }
   return eta;
+}
+
+/// Megaproject id to the game seconds until goods start going in on their
+/// own for each megaproject of [owed] fed goods near ready but not yet
+/// (not in [fedNow]); null for never. A stage owing no credits starts now;
+/// with credit auto-pay, when the start rule would fire as the credits
+/// are shared out at [income] ([_nearReadyStart]); without it, once the
+/// credits it owes are held ([creditsDone]).
+Map<String, double?> _goodsStarts(
+  GameState s,
+  Content c,
+  FactionState f,
+  Map<String, Map<String, BigNum>> owed,
+  Set<String> fedNow,
+  BigNum income,
+  Map<String, double?> creditsDone,
+) => {
+  for (final m in owed.keys)
+    if (f.megaprojectAuto[m] case final a?
+        when !fedNow.contains(m) && a.goods == GoodsFeedMode.nearReady)
+      m: !owed[m]!.containsKey(creditsKey)
+          ? 0
+          : a.credits
+          ? _nearReadyStart(
+              f,
+              owed,
+              m,
+              income.toDouble(),
+              c.rules.nearReadyHorizonSeconds,
+            )
+          : creditsDone[m],
+};
+
+/// Megaproject id to the game seconds until [factionId]'s megaprojects fed
+/// goods near ready, but not fed yet, start taking them, at the rates of
+/// [report]: what [megaprojectEtas] times their goods from. Null for
+/// never. For tests: the package does not export it.
+Map<String, double?> nearReadyStarts(
+  GameState s,
+  Content c,
+  String factionId,
+  FlowReport report,
+) {
+  final f = s.faction(factionId);
+  final owed = <String, Map<String, BigNum>>{
+    for (final m in c.megaprojects.values)
+      if (megaprojectTakesDeliveries(s, c, factionId, m))
+        if (megaprojectRemaining(s, c, factionId, m) case final left
+            when left.isNotEmpty)
+          m.id: left,
+  };
+  final creditsDone = <String, double?>{};
+  if (owed.values.any((left) => left.containsKey(creditsKey))) {
+    _creditEtas(f, owed, report.creditsPerSec, (m, done) {
+      creditsDone[m] = done;
+    });
+  }
+  return _goodsStarts(
+    s,
+    c,
+    f,
+    owed,
+    {
+      for (final m in owed.keys)
+        if (megaprojectGoodsFed(s, f, c.megaprojects[m]!)) m,
+    },
+    report.creditsPerSec,
+    creditsDone,
+  );
+}
+
+/// Seconds until the near-ready start rule (`startNearReady`) fires for
+/// [m], fed credits on its own: the first moment the credits it still owes
+/// are no more than [horizon] seconds of its share of [income], the
+/// credits above [f]'s reserve and then [income] being shared out among
+/// the credit-fed megaprojects of [owed] by weight, as [_creditEtas] has
+/// them paid. Its share grows as the others are paid for. 0 when the rule
+/// holds now; null when it never does (no income).
+double? _nearReadyStart(
+  FactionState f,
+  Map<String, Map<String, BigNum>> owed,
+  String m,
+  double income,
+  double horizon,
+) {
+  final fed = [
+    for (final MapEntry(key: id, value: left) in owed.entries)
+      if (left[creditsKey] case final need?)
+        if (f.megaprojectAuto[id] case final a? when a.credits)
+          (id: id, need: need.toDouble(), weight: a.creditWeight),
+  ];
+  final me = fed.where((x) => x.id == m).firstOrNull;
+  if (me == null) return 0;
+  final weighted = [
+    for (final x in fed)
+      if (x.weight > 0) x,
+  ];
+  final zeros = [
+    for (final x in fed)
+      if (x.weight == 0) x,
+  ];
+  final first = weighted.fold(0.0, (t, x) => t + x.need);
+  final total = fed.fold(0.0, (t, x) => t + x.need);
+  // What [x] has received once [paid] has gone in: a fill by weight of
+  // those above 0, then an even fill of those at 0.
+  double received(({String id, double need, int weight}) x, double paid) {
+    final (group, poured, even) = x.weight > 0
+        ? (weighted, paid, false)
+        : (zeros, math.max(0.0, paid - first), true);
+    double w(({String id, double need, int weight}) y) =>
+        even ? 1.0 : y.weight.toDouble();
+    if (poured >= group.fold(0.0, (t, y) => t + y.need)) return x.need;
+    var lo = 0.0;
+    var hi = group.fold(0.0, (t, y) => math.max(t, y.need / w(y)));
+    for (var i = 0; i < 100; i++) {
+      final mid = (lo + hi) / 2;
+      final sum = group.fold(0.0, (t, y) => t + math.min(y.need, w(y) * mid));
+      if (sum < poured) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    return math.min(x.need, w(x) * hi);
+  }
+
+  bool near(double paid) {
+    final owing = [
+      for (final x in fed)
+        if (received(x, paid) < x.need * (1 - 1e-12)) x,
+    ];
+    final anyWeighted = owing.any((x) => x.weight > 0);
+    final weights = owing.fold(
+      0.0,
+      (t, x) => t + (anyWeighted ? x.weight : (x.weight == 0 ? 1 : 0)),
+    );
+    final mine = anyWeighted ? me.weight : (me.weight == 0 ? 1 : 0);
+    final share = weights <= 0 ? 0.0 : mine / weights;
+    return me.need - received(me, paid) <= horizon * income * share + 1e-9;
+  }
+
+  final now = math.max(0.0, f.credits.toDouble() - f.autoPayReserve.toDouble());
+  if (near(now)) return 0;
+  if (income <= 0) return null;
+  // The rule holds once [me] is paid in full, and the more is paid, the
+  // nearer it holds: the first amount paid that meets it.
+  var lo = now;
+  var hi = math.max(now, total);
+  for (var i = 0; i < 100; i++) {
+    final mid = (lo + hi) / 2;
+    if (near(mid)) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  final t = (hi - now) / income;
+  return t.isFinite ? t : null;
 }
 
 /// [megaprojectEtas] for credits: [note]s, for each megaproject of [owed]
