@@ -165,6 +165,53 @@ void main() {
     expect((noted(), shown()), (true, true));
   });
 
+  test('a habitat\'s draw is taken off its supply before the others '
+      'share what is left, in one round', () {
+    // A well makes 1 ore a second; a crewless habitat holding its last run
+    // draws 0.98 and a press would draw 0.5. The press gets the 0.02 left,
+    // a share of 0.04, at once: sharing the shortfall with the habitat,
+    // round by round, would close in by only 2% a round and stop short.
+    final base = fx.pressContent();
+    final content = Content(
+      rules: base.rules,
+      resources: base.resources,
+      buildings: {
+        ...base.buildings,
+        'well': BuildingDef(
+          id: 'well',
+          name: 'Well',
+          kind: BuildingKind.factory,
+          cycleSeconds: 1,
+          outputs: const {'ore': 1},
+          crewSlots: 1,
+          buildCost: const {},
+        ),
+        'dome': BuildingDef(
+          id: 'dome',
+          name: 'Dome',
+          kind: BuildingKind.habitat,
+          cycleSeconds: 1,
+          inputs: const {'ore': 0.98},
+          crewSlots: 0,
+          housing: 5,
+          buildCost: const {},
+        ),
+      },
+      bodyTypes: base.bodyTypes,
+      galaxy: base.galaxy,
+      milestones: base.milestones,
+    );
+    final t = GameEngine(content).newGame(1);
+    t.body('a').buildings.addAll([
+      BuildingState(id: 'well', defId: 'well', crew: 1),
+      BuildingState(id: 'dome', defId: 'dome', crew: 0)..lastRunFraction = 1,
+      BuildingState(id: 'press', defId: 'press', crew: 1),
+    ]);
+    final r = buildFlowReport(t, content, 'p');
+    expect(r.steadyProducedPerSec('plate').toDouble(), closeTo(0.02, 1e-9));
+    expect(r.steadySurplusPerSec('ore').toDouble(), closeTo(0, 1e-9));
+  });
+
   test('building statuses report run, crew and slots', () {
     s.faction('player').credits = n(1e6);
     engine.apply(

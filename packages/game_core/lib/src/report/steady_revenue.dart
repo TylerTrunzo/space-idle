@@ -246,7 +246,11 @@ final class SteadyFlows {
 /// rest staying at the source. Rates start at full and are lowered round
 /// by round until every input is covered (`supply ≥ demand` on each body),
 /// so the result is the fastest the empire can run without drawing stock
-/// down. Stock plays no part, so the flows of a copy whose stock moved on
+/// down. Habitats are the exception: each keeps the run fraction it last
+/// settled on ([BuildingState.lastRunFraction]), stock-fed or not, since
+/// it houses the crew the crew efficiency counts; what they draw comes off
+/// the supply first, and the other buildings and routes share what is
+/// left. Stock plays no part, so the flows of a copy whose stock moved on
 /// are the state's.
 SteadyFlows steadyFlows(
   GameState s,
@@ -368,13 +372,16 @@ Map<String, String> _cycles(List<_Leg> legs) {
 /// What each route cycle ([_cycles]) of [legs] has to give and is asked
 /// for: what its bodies' buildings make ([made]) and routes bring in from
 /// outside it, against what they use ([used]) and routes take out of it.
-/// Cargo going round the cycle is neither: only production feeds it.
+/// Cargo going round the cycle is neither: only production feeds it. What
+/// habitats draw there ([held]), which they keep drawing, comes off both
+/// first, so the rest share what it leaves.
 Map<String, (BigNum, BigNum)> _cycleBalance(
   Map<String, String> cycles,
   List<_Leg> legs,
   Map<String, BigNum> made,
-  Map<String, BigNum> used,
-) {
+  Map<String, BigNum> used, [
+  Map<String, BigNum> held = const {},
+]) {
   final balance = <String, (BigNum, BigNum)>{};
   void add(String id, BigNum have, BigNum want) {
     final (h, w) = balance[id] ?? (const BigNum.zero(), const BigNum.zero());
@@ -382,7 +389,13 @@ Map<String, (BigNum, BigNum)> _cycleBalance(
   }
 
   for (final MapEntry(key: key, value: id) in cycles.entries) {
-    add(id, made[key] ?? const BigNum.zero(), used[key] ?? const BigNum.zero());
+    // Habitats' held draws come off what is made before the rest share it.
+    final draw = held[key] ?? const BigNum.zero();
+    add(
+      id,
+      (made[key] ?? const BigNum.zero()) - draw,
+      (used[key] ?? const BigNum.zero()) - draw,
+    );
   }
   for (final leg in legs) {
     final r = leg.route;
@@ -405,13 +418,16 @@ Map<String, double> _cycleLimits(
   List<_Leg> legs,
   Map<String, BigNum> made,
   Map<String, BigNum> used,
+  Map<String, BigNum> held,
 ) {
   if (cycles.isEmpty) return const {};
-  final balance = _cycleBalance(cycles, legs, made, used);
+  final balance = _cycleBalance(cycles, legs, made, used, held);
   final share = {
     for (final MapEntry(key: id, value: (have, want)) in balance.entries)
-      id: want.isZero || have >= want
+      id: want <= const BigNum.zero() || have >= want
           ? 1.0
+          : have <= const BigNum.zero()
+          ? 0.0
           : (have / want).toDouble().clamp(0.0, 1.0),
   };
   return {
@@ -495,11 +511,15 @@ SteadyFlows _steadyNet(
   // balance (see [_cycleLimits]).
   var made = <String, BigNum>{};
   var used = <String, BigNum>{};
+  // What habitats, which keep their share, draw by key: it comes off the
+  // supply before the others share what is left.
+  var held = <String, BigNum>{};
   void tally() {
     supply = {};
     demand = {};
     made = {};
     used = {};
+    held = {};
     void add(Map<String, BigNum> into, String key, BigNum v) {
       if (!v.isZero) into[key] = (into[key] ?? const BigNum.zero()) + v;
     }
@@ -512,6 +532,7 @@ SteadyFlows _steadyNet(
       for (final MapEntry(key: id, value: v) in run.inputs.entries) {
         add(demand, _key(run.bodyId, id), v.mulDouble(run.share));
         add(used, _key(run.bodyId, id), v.mulDouble(run.share));
+        if (run.held) add(held, _key(run.bodyId, id), v.mulDouble(run.share));
       }
     }
     for (final leg in legs) {
@@ -521,18 +542,22 @@ SteadyFlows _steadyNet(
     }
   }
 
-  /// Share of the demand on [key] its supply covers, at most 1.
+  /// Share of the demand on [key] its supply covers, at most 1, for a
+  /// draw that can be lowered: the habitats' draws, held, come off both
+  /// first.
   double covered(String key) {
-    final want = demand[key];
-    if (want == null || want.isZero) return 1;
-    final have = supply[key] ?? const BigNum.zero();
+    final draw = held[key] ?? const BigNum.zero();
+    final want = (demand[key] ?? const BigNum.zero()) - draw;
+    if (want <= const BigNum.zero()) return 1;
+    final have = (supply[key] ?? const BigNum.zero()) - draw;
+    if (have <= const BigNum.zero()) return 0;
     return have >= want ? 1 : (have / want).toDouble().clamp(0.0, 1.0);
   }
 
   for (var round = 0; round < _maxRounds; round++) {
     tally();
     final cycles = _cycles(legs);
-    final limit = _cycleLimits(cycles, legs, made, used);
+    final limit = _cycleLimits(cycles, legs, made, used, held);
     // A draw on [key] from outside its route cycle: a building, or a
     // route leaving the cycle, gets no more than the cycle's own
     // production covers.
