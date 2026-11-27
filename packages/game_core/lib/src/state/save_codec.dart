@@ -230,10 +230,12 @@ final class SaveCodec {
         return 'faction ${f.id}: ${f.contractRefillAt.length} contract '
             'refills, at most ${RulesDef.contractSlots}';
       }
-      if (f.contracts.length + f.contractRefillAt.length >
-          RulesDef.contractSlots) {
+      // Every slot of a board holds a contract or waits for one: posting
+      // uses up a refill, and freeing a slot banks one.
+      final board = f.contracts.length + f.contractRefillAt.length;
+      if (board != 0 && board != RulesDef.contractSlots) {
         return 'faction ${f.id}: ${f.contracts.length} contracts and '
-            '${f.contractRefillAt.length} refills, at most '
+            '${f.contractRefillAt.length} refills, not '
             '${RulesDef.contractSlots} together';
       }
       double? previousRefill;
@@ -399,6 +401,13 @@ final class SaveCodec {
     }
     if (!(p.finishAt.isFinite && p.finishAt >= p.startedAt)) {
       return 'finishes at ${p.finishAt}, not at or after its start';
+    }
+    // Every project's time is clamped to the rules' longest; the slack is
+    // for float error in `startedAt + seconds`.
+    final longest = RulesDef.maxProjectSeconds * (1 + 1e-9);
+    if (p.finishAt - p.startedAt > longest) {
+      return 'takes ${p.finishAt - p.startedAt} s, more than '
+          '${RulesDef.maxProjectSeconds}';
     }
     switch (p.kind) {
       case ProjectKind.claim:

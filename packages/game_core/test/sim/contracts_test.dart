@@ -888,6 +888,15 @@ void main() {
           me(m)['contracts'] = ks.take(2).toList();
           me(m)['contractRefillAt'] = [1, 2];
         },
+        'contracts and refills under 3 together': (m) {
+          final ks = list(me(m)['contracts']);
+          me(m)['contracts'] = ks.take(1).toList();
+          me(m)['contractRefillAt'] = [1];
+        },
+        'a refill with no contracts': (m) {
+          me(m)['contracts'] = <Object?>[];
+          me(m)['contractRefillAt'] = [1];
+        },
         'a negative refill time': (m) => me(m)['contractRefillAt'] = [-1],
         'a duplicate contract id': (m) {
           final ks = list(me(m)['contracts']);
@@ -914,6 +923,10 @@ void main() {
         final m = board();
         me(m)['contracts'] = list(me(m)['contracts']).take(1).toList();
         me(m)['contractRefillAt'] = [5, 5];
+        expect(SaveCodec.decode(jsonEncode(m), content), isA<SaveOk>());
+        // A faction with no board has neither.
+        me(m)['contracts'] = <Object?>[];
+        me(m)['contractRefillAt'] = <Object?>[];
         expect(SaveCodec.decode(jsonEncode(m), content), isA<SaveOk>());
       });
 

@@ -537,6 +537,9 @@ void main() {
       'owner is not a faction': [project(factionId: 'ghost')],
       'finishes before it starts': [project(startedAt: 50, finishAt: 40)],
       'starts after the save time': [project(startedAt: 200, finishAt: 400)],
+      'takes longer than the longest project': [
+        project(startedAt: 0, finishAt: RulesDef.maxProjectSeconds + 1),
+      ],
       'duplicate id': [
         project(),
         project(kind: 'expandSlots', targetId: 'kora'),
