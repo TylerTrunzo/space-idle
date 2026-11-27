@@ -81,4 +81,25 @@ void main() {
     expect(actual, greaterThan(0));
     expect(shown, closeTo(actual, actual * 0.1));
   });
+
+  test('right after a large upgrade spree, credits a second are within 8% '
+      'of the next 2.5 h away', () {
+    // The round-4 optimizer's state at 26.5 h, seed 1, just after a 578M
+    // upgrade spree (its allcmds.jsonl replayed to that point and saved):
+    // the report showed 87.2K a second and the next 8,850 s earned 71.9K a
+    // second, as prices took a while to fall to the new volume.
+    final s =
+        (SaveCodec.decode(
+                  File(
+                    'test/fixtures/optimizer_r4_spree_26h.json',
+                  ).readAsStringSync(),
+                  c,
+                )
+                as SaveOk)
+            .state;
+    final shown = buildFlowReport(s, c, 'player').creditsPerSec.toDouble();
+    final away = e.catchUpOffline(s, 8850);
+    final earned = away.creditsEarned.toDouble() / 8850;
+    expect(shown, closeTo(earned, earned * 0.08), reason: '$shown vs $earned');
+  });
 }

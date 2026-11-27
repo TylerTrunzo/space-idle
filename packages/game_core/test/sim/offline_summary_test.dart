@@ -298,6 +298,33 @@ void main() {
       expect(ranked(b), ranked(a));
     });
 
+    test('the away top 3, ranked by loss, is the same after 1 s steps as '
+        'after 60 s ones', () {
+      // Plan review focus 5: the same hour, played in 60 s catch-up steps
+      // or in 1 s steps before a last minute away.
+      final a = starved(17);
+      // Copper ore that nothing sells, its store filling within the hour,
+      // and a shipyard left with no crew: three causes.
+      a
+          .faction('player')
+          .autoSell
+          .removeWhere((r) => r.resourceId == 'copper_ore');
+      a.body('kora').stock['copper_ore'] = n(500);
+      a
+          .body('kora')
+          .buildings
+          .add(BuildingState(id: a.newId('b'), defId: 'shipyard', crew: 0));
+      final b = a.copy();
+      final caught = e.catchUpOffline(a, 3600);
+      e.advance(b, 3540, maxStep: 1);
+      final live = e.catchUpOffline(b, 60);
+      List<String> top(OfflineSummary sum) => [
+        for (final n in sum.topBottlenecks) n.groupKey,
+      ];
+      expect(top(caught), hasLength(3));
+      expect(top(live), top(caught));
+    });
+
     test('a full store that costs more outranks the group', () {
       final s = starved(17);
       final kora = s.body('kora');
