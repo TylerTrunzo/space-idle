@@ -258,22 +258,29 @@ void main() {
         final e = _engine();
         final s = stocked(e);
         final issued = play(e, bot, s, 3);
-        // Goods on their own once the station is open, then its credits
-        // once they are all it lacks; none by hand.
-        expect(issued.whereType<DeliverToMegaprojectCommand>(), isEmpty);
+        // Goods on their own once the station is open; its credits, once
+        // they are all it lacks and a billion covers them and the reserve,
+        // by hand, so none go on into the next stage.
+        expect(
+          [
+            for (final d in issued.whereType<DeliverToMegaprojectCommand>())
+              d.amounts.keys.toList(),
+          ],
+          [
+            ['credits'],
+          ],
+        );
         final settings = issued
             .whereType<SetMegaprojectAutoCommand>()
             .where((c) => c.megaprojectId == 'orbital_station')
             .toList();
         expect(settings.first.goods, isTrue);
-        expect(settings.first.creditReserve, isNull);
-        expect(settings[1].creditReserve, isNotNull);
+        expect(settings.map((c) => c.creditReserve), everyElement(isNull));
         expect(
           megaprojectStageOf(s, 'player', 'orbital_station'),
           isNotNull,
           reason: '$issued',
         );
-        // Paid for: its credits stop again.
         expect(
           s.faction('player').megaprojectAuto['orbital_station']!.creditReserve,
           isNull,
@@ -281,13 +288,19 @@ void main() {
       });
     }
 
-    test('keeps an hour of income when the credits go in on their own', () {
+    test('keeps an hour of income when the credits go in on their own, '
+        'as they do when it cannot pay them and keep it', () {
       final e = _engine();
       final s = e.newGame(1);
       // Half an hour of play, so auto-sell earns an income.
       play(e, BalancedBot(), s, 15);
-      s.faction('player').credits = BigNum.from(1e9);
       final station = e.content.megaprojects['orbital_station']!;
+      // The stage's credits, but not an hour of income besides.
+      s.faction('player').credits = megaprojectCost(
+        e.content,
+        station,
+        0,
+      )['credits']!;
       s.faction('player').megaprojectProgress['orbital_station'] = {
         for (final MapEntry(:key, :value) in megaprojectCost(
           e.content,
@@ -407,6 +420,85 @@ void main() {
         autoSellKeep(s, e.content, rule, 1).megaprojectHold,
         need.mulDouble(0.75),
       );
+    });
+  });
+
+  group('growing the supply of a stage good', () {
+    /// A new game with the Mass Driver open and [presses] plate presses on
+    /// Kora, a minute played; each megaproject's next stage lacks only
+    /// the hull plates [owed] lists of it (none for one not listed).
+    GameState shape(GameEngine e, Map<String, int> owed, {int presses = 1}) {
+      final c = e.content;
+      final s = e.newGame(1);
+      final f = s.faction('player');
+      f.megaprojectLevels['orbital_station'] = 1;
+      f.baseCrew += presses;
+      for (var i = 0; i < presses; i++) {
+        s
+            .body('kora')
+            .buildings
+            .add(
+              BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+            );
+      }
+      for (final m in c.megaprojects.values) {
+        final cost = megaprojectCost(
+          c,
+          m,
+          megaprojectDeliveryLevel(s, 'player', m),
+        );
+        f.megaprojectProgress[m.id] = {
+          for (final MapEntry(key: id, value: v) in cost.entries)
+            if (id != 'credits')
+              id: id == 'hull_plate' ? v - BigNum.from(owed[m.id] ?? 0) : v,
+        };
+      }
+      e.advance(s, 60);
+      return s;
+    }
+
+    /// Hull plates Kora's presses make in a day: under 6,000.
+    double day(GameEngine e, GameState s) =>
+        buildFlowReport(
+          s,
+          e.content,
+          'player',
+        ).netProducedPerSec('hull_plate').toDouble() *
+        86400;
+
+    test('a good a stage lacks for more than a day gets a step', () {
+      final e = _engine();
+      final s = shape(e, {'orbital_station': 9000});
+      expect(day(e, s), lessThan(9000));
+      expect(growthStepFor(e, s, 'player', 'orbital_station'), isNotNull);
+    });
+
+    test('a good another megaproject takes first counts its need too', () {
+      // Each alone comes within a day; the Mass Driver's comes after the
+      // station's, which auto-delivery feeds first.
+      final e = _engine();
+      final s = shape(e, {'orbital_station': 4000, 'mass_driver': 3000});
+      expect(day(e, s), inInclusiveRange(4000, 7000));
+      expect(growthStepFor(e, s, 'player', 'orbital_station'), isNull);
+      expect(growthStepFor(e, s, 'player', 'mass_driver'), isNotNull);
+      final alone = shape(e, {'mass_driver': 3000});
+      expect(growthStepFor(e, alone, 'player', 'mass_driver'), isNull);
+    });
+
+    test('a maker short of a good already being grown does not end the '
+        'search', () {
+      // The first press reads as short of hull plates themselves (a loop):
+      // growing that leads nowhere, so the second press's steel is grown.
+      final e = _engine();
+      final s = shape(e, {'orbital_station': 9000}, presses: 2);
+      final first = s
+          .body('kora')
+          .buildings
+          .firstWhere((b) => b.defId == 'plate_press');
+      first
+        ..lastLimitReason = 'input:hull_plate'
+        ..lastRunFraction = 0.5;
+      expect(growthStepFor(e, s, 'player', 'orbital_station'), isNotNull);
     });
   });
 

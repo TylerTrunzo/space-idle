@@ -308,16 +308,21 @@ first in a check-in (surveys, claims, contracts, megaproject deliveries), so
 their timers run while the player is away.
 
 - **Megaprojects.** Once a megaproject opens, each bot feeds it on its own
-  (`setMegaprojectAuto`): goods from every body, and its credits, above a
-  reserve of an hour of income, only while they are all the stage being paid
-  for still lacks (credits paid in earlier sit idle in a stage still short of
-  goods). The bots deliver by hand only what auto-delivery does not cover.
-  Stages go on being paid for while one runs, the next starting as the
-  running one ends; the engine's auto-sell holds back what a fed stage still
-  lacks. When at today's surplus a good a stage lacks would take more than a
-  day to come, the balanced and casual bots grow its supply, once per
-  megaproject per decision: they feed a maker held back by its inputs (or
-  grow those in turn), else build another maker.
+  (`setMegaprojectAuto`): goods from every body. Once credits are all the
+  stage being paid for still lacks, the bot pays them by hand when it can
+  and still keep a reserve of an hour of income; otherwise they go in on
+  their own above that reserve, and stop at the next decision after the
+  stage is paid (credits paid in earlier, or left flowing into the next
+  stage, sit idle in a stage still short of goods). The bots deliver by
+  hand only what auto-delivery does not cover. Stages go on being paid for
+  while one runs, the next starting as the running one ends; the engine's
+  auto-sell holds back what a fed stage still lacks. When at today's
+  surplus a good a stage lacks would take more than a day to come (after
+  what megaprojects before it in content order still lack of it, since
+  auto-delivery feeds those first), the balanced and casual bots grow its
+  supply, once per megaproject per decision: they feed a maker held back
+  by its inputs (or grow those in turn, going on to the next maker when
+  that leads nowhere), else build another maker.
 - **Surveys** take only drones beyond what that stage still lacks.
 - **Contracts** come before the station: the engine's auto-sell holds a
   contract's goods back, and the bots deliver once a body holds enough to

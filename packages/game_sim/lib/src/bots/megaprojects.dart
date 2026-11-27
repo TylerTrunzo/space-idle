@@ -32,11 +32,15 @@ extension _Megaprojects on _View {
   /// Once a megaproject is open ([megaprojectLockedBy]) and its host is
   /// owned, every body feeds it goods. Its credits go in on their own,
   /// above a reserve of [creditReserveSeconds] of income, only while they
-  /// are all the stage being paid for still lacks; at the next decision
-  /// after that stage is paid for, they stop again. Paid in earlier, credits
-  /// would sit in a stage still short of goods instead of growing the
-  /// economy that makes them: in 21-day runs that kept the casual bot's
-  /// first station level a day later and its income lower.
+  /// are all the stage being paid for still lacks and the faction cannot
+  /// pay them now and keep the reserve ([deliverMegaproject] pays them by
+  /// hand when it can); at the next decision after that stage is paid
+  /// for, they stop again. Paid in earlier, credits would sit in a stage
+  /// still short of goods instead of growing the economy that makes them:
+  /// in 21-day runs that kept the casual bot's first station level a day
+  /// later and its income lower. And a reserve left on once the stage is
+  /// paid would pour the credits earned until the next decision into the
+  /// next stage, still short of its goods.
   Command? autoDeliver() {
     for (final m in c.megaprojects.values) {
       if (megaprojectLockedBy(s, c, factionId, m) != null) continue;
@@ -44,9 +48,10 @@ extension _Megaprojects on _View {
         continue;
       }
       final now = faction.megaprojectAuto[m.id];
-      final payCredits =
-          _deliverable(m) &&
-          _onlyCredits(megaprojectRemaining(s, c, factionId, m)) != null;
+      final owedCredits = _deliverable(m)
+          ? _onlyCredits(megaprojectRemaining(s, c, factionId, m))
+          : null;
+      final payCredits = owedCredits != null && !_affordable(owedCredits);
       final reserve = payCredits ? _creditReserve() : null;
       if (now != null &&
           now.goods &&
@@ -57,6 +62,11 @@ extension _Megaprojects on _View {
     }
     return null;
   }
+
+  /// Whether the faction can pay [credits] now and still keep the reserve
+  /// [autoDeliver] would set ([_creditReserve]).
+  bool _affordable(BigNum credits) =>
+      faction.credits >= credits + _creditReserve();
 
   /// Whether credit reserve [now] can stay for one of [want]: both none,
   /// or both set and within a factor of two, so the reserve is not reset
@@ -92,8 +102,8 @@ extension _Megaprojects on _View {
   /// way, the one after it): the goods it still lacks from the first owned
   /// body holding at least one whole unit more of them than it keeps for
   /// its own use ([keepForUse]), body order; once every good is in, the
-  /// credits, when the faction holds them all. Null if there is nothing to
-  /// deliver.
+  /// credits, when the faction holds them all and the credit reserve
+  /// besides ([autoDeliver]). Null if there is nothing to deliver.
   ///
   /// Deliveries add up, so goods go in as they are made, from every body,
   /// and the stage's timer starts as soon as the last of its cost is in,
@@ -120,8 +130,10 @@ extension _Megaprojects on _View {
         }
       }
       if (_fedCredits(m)) continue;
-      if (_onlyCredits(owed) case final credits?
-          when faction.credits >= credits) {
+      // With the credits all a stage lacks, they are paid by hand only
+      // when the reserve stays; otherwise they go in on their own above it
+      // ([autoDeliver]).
+      if (_onlyCredits(owed) case final credits? when _affordable(credits)) {
         return DeliverToMegaprojectCommand(factionId, m.id, owned.first.id, {
           'credits': credits,
         });
@@ -166,7 +178,12 @@ extension _Megaprojects on _View {
     for (final MapEntry(key: id, value: need) in owed.entries) {
       if (id == 'credits') continue;
       final rate = owned.fold(0.0, (t, b) => t + math.max(0.0, surplus(b, id)));
-      final seconds = rate > 0 ? need.toDouble() / rate : double.infinity;
+      // Megaprojects before [m] in content order take a good they share
+      // first, as auto-delivery feeds them in that order.
+      final ahead = _owedBefore(m, id);
+      final seconds = rate > 0
+          ? (need + ahead).toDouble() / rate
+          : double.infinity;
       if (seconds > longest) {
         slowest = id;
         longest = seconds;
@@ -194,10 +211,26 @@ extension _Megaprojects on _View {
       if (!reason.startsWith('input:')) continue;
       final fed = _feedMaker(body, b, deeper);
       if (_acts(fed)) return fed;
-      // Made and on its way, but too little of it: grow that.
-      return _grow(reason.substring('input:'.length), deeper);
+      // Made and on its way, but too little of it: grow that, or, when
+      // that leads nowhere (an input already being grown), try the next
+      // maker, then another maker of it.
+      final grown = _grow(reason.substring('input:'.length), deeper);
+      if (_acts(grown)) return grown;
     }
     return ensureMade(resourceId, visiting, true);
+  }
+
+  /// Units of [resourceId] the megaprojects before [m] in content order
+  /// still lack for the stages being paid for ([megaprojectRemaining]).
+  BigNum _owedBefore(MegaprojectDef m, String resourceId) {
+    var total = const BigNum.zero();
+    for (final other in c.megaprojects.values) {
+      if (other.id == m.id) break;
+      if (!_deliverable(other)) continue;
+      final owed = megaprojectRemaining(s, c, factionId, other)[resourceId];
+      if (owed != null) total = total + owed;
+    }
+    return total;
   }
 
   /// Units of [resourceId] the megaproject stages being paid for still

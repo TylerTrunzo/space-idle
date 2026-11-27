@@ -170,6 +170,23 @@ final class CasualBot implements Bot {
   }
 }
 
+/// The command the balanced bot's planning would issue toward more of the
+/// good the stage of [megaprojectId] being paid for still lacks that comes
+/// slowest ([_Megaprojects._growFor]); null when every good comes within
+/// [_stageGoodsWithinSeconds] at today's surplus, no step helps, or the
+/// step is to save credits. One planning step's view, for tests.
+Command? growthStepFor(
+  GameEngine e,
+  GameState s,
+  String factionId,
+  String megaprojectId,
+) {
+  final v = _View(e.content, s, factionId, withReport: true);
+  final m = e.content.megaprojects[megaprojectId]!;
+  final step = v._growFor(m, megaprojectRemaining(s, e.content, factionId, m));
+  return step is _Do ? step.cmd : null;
+}
+
 /// Most commands one decision may plan; a guard against a planning loop.
 const int _maxCommandsPerDecision = 60;
 
@@ -213,8 +230,8 @@ const double _feedHeadroom = 2;
 const double _demandBufferSeconds = 60;
 
 /// Game seconds within which the goods a megaproject stage still lacks
-/// should come at today's rates; slower, the balanced bot grows the supply
-/// of the slowest ([_Megaprojects._growFor]).
+/// should come at today's rates; slower, the balanced and casual bots grow
+/// the supply of the slowest ([_Megaprojects._growFor]).
 const double _stageGoodsWithinSeconds = 86400;
 
 /// Share of demand below which a route counts as too small.
