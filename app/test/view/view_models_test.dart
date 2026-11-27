@@ -164,7 +164,6 @@ void main() {
         s,
         content,
         _p,
-        body,
         b,
         BuildingStatus(
           buildingId: 'b3',
@@ -177,7 +176,7 @@ void main() {
           inputsPerSec: const {},
           outputsPerSec: const {},
         ),
-        const [
+        RowContext.of(s, content, _p, const [
           Bottleneck(
             kind: BottleneckKind.understaffed,
             bodyId: 'kora',
@@ -186,7 +185,7 @@ void main() {
             runFraction: 0.5,
             buildingIds: ['b3'],
           ),
-        ],
+        ]),
       );
       expect(row.severity, Severity.warning);
       expect(row.problem, isNotNull);
@@ -247,6 +246,31 @@ void main() {
       )!.storage.firstWhere((r) => r.id == 'iron_ore');
       expect(iron.net, startsWith('-'));
       expect(iron.alert, StockAlert.runningOut);
+    });
+
+    test('every price is the core salePrice, Mass Driver bonus included', () {
+      c.state.faction(_p).megaprojectLevels['mass_driver'] = 3;
+      for (final id in content.resources.keys) {
+        c.state.body('kora').stock[id] = BigNum.from(1);
+      }
+      final rows = bodyView(c, 'kora')!.storage;
+      expect(rows, hasLength(content.resources.length));
+      for (final r in rows) {
+        expect(
+          r.price,
+          formatAmount(salePrice(c.state, content, _p, r.id)),
+          reason: r.id,
+        );
+      }
+      // The bonus makes a difference somewhere, so the check means it.
+      expect(
+        content.resources.keys.any(
+          (id) =>
+              salePrice(c.state, content, _p, id) !=
+              price(c.state, content, id),
+        ),
+        isTrue,
+      );
     });
 
     test('auto-sell rules show on their rows', () {

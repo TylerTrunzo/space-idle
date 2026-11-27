@@ -127,17 +127,49 @@ final class BuildingRowView {
   final bool canRemoveCrew;
 }
 
-/// The row of building [b] on [body], from [status] (its line in the flow
-/// report; null for a body the report does not cover) and the report's
-/// per-building [bottlenecks].
+/// What every building row of one body view shares, worked out once for
+/// the view rather than once a row.
+@immutable
+final class RowContext {
+  /// Creates a context.
+  const RowContext({
+    required this.credits,
+    required this.freeCrew,
+    required this.bottlenecks,
+  });
+
+  /// [playerId]'s context from [s] and its flow report's per-building
+  /// [bottlenecks].
+  factory RowContext.of(
+    GameState s,
+    Content c,
+    String playerId,
+    List<Bottleneck> bottlenecks,
+  ) => RowContext(
+    credits: s.faction(playerId).credits,
+    freeCrew: availableCrew(s, c, playerId),
+    bottlenecks: {for (final n in bottlenecks.reversed) ?n.buildingId: n},
+  );
+
+  /// Credits the player holds.
+  final BigNum credits;
+
+  /// Crew the player can still assign.
+  final int freeCrew;
+
+  /// Building id to the first bottleneck the report names it in.
+  final Map<String, Bottleneck> bottlenecks;
+}
+
+/// The row of building [b], from [status] (its line in the flow report;
+/// null for a body the report does not cover) and [ctx].
 BuildingRowView buildingRowView(
   GameState s,
   Content c,
   String playerId,
-  BodyState body,
   BuildingState b,
   BuildingStatus? status,
-  List<Bottleneck> bottlenecks,
+  RowContext ctx,
 ) {
   final def = c.buildings[b.defId]!;
   final inputs = def.inputs.keys;
@@ -147,8 +179,7 @@ BuildingRowView buildingRowView(
   BigNum rate(Map<String, BigNum>? m, String id) =>
       m?[id] ?? const BigNum.zero();
   final fraction = runsRecipe(def) ? _fraction(b, status) : 1.0;
-  final neck = bottlenecks.where((n) => n.buildingId == b.id).firstOrNull;
-  final credits = s.faction(playerId).credits;
+  final neck = ctx.bottlenecks[b.id];
   final most = maxCrew(c.rules, def, b);
   return BuildingRowView(
     id: b.id,
@@ -181,9 +212,9 @@ BuildingRowView buildingRowView(
     problem: neck == null ? null : bottleneckText(s, c, playerId, neck),
     upgrades: {
       for (final t in UpgradeTrack.values)
-        if (def.upgrades.containsKey(t)) t: _upgrade(c, b, t, credits),
+        if (def.upgrades.containsKey(t)) t: _upgrade(c, b, t, ctx.credits),
     },
-    canAddCrew: b.crew < most && availableCrew(s, c, playerId) > 0,
+    canAddCrew: b.crew < most && ctx.freeCrew > 0,
     canRemoveCrew: b.crew > 0,
   );
 }

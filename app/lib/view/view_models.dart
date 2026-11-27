@@ -52,15 +52,15 @@ TopBarView topBar(GameController c) {
       held[id] = (held[id] ?? const BigNum.zero()) + v;
     }
   }
-  final order = c.content.resources.keys.toList();
+  final rank = {for (final (i, id) in c.content.resources.keys.indexed) id: i};
   final ids = [
-    for (final id in order)
+    for (final id in rank.keys)
       if ((held[id] ?? const BigNum.zero()) > const BigNum.zero()) id,
   ];
   // Most first; content order breaks ties (List.sort is not stable).
   ids.sort((a, b) {
     final by = held[b]!.compareTo(held[a]!);
-    return by != 0 ? by : order.indexOf(a).compareTo(order.indexOf(b));
+    return by != 0 ? by : rank[a]!.compareTo(rank[b]!);
   });
   return TopBarView(
     credits: formatNumber(f.credits),
@@ -271,6 +271,7 @@ BodyView? bodyView(GameController c, String bodyId) {
   if (body == null || !isVisible(s, body, player)) return null;
   final flow = c.flow;
   final bodyFlow = flow.bodies.where((b) => b.bodyId == bodyId).firstOrNull;
+  final rows = RowContext.of(s, content, player, flow.bottlenecks);
   final statuses = {
     for (final st in bodyFlow?.buildings ?? const <BuildingStatus>[])
       st.buildingId: st,
@@ -288,15 +289,7 @@ BodyView? bodyView(GameController c, String bodyId) {
     slotsTotal: buildSlots(content, body),
     buildings: [
       for (final b in body.buildings)
-        buildingRowView(
-          s,
-          content,
-          player,
-          body,
-          b,
-          statuses[b.id],
-          flow.bottlenecks,
-        ),
+        buildingRowView(s, content, player, b, statuses[b.id], rows),
     ],
     storage: _storage(c, body, bodyFlow),
     routesOut: [
@@ -318,6 +311,9 @@ List<ResourceRowView> _storage(
 ) {
   final s = c.state;
   final cap = storageCap(s, c.content, body);
+  // One bonus lookup for every row's sale price (the core's salePrice is
+  // price x salePriceMultiplierFor(tier); a test pins the two together).
+  final bonuses = bonusesFor(s, c.content, c.playerId);
   final selling = {
     for (final r in s.faction(c.playerId).autoSell)
       if (r.bodyId == body.id) r.resourceId,
@@ -339,6 +335,11 @@ List<ResourceRowView> _storage(
           net: flow?.netPerSec[id] ?? zero,
           wasted: flow?.wastedPerSec[id] ?? zero,
           autoSell: selling.contains(id),
+          salePrice: price(
+            s,
+            c.content,
+            id,
+          ).mulDouble(bonuses.salePriceMultiplierFor(def.tier)),
         ),
   ];
 }
@@ -352,6 +353,7 @@ ResourceRowView _resourceRow(
   required BigNum net,
   required BigNum wasted,
   required bool autoSell,
+  required BigNum salePrice,
 }) {
   final capD = cap.toDouble();
   final fill = capD <= 0 ? 0.0 : (stock.toDouble() / capD).clamp(0.0, 1.0);
@@ -371,7 +373,7 @@ ResourceRowView _resourceRow(
     cap: formatNumber(cap),
     fill: fill,
     net: formatRate(net),
-    price: formatAmount(salePrice(c.state, c.content, c.playerId, id)),
+    price: formatAmount(salePrice),
     alert: alert,
     autoSell: autoSell,
   );
