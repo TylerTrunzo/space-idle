@@ -15,43 +15,49 @@ sections after it describe task 5.
 
 What moved the numbers:
 
-- **Engine.** Credits auto-paid to megaprojects go in after the minute's sales, and stages due by
-  the minute complete before the next is paid for (both for step-size invariance). Together they
-  move when the bots' stages start by up to a minute, which the optimizer's tightly timed play
-  amplifies: reverting just these two brings its seed-1 day 7 back from 29.2B to 40.2B.
+- **One auto-pay credit reserve per faction** (round 2). With a reserve per megaproject, the lower
+  one took every credit above it for good: the optimizer's station, short of only credits behind the
+  Mass Driver's lower reserve, sat at level 6 from 144 h to 312 h on seed 1 in round 1 (and at levels
+  8-10 for days in task 5). Credits above the shared reserve now go to every credit-fed megaproject
+  in even shares, and the optimizer is back: station level 12 by day 21 on every seed (task 5:
+  11 / 9 / 11), day 14 earnings 87B on seed 1 (task 5: 69.4B).
+- **Engine.** Credits auto-paid go in after the minute's sales, and stages due by the minute
+  complete before the next is paid for (step-size invariance).
 - **Contracts** scale their `maxQuantity` by Orbital Station levels only (the Mass Driver sets
   `scalesContracts` false).
-- **Bots** pay a stage's credits by hand when they can and keep their hour-of-income reserve (the
-  auto reserve only otherwise), and grow a shared good (hull plate) counting what the station still
-  lacks of it first.
+- **Bots** pay a stage's credits by hand when they can and keep their hour-of-income reserve, and
+  grow a shared good (hull plate) counting what the station still lacks of it first.
 - **Report.** An event seen at a day's end counts in that day, as the Days table does.
 
 Pacing targets (findings §4), seeds 1 / 2 / 3, task 5 then the fix wave:
 
 | Target | Task 5 | Fix wave | Met |
 |---|---|---|---|
-| Casual: a milestone or project on 5 of every 7 days, days 1-21 (worst 7 days) | 6 / 5 / 6 | 6 / 5 / 6 (20, 18, 20 of 21 days) | yes |
+| Casual: a milestone or project on 5 of every 7 days, days 1-21 (worst 7 days) | 6 / 5 / 6 | 7 / 6 / 5 (21, 19, 19 of 21 days) | yes |
 | Casual: Orbital Station level 1 in days 4-6 | day 6 / 5 / 6 | day 6 / 5 / 6 | yes |
-| Casual: Mass Driver level 1 around days 6-8 | day 6 / 8 / 7 | day 6 / 8 / 7 | yes |
-| Casual: no gap above 3 days between levels of one megaproject, through day 21 | station 4 / 4 / 4; Mass Driver 4 / 5 / 4 | station 4 / 4 / 5; Mass Driver 4 / 4 / 3 | **no** (accepted) |
-| Casual: no gap above 3 days between levels of either megaproject, through day 21 | 2 / 4 / 2 | 2 / 3 / 3 | yes |
-| Casual: income on day 21 at least 2× day 14 | 2.61× / 2.56× / 2.67× | 3.66× / 2.90× / 2.93× | yes |
-| Balanced: income +20% from day 7 to day 14 | +71% / +59% / +32% | +52% / +109% / +69% | yes |
-| Balanced: income +10% from day 14 to day 21 | +30% / +19% / +49% | +40% / +36% / +45% | yes |
+| Casual: Mass Driver level 1 around days 6-8 | day 6 / 8 / 7 | day 6 / **10** / 7 | **no on seed 2** |
+| Casual: no gap above 3 days between levels of one megaproject, through day 21 | station 4 / 4 / 4; Mass Driver 4 / 5 / 4 | station 4 / 5 / 5; Mass Driver 5 / 3 / 4 | **no** (accepted) |
+| Casual: no gap above 3 days between levels of either megaproject, through day 21 | 2 / 4 / 2 | 3 / 3 / 3 | yes |
+| Casual: income on day 21 at least 2× day 14 | 2.61× / 2.56× / 2.67× | 2.56× / 3.67× / 2.23× | yes |
+| Balanced: income +20% from day 7 to day 14 | +71% / +59% / +32% | +160% / +170% / +103% | yes |
+| Balanced: income +10% from day 14 to day 21 | +30% / +19% / +49% | +41% / +43% / +39% | yes |
 | Contracts at most 15% of earnings on days 1, 7 and 14, every bot | highest 14.3% (casual s1 day 1) | highest 14.3% (casual s1 day 1) | yes |
+
+On seed 2 the casual bot's Mass Driver comes on day 10 (222 h), where round 1's came on day 8: its
+economy goes another way from day 6 (5.12M earned on day 8 against 6.08M). Seed 1, which
+`balance_targets_test` checks, still opens it on day 6.
 
 Contract rewards as a share of earnings, days 1 / 7 / 14:
 
 | Bot | s1 | s2 | s3 |
 |---|---|---|---|
-| casual | 14.3 / 3.3 / 4.1% | 9.3 / 2.9 / 5.1% | 7.6 / 4.0 / 5.1% |
-| balanced | 0.2 / 10.0 / 9.3% | 0.9 / 11.8 / 9.3% | 0.9 / 9.0 / 8.7% |
+| casual | 14.3 / 3.3 / 6.0% | 9.3 / 2.5 / 6.6% | 7.6 / 4.0 / 3.5% |
+| balanced | 0.2 / 11.9 / 9.1% | 0.9 / 10.2 / 8.6% | 0.9 / 9.9 / 9.5% |
 | greedy | 10.9 / 7.7 / 7.4% | 10.8 / 7.7 / 7.4% | 10.1 / 7.7 / 7.4% |
 
-
-On the days not checked the balanced bot still passes 15% now and then: 16.7% on day 20 (seed 1)
-and 15.0% on day 16 (seed 3), when a single large order lands. A 50-minute reward cap (was 1 h)
-changed nothing on seed 1 and cost seed 2 its day 14 to day 21 growth (+7%), so the cap stays.
+On the days not checked the balanced bot still passes 15% now and then: 16.0% on day 18 (seed 1) and
+16.3% on day 17 (seed 2), each a day when one large order lands. In round 1 a 50-minute reward cap
+(was 1 h) changed nothing on seed 1 and cost seed 2 its day 14 to day 21 growth, so the cap stays.
 
 Megaproject levels by day (Orbital Station / Mass Driver at the end of each day):
 
@@ -62,29 +68,29 @@ Megaproject levels by day (Orbital Station / Mass Driver at the end of each day)
 | 3 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
 | 4 | 0/0 | 0/0 | 0/0 | 3/4 | 2/5 | 4/5 |
 | 5 | 0/0 | 1/0 | 0/0 | 5/9 | 5/9 | 8/9 |
-| 6 | 1/1 | 1/0 | 1/0 | 6/11 | 7/11 | 8/11 |
-| 7 | 1/1 | 1/0 | 1/1 | 6/11 | 8/12 | 8/12 |
-| 8 | 2/1 | 2/1 | 2/1 | 6/12 | 8/12 | 9/13 |
-| 9 | 2/2 | 2/2 | 2/2 | 6/13 | 9/13 | 9/13 |
-| 10 | 2/3 | 2/2 | 2/2 | 6/13 | 9/13 | 9/13 |
-| 11 | 2/4 | 3/2 | 3/2 | 6/13 | 9/13 | 10/14 |
-| 12 | 3/4 | 3/3 | 3/3 | 6/13 | 10/14 | 10/14 |
-| 13 | 3/5 | 3/4 | 3/4 | 7/14 | 10/14 | 10/14 |
-| 14 | 4/5 | 3/4 | 3/4 | 8/14 | 10/14 | 10/14 |
-| 15 | 4/5 | 4/5 | 3/5 | 8/14 | 10/14 | 10/14 |
-| 16 | 4/6 | 4/5 | 4/5 | 8/14 | 10/14 | 10/15 |
-| 17 | 4/6 | 4/5 | 4/5 | 8/14 | 10/15 | 11/15 |
-| 18 | 5/6 | 5/5 | 4/6 | 8/14 | 11/15 | 11/15 |
-| 19 | 5/6 | 5/6 | 4/6 | 8/14 | 11/15 | 11/15 |
-| 20 | 5/7 | 5/6 | 4/6 | 9/15 | 11/15 | 11/15 |
-| 21 | 5/7 | 5/6 | 5/6 | 9/15 | 11/15 | 11/15 |
+| 6 | 1/1 | 1/0 | 1/0 | 6/10 | 7/11 | 8/11 |
+| 7 | 1/1 | 1/0 | 1/1 | 7/12 | 8/12 | 9/12 |
+| 8 | 1/2 | 2/0 | 2/1 | 8/12 | 9/12 | 10/13 |
+| 9 | 2/2 | 2/0 | 2/2 | 9/13 | 9/13 | 10/13 |
+| 10 | 2/3 | 2/1 | 2/3 | 10/13 | 10/13 | 10/13 |
+| 11 | 2/3 | 2/2 | 2/3 | 10/13 | 10/13 | 11/13 |
+| 12 | 3/4 | 2/3 | 2/3 | 11/13 | 11/14 | 11/14 |
+| 13 | 3/5 | 3/3 | 3/4 | 11/14 | 11/14 | 11/14 |
+| 14 | 4/5 | 3/4 | 3/4 | 11/14 | 11/14 | 12/14 |
+| 15 | 4/5 | 3/4 | 3/5 | 11/14 | 11/14 | 12/14 |
+| 16 | 4/6 | 4/4 | 4/5 | 11/14 | 12/14 | 12/14 |
+| 17 | 4/6 | 4/5 | 4/5 | 12/14 | 12/15 | 12/15 |
+| 18 | 5/6 | 4/5 | 4/5 | 12/15 | 12/15 | 12/15 |
+| 19 | 5/6 | 4/5 | 4/6 | 12/15 | 12/15 | 12/15 |
+| 20 | 5/6 | 4/6 | 4/6 | 12/15 | 12/15 | 12/15 |
+| 21 | 5/7 | 4/6 | 5/6 | 12/15 | 12/15 | 12/15 |
 
 Earned by day, seed 1:
 
 | Bot | Day 7 | Day 14 | Day 21 | Day 30 |
 |---|---:|---:|---:|---:|
-| casual | 7.03M | 71.1M | 260M | 687M |
-| balanced | 30.6B | 46.5B | 65.3B | 72.6B |
+| casual | 7M | 77.3M | 198M | 744M |
+| balanced | 33.4B | 87B | 123B | 155B |
 | greedy | 4.1M | 4.77M | 16.7M | 69.8M |
 
 ## What task 5 changed

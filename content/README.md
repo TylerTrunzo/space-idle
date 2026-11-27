@@ -44,7 +44,8 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   It asks for no food (habitats eat all a young economy makes) and no steel (plate presses take it for
   the station's hull plates), and it does not deepen markets: deeper tier 0–1 markets made those goods
   most of an optimizer's sales. Tuned in stage 1.6 so a casual player opens it on days 6–8 and gets a
-  level every 1–4 days through day 21 (the casual bot on seeds 1–3, `docs/balance/`).
+  level every 1–5 days through day 21 (the casual bot on seeds 1–3, `docs/balance/`; it opens on
+  day 10 on seed 2).
 - **Megaproject bonuses.** `bonusesPerLevel` kinds: `storagePercent`, `housingPercent`,
   `outputPercent` and `marketDepthPercent` add `amount` percent a level; `offlineCapSeconds` adds
   seconds; `marketDepthMultiplier` and `productionSpeedMultiplier` multiply by `amount^level`
