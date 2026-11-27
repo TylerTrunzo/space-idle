@@ -318,8 +318,12 @@ NextGoal? nextGoal(
 ///   content order, each what is left of the stock, then the rate, until
 ///   it has all it is owed.
 ///
-/// It looks one stage ahead for each: stages paid for and started later
-/// would take a share too, which it leaves out.
+/// It looks one stage ahead for each: once a megaproject's stage is paid
+/// for, its next stage usually starts and takes a share again, which this
+/// leaves out. So the soonest ETA, all [nextGoal] uses, is right, and the
+/// later ones are lower bounds (18-41% short for the second of two
+/// credit-fed megaprojects on bot states); that is why the package does
+/// not export it.
 Map<String, double?> megaprojectEtas(
   GameState s,
   Content c,

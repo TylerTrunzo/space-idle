@@ -22,7 +22,9 @@ export 'src/sim/megaprojects.dart';
 // The engine's own milestone helpers stay inside the package.
 export 'src/sim/milestones.dart'
     hide factionStock, hiddenBodies, milestoneProgressAt;
-export 'src/sim/offline_summary.dart';
+// megaprojectEtas looks one stage ahead only, which suits nextGoal (the
+// soonest) but not a per-megaproject ETA: it stays inside.
+export 'src/sim/offline_summary.dart' hide megaprojectEtas;
 export 'src/sim/production.dart' hide buildingTier;
 export 'src/sim/projects.dart';
 export 'src/sim/survey.dart';

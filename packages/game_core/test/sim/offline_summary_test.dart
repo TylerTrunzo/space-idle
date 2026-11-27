@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:game_core/game_core.dart';
 import 'package:game_core/src/sim/milestones.dart' show factionStock;
+import 'package:game_core/src/sim/offline_summary.dart' show megaprojectEtas;
 import 'package:test/test.dart';
 
 import '../state/helpers.dart';
