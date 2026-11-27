@@ -80,6 +80,9 @@ void main() {
       expect(BodyPalette.forType('ice_moon'), const Color(0xFF9FE8FF));
       expect(BodyPalette.forType('gas_giant'), const Color(0xFFC56CFF));
       expect(BodyPalette.forType('volcanic'), const Color(0xFFFF8A5B));
+      expect(BodyPalette.forType('kuiper'), const Color(0xFFA9B8D0));
+      expect(BodyPalette.forType('no_such_type'), Palette.muted);
+      expect(BodyPalette.star, const Color(0xFFFFD27A));
       // Unowned bodies are dimmed.
       expect(
         _body(scene, 'cinder').color.a,

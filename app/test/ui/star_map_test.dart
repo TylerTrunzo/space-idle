@@ -65,7 +65,6 @@ double _shipmentProgress(WidgetTester tester) {
 
 void main() {
   testWidgets('hidden bodies have no node until surveyed', (tester) async {
-    final handle = tester.ensureSemantics();
     final c = _controller();
     await tester.pumpWidget(_app(c));
 
@@ -76,13 +75,11 @@ void main() {
     c.tickSeconds(1); // any change notifies the map
     await tester.pump();
     expect(find.bySemanticsLabel('Tessaly, unclaimed'), findsOneWidget);
-    handle.dispose();
   });
 
   testWidgets('all 5 visible bodies have labelled button nodes', (
     tester,
   ) async {
-    final handle = tester.ensureSemantics();
     await tester.pumpWidget(_app(_controller()));
 
     for (final label in [
@@ -102,41 +99,33 @@ void main() {
     }
     // The visible labels say so too, not only the ring color.
     expect(find.text('Unclaimed'), findsNWidgets(4));
-    handle.dispose();
   });
 
   testWidgets('tapping Kora calls onSelect(kora)', (tester) async {
-    final handle = tester.ensureSemantics();
     final selected = <String>[];
     await tester.pumpWidget(_app(_controller(), selected: selected));
 
     await tester.tap(find.bySemanticsLabel('Kora, owned'));
     expect(selected, ['kora']);
-    handle.dispose();
   });
 
   testWidgets('the semantics tap action selects the body too', (tester) async {
-    final handle = tester.ensureSemantics();
     final selected = <String>[];
     await tester.pumpWidget(_app(_controller(), selected: selected));
 
     tester.semantics.tap(find.semantics.byLabel('Cinder, unclaimed'));
     expect(selected, ['cinder']);
-    handle.dispose();
   });
 
   testWidgets('tapping the signal marker calls onSignalTap', (tester) async {
-    final handle = tester.ensureSemantics();
     final signals = <String>[];
     await tester.pumpWidget(_app(_controller(), signals: signals));
 
     await tester.tap(find.bySemanticsLabel(RegExp('^Unsurveyed signal')));
     expect(signals, ['veyra']);
-    handle.dispose();
   });
 
   testWidgets('a body stays where it was across two builds', (tester) async {
-    final handle = tester.ensureSemantics();
     await tester.pumpWidget(_app(_controller()));
     final first = tester.getCenter(find.bySemanticsLabel('Kora, owned'));
 
@@ -144,7 +133,6 @@ void main() {
     await tester.pumpWidget(_app(_controller()));
     final second = tester.getCenter(find.bySemanticsLabel('Kora, owned'));
     expect(second, first);
-    handle.dispose();
   });
 
   testWidgets('paints a route and a moving shipment without errors', (
@@ -177,6 +165,19 @@ void main() {
     expect(c.lastError, isNotNull);
     await tester.pump();
     expect(_shipmentProgress(tester), greaterThanOrEqualTo(before));
+  });
+
+  testWidgets('an idle map schedules no frames', (tester) async {
+    // No shipments, every body surveyed (no signal), no project running.
+    final c = _controller();
+    c.state.body('tessaly').surveyed = true;
+    c.state.body('dusk_cairn').surveyed = true;
+    expect(c.state.shipments, isEmpty);
+    expect(c.state.projects, isEmpty);
+
+    await tester.pumpWidget(_app(c));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
   testWidgets('turning animations off while running stops the ticker', (
