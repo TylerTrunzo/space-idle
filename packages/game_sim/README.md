@@ -12,7 +12,8 @@ dart run game_sim:game_sim bot --bot balanced|casual|greedy --hours 168 --seed 1
 Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`,
 `upgrade`, `createRoute`, `updateRoute`, `moveShips`, `removeRoute`, `sell`,
 `setAutoSell`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`,
-`deliverToMegaproject`, `deliverContract`, `discardContract`);
+`deliverToMegaproject`, `setMegaprojectAuto`, `deliverContract`,
+`discardContract`);
 `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts it took
 and gave), `createdId` for a new building, route, ship move or project, and for
@@ -45,7 +46,18 @@ a level is part-paid. `{"cmd":"startMegaprojectStage","megaprojectId":
 body at once ("Started Orbital Station level 1 on Kora for …", or "Paid for …
 level 3 … it starts when level 2 is done" while a stage runs), or fails with
 `cannotAfford`. Each completed stage raises the megaproject's level, a
-permanent bonus.
+permanent bonus. A megaproject with `requiresMegaproject` refuses deliveries
+with `megaprojectLocked` until it opens ("Mass Driver opens at Orbital Station
+level 2 (you have level 1)").
+
+`{"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station","goods":true,
+"creditReserve":"5e6"}` feeds a megaproject on its own every game minute:
+with `goods`, each owned body hands over what the stage still needs above
+what it keeps (local use, its auto-sell rule's `keepAtLeast`, open contract
+needs); with `creditReserve`, the credits above it (leave it out for no
+credits). `"goods":false` without a reserve clears it. It may be set while
+the megaproject is locked. Between minutes auto-sell holds back what a fed
+megaproject still needs, so deliveries are the same for any step size.
 
 A new building takes free crew up to its base crew slots (fewer if fewer are
 free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew. At full
@@ -138,9 +150,16 @@ commands:
   3"`, which the headline also ends with), stages that started while away
   included; and the contracts posted while away (`contractsPosted`: `id`,
   `resourceId`, `resource`, `quantity`, `reward`)
-- `{"cmd":"report"}` per-second flows and bottlenecks
+- `{"cmd":"report"}` per-second flows and bottlenecks; while a megaproject
+  is fed on its own, `autoDeliveredPerSec` (per megaproject, credits and
+  goods a second) and `autoDeliveredValuePerSec`, apart from
+  `creditsPerSec`, which leaves out what goes to megaprojects
 - `{"cmd":"state"}` time, credits, crew, reached milestones, the level of
-  every megaproject (`megaprojects`: `id`, `name`, `level`), the contracts
+  every megaproject (`megaprojects`: `id`, `name`, `level`, `bonuses` and
+  `nextLevel` such as `"level 3: storage +30%, housing +15%, offline cap +3h,
+  market depth ×1.73"`, `locked` such as `"opens at Orbital Station level 2
+  (now 1)"` while it is, and `auto` with `goods`, `creditReserve` and a `text`
+  when it is fed on its own), the contracts
   board (`contracts`: `id`, `issuer`, `resourceId`, `resource` name,
   `quantity`, `delivered`, `reward` in credits) and when its empty slots
   refill (`contractRefills`: `at` and `timeLeft`; a refill already due, which
@@ -156,7 +175,8 @@ commands:
   bodies with no rule for the good hold, held on the body with a rule on the
   good that holds the most of it, up to its storage cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
   7.77K local use)"`, with `" + 200 for open contracts"` when it holds
-  some), its running projects soonest first (`kind`, `targetId`
+  some and `" + 20K for megaprojects"` (`megaprojectHold`) for what a fed
+  megaproject still needs), its running projects soonest first (`kind`, `targetId`
   but for a survey of a hidden body,
   `name`, `startedAt`, `finishAt`, `secondsLeft` and `timeLeft` such as
   `"1h 30m"`), and price and saturation of the goods the player holds
@@ -167,7 +187,8 @@ commands:
   next claim
   cost (or `"no bodies left to claim"` once every body is owned), each
   owned body's next extra build slot, the survey cost and time, and each
-  megaproject's next stage (`megaprojects`: `nextLevel`, `cost`,
+  megaproject's next stage (`"locked: opens at …"` while locked; else
+  `megaprojects`: `nextLevel`, `cost`,
   `stillNeeded` once part-paid, `timeTaken`, and a `note` while a stage
   runs). What cannot be started now says why instead of a cost: `"busy: an
   extra slot arrives in 25m"`, `"busy: every unsurveyed signal is being
