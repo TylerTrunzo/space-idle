@@ -1,0 +1,253 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:game_core/game_core.dart' hide formatDuration;
+import 'package:space_idle/game/clock.dart';
+import 'package:space_idle/game/content_source.dart';
+import 'package:space_idle/game/game_controller.dart';
+import 'package:space_idle/game/save_store.dart';
+import 'package:space_idle/view/format.dart';
+import 'package:space_idle/view/view_models.dart';
+
+final Content content = loadEmbeddedContent();
+const _p = 'player';
+
+GameController _controller() => GameController(
+  content: content,
+  store: MemorySaveStore(),
+  clock: FakeClock(DateTime.utc(2026, 11, 27)),
+  newGameSeed: 1,
+);
+
+BuildingRowView _row(BodyView body, String defName) =>
+    body.buildings.firstWhere((b) => b.name == defName);
+
+void main() {
+  late GameController c;
+  setUp(() => c = _controller());
+
+  group('topBar', () {
+    test('shows the starting credits, income and crew', () {
+      final top = topBar(c);
+      expect(top.credits, formatNumber(c.state.faction(_p).credits));
+      expect(top.credits, '250');
+      expect(top.creditsRate, formatRate(c.flow.creditsPerSec));
+      final crew = crewTotals(c.state, content, _p);
+      expect(top.crewFree, crew.free);
+      expect(top.crewTotal, crew.supported);
+    });
+
+    test('pins up to 3 resources with the most stock on owned bodies', () {
+      final kora = c.state.body('kora');
+      kora.stock
+        ..clear()
+        ..['steel'] = BigNum.from(50)
+        ..['iron_ore'] = BigNum.from(50)
+        ..['copper_ore'] = BigNum.from(900)
+        ..['silicon'] = BigNum.from(1);
+      // Unowned bodies' stock does not count.
+      c.state.body('cinder').stock['sulfur'] = BigNum.from(1e6);
+
+      final pinned = topBar(c).pinned;
+      // Ties by content order: Iron Ore comes before Steel there.
+      expect(pinned.map((p) => p.name), ['Copper Ore', 'Iron Ore', 'Steel']);
+      expect(pinned.first.value, '900');
+    });
+
+    test('stays readable at 1e40 credits', () {
+      c.state.faction(_p).credits = BigNum.parse('1e40');
+      expect(topBar(c).credits, '1e40');
+    });
+  });
+
+  group('bodyView of an owned body', () {
+    test('Kora has its 3 starting buildings and its slots', () {
+      final kora = bodyView(c, 'kora')!;
+      expect(kora.name, 'Kora');
+      expect(kora.typeName, 'Rocky World');
+      expect(kora.owned, isTrue);
+      expect(kora.ownerName, 'Kora Compact');
+      expect(kora.depositNames, ['Iron Ore', 'Copper Ore', 'Silicon']);
+      expect(kora.buildings, hasLength(3));
+      expect(kora.slotsUsed, 3);
+      expect(kora.slotsTotal, buildSlots(content, c.state.body('kora')));
+      expect(kora.claim, isNull);
+    });
+
+    test('the smelter row shows its recipe, crew and upgrades', () {
+      c.tickSeconds(5);
+      final smelter = _row(bodyView(c, 'kora')!, 'Smelter');
+      expect(smelter.uses.map((u) => u.name), contains('Iron Ore'));
+      expect(smelter.makes.map((u) => u.name), contains('Steel'));
+      expect(smelter.uses.first.value, startsWith('-'));
+      expect(smelter.makes.first.value, startsWith('+'));
+      expect(smelter.crew, 1);
+      expect(smelter.crewBaseSlots, 1);
+      expect(smelter.crewMax, 1);
+      expect(smelter.level, 0);
+      expect(smelter.canRemoveCrew, isTrue);
+      expect(smelter.canAddCrew, isFalse, reason: 'at its most crew');
+      expect(smelter.upgrades.keys, {
+        UpgradeTrack.speed,
+        UpgradeTrack.efficiency,
+        UpgradeTrack.capacity,
+      });
+      final speed = smelter.upgrades[UpgradeTrack.speed]!;
+      expect(speed.label, 'Speed');
+      expect(speed.cost, '75');
+      expect(speed.affordable, isTrue);
+      expect(speed.payback, isNull);
+      expect(smelter.upgrades[UpgradeTrack.capacity]!.cost, '450');
+      expect(smelter.upgrades[UpgradeTrack.capacity]!.affordable, isFalse);
+    });
+
+    test('a starved smelter is stopped or held back, naming Iron Ore', () {
+      c.state.body('kora').stock['iron_ore'] = const BigNum.zero();
+      c.run(const AssignCrewCommand(_p, 'b1', 0)); // the iron mine
+      c.tickSeconds(1);
+
+      final kora = bodyView(c, 'kora')!;
+      final smelter = _row(kora, 'Smelter');
+      expect(smelter.severity, anyOf(Severity.stopped, Severity.warning));
+      expect(smelter.problem, contains('Iron Ore'));
+      final mine = kora.buildings.firstWhere((b) => b.id == 'b1');
+      expect(mine.severity, Severity.stopped);
+      expect(mine.problem, 'Mine on Kora has no crew');
+      expect(mine.canAddCrew, isTrue);
+      expect(mine.canRemoveCrew, isFalse);
+    });
+
+    test('a building running freely is ok with no problem', () {
+      c.tickSeconds(5);
+      final mine = bodyView(
+        c,
+        'kora',
+      )!.buildings.firstWhere((b) => b.id == 'b1');
+      expect(mine.severity, Severity.ok);
+      expect(mine.runFraction, 1);
+      expect(mine.problem, isNull);
+    });
+
+    test('storage rows show stock, cap, fill, net, price and auto-sell', () {
+      c.tickSeconds(5);
+      final kora = c.state.body('kora');
+      final cap = storageCap(c.state, content, kora);
+      final view = bodyView(c, 'kora')!;
+      final iron = view.storage.firstWhere((r) => r.id == 'iron_ore');
+      expect(iron.name, 'Iron Ore');
+      expect(iron.amount, formatNumber(kora.stock['iron_ore']!));
+      expect(iron.cap, formatNumber(cap));
+      expect(
+        iron.fill,
+        closeTo(kora.stock['iron_ore']!.toDouble() / cap.toDouble(), 1e-9),
+      );
+      expect(
+        iron.price,
+        formatAmount(salePrice(c.state, content, _p, 'iron_ore')),
+      );
+      expect(iron.autoSell, isFalse);
+      expect(iron.alert, StockAlert.none);
+    });
+
+    test('a full store that wastes output is flagged full', () {
+      final kora = c.state.body('kora');
+      kora.stock['copper_ore'] = storageCap(c.state, content, kora);
+      c.tickSeconds(5);
+      final copper = bodyView(
+        c,
+        'kora',
+      )!.storage.firstWhere((r) => r.id == 'copper_ore');
+      expect(copper.fill, 1);
+      expect(copper.alert, StockAlert.full);
+    });
+
+    test('a store about to run dry is flagged running out', () {
+      // The smelter draws iron ore; with the mine idle it only falls.
+      c.run(const AssignCrewCommand(_p, 'b1', 0));
+      c.state.body('kora').stock['iron_ore'] = BigNum.from(5);
+      c.tickSeconds(1);
+      final iron = bodyView(
+        c,
+        'kora',
+      )!.storage.firstWhere((r) => r.id == 'iron_ore');
+      expect(iron.net, startsWith('-'));
+      expect(iron.alert, StockAlert.runningOut);
+    });
+
+    test('auto-sell rules show on their rows', () {
+      c.run(const SetAutoSellCommand(_p, 'kora', 'steel', BigNum.zero()));
+      c.tickSeconds(5);
+      final steel = bodyView(
+        c,
+        'kora',
+      )!.storage.firstWhere((r) => r.id == 'steel');
+      expect(steel.autoSell, isTrue);
+    });
+
+    test('routes out and in', () {
+      c.state.body('brine').ownerId = _p;
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      final r = c.run(
+        CreateRouteCommand(
+          _p,
+          'kora',
+          'brine',
+          'iron_ore',
+          BigNum.from(0.5),
+          1,
+        ),
+      );
+      expect(r, isA<CommandOk>(), reason: c.lastError);
+
+      final out = bodyView(c, 'kora')!.routesOut.single;
+      expect(out.fromName, 'Kora');
+      expect(out.toName, 'Brine');
+      expect(out.resourceName, 'Iron Ore');
+      expect(out.rate, '0.5/s');
+      expect(out.ships, 1);
+      expect(
+        out.travel,
+        formatDuration(
+          travelSeconds(
+            c.state,
+            content,
+            c.state.body('kora'),
+            c.state.body('brine'),
+          ),
+        ),
+      );
+      expect(bodyView(c, 'brine')!.routesIn.single.id, out.id);
+      expect(bodyView(c, 'kora')!.routesIn, isEmpty);
+    });
+  });
+
+  group('bodyView of an unowned body', () {
+    test('has a first claim with no kits needed', () {
+      final cinder = bodyView(c, 'cinder')!;
+      expect(cinder.owned, isFalse);
+      expect(cinder.ownerName, isNull);
+      expect(cinder.buildings, isEmpty);
+      final claim = cinder.claim!;
+      expect(claim.kitsNeeded, 0);
+      expect(claim.creditsCost, '5K');
+      expect(claim.affordable, isFalse, reason: '250 credits only');
+      expect(claim.sourceBodyIds, ['kora']);
+    });
+
+    test('a second claim needs kits; sources are the bodies holding them', () {
+      c.state.body('brine').ownerId = _p;
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      c.state.body('brine').stock['outpost_kit'] = BigNum.from(100);
+
+      final claim = bodyView(c, 'cinder')!.claim!;
+      expect(claim.kitsNeeded, 10);
+      expect(claim.sourceBodyIds, ['brine']);
+      expect(claim.affordable, isTrue);
+    });
+
+    test('a hidden body has no view until surveyed', () {
+      expect(bodyView(c, 'tessaly'), isNull);
+      expect(bodyView(c, 'no_such_body'), isNull);
+      c.state.body('tessaly').surveyed = true;
+      expect(bodyView(c, 'tessaly'), isNotNull);
+    });
+  });
+}
