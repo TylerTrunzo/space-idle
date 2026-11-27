@@ -129,7 +129,11 @@ final class _Loader {
               'minTier',
               'maxTier',
               'quantitySeconds',
+              'quantityIncomeSecondsMin',
+              'quantityIncomeSecondsMax',
+              'quantityProductionSecondsMax',
               'rewardMultiplier',
+              'minRewardMultiplier',
               'minQuantity',
               'maxQuantity',
               'rewardIncomeSeconds',
@@ -907,11 +911,55 @@ final class _Loader {
       fallback: ContractTemplateDef.defaultQuantitySeconds,
       gt: 0,
     );
+    final quantityIncomeSecondsMin = f.number(
+      'quantityIncomeSecondsMin',
+      fallback: ContractTemplateDef.defaultQuantityIncomeSecondsMin,
+      gt: 0,
+    );
+    final quantityIncomeSecondsMax = f.number(
+      'quantityIncomeSecondsMax',
+      fallback: ContractTemplateDef.defaultQuantityIncomeSecondsMax,
+      gt: 0,
+    );
+    if (quantityIncomeSecondsMin != null &&
+        quantityIncomeSecondsMax != null &&
+        quantityIncomeSecondsMax < quantityIncomeSecondsMin) {
+      f.err(
+        'quantityIncomeSecondsMax',
+        'must be >= quantityIncomeSecondsMin '
+            '(${_fmt(quantityIncomeSecondsMin)})',
+      );
+    }
+    final quantityProductionSecondsMax =
+        f.map.containsKey('quantityProductionSecondsMax')
+        ? f.number('quantityProductionSecondsMax', gt: 0)
+        : null;
+    if (quantityProductionSecondsMax != null &&
+        quantitySeconds != null &&
+        quantityProductionSecondsMax < quantitySeconds) {
+      f.err(
+        'quantityProductionSecondsMax',
+        'must be >= quantitySeconds (${_fmt(quantitySeconds)})',
+      );
+    }
     final rewardMultiplier = f.number(
       'rewardMultiplier',
       fallback: ContractTemplateDef.defaultRewardMultiplier,
       gt: 0,
     );
+    final minRewardMultiplier = f.number(
+      'minRewardMultiplier',
+      fallback: ContractTemplateDef.defaultMinRewardMultiplier,
+      gt: 0,
+    );
+    if (rewardMultiplier != null &&
+        minRewardMultiplier != null &&
+        minRewardMultiplier > rewardMultiplier) {
+      f.err(
+        'minRewardMultiplier',
+        'must be <= rewardMultiplier (${_fmt(rewardMultiplier)})',
+      );
+    }
     final minQuantity = f.map.containsKey('minQuantity')
         ? f.bigNum('minQuantity', positive: true)
         : null;
@@ -958,7 +1006,11 @@ final class _Loader {
       minTier: minTier!,
       maxTier: maxTier!,
       quantitySeconds: quantitySeconds!,
+      quantityIncomeSecondsMin: quantityIncomeSecondsMin!,
+      quantityIncomeSecondsMax: quantityIncomeSecondsMax!,
+      quantityProductionSecondsMax: quantityProductionSecondsMax,
       rewardMultiplier: rewardMultiplier!,
+      minRewardMultiplier: minRewardMultiplier!,
       minQuantity: minQuantity,
       maxQuantity: maxQuantity,
       rewardIncomeSeconds: rewardIncomeSeconds!,

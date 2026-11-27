@@ -106,10 +106,10 @@ SaleResult sell(
 /// them back, all kept no higher than the body's [storageCap] unless
 /// `keepAtLeast` alone is ([autoSellKeep]); only while its faction owns
 /// the body. A contract's need, less what the faction's bodies with no
-/// rule on the resource hold, is held on one body: of the faction's
-/// bodies with a rule on the resource, the one holding the most of it
-/// at the step's start (the first in rule order on a tie), and no more
-/// than it can store. A rule sees the stock less what earlier rules on
+/// rule on the resource hold, is held on the faction's bodies with a rule
+/// on the resource: first the one holding the most of it at the step's
+/// start (the first in rule order on a tie), no more than it can store,
+/// what it cannot store on the next fullest, and so on. A rule sees the stock less what earlier rules on
 /// the same body and resource queued, so duplicate rules (which saves
 /// reject) never sell more than is held. Keeping that demand back means
 /// auto-selling an input never starves the factories that use it, however
@@ -232,8 +232,8 @@ typedef AutoSellKeep = ({
 /// full supply over `max(dt, shipmentMergeSeconds)` ([localUse]), plus
 /// what the owner's open contracts still need of it when this body holds
 /// it back for them ([contractHold]: the need less what bodies with no
-/// rule on it hold, on the body with a rule on it that holds the most, at
-/// most its storage cap), plus what the megaprojects its owner feeds goods
+/// rule on it hold, on the bodies with a rule on it, the fullest first,
+/// each at most its storage cap), plus what the megaprojects its owner feeds goods
 /// to on their own still need of it ([megaprojectHold]; see
 /// `stepMegaprojectAuto`, which takes it once a game minute), the sum
 /// ([keeps]) no higher than the body's storage cap unless `keepAtLeast`
@@ -316,9 +316,12 @@ Map<String, BigNum> _contractNeeds(FactionState f) {
 /// Body id to resource id to what [f]'s auto-sell rules hold back there
 /// for its open contracts: each resource's need ([_contractNeeds]) less
 /// what [f]'s bodies with no rule on it hold (they sell none of it), on
-/// the body, among those [f] owns with a rule on it, that holds the most
-/// of it now (the first in rule order on a tie), at most its storage cap.
-/// Written in rule order.
+/// the bodies [f] owns with a rule on it, the one that holds the most of
+/// it now first (the first in rule order on a tie), each up to its storage
+/// cap: what one cannot store is held on the next. So an order larger than
+/// one store, which contracts may ask for (they are sized by all of a
+/// faction's stores together), can be filled from several. Written in rule
+/// order.
 Map<String, Map<String, BigNum>> _contractHolds(
   GameState s,
   StepCache cache,
@@ -326,32 +329,49 @@ Map<String, Map<String, BigNum>> _contractHolds(
 ) {
   if (f.contracts.isEmpty) return const {};
   final need = _contractNeeds(f);
-  final holder = <String, BodyState>{};
-  final ruled = <(String, String)>{};
+  // Resource id to the bodies with a rule on it, in rule order.
+  final ruled = <String, List<BodyState>>{};
   for (final rule in f.autoSell) {
     if (!need.containsKey(rule.resourceId)) continue;
     final body = s.body(rule.bodyId);
     if (body.ownerId != f.id) continue;
-    ruled.add((body.id, rule.resourceId));
-    final best = holder[rule.resourceId];
-    if (best == null ||
-        (body.stock[rule.resourceId] ?? _zero) >
-            (best.stock[rule.resourceId] ?? _zero)) {
-      holder[rule.resourceId] = body;
-    }
+    final bodies = ruled[rule.resourceId] ??= [];
+    if (!bodies.contains(body)) bodies.add(body);
   }
   final holds = <String, Map<String, BigNum>>{};
-  for (final MapEntry(key: id, value: body) in holder.entries) {
+  for (final MapEntry(key: id, value: bodies) in ruled.entries) {
     var left = need[id]!;
     for (final b in s.bodies) {
-      if (b.ownerId == f.id && !ruled.contains((b.id, id))) {
+      if (b.ownerId == f.id && !bodies.contains(b)) {
         left = left - (b.stock[id] ?? _zero);
       }
     }
-    if (left <= _zero) continue;
-    (holds[body.id] ??= {})[id] = left.min(cache.cap(body));
+    // The fullest first; a stable sort keeps rule order on a tie.
+    final fullest = List.of(bodies);
+    _byStockDescending(fullest, id);
+    for (final body in fullest) {
+      if (left <= _zero) break;
+      final hold = left.min(cache.cap(body));
+      (holds[body.id] ??= {})[id] = hold;
+      left = left - hold;
+    }
   }
   return holds;
+}
+
+/// Sorts [bodies] by what they hold of [id], most first, keeping their
+/// order on a tie.
+void _byStockDescending(List<BodyState> bodies, String id) {
+  final indexed = [for (final (i, b) in bodies.indexed) (i, b)]
+    ..sort((x, y) {
+      final byStock = (y.$2.stock[id] ?? _zero).compareTo(
+        x.$2.stock[id] ?? _zero,
+      );
+      return byStock != 0 ? byStock : x.$1.compareTo(y.$1);
+    });
+  for (final (i, (_, b)) in indexed.indexed) {
+    bodies[i] = b;
+  }
 }
 
 /// Resource id to what the megaprojects [f] feeds goods to on their own

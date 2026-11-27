@@ -19,23 +19,30 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   and their makers have no speed or capacity track. Each maker makes a steady 36–72 every 6 h; more
   needs another building. Claims after the first cost 5 + 5 × (bodies owned − 1) kits.
 - **Contracts.** An order asks only for a good your buildings make now from steady supply (never
-  from a stock nothing refills), at least `minQuantity / quantitySeconds` a second, so neither a
-  trickle nor a stockpile gets one. It asks for `quantitySeconds` of what you make of it that way,
-  gross of what your own buildings use (1 h of bulk goods, 2 h of components, 3 h of advanced
-  goods), but never more than one of your bodies can store, nor the template's `maxQuantity` (5,000,
-  1,000 and 100) × (1 + your levels of the megaprojects with `scalesContracts`, the Orbital Station's
-  alone today: the Mass Driver sets it to `false`, as optimizers level it far faster and the storage
-  cap then set every order). It pays 3× the base price per unit, at least
-  `rewardIncomeSeconds` (20 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it is
-  posted, both at least `minRewardCredits` (500). Income here is the larger of what auto-sell earns
-  a second and the value of what your buildings steadily make beyond what they use, at current
-  prices, so it does not matter which goods you auto-sell or whether you sell by hand, and a
-  stockpile does not raise it. The first contract you
-  are ever offered has no cap and pays at least `firstContractMinReward` (7,500, which must cover the
-  first claim's 5,000 credits): it is the hook. Habitat goods (food, water, oxygen) weigh
-  `lifeSupportWeight` (0.25) in the draw, so orders seldom compete with crew upkeep. Auto-sell holds
-  back what open contracts still need, less what bodies with no rule for the good hold, on the
-  body with a rule that holds the most of it.
+  from a stock nothing refills), at least `minQuantity / quantitySeconds` a second (1 h for bulk
+  goods, 2 h for components, 3 h for advanced goods), so neither a trickle nor a stockpile gets one.
+  It asks for as much as sells, at today's price, for 10 to 30 minutes of your income
+  (`quantityIncomeSecondsMin` 600 and `quantityIncomeSecondsMax` 1800, rolled for each order), so
+  filling it gives up real sales: a decision, not a formality. It never asks for more than a day
+  of what you make of it (`quantityProductionSecondsMax` 86,400, gross: habitat modules and cargo
+  ships, made a few dozen at a time, would otherwise be asked for in thousands), nor more than your
+  bodies can store together (an order can be filled from several; auto-sell holds its goods back on
+  the fullest body with a rule for the good first, each up to its cap), nor less than `minQuantity`.
+  Templates may still set a `maxQuantity` (× 1 + your levels of the megaprojects with
+  `scalesContracts`); the shipped ones do not, as it cut late orders to a sliver of income. It pays
+  `rewardMultiplier` (3) times what its goods sell for at today's price, at least
+  `rewardIncomeSeconds` (5 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it
+  is posted, both at least `minRewardCredits` (500), and never less than `minRewardMultiplier`
+  (1.5) times the sale value, cap or not, in whole credits. Income here is the larger of what
+  auto-sell earns a second and the value of what your buildings steadily make beyond what they use,
+  at current prices, so it does not matter which goods you auto-sell or whether you sell by hand,
+  and a stockpile does not raise it. The first contract you are ever offered has no cap and pays at
+  least `firstContractMinReward` (7,500, which must cover the first claim's 5,000 credits): it is
+  the hook. Habitat goods (food, water, oxygen) weigh `lifeSupportWeight` (0.25) in the draw, so
+  orders seldom compete with crew upkeep. Auto-sell holds back what open contracts still need, less
+  what bodies with no rule for the good hold. The loader checks that the quantity span's minimum is
+  at most its maximum, the reward cap at least the floor, and `minRewardMultiplier` at most
+  `rewardMultiplier`.
 - **Orbital Station.** Each level's goods and credits are delivered bit by bit, from any body, so a
   level may cost far more than one body holds; its timer starts once the last of it is in.
 - **Mass Driver.** Opens at Orbital Station level 1 (`requiresMegaproject`). It takes credits and bulk

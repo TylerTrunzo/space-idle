@@ -27,17 +27,22 @@ import 'production.dart';
 /// orders seldom compete with crew upkeep; a template weighs as much as
 /// its heaviest resource.
 ///
-/// Its quantity is that steady gross rate × `quantitySeconds`, rounded to two
-/// significant figures, at most the template's `maxQuantity` × (1 + the
+/// Its quantity sells, at the current price ([price]), for the faction's
+/// income basis ([incomeBasis]) over a span rolled between the template's
+/// `quantityIncomeSecondsMin` and `quantityIncomeSecondsMax` (10 to 30
+/// minutes), rounded to two significant figures, at most the storage caps
+/// of its bodies summed, the template's `quantityProductionSecondsMax` of
+/// that steady gross rate, and the template's `maxQuantity` × (1 + the
 /// faction's levels of the megaprojects that
-/// [MegaprojectDef.scalesContracts], summed) and the largest storage cap among
-/// its bodies (each rounded down to two figures), at least `minQuantity`,
-/// in whole units ([twoSignificantFigures]). Its reward is `quantity ×
-/// basePrice × rewardMultiplier` credits, at least `rewardIncomeSeconds`
-/// and at most `rewardCapIncomeSeconds` of the faction's income basis
-/// ([incomeBasis]), both at least `minRewardCredits`. The first contract a
-/// faction is ever offered ([FactionState.contractsPosted] 0) is exempt
-/// from the cap and pays at least `firstContractMinReward`.
+/// [MegaprojectDef.scalesContracts], summed) (each rounded down to two
+/// figures), at least `minQuantity`, in whole units
+/// ([twoSignificantFigures]). So delivering it gives up a known share of
+/// play's sales. Its reward is that sale value × `rewardMultiplier`, at
+/// least `rewardIncomeSeconds` and at most `rewardCapIncomeSeconds` of the
+/// income basis, both at least `minRewardCredits`, and never below the
+/// sale value × `minRewardMultiplier`, in whole credits. The first
+/// contract a faction is ever offered ([FactionState.contractsPosted] 0)
+/// is exempt from the cap and pays at least `firstContractMinReward`.
 ///
 /// When nothing qualifies, the refill stays due and is used once something
 /// does. Whether a resource is made at all, and on the board, is
@@ -51,7 +56,8 @@ import 'production.dart';
 /// whole game minute ([_dueNowOrOnMinute]), so one waiting on a starved
 /// maker builds a report once a game minute, at the same game times for
 /// any step size. The RNG is drawn only when a
-/// contract is posted, two numbers each time, and the flow report built
+/// contract is posted, three numbers each time (the template, the
+/// resource, then the span), and the flow report built
 /// at most once per faction per call, so a tick without a due refill
 /// costs next to nothing. A faction with no refills banked (every faction
 /// but the player in stage 1.5) has no board.
@@ -100,13 +106,18 @@ void stepContracts(GameState s, Content c, double now) {
         return most;
       });
       final resourceId = _draw(rng, resources, (id) => weight(template, id));
+      final roll = rng.nextDouble();
       s.rngState = rng.state;
+      final income = incomeBasis(s, c, made);
       final quantity = _quantity(
         s,
         c,
         f,
         template,
+        resourceId,
+        income,
         made.steadyProducedPerSec(resourceId),
+        roll,
       );
       f.contractRefillAt.removeAt(0);
       f.contracts.add(
@@ -115,7 +126,15 @@ void stepContracts(GameState s, Content c, double now) {
           templateId: template.id,
           resourceId: resourceId,
           quantity: quantity,
-          rewardCredits: _reward(s, c, f, template, resourceId, quantity, made),
+          rewardCredits: _reward(
+            s,
+            c,
+            f,
+            template,
+            resourceId,
+            quantity,
+            income,
+          ),
           postedAt: now,
         ),
       );
@@ -196,12 +215,15 @@ bool _couldQualify(
   );
 }
 
-/// What a contract from [t] for [quantity] of [resourceId] pays [f]:
-/// `quantity × basePrice × rewardMultiplier`, at least the floor and at
-/// most the cap, which are `rewardIncomeSeconds` and
-/// `rewardCapIncomeSeconds` of the income basis ([incomeBasis]), neither
-/// below `minRewardCredits`. The first contract [f] is ever offered has
-/// no cap and pays at least `firstContractMinReward`.
+/// What a contract from [t] for [quantity] of [resourceId] pays [f], whose
+/// income basis ([incomeBasis]) is [income] a second: its sale value at
+/// current prices ([price]) times `rewardMultiplier`, at least the floor
+/// and at most the cap, which are `rewardIncomeSeconds` and
+/// `rewardCapIncomeSeconds` of the income, neither below
+/// `minRewardCredits`; then never below the sale value times
+/// `minRewardMultiplier`, cap or not, and in whole credits (rounded down).
+/// The first contract [f] is ever offered has no cap and pays at least
+/// `firstContractMinReward`.
 BigNum _reward(
   GameState s,
   Content c,
@@ -209,20 +231,19 @@ BigNum _reward(
   ContractTemplateDef t,
   String resourceId,
   BigNum quantity,
-  FlowReport report,
+  BigNum income,
 ) {
-  final income = incomeBasis(s, c, report);
-  final byQuantity =
-      quantity *
-      c.resources[resourceId]!.basePrice.mulDouble(t.rewardMultiplier);
+  final sale = quantity * price(s, c, resourceId);
   final floor = t.minRewardCredits.max(income.mulDouble(t.rewardIncomeSeconds));
-  final reward = byQuantity.max(floor);
+  var reward = sale.mulDouble(t.rewardMultiplier).max(floor);
   if (f.contractsPosted == 0) {
-    return reward.max(t.firstContractMinReward ?? const BigNum.zero());
+    reward = reward.max(t.firstContractMinReward ?? const BigNum.zero());
+  } else if (t.rewardCapIncomeSeconds case final cap?) {
+    reward = reward.min(floor.max(income.mulDouble(cap)));
   }
-  final cap = t.rewardCapIncomeSeconds;
-  if (cap == null) return reward;
-  return reward.min(floor.max(income.mulDouble(cap)));
+  // Whole credits, never less than the goods' sale value times the
+  // least multiple.
+  return reward.max(sale.mulDouble(t.minRewardMultiplier)).floor();
 }
 
 /// Credits a second a contract's reward is measured against, for the
@@ -291,11 +312,17 @@ void freeContractSlot(FactionState f, Content c, double now) {
   refills.add(last + c.rules.contractRefillSeconds);
 }
 
-/// Units a contract from [t] asks [f] for, given its gross production
-/// [rate] of the resource: `rate × quantitySeconds` rounded to two
-/// significant figures, at most the largest storage cap among the bodies
-/// [f] owns and [ContractTemplateDef.maxQuantity] × (1 + [f]'s levels of
-/// the megaprojects that [MegaprojectDef.scalesContracts], summed) (each
+/// Units of [resourceId] a contract from [t] asks [f] for, whose income
+/// basis ([incomeBasis]) is [income] a second, given a [roll] in `[0, 1)`:
+/// what sells for the income of a span rolled between
+/// [ContractTemplateDef.quantityIncomeSecondsMin] and
+/// [ContractTemplateDef.quantityIncomeSecondsMax] at the current price
+/// ([price]), rounded to two significant figures; at most the storage caps
+/// of the bodies [f] owns, summed (an order can be filled from several),
+/// [ContractTemplateDef.quantityProductionSecondsMax] of [rate], what [f]
+/// makes of it a second (steady and gross), and
+/// [ContractTemplateDef.maxQuantity] × (1 + [f]'s levels of the
+/// megaprojects that [MegaprojectDef.scalesContracts], summed) (each
 /// rounded down to two figures), and at least
 /// [ContractTemplateDef.minQuantity]; then rounded down to whole units, at
 /// least 1.
@@ -304,23 +331,35 @@ BigNum _quantity(
   Content c,
   FactionState f,
   ContractTemplateDef t,
+  String resourceId,
+  BigNum income,
   BigNum rate,
+  double roll,
 ) {
-  BigNum? largest;
+  BigNum? stores;
   for (final b in s.bodies) {
     if (b.ownerId != f.id) continue;
-    final cap = storageCap(s, c, b);
-    if (largest == null || cap > largest) largest = cap;
+    stores = (stores ?? const BigNum.zero()) + storageCap(s, c, b);
   }
   var levels = 0;
   for (final m in c.megaprojects.values) {
     if (m.scalesContracts) levels += f.megaprojectLevels[m.id] ?? 0;
   }
-  final most = t.maxQuantity?.mulDouble(1.0 + levels);
-  final ceiling = largest == null || most == null
-      ? largest ?? most
-      : largest.min(most);
-  var q = twoSignificantFigures(rate.mulDouble(t.quantitySeconds));
+  BigNum? ceiling;
+  for (final v in [
+    stores,
+    t.maxQuantity?.mulDouble(1.0 + levels),
+    if (t.quantityProductionSecondsMax case final most?) rate.mulDouble(most),
+  ]) {
+    if (v != null) ceiling = ceiling == null ? v : ceiling.min(v);
+  }
+  final seconds =
+      t.quantityIncomeSecondsMin +
+      (t.quantityIncomeSecondsMax - t.quantityIncomeSecondsMin) * roll;
+  // Every market's price is above zero: its floor is.
+  var q = twoSignificantFigures(
+    income.mulDouble(seconds) / price(s, c, resourceId),
+  );
   if (ceiling != null) q = q.min(_twoFiguresDown(ceiling));
   // Deliveries move whole units, so the quantity is whole, at least 1.
   return q.max(t.minQuantity).floor().max(BigNum.from(1));

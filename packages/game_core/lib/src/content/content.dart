@@ -830,7 +830,11 @@ final class ContractTemplateDef {
     required this.minTier,
     required this.maxTier,
     this.quantitySeconds = defaultQuantitySeconds,
+    this.quantityIncomeSecondsMin = defaultQuantityIncomeSecondsMin,
+    this.quantityIncomeSecondsMax = defaultQuantityIncomeSecondsMax,
+    this.quantityProductionSecondsMax,
     this.rewardMultiplier = defaultRewardMultiplier,
+    this.minRewardMultiplier = defaultMinRewardMultiplier,
     BigNum? minQuantity,
     this.maxQuantity,
     this.rewardIncomeSeconds = 0,
@@ -843,8 +847,19 @@ final class ContractTemplateDef {
   /// [quantitySeconds] when a template does not set it: 4 hours.
   static const double defaultQuantitySeconds = 14400;
 
+  /// [quantityIncomeSecondsMin] when a template does not set it: 10
+  /// minutes.
+  static const double defaultQuantityIncomeSecondsMin = 600;
+
+  /// [quantityIncomeSecondsMax] when a template does not set it: 30
+  /// minutes.
+  static const double defaultQuantityIncomeSecondsMax = 1800;
+
   /// [rewardMultiplier] when a template does not set it.
   static const double defaultRewardMultiplier = 2.5;
+
+  /// [minRewardMultiplier] when a template does not set it.
+  static const double defaultMinRewardMultiplier = 1.5;
 
   /// [minQuantity] when a template does not set it.
   static const double defaultMinQuantity = 10;
@@ -861,21 +876,46 @@ final class ContractTemplateDef {
   /// Highest resource tier it asks for; at least [minTier].
   final int maxTier;
 
-  /// Seconds of the faction's current net production of the resource that
-  /// a contract asks for; above zero.
+  /// Seconds over which a resource must be made to be asked for at all:
+  /// a contract asks only for what the faction makes at least
+  /// [minQuantity] of in this long, gross; above zero.
   final double quantitySeconds;
 
-  /// Reward per unit as a multiple of the resource's base price: a contract
-  /// pays `quantity × basePrice × rewardMultiplier` credits; above zero.
+  /// Fewest seconds of the faction's income a contract's goods sell for
+  /// at current prices: each contract's ask is rolled between this and
+  /// [quantityIncomeSecondsMax]; above zero.
+  final double quantityIncomeSecondsMin;
+
+  /// Most seconds of the faction's income a contract's goods sell for at
+  /// current prices; at least [quantityIncomeSecondsMin].
+  final double quantityIncomeSecondsMax;
+
+  /// Most seconds of what the faction makes of the resource, gross, a
+  /// contract asks for, so a good made slowly but priced high (habitat
+  /// modules, cargo ships) is not asked for in days of output; at least
+  /// [quantitySeconds]. Null for no such ceiling.
+  final double? quantityProductionSecondsMax;
+
+  /// What a contract pays as a multiple of what its goods sell for at
+  /// current prices when it is posted: `quantity × price ×
+  /// rewardMultiplier` credits, before the income floor and cap; above
+  /// zero.
   final double rewardMultiplier;
+
+  /// Least a contract pays as a multiple of what its goods sell for at
+  /// current prices, whatever the cap: delivering always beats selling;
+  /// above zero and at most [rewardMultiplier].
+  final double minRewardMultiplier;
 
   /// Fewest units a contract asks for, above zero: what a resource made
   /// slowly, or not yet at all, is asked for.
   final BigNum minQuantity;
 
-  /// Most units a contract asks for, however much is made; at least
-  /// [minQuantity]. Null for no ceiling beyond the storage one (a contract
-  /// never asks for more than one owned body can store).
+  /// Most units a contract asks for, however much is made, times 1 plus
+  /// the faction's levels of the megaprojects that scale contracts; at
+  /// least [minQuantity]. Null for no ceiling beyond the storage one (a
+  /// contract never asks for more than the faction's bodies can store
+  /// together).
   final BigNum? maxQuantity;
 
   /// Seconds of the faction's income a contract pays at least, so a

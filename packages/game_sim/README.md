@@ -117,11 +117,14 @@ are in `content/galaxy.json`, `"hidden": true`); an unknown id fails with
 surveyed one with `alreadySurveyed`.
 
 The Veyra Exchange posts up to 3 contracts on the player's board. They never
-expire. Each asks for 1–3 h of what the player's buildings make of a good
-now from steady supply (a good made at a trickle, or only from a stockpile
-nothing refills, gets none) and pays 3× its base price, between 20 minutes
-and 1 hour of income (the larger of auto-sale income and the value of steady
-net production), at least 500 credits; the first contract ever posted has
+expire. Each asks for a good the player's buildings make now from steady
+supply (a good made at a trickle, or only from a stockpile nothing refills,
+gets none), as much as sells for 10 to 30 minutes of income at today's price
+(the larger of auto-sale income and the value of steady net production), at
+most a day of what they make of it and what the player's bodies store
+together, and pays 3× that sale value,
+between 5 minutes and 1 hour of income and never below 1.5× the sale value,
+at least 500 credits, in whole credits; the first contract ever posted has
 no cap and pays at least 7,500 (see `content/README.md`). `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
 "amount":"500"}` delivers up to `amount` of the contract's resource from the
 body's stock (clamped to what is held and to what the contract still wants;
@@ -216,8 +219,9 @@ commands:
   take); `inFlight` and `travelTime`), its
   auto-sell rules (`autoSell`: `bodyId`, `resourceId`, `keepAtLeast`,
   `localUse`, `contractHold` (what open contracts still need, less what
-  bodies with no rule for the good hold, held on the body with a rule on the
-  good that holds the most of it, up to its storage cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
+  bodies with no rule for the good hold, held on the bodies with a rule on
+  the good, the one that holds the most of it first, each up to its storage
+  cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
   7.77K local use)"`, with `" + 200 for open contracts"` when it holds
   some and `" + 20K for megaprojects"` (`megaprojectHold`) for what a fed
   megaproject still needs), its running projects soonest first (`kind`, `targetId`

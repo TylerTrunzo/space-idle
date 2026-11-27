@@ -101,8 +101,16 @@ void main() {
         expect(t.issuer, 'Veyra Exchange');
         // 1 to 3 h of production, longer for higher tiers.
         expect(t.quantitySeconds, inInclusiveRange(3600, 10800));
+        // 10 to 30 minutes of income at sale value, paid 3 times over, at
+        // least 1.5 times; at least 5 minutes and at most an hour of it.
+        expect(t.quantityIncomeSecondsMin, 600);
+        expect(t.quantityIncomeSecondsMax, 1800);
+        // But never a day's worth of what is made: habitat modules.
+        expect(t.quantityProductionSecondsMax, 86400);
+        expect(t.maxQuantity, isNull, reason: 'storage caps the size');
         expect(t.rewardMultiplier, 3);
-        expect(t.rewardIncomeSeconds, 1200);
+        expect(t.minRewardMultiplier, 1.5);
+        expect(t.rewardIncomeSeconds, 300);
         expect(t.rewardCapIncomeSeconds, 3600);
         expect(t.lifeSupportWeight, 0.25);
         expect(t.minRewardCredits > const BigNum.zero(), isTrue);
@@ -141,6 +149,10 @@ void main() {
       expect(t.quantitySeconds, ContractTemplateDef.defaultQuantitySeconds);
       expect(t.quantitySeconds, 14400);
       expect(t.rewardMultiplier, 2.5);
+      expect(t.minRewardMultiplier, 1.5);
+      expect(t.quantityIncomeSecondsMin, 600);
+      expect(t.quantityIncomeSecondsMax, 1800);
+      expect(t.quantityProductionSecondsMax, isNull);
       expect(t.minQuantity, n(ContractTemplateDef.defaultMinQuantity));
       expect(t.maxQuantity, isNull);
       expect(t.rewardIncomeSeconds, 0);
@@ -148,6 +160,19 @@ void main() {
       expect(t.lifeSupportWeight, 1);
       expect(t.minRewardCredits, const BigNum.zero());
       expect(t.firstContractMinReward, isNull);
+    });
+
+    test('equal quantity income bounds load: no roll', () {
+      final c = contentWith((b) {
+        template(b)
+          ..['quantityIncomeSecondsMin'] = 900
+          ..['quantityIncomeSecondsMax'] = 900;
+      });
+      final t = c.contractTemplates.values.first;
+      expect(
+        (t.quantityIncomeSecondsMin, t.quantityIncomeSecondsMax),
+        (900, 900),
+      );
     });
 
     test('a reward cap of at least the floor loads', () {
@@ -230,6 +255,36 @@ void main() {
           ..['rewardIncomeSeconds'] = 0
           ..['rewardCapIncomeSeconds'] = 0,
         'rewardCapIncomeSeconds: must be > 0',
+      ),
+      'zero quantity income seconds': (
+        (t) => t['quantityIncomeSecondsMin'] = 0,
+        'quantityIncomeSecondsMin: must be > 0',
+      ),
+      'a quantity income maximum below the minimum': (
+        (t) => t
+          ..['quantityIncomeSecondsMin'] = 900
+          ..['quantityIncomeSecondsMax'] = 899,
+        'quantityIncomeSecondsMax: must be >= quantityIncomeSecondsMin (900)',
+      ),
+      'a production ceiling below the quantity seconds': (
+        (t) => t
+          ..['quantitySeconds'] = 3600
+          ..['quantityProductionSecondsMax'] = 3599,
+        'quantityProductionSecondsMax: must be >= quantitySeconds (3600)',
+      ),
+      'a zero production ceiling': (
+        (t) => t['quantityProductionSecondsMax'] = 0,
+        'quantityProductionSecondsMax: must be > 0',
+      ),
+      'a zero least reward multiple': (
+        (t) => t['minRewardMultiplier'] = 0,
+        'minRewardMultiplier: must be > 0',
+      ),
+      'a least reward multiple above the multiplier': (
+        (t) => t
+          ..['rewardMultiplier'] = 2
+          ..['minRewardMultiplier'] = 2.5,
+        'minRewardMultiplier: must be <= rewardMultiplier (2)',
       ),
       'a negative minimum reward': (
         (t) => t['minRewardCredits'] = '-1',
@@ -334,35 +389,51 @@ void main() {
       }
     });
 
-    test('the quantity is hours of gross production, not net', () {
-      final s = e.newGame(1);
+    /// [s] with only [resourceId] eligible for its one refill, due now.
+    void onlyDue(GameState s, String resourceId) {
       final f = player(s);
-      // A plate press uses most of the smelter's steel, so steel's net rate
-      // is far below what is made.
-      s
-          .body('kora')
-          .buildings
-          .add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1));
-      // Only steel is eligible.
+      f.contracts.clear();
       f.lifetimeProduced
         ..clear()
-        ..['steel'] = n(1);
+        ..[resourceId] = n(1);
       f.contractRefillAt
         ..clear()
-        ..add(0);
-      final report = buildFlowReport(s, content, f.id);
-      final gross = report.steadyProducedPerSec('steel');
-      expect(gross > const BigNum.zero(), isTrue);
-      expect(gross, report.producedPerSec('steel'), reason: 'steadily fed');
-      expect(report.netProducedPerSec('steel') < gross.mulDouble(0.5), isTrue);
-      stepContracts(s, content, 0);
-      final k = f.contracts.single;
-      expect(k.resourceId, 'steel');
-      final t = content.contractTemplates[k.templateId]!;
-      expect(
-        k.quantity,
-        twoSignificantFigures(gross.mulDouble(t.quantitySeconds)),
+        ..add(s.time);
+    }
+
+    test('the quantity is worth 10 to 30 minutes of income at current '
+        'prices, rolled from the RNG', () {
+      final s = e.newGame(1);
+      final kora = s.body('kora');
+      for (final b in kora.buildings) {
+        b.levels[UpgradeTrack.speed] = 10;
+      }
+      kora.buildings
+        ..add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1))
+        // Room for the ask: the store does not cap it.
+        ..add(BuildingState(id: s.newId('b'), defId: 'depot', crew: 0));
+      onlyDue(s, 'steel');
+      player(s).contractsPosted = 1;
+      final income = incomeBasis(
+        s,
+        content,
+        buildFlowReport(s, content, 'player'),
       );
+      // The template, the resource, then the roll.
+      final rng = Rng.fromState(s.rngState)
+        ..nextDouble()
+        ..nextDouble();
+      final seconds = 600 + 1200 * rng.nextDouble();
+      final steel = price(s, content, 'steel');
+      stepContracts(s, content, s.time);
+      final k = player(s).contracts.single;
+      expect(k.resourceId, 'steel');
+      expect(s.rngState, rng.state, reason: 'three numbers drawn');
+      final asked = income.mulDouble(seconds) / steel;
+      final t = content.contractTemplates[k.templateId]!;
+      expect(asked > t.minQuantity.mulDouble(2), isTrue, reason: '$asked');
+      expect(asked < storageCap(s, content, kora), isTrue, reason: '$asked');
+      expect(k.quantity, twoSignificantFigures(asked).floor());
     });
 
     test('the bug-1 shape: a good made before but at a trickle now gets no '
@@ -399,35 +470,6 @@ void main() {
       expect(report.steadyProducedPerSec('survey_drone'), const BigNum.zero());
       stepContracts(s, content, 0);
       expect(f.contracts, isEmpty);
-    });
-
-    test('hours of what a steadily fed maker makes are asked for', () {
-      // The smelter feeds a plate press about half what it could use.
-      final s = e.newGame(1);
-      s
-          .body('kora')
-          .buildings
-          .add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1));
-      final f = player(s);
-      f.lifetimeProduced
-        ..clear()
-        ..['hull_plate'] = n(1);
-      f.contractRefillAt
-        ..clear()
-        ..add(0);
-      final gross = buildFlowReport(
-        s,
-        content,
-        f.id,
-      ).steadyProducedPerSec('hull_plate');
-      expect(gross.toDouble(), closeTo(0.2 / 3, 1e-6));
-      stepContracts(s, content, 0);
-      final k = f.contracts.single;
-      final t = content.contractTemplates[k.templateId]!;
-      expect(
-        k.quantity,
-        twoSignificantFigures(gross.mulDouble(t.quantitySeconds)),
-      );
     });
 
     test('a refill waiting on a starved maker is checked again only at '
@@ -566,7 +608,13 @@ void main() {
           return f.contracts.single;
         }
 
-        expect(plates(true).quantity, plates(false).quantity);
+        // The income basis leaves the stockpile out, so the ask is the
+        // same but for rounding.
+        final (stocked, plain) = (plates(true), plates(false));
+        expect(
+          stocked.quantity.toDouble(),
+          closeTo(plain.quantity.toDouble(), plain.quantity.toDouble() * 0.05),
+        );
       });
     });
 
@@ -606,10 +654,7 @@ void main() {
       expect(player(steelAt('${atRate * 1.05}')).contracts, isEmpty);
       final k = player(steelAt('${atRate * 0.95}')).contracts.single;
       expect(k.resourceId, 'steel');
-      expect(
-        k.quantity,
-        twoSignificantFigures(gross.mulDouble(t.quantitySeconds)),
-      );
+      expect(k.quantity >= BigNum.parse('${atRate * 0.95}').floor(), isTrue);
     });
 
     /// A game whose only eligible resource is steel, made fast enough that
@@ -655,19 +700,73 @@ void main() {
       throw StateError('steel never drawn');
     }
 
-    test('the quantity is at most what one owned body can store', () {
+    test('the quantity is at most what its bodies can store together', () {
       final s = steelFlood(content);
+      s.body('brine').ownerId = 'player';
+      final kora = storageCap(s, content, s.body('kora'));
+      final both = kora + storageCap(s, content, s.body('brine'));
+      final k = postSteel(s, content);
+      expect(k.quantity, both, reason: 'the sum, ${k.quantity} vs $both');
+      expect(k.quantity > kora, isTrue);
+      expect(k.quantity, twoSignificantFigures(k.quantity));
+    });
+
+    test('an order larger than one store is filled from two bodies', () {
+      final s = steelFlood(content);
+      final brine = s.body('brine')..ownerId = 'player';
+      final kora = s.body('kora');
+      final k = postSteel(s, content);
+      player(s).contracts
+        ..clear()
+        ..add(k);
+      final cap = storageCap(s, content, kora);
+      expect(k.quantity > cap, isTrue);
+      kora.stock['steel'] = cap;
+      brine.stock['steel'] = k.quantity - cap;
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', cap));
+      expect(player(s).contracts.single.remaining, k.quantity - cap);
+      ok(s, DeliverContractCommand('player', k.id, 'brine', k.quantity));
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).credits, credits + k.rewardCredits);
+    });
+
+    test('auto-sell holds an order larger than one store on several '
+        'bodies, the fullest first, each up to its cap', () {
+      final s = steelFlood(content);
+      final brine = s.body('brine')..ownerId = 'player';
+      final kora = s.body('kora');
+      ok(s, SetAutoSellCommand('player', 'brine', 'steel', n(0)));
+      final cap = storageCap(s, content, kora);
+      final k = postOn(s, 'steel', cap.toDouble() * 1.5);
+      kora.stock['steel'] = cap;
+      brine.stock['steel'] = cap.mulDouble(0.5);
+      stepMarket(s, content, 60);
+      // Kora holds its cap's worth, Brine the half left: none of it sells.
+      expect(kora.stock['steel'], cap);
+      expect(brine.stock['steel'], cap.mulDouble(0.5));
+      expect(k.remaining, cap.mulDouble(1.5));
+    });
+
+    test('the quantity is at most quantityProductionSecondsMax of what is '
+        'made', () {
+      // Round 4 casual bot: 3,600 habitat modules, made 12 an hour.
+      final c = steelOnly(
+        (t) => t
+          ..['quantitySeconds'] = 60
+          ..['minQuantity'] = '1'
+          ..['quantityProductionSecondsMax'] = 100,
+      );
+      final s = GameEngine(c).newGame(1);
+      onlyDue(s, 'steel');
       final rate = buildFlowReport(
         s,
-        content,
+        c,
         'player',
-      ).netProducedPerSec('steel');
-      final cap = storageCap(s, content, s.body('kora'));
-      expect(rate.mulDouble(14400) > cap.mulDouble(10), isTrue);
-      final k = postSteel(s, content);
-      expect(k.quantity <= cap, isTrue, reason: '${k.quantity} vs $cap');
-      expect(k.quantity >= cap.mulDouble(0.9), isTrue);
-      expect(k.quantity, twoSignificantFigures(k.quantity));
+      ).steadyProducedPerSec('steel');
+      expect(rate.toDouble(), closeTo(0.2, 1e-9));
+      stepContracts(s, c, 0);
+      expect(player(s).contracts.single.quantity, n(20));
     });
 
     test("a template's maximum quantity caps it", () {
@@ -717,7 +816,7 @@ void main() {
       expect(income > n(10), isTrue);
       final k = postSteel(s, c);
       expect(k.quantity, n(10));
-      expect(k.rewardCredits, income.mulDouble(600));
+      expect(k.rewardCredits, income.mulDouble(600).floor());
       // Between the floor and the cap, the reward is by quantity.
       final plain = steelOnly(
         (t) => t
@@ -725,11 +824,13 @@ void main() {
           ..['rewardCapIncomeSeconds'] = 1e9
           ..['maxQuantity'] = '1000',
       );
-      final big = postSteel(steelFlood(plain), plain);
-      expect(
-        big.rewardCredits,
-        big.quantity * c.resources['steel']!.basePrice.mulDouble(3),
-      );
+      final flood = steelFlood(plain);
+      // At the price steel sells for now, not its base price.
+      flood.market.saturation['steel'] = 0.5;
+      final steel = price(flood, plain, 'steel');
+      expect(steel < plain.resources['steel']!.basePrice, isTrue);
+      final big = postSteel(flood, plain);
+      expect(big.rewardCredits, (big.quantity * steel).mulDouble(3).floor());
     });
 
     /// Only steel, paying a million times its price, capped at 1 h of
@@ -749,13 +850,13 @@ void main() {
       player(s).contractsPosted = 1;
       final income = basis(s, c);
       expect(income > const BigNum.zero(), isTrue);
+      final steel = price(s, c, 'steel');
       final k = postSteel(s, c);
       expect(
-        k.quantity * c.resources['steel']!.basePrice.mulDouble(1e6) >
-            income.mulDouble(3600),
+        (k.quantity * steel).mulDouble(1e6) > income.mulDouble(3600),
         isTrue,
       );
-      expect(k.rewardCredits, income.mulDouble(3600));
+      expect(k.rewardCredits, income.mulDouble(3600).floor());
     });
 
     test('the first contract a faction is ever offered is exempt from the '
@@ -764,11 +865,9 @@ void main() {
       final s = steelFlood(c);
       expect(player(s).contractsPosted, 0);
       final income = basis(s, c);
+      final steel = price(s, c, 'steel');
       final k = postSteel(s, c);
-      expect(
-        k.rewardCredits,
-        k.quantity * c.resources['steel']!.basePrice.mulDouble(1e6),
-      );
+      expect(k.rewardCredits, (k.quantity * steel).mulDouble(1e6).floor());
       expect(k.rewardCredits > income.mulDouble(3600), isTrue);
     });
 
@@ -782,11 +881,13 @@ void main() {
         final first = f.contracts.single;
         expect(f.contractsPosted, 1);
         final t = content.contractTemplates[first.templateId]!;
+        // Nothing has sold yet, so the price is the base price.
         final byQuantity =
-            first.quantity *
-            content.resources[first.resourceId]!.basePrice.mulDouble(
-              t.rewardMultiplier,
-            );
+            (first.quantity *
+                    content.resources[first.resourceId]!.basePrice.mulDouble(
+                      t.rewardMultiplier,
+                    ))
+                .floor();
         expect(t.firstContractMinReward, isNotNull);
         expect(
           first.rewardCredits,
@@ -811,7 +912,73 @@ void main() {
       expect(player(s).contractsPosted, 2);
       final second = player(s).contracts.last;
       expect(second.rewardCredits <= income.mulDouble(3600 * 1.01), isTrue);
-      expect(second.rewardCredits >= income.mulDouble(600 * 0.99), isTrue);
+      expect(second.rewardCredits >= income.mulDouble(300 * 0.99), isTrue);
+    });
+
+    test('the round-4 optimizer shape: a cheap bulk good is asked for in a '
+        'quantity worth 10 to 30 minutes of income, and paid at least 1.5 '
+        'times its sale value and at most an hour of income', () {
+      // Round 4: 24K copper ore, from stock, for the 20-minute floor.
+      for (final seed in [1, 2, 3]) {
+        final s = e.newGame(seed);
+        final kora = s.body('kora');
+        for (final b in kora.buildings) {
+          b.levels[UpgradeTrack.speed] = 30;
+        }
+        // Depots, so the store does not cap the ask.
+        for (var i = 0; i < 5; i++) {
+          kora.buildings.add(
+            BuildingState(id: s.newId('b'), defId: 'depot', crew: 0)
+              ..levels[UpgradeTrack.capacity] = 20,
+          );
+        }
+        for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+          ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        e.advance(s, 3600);
+        onlyDue(s, 'copper_ore');
+        player(s).contractsPosted = 1;
+        final income = incomeBasis(
+          s,
+          content,
+          buildFlowReport(s, content, 'player'),
+        );
+        final copper = price(s, content, 'copper_ore');
+        stepContracts(s, content, s.time);
+        final k = player(s).contracts.single;
+        expect(k.quantity < storageCap(s, content, kora), isTrue);
+        final sale = k.quantity * copper;
+        final minutes = (sale / income).toDouble() / 60;
+        expect(
+          minutes,
+          inInclusiveRange(10 * 0.95, 30 * 1.05),
+          reason: '$seed',
+        );
+        expect(k.rewardCredits >= sale.mulDouble(1.5).floor(), isTrue);
+        expect(k.rewardCredits <= income.mulDouble(3600), isTrue);
+        // Well above the 5-minute floor: the order is worth its goods.
+        expect(k.rewardCredits > income.mulDouble(300 * 1.5), isTrue);
+      }
+    });
+
+    test('a reward never falls below 1.5 times the sale value, even past '
+        'the cap', () {
+      // A minQuantity worth far more than the cap forces the ask up; a
+      // long quantitySeconds keeps steel eligible.
+      final c = steelOnly(
+        (t) => t
+          ..['minQuantity'] = '1e6'
+          ..['quantitySeconds'] = 1e9
+          ..remove('quantityProductionSecondsMax')
+          ..['rewardCapIncomeSeconds'] = 3600,
+      );
+      final s = steelFlood(c);
+      player(s).contractsPosted = 1;
+      final steel = price(s, c, 'steel');
+      final k = postSteel(s, c);
+      expect(k.quantity, n(1e6));
+      expect(k.rewardCredits, (k.quantity * steel).mulDouble(1.5).floor());
+      expect(k.rewardCredits > basis(s, c).mulDouble(3600), isTrue);
     });
 
     group('the reward does not depend on which goods auto-sell', () {
