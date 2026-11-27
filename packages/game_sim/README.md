@@ -188,8 +188,9 @@ commands:
   auto-pay off and paid it none by hand since it opened; one whose
   auto-delivery you never set still counts; its ETA shares stock
   and income out as auto-delivery does: credits above the auto-pay reserve
-  split evenly among the megaprojects taking them, goods to those fed
-  goods in content order, so a stage paid by hand waits for them) (`kind`,
+  split by weight among the megaprojects taking them, goods to those fed
+  goods in content order, so a stage paid by hand waits for them, and a
+  near-ready stage's goods only once its feeding would start) (`kind`,
   `id`, `name`,
   `level` for a stage, `etaSeconds`, null when not in reach, and a
   `message` such as `"Next: First Foundry (Make 30 Steel), 12 of 30, in 1m
