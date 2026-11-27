@@ -252,6 +252,7 @@ final class GameEngine {
     };
     final necks = _withAwayWaste(
       s,
+      player.id,
       report.groupedBottlenecks,
       wastedAt,
       simulated,
@@ -306,8 +307,8 @@ final class GameEngine {
     );
   }
 
-  /// [necks], a report's [FlowReport.groupedBottlenecks] on return, with
-  /// what the cap cut while away ([wastedAt], body id to resource id to
+  /// [necks], [factionId]'s report's [FlowReport.groupedBottlenecks] on
+  /// return, with what the cap cut while away ([wastedAt], body id to resource id to
   /// the units and when they were first cut) as storage-full entries: the
   /// units' value at [s]'s prices spread over the [seconds] simulated, an
   /// hour. Where the report shows that store full too, its entry takes
@@ -321,6 +322,7 @@ final class GameEngine {
   /// not see, competes for the top bottlenecks with the rest.
   List<Bottleneck> _withAwayWaste(
     GameState s,
+    String factionId,
     List<Bottleneck> necks,
     Map<String, Map<String, (BigNum, double)>> wastedAt,
     double seconds,
@@ -331,15 +333,9 @@ final class GameEngine {
     final at = {for (final (i, b) in out.indexed) b.groupKey: i};
     for (final MapEntry(key: bodyId, value: cut) in wastedAt.entries) {
       for (final MapEntry(key: id, value: (units, since)) in cut.entries) {
-        final lost =
-            (units *
-                    salePrice(
-                      s,
-                      content,
-                      s.factions.firstWhere((f) => f.isPlayer).id,
-                      id,
-                    ))
-                .mulDouble(3600 / seconds);
+        final lost = (units * salePrice(s, content, factionId, id)).mulDouble(
+          3600 / seconds,
+        );
         if (lost <= const BigNum.zero()) continue;
         final key = bottleneckKey(
           BottleneckKind.storageFull.name,
