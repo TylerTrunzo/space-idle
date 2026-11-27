@@ -347,9 +347,13 @@ bool _unfunded(
 ///   content order, each what is left of the stock, then the rate, until
 ///   it has all it is owed. One fed goods near ready
 ///   ([GoodsFeedMode.nearReady]) whose stage is not fed yet starts taking
-///   them once its credits are within [RulesDef.nearReadyHorizonSeconds]
-///   of being in (with credit auto-pay off, once they are in), and is
-///   timed from then on what the others leave, as one paid by hand is.
+///   them when [_goodsStarts] has the start rule fire: with credit
+///   auto-pay, once what it still owes is no more than
+///   [RulesDef.nearReadyHorizonSeconds] of its weight share of income as
+///   the others are paid for ([_nearReadyStart]); without it, once its
+///   credits are held. From then it is timed on what is made of the good
+///   ([FlowReport.netProducedPerSec]) less what the others take, since
+///   until then its goods are sold.
 ///
 /// It looks one stage ahead for each: once a megaproject's stage is paid
 /// for, its next stage usually starts and takes a share again, which this

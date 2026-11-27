@@ -257,11 +257,12 @@ BigNum _reward(
 /// faction [report] is about: the larger of its steady auto-sale income
 /// ([FlowReport.creditsPerSec]) and the value of what is left over with
 /// every flow steady, at what [factionId]'s sales of it earn (each
-/// resource's [FlowReport.steadySurplusPerSec] × [salePrice]). So the floor and cap do
-/// not depend on which goods auto-sell: a player who sells by hand, or
-/// turns auto-sell off before a refill, is measured like one who
-/// auto-sells. And as for credits per second, output fed from a stock
-/// nothing refills does not count, so a stockpile does not raise it.
+/// resource's [FlowReport.steadySurplusPerSec] × [salePrice]). So the
+/// floor and cap do not depend on which goods auto-sell: a player who
+/// sells by hand, or turns auto-sell off before a refill, is measured like
+/// one who auto-sells. And as for credits per second, output fed from a
+/// stock nothing refills does not count, so a stockpile does not raise
+/// it.
 BigNum incomeBasis(
   GameState s,
   Content c,
@@ -331,10 +332,10 @@ void freeContractSlot(FactionState f, Content c, double now) {
 /// what sells for the income of a span rolled between
 /// [ContractTemplateDef.quantityIncomeSecondsMin] and
 /// [ContractTemplateDef.quantityIncomeSecondsMax] at the faction's sale
-/// price ([salePrice]), rounded to two significant figures; at most the storage caps
-/// of the bodies [f] owns, summed (an order can be filled from several),
-/// [ContractTemplateDef.quantityProductionSecondsMax] of [rate], what [f]
-/// makes of it a second (steady and gross), and
+/// price ([salePrice]), rounded to two significant figures; at most the
+/// storage caps of the bodies [f] owns, summed (an order can be filled
+/// from several), [ContractTemplateDef.quantityProductionSecondsMax] of
+/// [rate], what [f] makes of it a second (steady and gross), and
 /// [ContractTemplateDef.maxQuantity] × (1 + [f]'s levels of the
 /// megaprojects that [MegaprojectDef.scalesContracts], summed) (each
 /// rounded down to two figures), and at least

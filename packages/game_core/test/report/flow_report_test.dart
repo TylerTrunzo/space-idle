@@ -62,6 +62,32 @@ void main() {
     expect(r.bottlenecks.map((b) => b.kind), [BottleneckKind.noSales]);
   });
 
+  test('a report whose income came from the cache still gives steady '
+      'rates', () {
+    // Credits a second for one state are worked out once: a second report
+    // on the same state takes them from a cache, without the steady flows
+    // its own income would have worked out first.
+    s
+        .faction('player')
+        .autoSell
+        .add(
+          AutoSellRule(bodyId: 'kora', resourceId: 'steel', keepAtLeast: n(0)),
+        );
+    engine.advance(s, 600);
+    final first = buildFlowReport(s, c, 'player');
+    final income = first.creditsPerSec;
+    final again = buildFlowReport(s, c, 'player');
+    expect(again.creditsPerSec, income);
+    expect(
+      again.steadyProducedPerSec('steel'),
+      first.steadyProducedPerSec('steel'),
+    );
+    expect(
+      again.steadySurplusPerSec('steel'),
+      first.steadySurplusPerSec('steel'),
+    );
+  });
+
   test('a noSales bottleneck says when goods are made and nothing sells '
       'them', () {
     // Round-3 new player, t=0: 0 credits a second and no bottleneck.

@@ -1111,7 +1111,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         steady: steadyOf,
         market: sold!,
       );
-      played = null;
+      // The steady rates still need [played] when the income came from
+      // the cache, which works out no steady flows.
+      if (steady != null) played = null;
       sold = null;
       return v;
     },

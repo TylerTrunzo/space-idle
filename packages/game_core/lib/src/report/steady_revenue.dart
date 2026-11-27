@@ -156,7 +156,7 @@ SteadyIncome _saleRevenuePerSec(
       played = first;
     } else {
       for (final copy in [s, market]) {
-        _takeMegaprojectsFrom(dry, copy, factionId);
+        takeMegaprojectsFrom(dry, copy, c, factionId);
       }
     }
   }
@@ -389,10 +389,33 @@ String _takes(GameState s, Content c, String factionId) {
 }
 
 /// Gives [to] the megaproject standing [factionId] has in [from]: levels,
-/// progress, settings (with the stages being fed) and stages under way.
-void _takeMegaprojectsFrom(GameState from, GameState to, String factionId) {
+/// progress, settings (with the stages being fed) and stages under way;
+/// and takes the goods paid in to get there off [to]'s owned bodies, the
+/// fullest first (ties in body order), so a good the megaprojects took
+/// counts once, as delivered, not also as stock that sells. [from] is
+/// [to] played on: it is never behind.
+///
+/// For [saleRevenuePerSec]; exposed from src for tests, as the package
+/// does not export it.
+void takeMegaprojectsFrom(
+  GameState from,
+  GameState to,
+  Content c,
+  String factionId,
+) {
   final a = from.faction(factionId);
   final b = to.faction(factionId);
+  for (final m in c.megaprojects.values) {
+    // Stages below [to]'s level are paid for in both.
+    final base = b.megaprojectLevels[m.id] ?? 0;
+    for (final id in m.baseCost.keys) {
+      if (id == creditsKey) continue;
+      final paid =
+          _paidSince(from, c, factionId, m, id, base) -
+          _paidSince(to, c, factionId, m, id, base);
+      if (paid > const BigNum.zero()) _takeStock(to, factionId, id, paid);
+    }
+  }
   b.megaprojectLevels
     ..clear()
     ..addAll(a.megaprojectLevels);
@@ -421,6 +444,53 @@ void _takeMegaprojectsFrom(GameState from, GameState to, String factionId) {
             finishAt: p.finishAt,
           ),
     ]);
+}
+
+/// Units of [id] [factionId] has paid into [m] in [s] for the stages from
+/// level [base] on: those below its delivery level
+/// ([megaprojectDeliveryLevel]) in full, plus its progress toward that
+/// one.
+BigNum _paidSince(
+  GameState s,
+  Content c,
+  String factionId,
+  MegaprojectDef m,
+  String id,
+  int base,
+) {
+  var total =
+      s.faction(factionId).megaprojectProgress[m.id]?[id] ??
+      const BigNum.zero();
+  for (var l = base; l < megaprojectDeliveryLevel(s, factionId, m); l++) {
+    total = total + (megaprojectCost(c, m, l)[id] ?? const BigNum.zero());
+  }
+  return total;
+}
+
+/// Takes [amount] of [id] off [factionId]'s owned bodies in [s], the
+/// fullest first, ties in body order, as much as they hold.
+void _takeStock(GameState s, String factionId, String id, BigNum amount) {
+  final bodies = [
+    for (final body in s.bodies)
+      if (body.ownerId == factionId) body,
+  ];
+  // A stable sort: ties keep body order.
+  final order = [for (var i = 0; i < bodies.length; i++) i]
+    ..sort((x, y) {
+      final byHeld = (bodies[y].stock[id] ?? const BigNum.zero()).compareTo(
+        bodies[x].stock[id] ?? const BigNum.zero(),
+      );
+      return byHeld != 0 ? byHeld : x.compareTo(y);
+    });
+  var left = amount;
+  for (final i in order) {
+    if (left <= const BigNum.zero()) break;
+    final held = bodies[i].stock[id] ?? const BigNum.zero();
+    final take = held.min(left);
+    if (take <= const BigNum.zero()) continue;
+    bodies[i].take(id, take);
+    left = left - take;
+  }
 }
 
 /// Completes [factionId]'s megaproject stages under way that finish
