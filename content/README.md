@@ -27,7 +27,8 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   of what you make of it (`quantityProductionSecondsMax` 86,400, gross: habitat modules and cargo
   ships, made a few dozen at a time, would otherwise be asked for in thousands), nor more than your
   bodies can store together (an order can be filled from several; auto-sell holds its goods back on
-  the fullest body with a rule for the good first, each up to its cap), nor less than `minQuantity`.
+  the bodies with a rule for the good: first all they hold, so none of what is owed sells, then room
+  for the rest, the fullest body first, each up to its cap), nor less than `minQuantity`.
   A good is asked for only if its largest possible order (the least of what your bodies store
   together and a day of what you make of it) sells today for at least `quantityIncomeSecondsMin` of
   your income, so an order is never for a good worth only seconds of play. When no good you make is

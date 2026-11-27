@@ -846,6 +846,77 @@ void main() {
       expect(k.remaining, cap.mulDouble(1.5));
     });
 
+    group('a hold below the fullest store\'s cap', () {
+      // Review probe: Kora holds 900 and Brine 800 of 1,000 each, both
+      // auto-sell steel, and one order owes 1,500. The hold took Kora's
+      // empty room for 100 of it, so Brine sold 300 the order needed.
+      GameState probe() {
+        final s = e.newGame(1);
+        s.body('brine').ownerId = 'player';
+        for (final b in ['kora', 'brine']) {
+          ok(s, SetAutoSellCommand('player', b, 'steel', n(0)));
+        }
+        final f = player(s);
+        f.contracts.clear();
+        f.contractRefillAt.clear();
+        postOn(s, 'steel', 1500);
+        s.body('kora').stock['steel'] = n(900);
+        s.body('brine').stock['steel'] = n(800);
+        return s;
+      }
+
+      BigNum steel(GameState s) =>
+          s.body('kora').stock['steel']! + s.body('brine').stock['steel']!;
+
+      test('holds what each body has first: none of what is owed sells', () {
+        final s = probe();
+        expect(storageCap(s, content, s.body('kora')), n(1000));
+        expect(storageCap(s, content, s.body('brine')), n(1000));
+        stepMarket(s, content, 60);
+        // Kora keeps its 900, Brine the 600 still owed; Brine's other 200
+        // sell.
+        expect(s.body('kora').stock['steel'], n(900));
+        expect(s.body('brine').stock['steel'], n(600));
+        expect(steel(s), n(1500));
+      });
+
+      test('what is owed beyond the stock held is held as room, the fullest '
+          'first', () {
+        final s = probe();
+        s.body('brine').stock['steel'] = n(300);
+        // 1,200 held, 300 more owed: Kora's 100 of room, then Brine's 200.
+        stepMarket(s, content, 60);
+        expect(s.body('kora').stock['steel'], n(900));
+        expect(s.body('brine').stock['steel'], n(300));
+      });
+
+      for (final step in [1.0, 60.0]) {
+        test(
+          'keeps what is owed while it plays, at ${step.toInt()} s steps',
+          () {
+            final s = probe();
+            e.advance(s, 600, maxStep: step);
+            expect(player(s).contracts.single.remaining, n(1500));
+            expect(steel(s) >= n(1500), isTrue, reason: '${steel(s)}');
+          },
+        );
+      }
+
+      test('a catch-up keeps what is owed as live play does', () {
+        final live = probe();
+        final away = probe();
+        e.advance(live, 3600, maxStep: 1);
+        e.catchUpOffline(away, 3600);
+        for (final x in [live, away]) {
+          expect(steel(x) >= n(1500), isTrue, reason: '${steel(x)}');
+        }
+        expect(
+          steel(away).toDouble(),
+          closeTo(steel(live).toDouble(), steel(live).toDouble() * 0.01),
+        );
+      });
+    });
+
     test('the quantity is at most quantityProductionSecondsMax of what is '
         'made', () {
       // Round 4 casual bot: 3,600 habitat modules, made 12 an hour.

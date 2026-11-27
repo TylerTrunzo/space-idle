@@ -141,8 +141,9 @@ Things worth knowing:
   lots about 10 s apart), so it is safe on an input with `keepAtLeast` 0;
   `state.autoSell` shows each rule's buffer. It also never sells what your
   open contracts still need, less what bodies with no rule for the good hold:
-  that is held on the bodies with a rule on the good, the one holding the most
-  of it first, each up to its storage cap. A route out of a body
+  that is held on the bodies with a rule on the good: first what they hold, so
+  none of it sells, then room for the rest, the fullest first, each up to its
+  storage cap. A route out of a body
   takes its share before auto-sell sells the rest.
 - Contracts ask only for goods you make now from steady supply (a stockpile
   nothing refills does not count), as much as sells for 10 to 30 minutes of

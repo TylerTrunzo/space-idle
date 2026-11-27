@@ -227,8 +227,8 @@ commands:
   auto-sell rules (`autoSell`: `bodyId`, `resourceId`, `keepAtLeast`,
   `localUse`, `contractHold` (what open contracts still need, less what
   bodies with no rule for the good hold, held on the bodies with a rule on
-  the good, the one that holds the most of it first, each up to its storage
-  cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
+  the good: first what they hold, so none of it sells, then room for the
+  rest, the one that holds the most first, each up to its storage cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
   7.77K local use)"`, with `" + 200 for open contracts"` when it holds
   some and `" + 20K for megaprojects"` (`megaprojectHold`) for what a fed
   megaproject still needs), its running projects soonest first (`kind`, `targetId`
