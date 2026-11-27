@@ -5,6 +5,7 @@ import '../num/big_num.dart';
 import '../report/flow_report.dart';
 import '../rng.dart';
 import '../state/game_state.dart';
+import 'market.dart';
 import 'megaprojects.dart';
 import 'production.dart';
 
@@ -30,11 +31,10 @@ import 'production.dart';
 /// its bodies (each rounded down to two figures), at least `minQuantity`,
 /// in whole units ([twoSignificantFigures]). Its reward is `quantity ×
 /// basePrice × rewardMultiplier` credits, at least `rewardIncomeSeconds`
-/// of the faction's income ([FlowReport.creditsPerSec]) and at most
-/// `rewardCapIncomeSeconds` of it. The first contract a faction is ever
-/// offered ([FactionState.contractsPosted] 0) is exempt from the cap, as
-/// is any posted while the faction earns nothing at all (an hour of no
-/// income would make the order worthless).
+/// and at most `rewardCapIncomeSeconds` of the faction's income basis
+/// ([incomeBasis]), both at least `minRewardCredits`. The first contract a
+/// faction is ever offered ([FactionState.contractsPosted] 0) is exempt
+/// from the cap and pays at least `firstContractMinReward`.
 ///
 /// When nothing qualifies, the refill stays due and is used once something
 /// does. Whether a resource is made at all, and on the board, is
@@ -104,7 +104,7 @@ void stepContracts(GameState s, Content c, double now) {
           templateId: template.id,
           resourceId: resourceId,
           quantity: quantity,
-          rewardCredits: _reward(c, f, template, resourceId, quantity, made),
+          rewardCredits: _reward(s, c, f, template, resourceId, quantity, made),
           postedAt: now,
         ),
       );
@@ -171,11 +171,14 @@ bool _couldQualify(
   );
 }
 
-/// What a contract from [t] for [quantity] of [resourceId] pays [f]: by
-/// quantity, at least `rewardIncomeSeconds` and, but for the first
-/// contract [f] is offered and while it earns nothing, at most
-/// `rewardCapIncomeSeconds` of [report]'s income.
+/// What a contract from [t] for [quantity] of [resourceId] pays [f]:
+/// `quantity × basePrice × rewardMultiplier`, at least the floor and at
+/// most the cap, which are `rewardIncomeSeconds` and
+/// `rewardCapIncomeSeconds` of the income basis ([incomeBasis]), neither
+/// below `minRewardCredits`. The first contract [f] is ever offered has
+/// no cap and pays at least `firstContractMinReward`.
 BigNum _reward(
+  GameState s,
   Content c,
   FactionState f,
   ContractTemplateDef t,
@@ -183,14 +186,34 @@ BigNum _reward(
   BigNum quantity,
   FlowReport report,
 ) {
-  final income = report.creditsPerSec;
+  final income = incomeBasis(s, c, report);
   final byQuantity =
       quantity *
       c.resources[resourceId]!.basePrice.mulDouble(t.rewardMultiplier);
-  final reward = byQuantity.max(income.mulDouble(t.rewardIncomeSeconds));
+  final floor = t.minRewardCredits.max(income.mulDouble(t.rewardIncomeSeconds));
+  final reward = byQuantity.max(floor);
+  if (f.contractsPosted == 0) {
+    return reward.max(t.firstContractMinReward ?? const BigNum.zero());
+  }
   final cap = t.rewardCapIncomeSeconds;
-  if (cap == null || f.contractsPosted == 0 || income.isZero) return reward;
-  return reward.min(income.mulDouble(cap));
+  if (cap == null) return reward;
+  return reward.min(floor.max(income.mulDouble(cap)));
+}
+
+/// Credits a second a contract's reward is measured against, for the
+/// faction [report] is about: the larger of its steady auto-sale income
+/// ([FlowReport.creditsPerSec]) and what its buildings make beyond what
+/// they use, valued at [s]'s market prices (each resource's positive
+/// [FlowReport.netProducedPerSec] × [price]). So the floor and cap do not
+/// depend on which goods auto-sell: a player who sells by hand, or turns
+/// auto-sell off before a refill, is measured like one who auto-sells.
+BigNum incomeBasis(GameState s, Content c, FlowReport report) {
+  var made = const BigNum.zero();
+  for (final id in c.resources.keys) {
+    final net = report.netProducedPerSec(id);
+    if (net > const BigNum.zero()) made = made + net * price(s, c, id);
+  }
+  return report.creditsPerSec.max(made);
 }
 
 /// What decides whether any contract can be posted to a board: the

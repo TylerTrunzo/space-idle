@@ -133,12 +133,17 @@ final class _Loader {
               'rewardIncomeSeconds',
               'rewardCapIncomeSeconds',
               'lifeSupportWeight',
+              'minRewardCredits',
+              'firstContractMinReward',
             },
             _contractTemplate,
           )
         : <String, ContractTemplateDef>{};
 
-    if (rules != null) _checkRules(rules, galaxy);
+    if (rules != null) {
+      _checkRules(rules, galaxy);
+      _checkContracts(contractTemplates, rules);
+    }
     _checkBuildings(buildings);
     _checkBodyTypes(bodyTypes);
     if (galaxy != null) _checkGalaxy(galaxy, buildings, bodyTypes);
@@ -903,6 +908,12 @@ final class _Loader {
       gt: 0,
       le: 1,
     );
+    final minRewardCredits = f.map.containsKey('minRewardCredits')
+        ? f.bigNum('minRewardCredits')
+        : const BigNum.zero();
+    final firstContractMinReward = f.map.containsKey('firstContractMinReward')
+        ? f.bigNum('firstContractMinReward')
+        : null;
     if (_errors.length > before) return null;
     return ContractTemplateDef(
       id: id,
@@ -916,6 +927,8 @@ final class _Loader {
       rewardIncomeSeconds: rewardIncomeSeconds!,
       rewardCapIncomeSeconds: rewardCapIncomeSeconds,
       lifeSupportWeight: lifeSupportWeight!,
+      minRewardCredits: minRewardCredits!,
+      firstContractMinReward: firstContractMinReward,
     );
   }
 
@@ -934,6 +947,21 @@ final class _Loader {
     _needResource('rules.cargoShipResource', r.cargoShipResource);
     if (_hasHidden(galaxy)) {
       _needResource('rules.surveyDroneResource', r.surveyDroneResource);
+    }
+  }
+
+  /// A first contract pays at least the first claim's credits
+  /// ([RulesDef.claimBaseCredits]), so the hook pays for a claim.
+  void _checkContracts(Map<String, ContractTemplateDef> templates, RulesDef r) {
+    for (final t in templates.values) {
+      final least = t.firstContractMinReward;
+      if (least != null && least < r.claimBaseCredits) {
+        err(
+          'contracts.${t.id}.firstContractMinReward',
+          "must be >= the first claim's credits "
+              '(${formatNumber(r.claimBaseCredits)})',
+        );
+      }
     }
   }
 

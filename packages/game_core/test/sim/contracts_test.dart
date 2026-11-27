@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
 import 'package:test/test.dart';
@@ -102,6 +103,11 @@ void main() {
         expect(t.rewardIncomeSeconds, 600);
         expect(t.rewardCapIncomeSeconds, 3600);
         expect(t.lifeSupportWeight, 0.25);
+        expect(t.minRewardCredits > const BigNum.zero(), isTrue);
+        expect(
+          t.firstContractMinReward! >= content.rules.claimBaseCredits,
+          isTrue,
+        );
         for (var i = t.minTier; i <= t.maxTier; i++) {
           tiers.add(i);
         }
@@ -138,6 +144,8 @@ void main() {
       expect(t.rewardIncomeSeconds, 0);
       expect(t.rewardCapIncomeSeconds, isNull);
       expect(t.lifeSupportWeight, 1);
+      expect(t.minRewardCredits, const BigNum.zero());
+      expect(t.firstContractMinReward, isNull);
     });
 
     test('a reward cap of at least the floor loads', () {
@@ -220,6 +228,14 @@ void main() {
           ..['rewardIncomeSeconds'] = 0
           ..['rewardCapIncomeSeconds'] = 0,
         'rewardCapIncomeSeconds: must be > 0',
+      ),
+      'a negative minimum reward': (
+        (t) => t['minRewardCredits'] = '-1',
+        'minRewardCredits: must be >= 0',
+      ),
+      'a first-contract minimum below the first claim': (
+        (t) => t['firstContractMinReward'] = '4999',
+        "firstContractMinReward: must be >= the first claim's credits (5K)",
       ),
       'a zero life-support weight': (
         (t) => t['lifeSupportWeight'] = 0,
@@ -502,7 +518,20 @@ void main() {
       expect(postSteel(s, c).quantity, n(360));
     });
 
-    test('the reward is at least rewardIncomeSeconds of income', () {
+    /// What [s]'s player is paid for by the second: the larger of its
+    /// steady auto-sale income and the value of what its buildings make
+    /// beyond what they use, at the current prices.
+    BigNum basis(GameState s, Content c) {
+      final r = buildFlowReport(s, c, 'player');
+      var made = const BigNum.zero();
+      for (final id in c.resources.keys) {
+        final net = r.netProducedPerSec(id);
+        if (net > const BigNum.zero()) made = made + net * price(s, c, id);
+      }
+      return r.creditsPerSec.max(made);
+    }
+
+    test('the reward is at least rewardIncomeSeconds of the income basis', () {
       final c = steelOnly(
         (t) => t
           ..['rewardIncomeSeconds'] = 600
@@ -511,8 +540,8 @@ void main() {
       );
       final s = steelFlood(c);
       player(s).contractsPosted = 1;
-      final income = buildFlowReport(s, c, 'player').creditsPerSec;
-      expect(income > const BigNum.zero(), isTrue);
+      final income = basis(s, c);
+      expect(income > n(10), isTrue);
       final k = postSteel(s, c);
       expect(k.quantity, n(10));
       expect(k.rewardCredits, income.mulDouble(600));
@@ -531,19 +560,21 @@ void main() {
     });
 
     /// Only steel, paying a million times its price, capped at 1 h of
-    /// income.
+    /// income, at least 500 credits.
     Content lavish() => steelOnly(
       (t) => t
         ..['rewardMultiplier'] = 1e6
         ..['rewardIncomeSeconds'] = 600
-        ..['rewardCapIncomeSeconds'] = 3600,
+        ..['rewardCapIncomeSeconds'] = 3600
+        ..['minRewardCredits'] = '500',
     );
 
-    test('the reward is at most rewardCapIncomeSeconds of income', () {
+    test('the reward is at most rewardCapIncomeSeconds of the income '
+        'basis', () {
       final c = lavish();
       final s = steelFlood(c);
       player(s).contractsPosted = 1;
-      final income = buildFlowReport(s, c, 'player').creditsPerSec;
+      final income = basis(s, c);
       expect(income > const BigNum.zero(), isTrue);
       final k = postSteel(s, c);
       expect(
@@ -559,7 +590,7 @@ void main() {
       final c = lavish();
       final s = steelFlood(c);
       expect(player(s).contractsPosted, 0);
-      final income = buildFlowReport(s, c, 'player').creditsPerSec;
+      final income = basis(s, c);
       final k = postSteel(s, c);
       expect(
         k.rewardCredits,
@@ -568,50 +599,123 @@ void main() {
       expect(k.rewardCredits > income.mulDouble(3600), isTrue);
     });
 
-    test("a new game's first contract pays by quantity and counts as "
-        'posted; the next ones keep within the cap', () {
-      final s = e.newGame(1);
-      final f = player(s);
-      expect(f.contractsPosted, 0);
-      e.advance(s, 60);
-      final first = f.contracts.single;
-      expect(f.contractsPosted, 1);
-      final t = content.contractTemplates[first.templateId]!;
-      expect(
-        first.rewardCredits,
-        first.quantity *
+    test("a new game's first contract pays at least firstContractMinReward, "
+        'more than the first claim, on seeds 1 to 3', () {
+      for (final seed in [1, 2, 3]) {
+        final s = e.newGame(seed);
+        final f = player(s);
+        expect(f.contractsPosted, 0);
+        e.advance(s, 60);
+        final first = f.contracts.single;
+        expect(f.contractsPosted, 1);
+        final t = content.contractTemplates[first.templateId]!;
+        final byQuantity =
+            first.quantity *
             content.resources[first.resourceId]!.basePrice.mulDouble(
               t.rewardMultiplier,
-            ),
-      );
+            );
+        expect(t.firstContractMinReward, isNotNull);
+        expect(
+          first.rewardCredits,
+          byQuantity.max(t.firstContractMinReward!),
+          reason: 'seed $seed: the floor is less early on',
+        );
+        // It pays for the first claim, with a margin.
+        final claim = claimCost(s, content, 'player')['credits']!;
+        expect(first.rewardCredits >= claim.mulDouble(1.4), isTrue);
+      }
+    });
 
-      // Sell everything, then let the next refills come due.
+    test('the next contracts keep within the floor and cap', () {
+      final s = e.newGame(1);
+      e.advance(s, 60);
       for (final id in ['iron_ore', 'copper_ore', 'steel']) {
         ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
       }
-      final x = s.copy();
-      e.advance(x, refill - 120);
-      final income = buildFlowReport(x, content, 'player').creditsPerSec;
-      e.advance(x, 120);
-      expect(player(x).contractsPosted, 2);
-      final second = player(x).contracts.last;
+      e.advance(s, refill - 120);
+      final income = basis(s, content);
+      e.advance(s, 120);
+      expect(player(s).contractsPosted, 2);
+      final second = player(s).contracts.last;
       expect(second.rewardCredits <= income.mulDouble(3600 * 1.01), isTrue);
       expect(second.rewardCredits >= income.mulDouble(600 * 0.99), isTrue);
     });
 
-    test('with no income at all, the cap does not bring the reward to '
-        'nothing', () {
-      final c = lavish();
-      final s = steelFlood(c);
-      player(s).contractsPosted = 1;
-      // No auto-sell rule: nothing earns a steady income.
-      player(s).autoSell.clear();
-      expect(buildFlowReport(s, c, 'player').creditsPerSec.isZero, isTrue);
-      final k = postSteel(s, c);
-      expect(
-        k.rewardCredits,
-        k.quantity * c.resources['steel']!.basePrice.mulDouble(1e6),
-      );
+    group('the reward does not depend on which goods auto-sell', () {
+      /// The second contract of a new game (seed 1) whose player sets
+      /// auto-sell rules for [sold] on Kora after the first.
+      ContractState second(List<String> sold) {
+        final s = e.newGame(1);
+        e.advance(s, 60);
+        for (final id in sold) {
+          ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        e.advance(s, refill);
+        return player(s).contracts[1];
+      }
+
+      test('none, one or all goods sold give about the same reward', () {
+        // Review probe: 12,960, 1,591 and 5,909 credits for steel.
+        final rewards = [
+          for (final sold in [
+            <String>[],
+            ['copper_ore'],
+            ['iron_ore', 'copper_ore', 'steel'],
+          ])
+            second(sold),
+        ];
+        expect({for (final k in rewards) k.resourceId}, hasLength(1));
+        final values = [for (final k in rewards) k.rewardCredits.toDouble()];
+        final most = values.reduce(math.max);
+        final least = values.reduce(math.min);
+        expect(most / least, lessThan(1.5), reason: '$values');
+      });
+
+      test('turning auto-sell off right before a refill gains nothing', () {
+        final c = lavish();
+        final s = steelFlood(c);
+        player(s).contractsPosted = 1;
+        GameEngine(c).advance(s, 3600);
+        final f = player(s);
+        f.contracts.clear();
+        f.contractRefillAt
+          ..clear()
+          ..addAll([s.time, s.time + 1e6, s.time + 2e6]);
+        final selling = s.copy();
+        final off = s.copy();
+        player(off).autoSell.clear();
+        stepContracts(selling, c, s.time);
+        stepContracts(off, c, s.time);
+        final (a, b) = (
+          player(selling).contracts.single,
+          player(off).contracts.single,
+        );
+        expect(b.resourceId, a.resourceId);
+        expect(b.rewardCredits <= a.rewardCredits.mulDouble(1.001), isTrue);
+      });
+
+      test('a tiny income pays minRewardCredits, never nothing', () {
+        final c = lavish();
+        final s = e.newGame(1);
+        final f = player(s);
+        f.contractsPosted = 1;
+        f.lifetimeProduced
+          ..clear()
+          ..['steel'] = n(1);
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+        // Every market at its floor: steel sells for next to nothing.
+        for (final id in c.resources.keys) {
+          s.market.saturation[id] = marketFloorOf(c, id);
+        }
+        final income = basis(s, c);
+        expect(income > const BigNum.zero(), isTrue);
+        expect(income.mulDouble(3600) < n(500), isTrue, reason: '$income');
+        stepContracts(s, c, 0);
+        expect(f.contracts.single.rewardCredits, n(500));
+      });
     });
 
     test('asks only for goods being made now', () {

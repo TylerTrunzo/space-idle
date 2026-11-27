@@ -786,6 +786,8 @@ final class ContractTemplateDef {
     this.rewardIncomeSeconds = 0,
     this.rewardCapIncomeSeconds,
     this.lifeSupportWeight = 1,
+    this.minRewardCredits = const BigNum.zero(),
+    this.firstContractMinReward,
   }) : minQuantity = minQuantity ?? BigNum.from(defaultMinQuantity);
 
   /// [quantitySeconds] when a template does not set it: 4 hours.
@@ -841,6 +843,16 @@ final class ContractTemplateDef {
   /// orders seldom compete with crew upkeep; 1 (no lower weight) by
   /// default. See `stepContracts`.
   final double lifeSupportWeight;
+
+  /// Fewest credits a contract pays, at least zero, whatever the faction
+  /// earns: the reward's floor and cap are never below it, so an order
+  /// from a faction that earns next to nothing still pays its way.
+  final BigNum minRewardCredits;
+
+  /// Fewest credits the first contract a faction is ever offered pays when
+  /// it comes from this template: the onboarding hook, at least the first
+  /// claim's credit cost; null for none.
+  final BigNum? firstContractMinReward;
 }
 
 /// All game content, validated.
