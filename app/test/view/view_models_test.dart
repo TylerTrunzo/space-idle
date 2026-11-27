@@ -115,6 +115,28 @@ void main() {
       expect(mine.canRemoveCrew, isFalse);
     });
 
+    test('a maxed upgrade track is unavailable, with the core\'s reason', () {
+      c.state.faction(_p).credits = BigNum.parse('1e30');
+      final b3 = c.state.body('kora').buildings.firstWhere((b) => b.id == 'b3');
+      var level = 0;
+      while (upgradeMaxedReason(content, b3, UpgradeTrack.efficiency) == null) {
+        b3.levels[UpgradeTrack.efficiency] = ++level;
+      }
+      final why = upgradeMaxedReason(content, b3, UpgradeTrack.efficiency);
+
+      final row = _row(bodyView(c, 'kora')!, 'Smelter');
+      final eff = row.upgrades[UpgradeTrack.efficiency]!;
+      expect(eff.affordable, isFalse, reason: 'the core refuses it');
+      expect(eff.maxedReason, why);
+      expect(
+        c.run(const UpgradeCommand(_p, 'b3', UpgradeTrack.efficiency)),
+        isA<CommandFailed>(),
+      );
+      // The other tracks are still open.
+      expect(row.upgrades[UpgradeTrack.speed]!.maxedReason, isNull);
+      expect(row.upgrades[UpgradeTrack.speed]!.affordable, isTrue);
+    });
+
     test('a starved building with a capacity level is still a warning', () {
       // Capacity crew lifts effectiveFraction above its supply share, so
       // clamping it alone read a starved smelter as ok.
@@ -296,6 +318,21 @@ void main() {
       expect(claim.kitsNeeded, 10);
       expect(claim.sourceBodyIds, ['brine']);
       expect(claim.affordable, isTrue);
+    });
+
+    test('a body being claimed shows the claim running, not affordable', () {
+      c.state.faction(_p).credits = BigNum.from(1e9);
+      expect(bodyView(c, 'brine')!.claim!.running, isNull);
+      c.run(const ClaimBodyCommand(_p, 'brine', 'kora'));
+
+      final claim = bodyView(c, 'brine')!.claim!;
+      expect(claim.affordable, isFalse, reason: 'the core refuses a second');
+      expect(claim.running?.title, 'Claiming Brine');
+      expect(claim.running?.remaining, '30m');
+      expect(
+        c.run(const ClaimBodyCommand(_p, 'brine', 'kora')),
+        isA<CommandFailed>(),
+      );
     });
 
     test('a hidden body has no view until surveyed', () {

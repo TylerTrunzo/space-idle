@@ -37,6 +37,7 @@ final class UpgradeButtonView {
     required this.label,
     required this.cost,
     required this.affordable,
+    this.maxedReason,
     this.payback,
   });
 
@@ -46,8 +47,13 @@ final class UpgradeButtonView {
   /// Credits it costs, formatted.
   final String cost;
 
-  /// Whether the player holds that many credits.
+  /// Whether it can be bought now: the track is not maxed and the player
+  /// holds that many credits.
   final bool affordable;
+
+  /// Why the track can go no higher (the core's `upgradeMaxedReason`,
+  /// such as "its inputs are at the 25% floor"); null while it can.
+  final String? maxedReason;
 
   /// How soon it pays for itself, such as "8m"; null until the core's
   /// upgrade advice (stage 2 Task 0) fills it in.
@@ -199,6 +205,7 @@ UpgradeButtonView _upgrade(
   BigNum credits,
 ) {
   final cost = upgradeCost(c, b, t)[creditsKey] ?? const BigNum.zero();
+  final maxed = upgradeMaxedReason(c, b, t);
   return UpgradeButtonView(
     label: switch (t) {
       UpgradeTrack.speed => 'Speed',
@@ -206,6 +213,7 @@ UpgradeButtonView _upgrade(
       UpgradeTrack.capacity => 'Capacity',
     },
     cost: formatNumber(cost),
-    affordable: credits >= cost,
+    affordable: maxed == null && credits >= cost,
+    maxedReason: maxed,
   );
 }

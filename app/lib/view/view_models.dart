@@ -3,6 +3,7 @@ import 'package:meta/meta.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/view/building_row_view.dart';
 import 'package:space_idle/view/format.dart';
+import 'package:space_idle/view/project_views.dart';
 
 export 'package:space_idle/view/building_row_view.dart';
 
@@ -178,6 +179,7 @@ final class ClaimView {
     required this.kitsNeeded,
     required this.affordable,
     required this.sourceBodyIds,
+    this.running,
   });
 
   /// Credits it costs, formatted.
@@ -186,12 +188,18 @@ final class ClaimView {
   /// Outpost kits it takes; 0 for the first claim.
   final int kitsNeeded;
 
-  /// Whether the player has the credits and a body with the kits.
+  /// Whether a claim can start now: no claim on the body is under way,
+  /// and the player has the credits and a body with the kits.
   final bool affordable;
 
   /// Owned bodies holding enough kits to pay from, or every owned body
   /// when none are needed.
   final List<String> sourceBodyIds;
+
+  /// The claim on the body already under way (the player's or anyone's),
+  /// for the panel to show its countdown instead of a button; null when
+  /// none is.
+  final ProjectView? running;
 }
 
 /// A body's Mission Control panel.
@@ -299,7 +307,7 @@ BodyView? bodyView(GameController c, String bodyId) {
       for (final r in s.routes)
         if (r.ownerId == player && r.toBodyId == bodyId) _route(c, r),
     ],
-    claim: body.ownerId == null ? _claim(c) : null,
+    claim: body.ownerId == null ? _claim(c, body) : null,
   );
 }
 
@@ -384,8 +392,9 @@ RouteView _route(GameController c, RouteState r) {
   );
 }
 
-ClaimView _claim(GameController c) {
+ClaimView _claim(GameController c, BodyState body) {
   final s = c.state;
+  final running = projectOn(s, ProjectKind.claim, body.id);
   final cost = claimCost(s, c.content, c.playerId);
   final kit = c.content.rules.outpostKitResource;
   final credits = cost[creditsKey] ?? const BigNum.zero();
@@ -399,7 +408,11 @@ ClaimView _claim(GameController c) {
   return ClaimView(
     creditsCost: formatNumber(credits),
     kitsNeeded: kits.toDouble().round(),
-    affordable: s.faction(c.playerId).credits >= credits && sources.isNotEmpty,
+    affordable:
+        running == null &&
+        s.faction(c.playerId).credits >= credits &&
+        sources.isNotEmpty,
     sourceBodyIds: sources,
+    running: running == null ? null : projectView(c, running),
   );
 }

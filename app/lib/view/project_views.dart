@@ -41,10 +41,11 @@ final class ProjectView {
 
 /// The player's projects under way, soonest to finish first.
 List<ProjectView> projectViews(GameController c) => [
-  for (final p in runningProjects(c.state, c.playerId)) _project(c, p),
+  for (final p in runningProjects(c.state, c.playerId)) projectView(c, p),
 ];
 
-ProjectView _project(GameController c, ProjectState p) {
+/// The view of project [p], one of the player's or any faction's.
+ProjectView projectView(GameController c, ProjectState p) {
   final s = c.state;
   final span = p.finishAt - p.startedAt;
   final done = span <= 0 ? 1.0 : (s.time - p.startedAt) / span;
@@ -214,7 +215,7 @@ MegaprojectView _megaproject(GameController c, MegaprojectDef m) {
       ).entries)
         _line(c, id, got[id] ?? const BigNum.zero(), need),
     ],
-    running: stage == null ? null : _project(c, stage),
+    running: stage == null ? null : projectView(c, stage),
     queued: megaprojectStageQueued(s, content, c.playerId, m),
     takesDeliveries: megaprojectTakesDeliveries(s, content, c.playerId, m),
     locked: lock == null
