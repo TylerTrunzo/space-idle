@@ -14,7 +14,9 @@ that taps buy-max each check-in.
 ## What changed
 
 - **Buy-max casual.** The casual bot taps `buyUpgrades` once a check-in, as one of its 15 commands,
-  with its spare credits (at most the auto-pay reserve while a megaproject takes credits on its own).
+  with its spare credits (less what it saves for a goal, and at most the auto-pay reserve while a
+  megaproject takes credits on its own). Buy-max fills free crew first with capacity on buildings
+  whose crew slots are all filled.
   With the stage 1.7 task 3 content it earned 40-47B on day 7, against 4-6M for the old casual bot:
   round 4's "about 1,000× ahead" was, if anything, low.
 - **Megaproject credits on their own.** Both bots now set credit auto-pay once every good a stage
@@ -29,26 +31,38 @@ that taps buy-max each check-in.
 
 ## Pacing targets, seeds 1 / 2 / 3
 
+After task 4's fix round 1: buy-max fills free crew first (a capacity level on a building whose
+crew slots are all filled comes before cost while crew is free), the casual bot's buy-max leaves
+its goal saving at every check-in, and the controller's rulings (a station level at least every 4
+days; rewards measured against the income basis the cap uses). Stage 1.5's "Orbital Station level 3
+around day 14-21" belonged to the old casual bot; §4's targets for the buy-max casual supersede it
+(it reaches level 3 on day 4-5).
+
 | Target | Before | After | Met after |
 |---|---|---|---|
-| Casual: station level 1 on days 3-5 | day 6 / 7 / 6 (132, 162, 138 h) | day 4 / 5 / 4 (90, 102, 90 h) | yes |
-| Casual: a milestone or project on ≥ 5 of every 7 days (worst week) | 6 / 7 / 6 | 6 / 7 / 6 | yes |
-| Casual: no gap > 3 days with neither megaproject levelling, through day 21 (longest gap from station level 1) | 2 / 2 / 3 | 2 / 3 / 3 | yes |
-| Casual: day 21 ≥ 1.5× day 14 | 2.31× / 2.36× / 4.35× | 1.97× / **1.38×** / 2.19× | **no on seed 2** |
+| Casual: station level 1 on days 3-5 | day 6 / 7 / 6 (132, 162, 138 h) | day 4 / 5 / 4 (96, 108, 90 h) | yes |
+| Casual: a milestone or project on ≥ 5 of every 7 days (worst week) | 6 / 7 / 6 | 6 / 6 / **4** | **no on seed 3** |
+| Casual: no gap > 3 days with neither megaproject levelling, through day 21 (longest gap from station level 1) | 2 / 2 / 3 | 3 / 2 / **4** | **no on seed 3** |
+| Casual: day 21 ≥ 1.5× day 14 | 2.31× / 2.36× / 4.35× | 2.27× / 1.82× / **1.38×** | **no on seed 3** |
 | Balanced: +20% from day 7 to day 14 | 2.59× / 2.51× / 2.63× | 3.16× / 3.01× / 3.09× | yes |
 | Balanced: +10% from day 14 to day 21 | 1.11× / 1.11× / 1.08× | 1.49× / 1.51× / 1.71× | yes |
-| Balanced: a station level at least every 3 days through day 21 (longest gap) | 12 / 13 / 10 | **4 / 4** / 3 | **no on seeds 1-2** |
-| Contracts ≤ 15% of earnings on days 1 / 7 / 14, casual | 12.7-0.0-9.3 / 6.3-0.0-7.9 / 6.0-9.6-3.1% | 0.1-0.9-0.0 / 0.7-1.6-2.5 / 0.8-0.3-0.0% | yes |
+| Balanced: a station level at least every 4 days through day 21 (longest run of days without one; §4 said 3, ruled 4) | 12 / 13 / 10 | 4 / 4 / 3 | yes |
+| Contracts ≤ 15% of earnings on days 1 / 7 / 14, casual | 12.7-0.0-9.3 / 6.3-0.0-7.9 / 6.0-9.6-3.1% | 0.6-1.2-6.8 / 0.4-1.7-4.6 / 0.7-6.9-4.0% | yes |
 | Same, balanced | 0.0-0.0-0.0 / 1.5-4.3-6.2 / 1.4-1.5-4.6% | 0.0-0.1-3.8 / 1.3-0.0-3.7 / 1.4-1.1-1.8% | yes |
 | Same, greedy | 12.3-11.2-10.6 / 9.9-12.8-12.0 / 9.0-9.5-10.7% | unchanged | yes |
-| No reward above 1 h of income, first excepted (largest, in hours of the report's credits a second when posted): casual | 3.81 / 4.21 / 7.51 | 1.04 / 1.78 / 1.37 | no (see below) |
-| Same, balanced | 1.01 / 1.02 / 0.79 | 1.01 / 1.02 / 0.79 | about |
-| Same, greedy | 0.94 / 1.03 / 1.02 | unchanged | about |
+| No reward above 1 h of income, first excepted: largest reward in hours of the income basis (`incomeBasis`, the cap's), casual | (credits a second: 3.8 / 4.2 / 7.5) | 0.98 / 1.00 / 0.60 | yes |
+| Same, balanced | | 0.99 / 1.0002 / 0.77 | yes (within 1%) |
+| Same, greedy | | 0.92 / 1.0006 / 1.00 | yes (within 1%) |
 | Mass Driver: a level raises balanced income ≥ 3% on days 5-14 | +4.5-5.0% | +4.84-5.00% (days 5, 7, 10, 14) | yes |
 
-The contract reward cap is 1 h of the reward's income basis, the larger of credits a second and the
-value of what is made beyond what is used; the measure above uses credits a second alone, so a
-reward a little over 1 h of it is within the cap.
+The reward is measured at the first decision after the order is posted, often after a catch-up, so
+the basis has moved a little since the engine capped it: 1% is allowed. Before the fix round the
+basis was not measured; the credits-a-second figures are given for reference.
+
+**Known misses.** Casual seed 3 misses three targets after the fix round, where seed 2 missed the
+day-21 ratio before it (1.38×, ruling 7). Which seed misses moves with small changes: with habitat
+capacity at ×2 every seed passes, at ×1.5 seed 1 misses three (worst week 5, gap 4, 1.13×), at ×2.5
+(shipped, ruling 4) seed 3. Nothing was tuned to pass.
 
 ## Megaproject levels (E1)
 
@@ -79,20 +93,29 @@ asks for both. Raising the station's depth factor to ×1.5 a level made the targ
 the economy grow ×11-15 from day 7 to day 14 (up to 30T a day by day 21), with levels at 0.1-0.6 days of
 income; it was not kept.
 
+The controller accepted the steep costs (ruling 1): a station level pays back in 7-19 days of the
+income it adds, and playtest round 5 judges whether levels still feel worth it.
+
+**Sales concentration.** Hull plates are 44-51% of the balanced bot's day-14 sales on seeds 1-3
+(38-41% before). `balance_targets_test` allows up to 55% for stage 1.7, a known concentration until
+stage 3's market-wall content (ruling 2).
+
 ## Crew (E8)
 
 Free crew as a share of crew supported, averaged over check-ins:
 
 | Bot | Days 1-4 before | Days 4-21 before | Days 1-4 after | Days 4-21 after |
 |---|---|---|---|---|
-| Old casual (before) / buy-max casual (after) | 14-17% | 0-1% | 51-52% | 25% |
-| Buy-max casual on the base content | 84% | 73-76% | | |
+| Old casual (before) / buy-max casual (after) | 14-17% | 0-1% | 8-12% | 2% |
+| Buy-max casual on the base content, cheapest first only | 84% | 73-76% | | |
+| Buy-max casual, habitat ×2.5, cheapest first only (task 4 before the fix round) | | | 51-52% | 25% |
 | Balanced | 7-10% | 3-5% | 13-16% | 3% |
 
-Habitat capacity ×2.5 a level cut the buy-max casual's idle crew from 84% to about half; the
-balanced bot keeps crew tight as before.
+Filling free crew with capacity first is what made crew bind for the buy-max casual: it now runs
+short of crew from day 2, as the balanced bot always did.
 
 ## Later days
 
 Seed 1 balanced: income 484B on day 21, 610-698B on days 24-30; station 16 → 17 and Mass Driver
-17 → 18 between day 21 and 30. Casual seed 1: 346B on day 21. Both still level past day 30.
+17 → 18 between day 21 and 30. Casual seed 1: 405B on day 21, 663B on day 30; station 15 → 16 and
+Mass Driver 17 → 18 between day 21 and 30. Both still level past day 30.
