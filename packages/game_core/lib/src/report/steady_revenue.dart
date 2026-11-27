@@ -181,13 +181,21 @@ BigNum steadySaleRevenue(
 }
 
 /// One building's full-rate flow a second, and the share of it it runs at.
+/// A [held] run (a habitat) keeps the share it starts at.
 final class _Run {
-  _Run(this.bodyId, this.inputs, this.outputs);
+  _Run(
+    this.bodyId,
+    this.inputs,
+    this.outputs, {
+    this.share = 1,
+    this.held = false,
+  });
 
   final String bodyId;
   final Map<String, BigNum> inputs;
   final Map<String, BigNum> outputs;
-  double share = 1;
+  final bool held;
+  double share;
 }
 
 /// One route's most a second, and the share of it it carries.
@@ -202,6 +210,134 @@ final class _Leg {
 }
 
 String _key(String bodyId, String resourceId) => '$bodyId/$resourceId';
+
+/// Each key ([_key]) on a route cycle to the id of its cycle: the keys of
+/// one resource that routes with cargo link both ways, through any
+/// number of bodies (a strongly connected set of two or more); keys on no
+/// cycle are left out. Ids are the cycle's first key in route order.
+Map<String, String> _cycles(List<_Leg> legs) {
+  final next = <String, List<String>>{};
+  for (final leg in legs) {
+    if (leg.carried.isZero) continue;
+    final r = leg.route;
+    final from = _key(r.fromBodyId, r.resourceId);
+    final to = _key(r.toBodyId, r.resourceId);
+    if (from == to) continue;
+    (next[from] ??= []).add(to);
+    next.putIfAbsent(to, () => []);
+  }
+  Set<String> reach(String start) {
+    final seen = <String>{start};
+    final todo = [start];
+    while (todo.isNotEmpty) {
+      for (final n in next[todo.removeLast()]!) {
+        if (seen.add(n)) todo.add(n);
+      }
+    }
+    return seen;
+  }
+
+  final reached = {for (final k in next.keys) k: reach(k)};
+  final cycle = <String, String>{};
+  for (final k in next.keys) {
+    if (cycle.containsKey(k)) continue;
+    final members = [
+      for (final o in next.keys)
+        if (reached[k]!.contains(o) && reached[o]!.contains(k)) o,
+    ];
+    if (members.length < 2) continue;
+    for (final o in members) {
+      cycle[o] = k;
+    }
+  }
+  return cycle;
+}
+
+/// What each route cycle ([_cycles]) of [legs] has to give and is asked
+/// for: what its bodies' buildings make ([made]) and routes bring in from
+/// outside it, against what they use ([used]) and routes take out of it.
+/// Cargo going round the cycle is neither: only production feeds it.
+Map<String, (BigNum, BigNum)> _cycleBalance(
+  Map<String, String> cycles,
+  List<_Leg> legs,
+  Map<String, BigNum> made,
+  Map<String, BigNum> used,
+) {
+  final balance = <String, (BigNum, BigNum)>{};
+  void add(String id, BigNum have, BigNum want) {
+    final (h, w) = balance[id] ?? (const BigNum.zero(), const BigNum.zero());
+    balance[id] = (h + have, w + want);
+  }
+
+  for (final MapEntry(key: key, value: id) in cycles.entries) {
+    add(id, made[key] ?? const BigNum.zero(), used[key] ?? const BigNum.zero());
+  }
+  for (final leg in legs) {
+    final r = leg.route;
+    final from = cycles[_key(r.fromBodyId, r.resourceId)];
+    final to = cycles[_key(r.toBodyId, r.resourceId)];
+    if (from == to) continue;
+    if (to != null) add(to, leg.carried, const BigNum.zero());
+    if (from != null) add(from, const BigNum.zero(), leg.carried);
+  }
+  return balance;
+}
+
+/// Each key on a route cycle to the share of what is drawn on the cycle
+/// from outside it (by buildings, or by routes leaving it) that its
+/// production and inflow cover ([_cycleBalance]), at most 1. So cargo
+/// sent round a cycle over a stock never counts as supply: with nothing
+/// made on it or brought in, its share is 0.
+Map<String, double> _cycleLimits(
+  Map<String, String> cycles,
+  List<_Leg> legs,
+  Map<String, BigNum> made,
+  Map<String, BigNum> used,
+) {
+  if (cycles.isEmpty) return const {};
+  final balance = _cycleBalance(cycles, legs, made, used);
+  final share = {
+    for (final MapEntry(key: id, value: (have, want)) in balance.entries)
+      id: want.isZero || have >= want
+          ? 1.0
+          : (have / want).toDouble().clamp(0.0, 1.0),
+  };
+  return {
+    for (final MapEntry(key: key, value: id) in cycles.entries) key: share[id]!,
+  };
+}
+
+/// Cuts what is left over on each route cycle's keys in [net] to what the
+/// cycle as a whole has left ([_cycleBalance]), in proportion: cargo
+/// still going round does not count as left over anywhere.
+void _keepCycleSurplus(
+  Map<String, BigNum> net,
+  Map<String, String> cycles,
+  List<_Leg> legs,
+  Map<String, BigNum> made,
+  Map<String, BigNum> used,
+) {
+  if (cycles.isEmpty) return;
+  final balance = _cycleBalance(cycles, legs, made, used);
+  for (final MapEntry(key: id, value: (have, want)) in balance.entries) {
+    final keys = [
+      for (final MapEntry(key: key, value: of) in cycles.entries)
+        if (of == id && net.containsKey(key)) key,
+    ];
+    if (keys.isEmpty) continue;
+    final shown = keys.fold(const BigNum.zero(), (t, k) => t + net[k]!);
+    final left = have - want;
+    if (left <= const BigNum.zero()) {
+      keys.forEach(net.remove);
+      continue;
+    }
+    if (shown <= left) continue;
+    final scale = (left / shown).toDouble();
+    for (final k in keys) {
+      net[k] = net[k]!.mulDouble(scale);
+    }
+  }
+}
 
 /// [factionId]'s [SteadyFlows]: what its bodies make and receive a second
 /// less what they use and send, by body and resource ([_key]), with every
@@ -219,7 +355,18 @@ SteadyFlows _steadyNet(
     for (final b in body.buildings) {
       final flow = fullRateFlow(c, body, b, 1, crewEff, bonuses: bonuses);
       if (flow.outputs.isEmpty && flow.inputs.isEmpty) continue;
-      runs.add(_Run(body.id, flow.inputs, flow.outputs));
+      // A habitat draws what it draws now: from stock or not, it houses
+      // the crew `crewEff` counts, so what it eats is never surplus.
+      final habitat = c.buildings[b.defId]!.kind == BuildingKind.habitat;
+      runs.add(
+        _Run(
+          body.id,
+          flow.inputs,
+          flow.outputs,
+          share: habitat ? b.lastRunFraction : 1,
+          held: habitat,
+        ),
+      );
     }
   }
   final legs = [
@@ -232,9 +379,15 @@ SteadyFlows _steadyNet(
 
   var supply = <String, BigNum>{};
   var demand = <String, BigNum>{};
+  // What buildings alone make and use, by key: what a route cycle must
+  // balance (see [_cycleLimits]).
+  var made = <String, BigNum>{};
+  var used = <String, BigNum>{};
   void tally() {
     supply = {};
     demand = {};
+    made = {};
+    used = {};
     void add(Map<String, BigNum> into, String key, BigNum v) {
       if (!v.isZero) into[key] = (into[key] ?? const BigNum.zero()) + v;
     }
@@ -242,9 +395,11 @@ SteadyFlows _steadyNet(
     for (final run in runs) {
       for (final MapEntry(key: id, value: v) in run.outputs.entries) {
         add(supply, _key(run.bodyId, id), v.mulDouble(run.share));
+        add(made, _key(run.bodyId, id), v.mulDouble(run.share));
       }
       for (final MapEntry(key: id, value: v) in run.inputs.entries) {
         add(demand, _key(run.bodyId, id), v.mulDouble(run.share));
+        add(used, _key(run.bodyId, id), v.mulDouble(run.share));
       }
     }
     for (final leg in legs) {
@@ -264,6 +419,12 @@ SteadyFlows _steadyNet(
 
   for (var round = 0; round < _maxRounds; round++) {
     tally();
+    final cycles = _cycles(legs);
+    final limit = _cycleLimits(cycles, legs, made, used);
+    // A draw on [key] from outside its route cycle: a building, or a
+    // route leaving the cycle, gets no more than the cycle's own
+    // production covers.
+    double drawn(String key) => math.min(covered(key), limit[key] ?? 1);
     var moved = 0.0;
     void lower(double from, double to, void Function(double) set) {
       if (to < from) {
@@ -284,7 +445,11 @@ SteadyFlows _steadyNet(
     final legShares = <_Leg, double>{};
     for (final leg in legs) {
       final r = leg.route;
-      var share = leg.share * covered(_key(r.fromBodyId, r.resourceId));
+      final from = _key(r.fromBodyId, r.resourceId);
+      final inside =
+          cycles[from] != null &&
+          cycles[from] == cycles[_key(r.toBodyId, r.resourceId)];
+      var share = leg.share * (inside ? covered(from) : drawn(from));
       final key = _key(r.toBodyId, r.resourceId);
       final inflow = stopInflow[key];
       if (r.stopAtDestination != null && inflow != null && !inflow.isZero) {
@@ -300,9 +465,10 @@ SteadyFlows _steadyNet(
       legShares[leg] = share;
     }
     for (final run in runs) {
+      if (run.held) continue;
       var share = run.share;
       for (final id in run.inputs.keys) {
-        share = math.min(share, run.share * covered(_key(run.bodyId, id)));
+        share = math.min(share, run.share * drawn(_key(run.bodyId, id)));
       }
       lower(run.share, share, (v) => run.share = v);
     }
@@ -318,6 +484,7 @@ SteadyFlows _steadyNet(
           when left > const BigNum.zero())
         key: left,
   };
+  _keepCycleSurplus(net, _cycles(legs), legs, made, used);
   void add(Map<String, BigNum> into, String id, BigNum v) {
     if (!v.isZero) into[id] = (into[id] ?? const BigNum.zero()) + v;
   }

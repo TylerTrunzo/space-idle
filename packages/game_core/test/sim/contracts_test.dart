@@ -859,6 +859,62 @@ void main() {
         expect(b.rewardCredits <= a.rewardCredits.mulDouble(1.001), isTrue);
       });
 
+      group('a habitat fed partly from stock', () {
+        /// Brine's 2 ice drills and melters, electrolyzer, protein vat
+        /// and habitat, with [unstaffed] left without crew, and food and
+        /// oxygen in stock.
+        GameState brine(String? unstaffed) {
+          final s = e.newGame(1);
+          final brine = s.body('brine')..ownerId = 'player';
+          for (final (def, dep) in [
+            ('ice_drill', 'water_ice'),
+            ('ice_drill', 'water_ice'),
+            ('ice_melter', null),
+            ('ice_melter', null),
+            ('electrolyzer', null),
+            ('protein_vat', null),
+            ('habitat', null),
+          ]) {
+            brine.buildings.add(
+              BuildingState(
+                id: s.newId('b'),
+                defId: def,
+                depositResourceId: dep,
+                crew: def == unstaffed ? 0 : content.buildings[def]!.crewSlots,
+              ),
+            );
+          }
+          brine.stock
+            ..['food'] = n(700)
+            ..['oxygen'] = n(700);
+          return s;
+        }
+
+        test('still counts all it draws', () {
+          // With no electrolyzer, the habitat breathes stocked oxygen and
+          // the vat, short of hydrogen, stands idle: of the melters' 1.0
+          // water a second, the habitat's 0.1 is not left over.
+          final s = brine('electrolyzer');
+          final r = buildFlowReport(s, content, 'player');
+          expect(r.steadySurplusPerSec('water').toDouble(), closeTo(0.9, 1e-9));
+        });
+
+        test('unstaffing the food maker it eats from does not raise the '
+            'basis', () {
+          // Review probe: 4.787 against 4.233 a second.
+          BigNum basis(String? unstaffed) {
+            final s = brine(unstaffed);
+            return incomeBasis(
+              s,
+              content,
+              buildFlowReport(s, content, 'player'),
+            );
+          }
+
+          expect(basis('protein_vat') <= basis(null), isTrue);
+        });
+      });
+
       test('a tiny income pays minRewardCredits, never nothing', () {
         final c = lavish();
         final s = e.newGame(1);

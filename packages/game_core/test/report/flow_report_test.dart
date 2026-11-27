@@ -719,4 +719,93 @@ void main() {
       'Habitat on Kora is running at 50%: not enough Oxygen',
     );
   });
+
+  group('steady rates come only from production', () {
+    /// Kora presses plates; Brine and Hollow Reach are owned too, and steel
+    /// moves between them on [legs] (from, to) with [ships] ships each.
+    /// Kora's mines and smelter work only when [smelting]; every body
+    /// starts with 2,000 steel.
+    FlowReport loop(
+      List<(String, String)> legs, {
+      required int ships,
+      bool smelting = false,
+    }) {
+      if (!smelting) {
+        for (final b in kora.buildings) {
+          b.crew = 0;
+        }
+      }
+      kora.buildings.add(
+        BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+      );
+      for (final id in ['brine', 'hollow_reach']) {
+        s.body(id).ownerId = 'player';
+      }
+      for (final id in ['kora', 'brine', 'hollow_reach']) {
+        s.body(id).stock
+          ..['steel'] = n(2000)
+          ..['cargo_ship'] = n(ships);
+      }
+      for (final (from, to) in legs) {
+        final r = engine.apply(
+          s,
+          CreateRouteCommand('player', from, to, 'steel', n(1000), ships),
+        );
+        expect(r, isA<CommandOk>(), reason: '$r');
+      }
+      return buildFlowReport(s, c, 'player');
+    }
+
+    for (final ships in [1, 5, 20]) {
+      test('a route pair over a stock nothing makes gives nothing, with '
+          '$ships ships each way', () {
+        final r = loop([('kora', 'brine'), ('brine', 'kora')], ships: ships);
+        expect(r.producedPerSec('hull_plate') > const BigNum.zero(), isTrue);
+        expect(r.steadyProducedPerSec('hull_plate'), const BigNum.zero());
+        expect(r.steadySurplusPerSec('steel'), const BigNum.zero());
+      });
+
+      test('a route pair where one side makes the input gives what that '
+          'makes, with $ships ships each way', () {
+        // The smelter makes 0.2 steel a second, so the press runs at
+        // 0.2 / 0.375 of full: 0.2 / 3 plates a second.
+        final r = loop(
+          [('kora', 'brine'), ('brine', 'kora')],
+          ships: ships,
+          smelting: true,
+        );
+        expect(
+          r.steadyProducedPerSec('hull_plate').toDouble(),
+          closeTo(0.2 / 3, 0.2 / 3 * 0.01),
+        );
+        expect(r.steadySurplusPerSec('steel').toDouble(), closeTo(0, 1e-9));
+      });
+    }
+
+    test('a three-body cycle over a stock nothing makes gives nothing', () {
+      final r = loop([
+        ('kora', 'brine'),
+        ('brine', 'hollow_reach'),
+        ('hollow_reach', 'kora'),
+      ], ships: 5);
+      expect(r.steadyProducedPerSec('hull_plate'), const BigNum.zero());
+      expect(r.steadySurplusPerSec('steel'), const BigNum.zero());
+    });
+
+    test('a three-body cycle carries what one body makes', () {
+      final r = loop(
+        [
+          ('kora', 'brine'),
+          ('brine', 'hollow_reach'),
+          ('hollow_reach', 'kora'),
+        ],
+        ships: 5,
+        smelting: true,
+      );
+      expect(
+        r.steadyProducedPerSec('hull_plate').toDouble(),
+        closeTo(0.2 / 3, 0.2 / 3 * 0.01),
+      );
+    });
+  });
 }
