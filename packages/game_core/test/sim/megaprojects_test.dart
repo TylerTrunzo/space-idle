@@ -154,15 +154,19 @@ void main() {
       }
     });
 
-    test('speeds up tiers 0 and 1, compounding', () {
+    test('raises what tier 1-2 sales earn, compounding', () {
       // No market depth: deeper tier 0-1 markets made them most of an
-      // optimizer's sales by day 14 (stage 1.6 task 5).
+      // optimizer's sales by day 14 (stage 1.6 task 5). No production
+      // speed: no tier range of it lifted mid-game income (stage 1.7). The
+      // sale price of tiers 1-2 adds about 15% of steady income a level on
+      // the balanced bot's day 7 and 14; tiers 0-1 made tier 0-1 goods
+      // most of its day-14 sales.
       expect(
         [
           for (final b in driver.bonusesPerLevel)
-            (b.kind, b.amount, b.appliesToMaxTier),
+            (b.kind, b.amount, b.appliesToMinTier, b.appliesToMaxTier),
         ],
-        [(BonusKind.productionSpeedMultiplier, 1.15, 1)],
+        [(BonusKind.salePriceMultiplier, 1.15, 1, 2)],
       );
     });
 

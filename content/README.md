@@ -54,12 +54,14 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   level may cost far more than one body holds; its timer starts once the last of it is in.
 - **Mass Driver.** Opens at Orbital Station level 1 (`requiresMegaproject`). It takes credits and bulk
   goods that otherwise saturate (hull plate, copper wire, water, silicon wafers), costs ×2.3 a level,
-  and each level runs extractors and tier-1 buildings ×1.15 faster (inputs and outputs), compounding.
-  Stage 1.7 measured other ranges (tiers 1–2, 2 only, 0–2, at ×1.15 to ×1.4) on the balanced bot's
-  day-7 and day-14 states: none adds 3% of steady income a level (at most 1.3% on day 7, nothing on
-  day 14), and any range with tier 2 makes the balanced bot's kits, modules and ships pass the
-  "tens per 6 h" target, so it stays at tiers 0–1. What a level used to cost was the goods its next
-  stage took from sales; feeding goods only near ready (`setMegaprojectAuto`) removes that.
+  and each level multiplies what market sales of tier-1 and tier-2 goods earn by 1.15, compounding
+  (`salePriceMultiplier`; saturation, depth and what sells are untouched, and contracts value goods
+  at the plain price). Stage 1.7 replaced its production speed bonus: no tier range of that lifted
+  the balanced bot's day-7 or day-14 steady income by more than 1.3% a level, and any range with
+  tier 2 overflowed the kits/modules/ships target. The sale price of tiers 1-2 adds about 15% a level
+  on both days; tiers 0-1 add 8-10% but make tier 0-1 goods most of day-14 sales. What a level used to
+  cost was the goods its next stage took from sales; feeding goods only near ready
+  (`setMegaprojectAuto`) removes that.
   It asks for no food (habitats eat all a young economy makes) and no steel (plate presses take it for
   the station's hull plates), and it does not deepen markets: deeper tier 0–1 markets made those goods
   most of an optimizer's sales. Tuned in stage 1.6 so a casual player opens it on days 6–8 and gets a
@@ -67,7 +69,8 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   day 10 on seed 2).
 - **Megaproject bonuses.** `bonusesPerLevel` kinds: `storagePercent`, `housingPercent`,
   `outputPercent` and `marketDepthPercent` add `amount` percent a level; `offlineCapSeconds` adds
-  seconds; `marketDepthMultiplier` and `productionSpeedMultiplier` multiply by `amount^level`
+  seconds; `marketDepthMultiplier`, `productionSpeedMultiplier` and `salePriceMultiplier` (the credits
+  market sales earn) multiply by `amount^level`
   (`amount` at least 1), optionally only from `appliesToMinTier` and up to `appliesToMaxTier` (the
   tier of the good sold, or the highest tier a building makes; habitats and depots make nothing and
   are never sped up; the lowest tier must not pass the highest). A multiplier never passes

@@ -97,6 +97,19 @@ void main() {
                 )
                 as SaveOk)
             .state;
+    // Its Mass Driver stage ends 1,772 s in. Since stage 1.7 a Mass Driver
+    // level raises what tier 1-2 sales earn, a real rise the report cannot
+    // see coming that far ahead; the stage is held past the window so this
+    // measures the prices settling alone.
+    final stage = s.projects.singleWhere((p) => p.targetId == 'mass_driver');
+    s.projects[s.projects.indexOf(stage)] = ProjectState(
+      id: stage.id,
+      factionId: stage.factionId,
+      kind: stage.kind,
+      targetId: stage.targetId,
+      startedAt: stage.startedAt,
+      finishAt: s.time + 9000,
+    );
     final shown = buildFlowReport(s, c, 'player').creditsPerSec.toDouble();
     final away = e.catchUpOffline(s, 8850);
     final earned = away.creditsEarned.toDouble() / 8850;

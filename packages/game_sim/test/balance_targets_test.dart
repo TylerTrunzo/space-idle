@@ -199,9 +199,10 @@ void main() {
       },
       skip:
           'Known miss on seed 1 since stage 1.7 Task 2 (contracts sized by '
-          'value): the casual bot opens the Mass Driver on day 11 (seeds 2 '
-          'and 3 open it by day 8). Task 4 moves the pacing targets to the '
-          'buy-max casual bot, which takes this target over.',
+          'value): the casual bot opens the Mass Driver on day 9 (210 h; '
+          'day 11 before Task 3\'s near-ready feeding; seeds 2 and 3 open '
+          'it by day 8). Task 4 moves the pacing targets to the buy-max '
+          'casual bot, which takes this target over.',
     );
 
     test('keeps both megaprojects rising once the Mass Driver opens', () {
