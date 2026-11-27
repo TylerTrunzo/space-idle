@@ -308,10 +308,11 @@ final class GameEngine {
   }
 
   /// [necks], [factionId]'s report's [FlowReport.groupedBottlenecks] on
-  /// return, with what the cap cut while away ([wastedAt], body id to resource id to
-  /// the units and when they were first cut) as storage-full entries: the
-  /// units' value at [s]'s prices spread over the [seconds] simulated, an
-  /// hour. Where the report shows that store full too, its entry takes
+  /// return, with what the cap cut while away ([wastedAt], body id to
+  /// resource id to the units and when they were first cut) as
+  /// storage-full entries: the units' value at [s]'s prices spread over
+  /// the [seconds] simulated, an hour. Where the report shows that store
+  /// full too, its entry takes
   /// the larger loss; otherwise a new entry follows the report's, bodies
   /// and resources in the order first cut, first seen when the cut began
   /// unless [before] (the report as the absence began, by

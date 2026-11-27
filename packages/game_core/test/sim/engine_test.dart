@@ -1562,7 +1562,7 @@ void main() {
         // quiet, 17-21 ms on a busy machine (a tenth of the synthetic run
         // allowed, for the median of three reads), a second read of the
         // same state about 1 ms.
-        final c = shippedContent();
+        final c = fixtureContent();
         final e = GameEngine(c);
         final saved = File(
           'test/fixtures/balanced_day14_fed.json',

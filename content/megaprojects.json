@@ -3,13 +3,13 @@
     "id": "orbital_station",
     "name": "Orbital Station",
     "baseCost": {
-      "credits": "5e6",
+      "credits": "2e7",
       "station_segment": "200",
       "survey_drone": "40",
       "reactor_core": "30",
       "hull_plate": "1500"
     },
-    "costGrowth": 2.5,
+    "costGrowth": 2.0,
     "stageSeconds": 7200,
     "stageSecondsGrowth": 1.15,
     "bonusesPerLevel": [
@@ -25,13 +25,13 @@
     "requiresMegaproject": {"orbital_station": 1},
     "scalesContracts": false,
     "baseCost": {
-      "credits": "2e6",
+      "credits": "8e6",
       "hull_plate": "5000",
       "copper_wire": "20000",
       "water": "10000",
       "silicon_wafer": "2000"
     },
-    "costGrowth": 2.3,
+    "costGrowth": 2.0,
     "stageSeconds": 7200,
     "stageSecondsGrowth": 1.15,
     "bonusesPerLevel": [

@@ -224,7 +224,7 @@ void main() {
 
     Command next() {
       final f = pick(factions);
-      return switch (rng.nextInt(19)) {
+      return switch (rng.nextInt(20)) {
         0 => BuildCommand(
           f,
           pick(bodies),
@@ -284,6 +284,18 @@ void main() {
           creditWeight: rng.nextInt(13) - 1,
         ),
         17 => SetAutoPayReserveCommand(f, pick(amounts)),
+        18 => BuyUpgradesCommand(
+          f,
+          pick(amounts),
+          // 0 and one past the cap are refused.
+          maxPurchases: pick([
+            1,
+            7,
+            0,
+            BuyUpgradesCommand.defaultMaxPurchases,
+            BuyUpgradesCommand.defaultMaxPurchases + 1,
+          ]),
+        ),
         _ => DiscardContractCommand(f, pick(contracts())),
       };
     }
@@ -298,6 +310,7 @@ void main() {
     }
 
     var applied = 0;
+    var boughtLevels = 0;
     for (var i = 0; i < 1500; i++) {
       final cmd = next();
       final json = cmd.toJson();
@@ -319,6 +332,9 @@ void main() {
         case CommandOk(:final outcome):
           applied++;
           expect(outcome, isNotNull, reason: jsonEncode(json));
+          if (outcome case UpgradesBought(:final levels) when levels > 0) {
+            boughtLevels += levels;
+          }
       }
       // The app may save between any two commands, before a tick.
       decodes(jsonEncode(json));
@@ -329,6 +345,8 @@ void main() {
     }
     // Enough of them were valid to exercise success paths too.
     expect(applied, greaterThan(50));
+    // Buy-max bought levels, not only refusals and empty budgets.
+    expect(boughtLevels, greaterThan(0));
   }, timeout: const Timeout(Duration(minutes: 1)));
 
   test('report credits per second match what 2.5 h away earns, from a '
@@ -360,7 +378,15 @@ void main() {
       'megaprojects on their own', () {
     final e = _engine();
     final played = _played(e, hours: 72);
+    // The bot has fed the station's first stage everything it can by day
+    // 3; taken back, its goods and credits are there to feed again.
+    played.faction('player').megaprojectProgress.clear();
+    // The bot's own settings feed megaprojects too: the copy to compare
+    // with feeds none.
     final unfed = played.copy();
+    unfed.faction('player')
+      ..megaprojectAuto.clear()
+      ..megaprojectAutoSet.clear();
     e.catchUpOffline(unfed, 21600);
     final start = _feeding(e, played);
     final away = start.copy();

@@ -68,6 +68,63 @@ void main() {
     expect(speed['message'], isNull);
   });
 
+  test('buyUpgrades buys cheapest first and says what it bought', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1000);
+    final none = r.handle({'cmd': 'buyUpgrades', 'budget': '49'});
+    expect(none['ok'], isTrue, reason: '$none');
+    expect(none['upgrades'], isEmpty);
+    expect(none['stop'], 'budget');
+    expect(none['nextCost'], _numJson(50));
+    expect(
+      none['message'],
+      'Bought no upgrades: the cheapest costs 50 credits, more than the '
+      'budget allows',
+    );
+    final buy = r.handle({'cmd': 'buyUpgrades', 'budget': '200'});
+    expect(buy['ok'], isTrue, reason: '$buy');
+    // The two mines' first speed levels at 50, then the first mine's
+    // second at 58.5 (the smelter's first is 75); the second mine's
+    // second, 58.5 more, would pass 200.
+    expect(buy['spent'], {'credits': _numJson(158.5)});
+    expect(buy['upgrades'], [
+      {
+        'buildingId': 'b1',
+        'bodyId': 'kora',
+        'track': 'speed',
+        'levels': 2,
+        'level': 2,
+        'cost': _numJson(108.5),
+      },
+      {
+        'buildingId': 'b2',
+        'bodyId': 'kora',
+        'track': 'speed',
+        'levels': 1,
+        'level': 1,
+        'cost': _numJson(50),
+      },
+    ]);
+    String f(double v) => formatNumber(BigNum.from(v));
+    expect(
+      buy['message'],
+      'Bought 3 upgrade levels on 2 buildings for ${f(158.5)} credits; the '
+      'next costs ${f(58.5)} credits, more than the budget allows',
+    );
+    r.state.faction('player').credits = BigNum.from(1e9);
+    final capped = r.handle({
+      'cmd': 'buyUpgrades',
+      'budget': '1e9',
+      'maxPurchases': 2,
+    });
+    expect(capped['stop'], 'maxPurchases');
+    expect(
+      capped['message'],
+      'Bought 2 upgrade levels on 2 buildings for ${f(58.5 + 68.445)} '
+      'credits; stopped at 2 levels, the most this command buys',
+    );
+  });
+
   test('advance then state shows time passing and stock/credits', () {
     final r = _runner();
     final before = r.handle({'cmd': 'state'});
@@ -230,6 +287,7 @@ void main() {
     expect(market.keys, containsAll(['iron_ore', 'steel', 'cargo_ship']));
     expect(market['steel'], {
       'price': {'value': '6e0', 'display': '6'},
+      'salePrice': {'value': '6e0', 'display': '6'},
       'saturation': 1.0,
     });
     // Cargo ships are whole units in state: 1.6 shows as 1.
@@ -238,6 +296,27 @@ void main() {
       '1',
     );
     expect(st['notes'], isNotEmpty);
+  });
+
+  test('state shows the sale price the Mass Driver raises next to the '
+      'market price', () {
+    final r = _runner();
+    r.state.faction('player').megaprojectLevels['mass_driver'] = 2;
+    r.state.body('kora').stock['hull_plate'] = BigNum.from(5);
+    final market = r.handle({'cmd': 'state'})['market']! as Map;
+    final plate = market['hull_plate']! as Map;
+    final factor = 1.05 * 1.05;
+    expect(
+      (plate['salePrice']! as Map)['value'],
+      BigNum.parse(
+        (plate['price']! as Map)['value']! as String,
+      ).mulDouble(factor).toJson(),
+    );
+    // Tier 0 goods take no bonus.
+    expect(
+      (market['iron_ore']! as Map)['salePrice'],
+      (market['iron_ore']! as Map)['price'],
+    );
   });
 
   test('state shows what each auto-sell rule keeps, and why', () {
@@ -956,7 +1035,7 @@ void main() {
     expect(out['ok'], isTrue, reason: '$out');
     expect(
       out['message'],
-      'Started Orbital Station level 1 on Kora for 5M credits and '
+      'Started Orbital Station level 1 on Kora for 20M credits and '
       '200 Station Segment and 40 Survey Drone and 30 Reactor Core and '
       '1.5K Hull Plate; done in 2h',
     );
@@ -1087,7 +1166,7 @@ void main() {
                 as Map)['orbital_station']!
             as Map);
     expect(later['nextLevel'], 2);
-    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '3.75K');
+    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '3K');
     expect(later.containsKey('stillNeeded'), isFalse);
   });
 
@@ -1620,7 +1699,7 @@ void main() {
       'level': 1,
       'etaSeconds': null,
       'message': startsWith(
-        'Next: Orbital Station level 1 still needs 5M credits and 200 '
+        'Next: Orbital Station level 1 still needs 20M credits and 200 '
         'Station Segment and ',
       ),
     });

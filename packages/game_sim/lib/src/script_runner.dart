@@ -24,6 +24,7 @@ const _gameCommands = {
   'demolish',
   'assignCrew',
   'upgrade',
+  'buyUpgrades',
   'createRoute',
   'updateRoute',
   'moveShips',
@@ -168,6 +169,7 @@ final class ScriptRunner {
             'outputsPerSec': _rates(recipe.outputs),
           if (o case Upgraded(:final crewAdded) when crewAdded > 0)
             'crewAdded': crewAdded,
+          if (o is UpgradesBought) ..._boughtJson(o),
         };
     }
   }
@@ -436,12 +438,57 @@ final class ScriptRunner {
             'above it are shared out each game minute among the megaprojects '
             'taking credits on their own',
       Upgraded(track: UpgradeTrack.capacity) => _capacityMessage(o),
+      UpgradesBought() => _boughtMessage(o),
       CrewAssigned() ||
       Upgraded() ||
       Sold() ||
       AutoSellSet() ||
       RouteRemoved() => null,
     };
+  }
+
+  /// A `buyUpgrades` reply's own fields: each building and track it
+  /// raised (`upgrades`, with `crewAdded` when a capacity level filled new
+  /// slots), why it stopped (`stop`) and what the cheapest level not
+  /// bought costs (`nextCost`).
+  Map<String, Object?> _boughtJson(UpgradesBought o) => {
+    'upgrades': [
+      for (final p in o.purchases)
+        {
+          'buildingId': p.buildingId,
+          'bodyId': p.bodyId,
+          'track': p.track.name,
+          'levels': p.levels,
+          'level': p.level,
+          'cost': _num(p.cost),
+          if (p.crewAdded > 0) 'crewAdded': p.crewAdded,
+        },
+    ],
+    'stop': o.stop.name,
+    if (o.nextCost case final v?) 'nextCost': _num(v),
+  };
+
+  /// "Bought 3 upgrade levels on 2 buildings for 159 credits; the next
+  /// costs 58.5 credits, more than the budget allows": what [o] bought and
+  /// why it stopped.
+  String _boughtMessage(UpgradesBought o) {
+    final why = switch (o.stop) {
+      UpgradeBuyStop.budget =>
+        '${o.levels == 0 ? 'the cheapest' : 'the next'} costs '
+            '${formatNumber(o.nextCost!)} credits, more than the budget '
+            'allows',
+      UpgradeBuyStop.maxPurchases =>
+        'stopped at ${o.levels} levels, the most this command buys',
+      UpgradeBuyStop.nothingToBuy => 'nothing is left to upgrade',
+    };
+    if (o.levels == 0) return 'Bought no upgrades: $why';
+    final buildings = {for (final p in o.purchases) p.buildingId}.length;
+    final levels = o.levels == 1
+        ? '1 upgrade level'
+        : '${o.levels} upgrade '
+              'levels';
+    final on = buildings == 1 ? '1 building' : '$buildings buildings';
+    return 'Bought $levels on $on for ${formatNumber(o.total)} credits; $why';
   }
 
   /// What a capacity level [o] did to its building's crew: "Mine on Kora
@@ -1188,6 +1235,9 @@ final class ScriptRunner {
           if (held.contains(id))
             id: {
               'price': _num(price(state, c, id)),
+              // What the player's sales earn: the price with the sale
+              // bonuses its megaproject levels give.
+              'salePrice': _num(salePrice(state, c, p.id, id)),
               'saturation': state.market.saturation[id] ?? 1.0,
             },
       },
