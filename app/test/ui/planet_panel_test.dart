@@ -9,6 +9,7 @@ import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/blocked_reason.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/build_picker.dart';
+import 'package:space_idle/ui/planet/command_feedback.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/top_bar.dart';
 import 'package:space_idle/view/body_actions_view.dart';
@@ -162,6 +163,48 @@ void main() {
       );
     });
 
+    testWidgets('repeated failures replace their own message, not others', (
+      tester,
+    ) async {
+      c.state.faction(_p).credits = BigNum.from(150);
+      await _pump(tester, c, 'kora');
+      ScaffoldMessenger.of(tester.element(find.byType(PlanetPanel)))
+          .showSnackBar(const SnackBar(content: Text('Unrelated news')));
+      await tester.pumpAndSettle();
+      final button = _key('upgrade-b3-speed');
+      // One level, then three failures within the frame.
+      for (var i = 0; i < 4; i++) {
+        await tester.tap(button);
+      }
+      await tester.pump();
+      expect(_level(c, 'b3', UpgradeTrack.speed), 1);
+      expect(find.text('Unrelated news'), findsOneWidget, reason: 'kept');
+      // It times out; then one failure message, then nothing.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('Unrelated news'), findsNothing);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing, reason: 'one, not queued');
+    });
+
+    testWidgets('a new failure replaces the one showing', (tester) async {
+      await _pump(tester, c, 'kora');
+      final context = tester.element(find.byType(PlanetPanel));
+      runAndReport(context, c, const AssignCrewCommand(_p, 'nope', 1));
+      await tester.pumpAndSettle();
+      final first = c.lastError!;
+      expect(find.text(first), findsOneWidget);
+      runAndReport(context, c, const DemolishCommand(_p, 'nope-either'));
+      await tester.pumpAndSettle();
+      expect(find.text(first), findsNothing);
+      expect(find.text(c.lastError!), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing, reason: 'one, not queued');
+    });
+
     testWidgets('a maxed track says why instead of a dead button', (
       tester,
     ) async {
@@ -218,6 +261,31 @@ void main() {
         before + 1,
       );
       expect(find.textContaining('Mine (Silicon)  Lv'), findsOneWidget);
+      // The sheet closed, and its sentence shows on the shell.
+      expect(find.byType(CatalogSheet), findsNothing);
+      expect(find.textContaining('Built Mine on Kora'), findsOneWidget);
+    });
+
+    testWidgets('a failed Build says why inside the catalog, still open', (
+      tester,
+    ) async {
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      await _pump(tester, c, 'kora');
+      await tester.tap(find.text('Build'));
+      await tester.pumpAndSettle();
+      // The credits go without a tick: the button is stale.
+      c.state.faction(_p).credits = const BigNum.zero();
+      await tester.tap(_key('build-mine-silicon-kora'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(CatalogSheet), findsOneWidget);
+      expect(
+        find.descendant(
+          of: _key('catalog-messages'),
+          matching: find.byType(SnackBar),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the catalog says why Mine (Copper Ore) cannot go on Brine', (

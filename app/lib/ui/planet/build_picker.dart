@@ -42,9 +42,17 @@ class BuildPicker extends StatelessWidget {
 /// Every building the player can put up, what each costs, uses and makes
 /// a second, and on which of the player's bodies it can go now, or why
 /// not. Builds take crew from the free crew (`autoCrew`).
+///
+/// The sheet has its own messenger, keyed [messagesKey], so a build that
+/// fails says why where the player is looking, over the sheet, which
+/// stays open. A build that succeeds closes the sheet and says so on the
+/// screen under it.
 class CatalogSheet extends StatelessWidget {
   /// Creates the sheet; [makes] filters it to that resource's makers.
   const CatalogSheet({super.key, this.makes});
+
+  /// The sheet's own scaffold, where its failure messages show.
+  static const Key messagesKey = ValueKey('catalog-messages');
 
   /// Resource id to show the makers of; null for everything.
   final String? makes;
@@ -57,16 +65,19 @@ class CatalogSheet extends StatelessWidget {
     final title = makes == null
         ? 'Build'
         : 'What makes ${c.content.resources[makes]?.name ?? makes}';
-    return Material(
-      color: Palette.panel,
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(title, style: text.titleLarge),
-            const SizedBox(height: 8),
-            for (final e in entries) _Entry(entry: e),
-          ],
+    return ScaffoldMessenger(
+      child: Scaffold(
+        key: messagesKey,
+        backgroundColor: Palette.panel,
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(title, style: text.titleLarge),
+              const SizedBox(height: 8),
+              for (final e in entries) _Entry(entry: e),
+            ],
+          ),
         ),
       ),
     );
@@ -146,11 +157,14 @@ class _Entry extends StatelessWidget {
     );
   }
 
-  /// Building this entry on [h]; the sheet closes once it is built.
+  /// Building this entry on [h]. A failure shows on the sheet's own
+  /// messenger; a success closes the sheet and shows on the messenger
+  /// above the navigator, under the sheet.
   Spend _spend(BuildContext context, GameController c, CatalogHost h) => Spend(
     price: entry.price,
     what: 'on ${entry.name} on ${h.bodyName}',
     run: () {
+      final navigator = Navigator.of(context);
       final r = runAndReport(
         context,
         c,
@@ -161,8 +175,9 @@ class _Entry extends StatelessWidget {
           depositResourceId: entry.depositResourceId,
         ),
         announce: true,
+        okMessenger: ScaffoldMessenger.maybeOf(navigator.context),
       );
-      if (r is CommandOk) Navigator.of(context).maybePop();
+      if (r is CommandOk) navigator.maybePop();
     },
   );
 }
