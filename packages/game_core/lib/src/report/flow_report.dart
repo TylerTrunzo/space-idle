@@ -325,6 +325,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   final probe = s.copy();
   deliverShipments(probe);
   stepProduction(probe, c, _sampleSeconds);
+  final playedEff = crewEfficiency(probe, c, factionId);
   final routeFlow = sendCargo(probe, c, _sampleSeconds);
 
   final copy = s.copy()..shipments.clear();
@@ -335,8 +336,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   final stockBefore = [for (final b in owned) Map.of(b.stock)];
   final atStart = {for (final b in copy.bodies) b.id: Map.of(b.stock)};
   final holdingsBefore = _holdings(copy, factionId);
-  // The tick computes crew efficiency from the state it starts in, so the
-  // crew shortage is read from that state too.
+  // The crew shortage is read from the state as it is, so its counts are
+  // the ones `crewTotals` gives; the sample step then settles on its own
+  // housing (`stepProduction`), which after a tick of play is the same.
   final crewEff = crewEfficiency(copy, c, factionId);
   final bonuses = bonusesFor(copy, c, factionId);
   final crewNeck = _crewShortage(copy, c, factionId, crewEff);
@@ -355,7 +357,16 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
           (holdingsBefore[r.resourceId] ?? const BigNum.zero()) + amount;
     }
   }
+  // With a crew shortage, the same production step on a copy at full
+  // staffing shows what the shortage costs.
+  final staffed = crewNeck == null ? null : copy.copy();
   stepProduction(copy, c, _sampleSeconds);
+  final crewLost = staffed == null
+      ? null
+      : _staffingGain(s, c, factionId, staffed, copy);
+  // The efficiency the sample step settled on, which its run fractions
+  // go with.
+  final settledEff = crewEfficiency(copy, c, factionId);
   sendCargo(copy, c, _sampleSeconds);
   stepMarket(
     copy,
@@ -374,10 +385,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   clampStorage(copy, c, kept);
 
   final bodies = <BodyFlow>[];
-  final bottlenecks = <(int, Bottleneck)>[if (crewNeck != null) (0, crewNeck)];
-  // What the crew shortage costs: each crewed building's output at full
-  // staffing, at the run fraction it settled on, less what it made.
-  final crewLost = <String, BigNum>{};
+  final bottlenecks = <(int, Bottleneck)>[
+    if (crewNeck != null) (0, crewNeck._with(lostCreditsPerHour: crewLost)),
+  ];
   void addNeck(Bottleneck? neck) {
     if (neck != null) bottlenecks.add((bottlenecks.length, neck));
   }
@@ -393,25 +403,11 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         body,
         b,
         _sampleSeconds,
-        crewEff,
+        settledEff,
         bonuses: bonuses,
       );
       final inputs = _scaled(flow.inputs, b.lastRunFraction);
       final outputs = _scaled(flow.outputs, b.lastRunFraction);
-      if (crewNeck != null && !runsWithoutCrew(def)) {
-        final staffed = fullRateFlow(
-          c,
-          body,
-          b,
-          _sampleSeconds,
-          1,
-          bonuses: bonuses,
-        );
-        _addAll(
-          crewLost,
-          _scaled(staffed.outputs, b.lastRunFraction * (1 - crewEff)),
-        );
-      }
       _addAll(produced, outputs);
       _addAll(consumed, inputs);
       final neck = _bottleneck(c, body, b);
@@ -435,7 +431,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
               ? b.lastRunFraction
               : def.crewSlots == 0
               ? 0
-              : b.lastRunFraction * b.crew / def.crewSlots * crewEff,
+              : b.lastRunFraction * b.crew / def.crewSlots * settledEff,
           limitReason: b.lastLimitReason,
           crew: b.crew,
           slots: maxCrew(c.rules, def, b),
@@ -465,17 +461,11 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
       ),
     );
   }
-  if (crewNeck != null) {
-    bottlenecks[0] = (
-      0,
-      crewNeck._with(lostCreditsPerHour: _valuePerHour(s, c, crewLost)),
-    );
-  }
   final unsold = _unsoldNet(
     c,
     copy.faction(factionId),
     owned,
-    crewEff,
+    settledEff,
     bonuses,
   );
   if (unsold.isNotEmpty) {
@@ -506,7 +496,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         played!,
         c,
         factionId,
-        crewEff: crewEff,
+        crewEff: playedEff,
         bonuses: bonuses,
         market: sold!,
       );
@@ -654,6 +644,46 @@ Map<String, BigNum> _unsoldNet(
             case final v when v > const BigNum.zero())
           r.id: v,
   };
+}
+
+/// Credits an hour [factionId]'s production would gain at full staffing:
+/// [staffed], a copy of [actual] from before its sample production step,
+/// runs that step at crew efficiency 1, and the change in each resource
+/// over the faction's bodies is set against [actual]'s, valued at the
+/// current market prices of [s]. Never below zero.
+///
+/// So a building held back by its inputs gains nothing, and goods made
+/// only to be used up on the same body (ore a smelter takes) count only
+/// through what is made from them.
+BigNum _staffingGain(
+  GameState s,
+  Content c,
+  String factionId,
+  GameState staffed,
+  GameState actual,
+) {
+  stepProduction(staffed, c, _sampleSeconds, crewEfficiencyOf: {factionId: 1});
+  Map<String, BigNum> held(GameState g) {
+    final total = <String, BigNum>{};
+    for (final b in g.bodies) {
+      if (b.ownerId != factionId) continue;
+      _addAll(total, b.stock);
+    }
+    return total;
+  }
+
+  final more = held(staffed);
+  final now = held(actual);
+  final gain = <String, BigNum>{
+    for (final id in c.resources.keys)
+      if (changeBetween(
+            more[id] ?? const BigNum.zero(),
+            now[id] ?? const BigNum.zero(),
+          )
+          case final d when !d.isZero)
+        id: d,
+  };
+  return _valuePerHour(s, c, gain).max(const BigNum.zero());
 }
 
 /// The crew-shortage bottleneck of [factionId], or null when its crew

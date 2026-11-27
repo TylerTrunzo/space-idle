@@ -127,6 +127,36 @@ void main() {
     expect(sum.headline, isNot(contains('Crew short')));
   });
 
+  test('an ongoing crew shortage is compared on its full-staffing loss', () {
+    // Short of crew from the start; the habitat's food runs out while away,
+    // so the shortage deepens.
+    final s = e.newGame(1);
+    s.faction('player').baseCrew = 2;
+    final kora = s.body('kora');
+    kora.buildings.add(
+      BuildingState(id: 'h1', defId: 'habitat', crew: 0, lastRunFraction: 1)
+        ..levels[UpgradeTrack.capacity] = 0,
+    );
+    kora.buildings.first.levels[UpgradeTrack.capacity] = 30;
+    kora.buildings.first.crew = 22;
+    kora.stock
+      ..['food'] = n(30)
+      ..['water'] = n(1000)
+      ..['oxygen'] = n(1000);
+    e.advance(s, 60);
+    final before = buildFlowReport(
+      s.copy(),
+      c,
+      'player',
+    ).bottlenecks.singleWhere((b) => b.kind == BottleneckKind.crewShortage);
+    final sum = e.catchUpOffline(s, 3600);
+    final crew = sum.topBottlenecks.first;
+    expect(crew.kind, BottleneckKind.crewShortage);
+    final ongoing = sum.ongoingFor(crew)!;
+    expect(ongoing.lostBefore, before.lostCreditsPerHour);
+    expect(ongoing.worseThanBefore, isTrue);
+  });
+
   test('housing before and after the absence', () {
     // Food for 10 minutes: the habitat houses 20 crew beyond the base 20
     // until it runs out.

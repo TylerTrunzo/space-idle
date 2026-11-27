@@ -90,13 +90,23 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 /// is the one it ran at ([_stepFaction]). Habitats with no crew slots run
 /// at full rate whatever the crew ([runsWithoutCrew]); other buildings
 /// with no crew slots (warehouses) and unowned bodies run nothing.
-void stepProduction(GameState s, Content c, double dt) {
+///
+/// [crewEfficiencyOf] fixes the crew efficiency of the factions it names
+/// for this step instead, with no settling: the report uses it to see what
+/// full staffing would make.
+void stepProduction(
+  GameState s,
+  Content c,
+  double dt, {
+  Map<String, double> crewEfficiencyOf = const {},
+}) {
   for (final f in s.factions) {
     final bodies = [
       for (final b in s.bodies)
         if (b.ownerId == f.id) b,
     ];
-    if (bodies.isNotEmpty) _stepFaction(s, c, f, bodies, dt);
+    if (bodies.isEmpty) continue;
+    _stepFaction(s, c, f, bodies, dt, fixed: crewEfficiencyOf[f.id]);
   }
 }
 
@@ -117,14 +127,16 @@ const int _maxCrewPasses = 12;
 /// of the crew, it is run again at efficiencies between the two until
 /// they agree, within [_crewTolerance], and that run is kept: a fixed-point
 /// step while the two move the same way, false position (Illinois) once
-/// they bracket the answer.
+/// they bracket the answer. A [fixed] crew efficiency is run once, as it
+/// is.
 void _stepFaction(
   GameState s,
   Content c,
   FactionState f,
   List<BodyState> bodies,
-  double dt,
-) {
+  double dt, {
+  double? fixed,
+}) {
   final bonuses = bonusesFor(s, c, f.id);
   var assigned = 0;
   for (final body in bodies) {
@@ -148,9 +160,9 @@ void _stepFaction(
         crewEff;
   }
 
-  var e = crewEfficiency(s, c, f.id);
+  var e = fixed ?? crewEfficiency(s, c, f.id);
   var runs = run(e);
-  var fe = gap(runs, e);
+  var fe = fixed != null ? 0.0 : gap(runs, e);
   // The other end of a bracket, once there is one.
   double? a;
   double? fa;

@@ -533,30 +533,44 @@ void main() {
     expect(b.runFraction, closeTo(2 / 3, 1e-12));
   });
 
-  test('crew shortage says what it costs an hour against full staffing', () {
-    // Two of three crew housed: every crewed building makes 2/3 of what it
-    // would. Each still runs fully on its inputs (40 ore in stock), so the
-    // loss is a third of the full-crew output: 0.4 iron ore, 0.32 copper
-    // ore and 0.2 steel a second.
+  test('crew shortage counts nothing for a building more crew would not '
+      'help', () {
+    // One crew housed for two: the copper mine and a plate press with a
+    // little steel and nothing making more. At half crew the press wants
+    // 0.1875 steel a second and runs at 0.53; fully crewed it would want
+    // twice that and make the same plates from the same steel. Only the
+    // mine's lost copper ore counts.
+    s.faction('player').baseCrew = 1;
+    kora.buildings
+      ..removeWhere((b) => b.id != 'b2')
+      ..add(BuildingState(id: 'p1', defId: 'plate_press', crew: 1));
+    kora.stock
+      ..clear()
+      ..['steel'] = n(0.1);
+    final b = held(
+      buildFlowReport(s, c, 'player'),
+    ).singleWhere((b) => b.kind == BottleneckKind.crewShortage);
+    expect(b.runFraction, closeTo(0.5, 1e-12));
+    expect(
+      b.lostCreditsPerHour!.toDouble(),
+      closeTo(0.32 * 0.5 * price(s, c, 'copper_ore').toDouble() * 3600, 1e-6),
+    );
+  });
+
+  test('crew shortage counts what full staffing adds, not every link of a '
+      'chain', () {
+    // Two of three crew housed. Fully crewed, the mines make half as much
+    // ore again and the smelter turns the extra iron ore into steel: the
+    // iron ore is used up, so only the copper ore and the steel count, a
+    // third of each at full rate.
     s.faction('player').baseCrew = 2;
     final b = held(
       buildFlowReport(s, c, 'player'),
     ).singleWhere((b) => b.kind == BottleneckKind.crewShortage);
     final perSec =
-        0.4 * price(s, c, 'iron_ore').toDouble() +
         0.32 * price(s, c, 'copper_ore').toDouble() +
         0.2 * price(s, c, 'steel').toDouble();
     expect(b.lostCreditsPerHour!.toDouble(), closeTo(perSec / 3 * 3600, 1e-6));
-    // Covered crew costs nothing, so there is no bottleneck at all.
-    s.faction('player').baseCrew = 3;
-    expect(
-      buildFlowReport(
-        s,
-        c,
-        'player',
-      ).bottlenecks.where((b) => b.kind == BottleneckKind.crewShortage),
-      isEmpty,
-    );
   });
 
   test('crew shortage loses nothing when no crewed building runs', () {
