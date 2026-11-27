@@ -3,6 +3,7 @@ import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/theme.dart';
+import 'package:space_idle/ui/map/label_layout.dart';
 import 'package:space_idle/ui/map/map_transform.dart';
 import 'package:space_idle/ui/map/star_map_painter.dart';
 import 'package:space_idle/ui/map/star_map_scene.dart';
@@ -168,6 +169,7 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
         builder: (context, constraints) {
           final size = constraints.biggest;
           final t = MapTransform.fitRect(size, scene.bounds);
+          final labels = _labelRects(context, scene, t, size);
           return InteractiveViewer(
             transformationController: _zoom,
             minScale: _minScale,
@@ -220,8 +222,8 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  for (final b in scene.bodies) ...[
-                    _BodyLabel(body: b, transform: t),
+                  for (final (i, b) in scene.bodies.indexed) ...[
+                    _BodyLabel(body: b, rect: labels[i]),
                     _BodyNode(
                       body: b,
                       transform: t,
@@ -244,6 +246,48 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
       ),
     );
   }
+}
+
+/// Where each body's label goes on the canvas: measured at the current
+/// text scale, then placed clear of the star, the discs and each other.
+List<Rect> _labelRects(
+  BuildContext context,
+  StarMapScene scene,
+  MapTransform t,
+  Size size,
+) {
+  final style = _BodyLabel.styleOf(context);
+  final scaler = MediaQuery.textScalerOf(context);
+  final direction = Directionality.of(context);
+  Size measure(List<String> lines) {
+    var width = 0.0;
+    var height = 0.0;
+    for (final line in lines) {
+      final tp = TextPainter(
+        text: TextSpan(text: line, style: style),
+        textDirection: direction,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      width = width < tp.width ? tp.width : width;
+      height += tp.height;
+      tp.dispose();
+    }
+    return Size(width.ceilToDouble() + 2, height.ceilToDouble());
+  }
+
+  return placeLabels(
+    bodies: [
+      for (final b in scene.bodies)
+        LabelTarget(
+          t.toCanvas(b.position),
+          b.radius * t.scale,
+          measure(_BodyLabel.linesOf(b)),
+        ),
+    ],
+    star: Rect.fromCircle(center: t.origin, radius: scene.starRadius * t.scale),
+    canvas: Offset.zero & size,
+  );
 }
 
 String _systemName(Content content, String systemId) =>
@@ -305,41 +349,42 @@ class _BodyNode extends StatelessWidget {
 }
 
 /// A body's visible name, and "Unclaimed" when the player does not own it,
-/// centred under it. Decorative: [_BodyNode] carries the semantics.
+/// in the rect [_labelRects] chose. Decorative: [_BodyNode] carries the
+/// semantics.
 class _BodyLabel extends StatelessWidget {
-  const _BodyLabel({required this.body, required this.transform});
-
-  static const double _width = 120;
-  static const double _gap = 6;
+  const _BodyLabel({required this.body, required this.rect});
 
   final MapBody body;
-  final MapTransform transform;
+  final Rect rect;
+
+  static TextStyle? styleOf(BuildContext context) =>
+      Theme.of(context).textTheme.labelSmall;
+
+  /// The label's lines, as measured and as shown.
+  static List<String> linesOf(MapBody b) => [b.name, if (!b.owned) 'Unclaimed'];
 
   @override
   Widget build(BuildContext context) {
-    final c = transform.toCanvas(body.position);
-    final style = Theme.of(context).textTheme.labelSmall;
-    return Positioned(
-      left: c.dx - _width / 2,
-      top: c.dy + body.radius * transform.scale + _gap,
-      width: _width,
+    final style = styleOf(context);
+    final lines = linesOf(body);
+    return Positioned.fromRect(
+      rect: rect,
       child: IgnorePointer(
+        key: ValueKey('label-${body.id}'),
         child: ExcludeSemantics(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                body.name,
-                textAlign: TextAlign.center,
-                style: style?.copyWith(
-                  color: body.owned ? Palette.text : Palette.muted,
-                ),
-              ),
-              if (!body.owned)
+              for (final (i, line) in lines.indexed)
                 Text(
-                  'Unclaimed',
+                  line,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
                   textAlign: TextAlign.center,
-                  style: style?.copyWith(color: Palette.muted),
+                  style: style?.copyWith(
+                    color: i == 0 && body.owned ? Palette.text : Palette.muted,
+                  ),
                 ),
             ],
           ),

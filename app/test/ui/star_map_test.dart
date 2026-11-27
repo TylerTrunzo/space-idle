@@ -254,6 +254,59 @@ void main() {
     expect(selected, ['kora']);
   });
 
+  for (final size in const [Size(412, 915), Size(1280, 800)]) {
+    testWidgets('at ${size.width.round()}x${size.height.round()} no disc, '
+        'label or the star collide', (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = _controller();
+      // Every body in sight, the real galaxy's seven.
+      c.state.body('tessaly').surveyed = true;
+      c.state.body('dusk_cairn').surveyed = true;
+      await tester.pumpWidget(_app(c));
+
+      final paint = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is StarMapPainter,
+      );
+      final painter =
+          tester.widget<CustomPaint>(paint).painter! as StarMapPainter;
+      final t = painter.transform;
+      final origin = tester.getTopLeft(paint);
+      Rect circle(Offset at, double r) =>
+          Rect.fromCircle(center: origin + t.toCanvas(at), radius: r * t.scale);
+      final star = circle(Offset.zero, painter.scene.starRadius);
+      final bodies = painter.scene.bodies;
+      expect(bodies, hasLength(7));
+      final labels = {
+        for (final b in bodies)
+          b.id: tester.getRect(find.byKey(ValueKey('label-${b.id}'))),
+      };
+
+      for (final (i, a) in bodies.indexed) {
+        for (final b in bodies.skip(i + 1)) {
+          final gap =
+              (t.toCanvas(a.position) - t.toCanvas(b.position)).distance -
+              (a.radius + b.radius) * t.scale;
+          expect(gap, greaterThan(0), reason: 'discs ${a.id} ${b.id}');
+          expect(
+            labels[a.id]!.overlaps(labels[b.id]!),
+            isFalse,
+            reason: 'labels ${a.id} ${b.id}',
+          );
+        }
+        expect(labels[a.id]!.overlaps(star), isFalse, reason: 'star ${a.id}');
+        for (final other in bodies) {
+          expect(
+            labels[a.id]!.overlaps(circle(other.position, other.radius)),
+            isFalse,
+            reason: 'label ${a.id} over disc ${other.id}',
+          );
+        }
+      }
+    });
+  }
+
   testWidgets('the map is fitted to its content and centred', (tester) async {
     tester.view.physicalSize = const Size(412, 915);
     tester.view.devicePixelRatio = 1;
