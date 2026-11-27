@@ -1331,6 +1331,61 @@ void main() {
         );
       });
 
+      test('mixed settings: near ready at weight 3 beside always at weight '
+          '0; the reserve holds at every step and steps agree', () {
+        GameState make() {
+          final s = near(owed: 2e6, credits: true);
+          feed(s, 'mass_driver', true, n(1000), weight: 0);
+          feed(
+            s,
+            'orbital_station',
+            false,
+            n(1000),
+            mode: GoodsFeedMode.nearReady,
+            weight: 3,
+          );
+          s.faction('player').credits = n(5000);
+          return s;
+        }
+
+        final live = make();
+        final ticks = make();
+        final away = make();
+        for (var t = 0; t < 1800; t++) {
+          e.advance(live, 1, maxStep: 1);
+          expect(
+            live.faction('player').credits >= n(1000),
+            isTrue,
+            reason: 'at ${live.time}',
+          );
+        }
+        e.advance(ticks, 1800);
+        e.catchUpOffline(away, 1800);
+        expect(encode(away), encode(ticks));
+        BigNum paid(GameState g, String m) =>
+            g.faction('player').megaprojectProgress[m]?['credits'] ?? n(0);
+        final start = make();
+        for (final g in [live, ticks]) {
+          // The station owes credits, so the Mass Driver, at weight 0,
+          // takes none; its goods go in every minute.
+          expect(paid(g, 'mass_driver'), paid(start, 'mass_driver'));
+          expect(progress(g)['steel']!.toDouble(), greaterThan(400));
+          // The station is far from ready: credits go in, goods do not.
+          final f = g.faction('player');
+          expect(f.megaprojectAuto['orbital_station']!.feedingLevel, isNull);
+          expect(
+            (paid(g, 'orbital_station') - paid(start, 'orbital_station'))
+                .toDouble(),
+            greaterThan(1000),
+          );
+        }
+        final want = paid(ticks, 'orbital_station').toDouble();
+        expect(
+          paid(live, 'orbital_station').toDouble(),
+          closeTo(want, want * 0.02),
+        );
+      });
+
       test('1 s steps, 60 s steps, 55 s and 5 s, and a catch-up start '
           'feeding at the same minute and deliver alike', () {
         final rate = income(near(owed: 2e9, credits: true), 1200);

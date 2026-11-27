@@ -406,6 +406,15 @@ void main() {
     expect(_errors(b), contains('rules.shipmentMergeSeconds: must be >= 0'));
   });
 
+  test('the near-ready horizon defaults to 12 h and may be 0', () {
+    expect(_ok(minimalBundle()).rules.nearReadyHorizonSeconds, 43200);
+    final b = minimalBundle();
+    (b['rules'] as Map)['nearReadyHorizonSeconds'] = 0;
+    expect(_ok(b).rules.nearReadyHorizonSeconds, 0);
+    (b['rules'] as Map)['nearReadyHorizonSeconds'] = -1;
+    expect(_errors(b), contains('rules.nearReadyHorizonSeconds: must be >= 0'));
+  });
+
   test('bad values are reported with paths', () {
     final b = minimalBundle();
     _entry(b, 'resources', 'ore')['basePrice'] = 'lots';
