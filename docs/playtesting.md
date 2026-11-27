@@ -184,7 +184,8 @@ lines (days with anything new, and days with a milestone or project, contracts l
 out), a timeline of completed projects and contracts, dead zones (check-ins
 where the bot found nothing to do), resources never produced or never used, the
 final stock and credits, and the worst bottleneck at each check-in.
-`docs/balance/` holds the 30-day baselines (`stage1_5-30day-*.md`); use them to
+`docs/balance/` holds the 30-day baselines (`stage1_6-30day-*.md`, and the stage 1.5 ones before
+them); use them to
 compare your experience against the bots', and rerun them after any content change.
 
 ## Personas
