@@ -841,29 +841,34 @@ final class _Loader {
       final b = _objectAt('${f.path}.bonusesPerLevel[$i]', raw, const {
         'kind',
         'amount',
+        'appliesToMinTier',
         'appliesToMaxTier',
       });
       if (b == null) continue;
       final kind = b.choice('kind', BonusKind.values, 'bonus kind');
       final amount = b.number('amount', gt: 0);
-      final maxTier = b.map.containsKey('appliesToMaxTier')
-          ? b.integer(
-              'appliesToMaxTier',
-              min: 0,
-              max: ResourceDef.megaprojectTier,
-            )
+      int? tier(String key) => b.map.containsKey(key)
+          ? b.integer(key, min: 0, max: ResourceDef.megaprojectTier)
           : null;
+      final minTier = tier('appliesToMinTier');
+      final maxTier = tier('appliesToMaxTier');
       if (kind == null || amount == null) continue;
       final bonus = BonusDef(
         kind: kind,
         amount: amount,
+        appliesToMinTier: minTier,
         appliesToMaxTier: maxTier,
       );
       if (bonus.isMultiplier && amount < 1) {
         b.err('amount', 'must be >= 1 for a multiplier');
       }
-      if (!bonus.isMultiplier && b.map.containsKey('appliesToMaxTier')) {
-        b.err('appliesToMaxTier', 'only multiplier bonuses take a tier');
+      for (final key in ['appliesToMinTier', 'appliesToMaxTier']) {
+        if (!bonus.isMultiplier && b.map.containsKey(key)) {
+          b.err(key, 'only multiplier bonuses take a tier');
+        }
+      }
+      if (minTier != null && maxTier != null && minTier > maxTier) {
+        b.err('appliesToMinTier', 'must be <= appliesToMaxTier ($maxTier)');
       }
       bonuses.add(bonus);
     }

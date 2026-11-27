@@ -114,7 +114,11 @@ EmpireBonuses bonusesFor(GameState s, Content c, String? factionId) {
   // The same levels give the same totals, one object for all of them, so
   // copies of a state share their bonuses and what is kept with them.
   final byLevels = _byLevels[c] ??= {};
-  final bonuses = byLevels[at.join(',')] ??= _bonusesAt(c, levels);
+  final key = at.join(',');
+  if (byLevels.length >= _byLevelsKept && !byLevels.containsKey(key)) {
+    byLevels.clear();
+  }
+  final bonuses = byLevels[key] ??= _bonusesAt(c, levels);
   _bonusCache[levels] = (c, at, bonuses);
   return bonuses;
 }
@@ -124,9 +128,13 @@ EmpireBonuses bonusesFor(GameState s, Content c, String? factionId) {
 final _bonusCache = Expando<(Content, List<int>, EmpireBonuses)>('bonuses');
 
 /// Per content, the levels in content order, joined by commas, to their
-/// [bonusesFor] totals. Levels only ever rise, a step at a time, so it
-/// stays small.
+/// [bonusesFor] totals. It lives as long as the content, so many games
+/// played on one content (a bot run, a test suite) share it; it starts
+/// over once it holds [_byLevelsKept] vectors, so it never grows past that.
 final _byLevels = Expando<Map<String, EmpireBonuses>>('bonusesByLevels');
+
+/// Level vectors [_byLevels] keeps per content before it starts over.
+const int _byLevelsKept = 256;
 
 /// [bonusesFor] a faction at megaproject [levels].
 EmpireBonuses _bonusesAt(Content c, Map<String, int> levels) {
@@ -147,7 +155,7 @@ EmpireBonuses _bonusesAt(Content c, Map<String, int> levels) {
       final add = b.amount * level;
       void compound(List<double> logs) {
         final top = b.appliesToMaxTier ?? ResourceDef.megaprojectTier;
-        for (var t = 0; t <= top; t++) {
+        for (var t = b.appliesToMinTier ?? 0; t <= top; t++) {
           logs[t] += level * math.log(b.amount);
         }
       }
@@ -194,8 +202,14 @@ double _compounded(double log) =>
 /// [kind], its [value] at the level (percent for the `…Percent` kinds,
 /// seconds for [BonusKind.offlineCapSeconds], the compounded factor for
 /// the `…Multiplier` kinds, at most [EmpireBonuses.maxMultiplier]), and
-/// the highest tier it [appliesToMaxTier], null for every tier.
-typedef BonusAtLevel = ({BonusKind kind, double value, int? appliesToMaxTier});
+/// the lowest and highest tiers it applies to ([appliesToMinTier], null
+/// from tier 0; [appliesToMaxTier], null for every tier above).
+typedef BonusAtLevel = ({
+  BonusKind kind,
+  double value,
+  int? appliesToMinTier,
+  int? appliesToMaxTier,
+});
 
 /// What [m]'s bonuses add up to at [level], in content order: each bonus
 /// as it stands at that level ([BonusAtLevel]), for the app to word.
@@ -206,6 +220,7 @@ List<BonusAtLevel> megaprojectBonusesAt(MegaprojectDef m, int level) => [
       value: b.isMultiplier
           ? _compounded(level * math.log(b.amount))
           : b.amount * level,
+      appliesToMinTier: b.appliesToMinTier,
       appliesToMaxTier: b.appliesToMaxTier,
     ),
 ];
@@ -379,3 +394,7 @@ ProjectState? megaprojectStageOf(
 /// Key of the credits entry in a megaproject cost
 /// ([MegaprojectDef.baseCost]); every other key is a resource id.
 const String creditsKey = 'credits';
+
+/// How many level vectors [bonusesFor] holds totals for on [c]; at most
+/// 256. For tests: it shows the shared cache stays bounded.
+int bonusVectorsKept(Content c) => _byLevels[c]?.length ?? 0;

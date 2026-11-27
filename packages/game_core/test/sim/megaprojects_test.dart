@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
+import 'package:game_core/src/sim/megaprojects.dart' show bonusVectorsKept;
 import 'package:test/test.dart';
 
 import '../state/helpers.dart';
@@ -956,6 +957,28 @@ void main() {
       expect(revenue(1), closeTo(6 * 2 * depth * (1 - math.exp(-0.5)), tol));
     });
 
+    test('the totals kept per level vector stay bounded across many '
+        'games', () {
+      final c = contentWithBonuses([
+        {'kind': 'storagePercent', 'amount': 10},
+      ]);
+      final s = GameEngine(c).newGame(1);
+      final f = s.faction('player');
+      for (var level = 0; level < 1000; level++) {
+        f.megaprojectLevels['boost'] = level;
+        expect(bonusesFor(s, c, 'player').storagePercent, 10.0 * level);
+        expect(bonusVectorsKept(c), lessThanOrEqualTo(256));
+      }
+      // Copies at the same levels still share one object.
+      expect(
+        identical(
+          bonusesFor(s, c, 'player'),
+          bonusesFor(s.copy(), c, 'player'),
+        ),
+        isTrue,
+      );
+    });
+
     group('compounding multipliers', () {
       final c = contentWithBonuses([
         {'kind': 'marketDepthMultiplier', 'amount': 1.2, 'appliesToMaxTier': 1},
@@ -1064,6 +1087,61 @@ void main() {
           rate('habitat', 'food', input: true),
           plain('habitat', 'food', input: true),
         );
+      });
+
+      test('production speed from a tier to a tier leaves the tiers outside '
+          'alone', () {
+        final c2 = contentWithBonuses([
+          {
+            'kind': 'productionSpeedMultiplier',
+            'amount': 1.1,
+            'appliesToMinTier': 1,
+            'appliesToMaxTier': 2,
+          },
+        ]);
+        final s = GameEngine(c2).newGame(1);
+        s.faction('player').megaprojectLevels['boost'] = 2;
+        final bonuses = bonusesFor(s, c2, 'player');
+        expect(bonuses.productionSpeedFactors[0], 1);
+        expect(bonuses.productionSpeedFactors[1], closeTo(1.21, 1e-12));
+        expect(bonuses.productionSpeedFactors[2], closeTo(1.21, 1e-12));
+        expect(bonuses.productionSpeedFactors[3], 1);
+        final kora = s.body('kora');
+        double out(String defId, String id, EmpireBonuses with_) {
+          final b = BuildingState(
+            id: 'x',
+            defId: defId,
+            crew: 1,
+            depositResourceId: defId == 'mine' ? 'iron_ore' : null,
+          );
+          return fullRateFlow(
+            c2,
+            kora,
+            b,
+            1,
+            1,
+            bonuses: with_,
+          ).outputs[id]!.toDouble();
+        }
+
+        // The mine (tier 0) is untouched; the smelter (1) and the press (2)
+        // run faster.
+        expect(
+          out('mine', 'iron_ore', bonuses),
+          out('mine', 'iron_ore', EmpireBonuses.none),
+        );
+        for (final (defId, id) in [
+          ('smelter', 'steel'),
+          ('plate_press', 'hull_plate'),
+        ]) {
+          expect(
+            out(defId, id, bonuses),
+            closeTo(out(defId, id, EmpireBonuses.none) * 1.21, 1e-9),
+          );
+        }
+        final shown = megaprojectBonusesAt(c2.megaprojects['boost']!, 2).single;
+        expect(shown.appliesToMinTier, 1);
+        expect(shown.appliesToMaxTier, 2);
       });
 
       test('the engine, the local use auto-sell keeps and the report all '
@@ -1507,6 +1585,45 @@ void main() {
         },
         'megaprojects.orbital_station.bonusesPerLevel[0].appliesToMaxTier: '
             'must be <= 4',
+      ),
+      'a lowest tier on a bonus that takes none': (
+        {
+          ...stationJson(),
+          'bonusesPerLevel': [
+            {'kind': 'housingPercent', 'amount': 5, 'appliesToMinTier': 1},
+          ],
+        },
+        'megaprojects.orbital_station.bonusesPerLevel[0].appliesToMinTier: '
+            'only multiplier bonuses take a tier',
+      ),
+      'a lowest tier out of range': (
+        {
+          ...stationJson(),
+          'bonusesPerLevel': [
+            {
+              'kind': 'productionSpeedMultiplier',
+              'amount': 1.1,
+              'appliesToMinTier': 5,
+            },
+          ],
+        },
+        'megaprojects.orbital_station.bonusesPerLevel[0].appliesToMinTier: '
+            'must be <= 4',
+      ),
+      'a lowest tier above the highest': (
+        {
+          ...stationJson(),
+          'bonusesPerLevel': [
+            {
+              'kind': 'productionSpeedMultiplier',
+              'amount': 1.1,
+              'appliesToMinTier': 2,
+              'appliesToMaxTier': 1,
+            },
+          ],
+        },
+        'megaprojects.orbital_station.bonusesPerLevel[0].appliesToMinTier: '
+            'must be <= appliesToMaxTier (1)',
       ),
       'a requirement on an unknown megaproject': (
         {

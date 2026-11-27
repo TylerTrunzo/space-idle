@@ -722,6 +722,7 @@ final class BonusDef {
   const BonusDef({
     required this.kind,
     required this.amount,
+    this.appliesToMinTier,
     this.appliesToMaxTier,
   });
 
@@ -733,12 +734,17 @@ final class BonusDef {
   /// kinds the factor per level, at least 1.
   final double amount;
 
+  /// For the `…Multiplier` kinds, the lowest resource tier it applies to
+  /// (resources sold, or what a building makes); null for every tier from
+  /// 0. At most [appliesToMaxTier] when both are set.
+  final int? appliesToMinTier;
+
   /// For the `…Multiplier` kinds, the highest resource tier it applies to
   /// (resources sold, or what a building makes); null for every tier.
   final int? appliesToMaxTier;
 
   /// Whether this bonus compounds per level, `amount^level`, and may take
-  /// an [appliesToMaxTier].
+  /// an [appliesToMinTier] and an [appliesToMaxTier].
   bool get isMultiplier => switch (kind) {
     BonusKind.marketDepthMultiplier ||
     BonusKind.productionSpeedMultiplier => true,
