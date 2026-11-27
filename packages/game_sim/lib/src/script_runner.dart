@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
 
@@ -50,15 +51,17 @@ BigNum _floor(BigNum v) {
   return d.abs() < 1e15 ? BigNum.from(d.floorToDouble()) : v;
 }
 
-/// A number as JSON: the raw `BigNum.toJson()` value and a display string.
-Map<String, Object?> _num(BigNum v) => {
-  'value': v.toJson(),
-  'display': formatNumber(v),
-};
+/// A number as JSON: the raw `BigNum.toJson()` value and a display string,
+/// rounded the [rounding] way.
+Map<String, Object?> _num(
+  BigNum v, {
+  NumberRounding rounding = NumberRounding.nearest,
+}) => {'value': v.toJson(), 'display': formatNumber(v, rounding: rounding)};
 
-Map<String, Object?> _nums(Map<String, BigNum> m) => {
-  for (final e in m.entries) e.key: _num(e.value),
-};
+Map<String, Object?> _nums(
+  Map<String, BigNum> m, {
+  NumberRounding rounding = NumberRounding.nearest,
+}) => {for (final e in m.entries) e.key: _num(e.value, rounding: rounding)};
 
 /// A rate a second for display: [formatNumber] from 1 up, else three
 /// significant figures, so a slow rate such as 0.00333 does not read as 0.
@@ -75,37 +78,6 @@ String _rateText(BigNum v) {
 Map<String, Object?> _rates(Map<String, BigNum> m) => {
   for (final e in m.entries)
     e.key: {'value': e.value.toJson(), 'display': _rateText(e.value)},
-};
-
-/// A bottleneck as JSON. With [ongoing], its record in an away summary
-/// as one that was there before the absence, and [now], the game time,
-/// it adds `since` (the game time it began), `worseThanBefore`, and
-/// `ongoing`: how long it has gone on, such as "for 3h 10m", and ", and
-/// worse than before" when its credits lost an hour grew by more than a
-/// quarter.
-Map<String, Object?> _bottleneck(
-  Bottleneck n, {
-  double? now,
-  OngoingBottleneck? ongoing,
-}) => {
-  'kind': n.kind.name,
-  'bodyId': n.bodyId,
-  'buildingId': n.buildingId,
-  'resourceId': n.resourceId,
-  'runFraction': n.runFraction,
-  'message': n.message,
-  'firstSeenAt': n.firstSeenAt,
-  'lostCreditsPerHour': switch (n.lostCreditsPerHour) {
-    final v? => _num(v),
-    null => null,
-  },
-  if (ongoing != null && now != null) ...{
-    'since': ongoing.since,
-    'worseThanBefore': ongoing.worseThanBefore,
-    'ongoing':
-        'for ${formatDuration(now - ongoing.since)}'
-        '${ongoing.worseThanBefore ? ', and worse than before' : ''}',
-  },
 };
 
 Map<String, Object?> _fail(String error, String message) => {
@@ -194,17 +166,127 @@ final class ScriptRunner {
     }
   }
 
+  /// A bottleneck as JSON, with a `message` built from its typed fields
+  /// ([_bottleneckText]). With [ongoing], its record in an away summary as
+  /// one that was there before the absence, it adds `since` (the game time
+  /// it began), `worseThanBefore`, and `ongoing`: how long it has gone on,
+  /// such as "for 3h 10m", and ", and worse than before" when its credits
+  /// lost an hour grew by more than a quarter.
+  Map<String, Object?> _bottleneck(
+    Bottleneck n, {
+    OngoingBottleneck? ongoing,
+  }) => {
+    'kind': n.kind.name,
+    'bodyId': n.bodyId,
+    'buildingId': n.buildingId,
+    'resourceId': n.resourceId,
+    'runFraction': n.runFraction,
+    'message': _bottleneckText(n),
+    'firstSeenAt': n.firstSeenAt,
+    'lostCreditsPerHour': switch (n.lostCreditsPerHour) {
+      final v? => _num(v),
+      null => null,
+    },
+    'count': n.count,
+    if (n.buildingIds.isNotEmpty) 'buildingIds': n.buildingIds,
+    'megaprojectId': ?n.megaprojectId,
+    'shareOfSales': ?n.shareOfSales,
+    if (n.heldByKeep case final v?) 'heldByKeep': _num(v),
+    if (ongoing != null) ...{
+      'since': ongoing.since,
+      'worseThanBefore': ongoing.worseThanBefore,
+      'ongoing':
+          'for ${formatDuration(state.time - ongoing.since)}'
+          '${ongoing.worseThanBefore ? ', and worse than before' : ''}',
+    },
+  };
+
+  /// What [n] says to the player: the engine's message for one building or
+  /// store; for a group of buildings ([Bottleneck.count] above 1), "17
+  /// Station Docks on Cinder are running at 40%: not enough Hull Plate";
+  /// for the megaproject kinds, what is taken or held back, in numbers.
+  String _bottleneckText(Bottleneck n) {
+    final c = engine.content;
+    String res(String id) => c.resources[id]!.name;
+    switch (n.kind) {
+      case BottleneckKind.megaprojectDiversion:
+        final share = math.min(100, (n.shareOfSales! * 100).round());
+        return '${_megaprojectName(n.megaprojectId!)} takes $share% of the '
+            '${res(n.resourceId!)} that would sell: '
+            '${formatNumber(n.lostCreditsPerHour!)} credits an hour not '
+            'earned';
+      case BottleneckKind.keepBlocksDelivery:
+        final rule = _player.autoSell
+            .where((r) => r.bodyId == n.bodyId && r.resourceId == n.resourceId)
+            .firstOrNull;
+        final keep = rule == null ? '' : ' ${formatNumber(rule.keepAtLeast)}';
+        return '${_megaprojectName(n.megaprojectId!)} still needs '
+            '${res(n.resourceId!)}, but ${state.body(n.bodyId!).name} '
+            'keeps ${formatNumber(n.heldByKeep!)} of it back for its '
+            'auto-sell keepAtLeast$keep';
+      case _ when n.count > 1:
+        return _groupText(n);
+      case _:
+        return n.message;
+    }
+  }
+
+  /// [_bottleneckText] of a group of [Bottleneck.count] buildings on one
+  /// body, named by type when they share one.
+  String _groupText(Bottleneck n) {
+    final c = engine.content;
+    final body = state.body(n.bodyId!);
+    final types = {
+      for (final id in n.buildingIds)
+        if (body.buildings.where((b) => b.id == id).firstOrNull case final b?)
+          b.defId,
+    };
+    final what = types.length == 1
+        ? _plural(c.buildings[types.single]!.name)
+        : 'buildings';
+    final who = '${n.count} $what on ${body.name}';
+    return switch (n.kind) {
+      BottleneckKind.input =>
+        '$who are running at ${math.min(99, (n.runFraction * 100).round())}%: '
+            'not enough ${c.resources[n.resourceId!]!.name}',
+      BottleneckKind.understaffed => '$who are understaffed',
+      BottleneckKind.noCrew => '$who have no crew',
+      _ => n.message,
+    };
+  }
+
+  /// [name] in the plural: "Station Docks", "Plate Presses".
+  static String _plural(String name) =>
+      RegExp(r'(s|sh|ch|x)$').hasMatch(name) ? '${name}es' : '${name}s';
+
+  /// "29.9K of 30K, 1 still owed": [done] of [whole], in whole units, the
+  /// part done rounded down and what is owed rounded up, so it never reads
+  /// "30K of 30K" while anything is owed.
+  static String _progress(BigNum done, BigNum whole) {
+    final got = done.floor();
+    final owed = (whole - done).ceil();
+    return '${formatNumber(got, rounding: NumberRounding.down)} of '
+        '${formatNumber(whole)}, '
+        '${formatNumber(owed, rounding: NumberRounding.up)} still owed';
+  }
+
   /// "Smelter on Kora (b3)": building [buildingId], a [defId], on [bodyId].
   String _describe(String defId, String bodyId, String buildingId) =>
       '${engine.content.buildings[defId]!.name} on '
       '${state.body(bodyId).name} ($buildingId)';
 
-  /// Credits and goods as "5K credits and 20 Steel", in [m]'s order.
-  String _list(Map<String, BigNum> m) => [
+  /// Credits and goods as "5K credits and 20 Steel", in [m]'s order, each
+  /// amount rounded the [rounding] way: [NumberRounding.up] for what is
+  /// still owed, so it never reads as less (or as nothing).
+  String _list(
+    Map<String, BigNum> m, {
+    NumberRounding rounding = NumberRounding.nearest,
+  }) => [
     for (final MapEntry(key: k, value: v) in m.entries)
       k == 'credits'
-          ? '${formatNumber(v)} credits'
-          : '${formatNumber(v)} ${engine.content.resources[k]!.name}',
+          ? '${formatNumber(v, rounding: rounding)} credits'
+          : '${formatNumber(v, rounding: rounding)} '
+                '${engine.content.resources[k]!.name}',
   ].join(' and ');
 
   /// Game seconds from now until [at], as "2h 5m".
@@ -257,8 +339,7 @@ final class ScriptRunner {
       ContractProgress() =>
         'Delivered ${formatNumber(o.delivered)} '
             '${c.resources[o.resourceId]!.name} from ${body(o.bodyId)} to '
-            'contract ${o.contractId} (${formatNumber(o.totalDelivered)} of '
-            '${formatNumber(o.quantity)})',
+            'contract ${o.contractId} (${_progress(o.totalDelivered, o.quantity)})',
       ContractDiscarded() =>
         'Discarded contract ${o.contractId} for '
             '${formatNumber(o.quantity)} ${c.resources[o.resourceId]!.name}; '
@@ -503,7 +584,7 @@ final class ScriptRunner {
             'level ${level - 1} is done, in ${_until(finishAt)}',
       _ =>
         'Delivered $paid to $name level $level; it still needs '
-            '${_list(o.remaining)}',
+            '${_list(o.remaining, rounding: NumberRounding.up)}',
     };
   }
 
@@ -659,7 +740,7 @@ final class ScriptRunner {
       ],
       'topBottlenecks': [
         for (final n in sum.topBottlenecks)
-          _bottleneck(n, now: state.time, ongoing: sum.ongoingFor(n)),
+          _bottleneck(n, ongoing: sum.ongoingFor(n)),
       ],
       if (sum.nextGoal case final goal?) 'nextGoal': _goal(goal),
       'autoDelivered': [
@@ -717,7 +798,8 @@ final class ScriptRunner {
           'etaSeconds': goal.etaSeconds,
           'message':
               'Next: ${m.name} (${milestoneGoalText(c, m)}), '
-              '${formatNumber(current)} of ${formatNumber(target)}, $eta',
+              '${formatNumber(current, rounding: NumberRounding.down)} of '
+              '${formatNumber(target)}, $eta',
         };
       case MegaprojectGoal(:final megaprojectId, :final level):
         final name = c.megaprojects[megaprojectId]!.name;
@@ -729,7 +811,7 @@ final class ScriptRunner {
           'etaSeconds': goal.etaSeconds,
           'message':
               'Next: $name level $level still needs '
-              '${_list(goal.remaining)}; $eta',
+              '${_list(goal.remaining, rounding: NumberRounding.up)}; $eta',
         };
     }
   }
@@ -781,7 +863,9 @@ final class ScriptRunner {
             ],
           },
       ],
-      'bottlenecks': [for (final n in r.bottlenecks) _bottleneck(n)],
+      // By cause: one entry for every building held back the same way on a
+      // body, with the megaproject kinds.
+      'bottlenecks': [for (final n in r.groupedBottlenecks) _bottleneck(n)],
     };
   }
 
@@ -827,8 +911,11 @@ final class ScriptRunner {
                 'text': _autoSetting(auto),
               },
             if (p.megaprojectProgress[m.id] case final got?) ...{
-              'delivered': _nums(got),
-              'stillNeeded': _nums(megaprojectRemaining(state, c, p.id, m)),
+              'delivered': _nums(got, rounding: NumberRounding.down),
+              'stillNeeded': _nums(
+                megaprojectRemaining(state, c, p.id, m),
+                rounding: NumberRounding.up,
+              ),
             },
           },
       ],
@@ -840,7 +927,7 @@ final class ScriptRunner {
             'resourceId': k.resourceId,
             'resource': c.resources[k.resourceId]!.name,
             'quantity': _num(k.quantity),
-            'delivered': _num(k.delivered),
+            'delivered': _num(k.delivered, rounding: NumberRounding.down),
             'reward': _num(k.rewardCredits),
           },
       ],
@@ -1113,7 +1200,10 @@ final class ScriptRunner {
       'nextLevel': level + 1,
       'cost': _nums(megaprojectCost(c, m, level)),
       if (p.megaprojectProgress.containsKey(m.id))
-        'stillNeeded': _nums(megaprojectRemaining(state, c, p.id, m)),
+        'stillNeeded': _nums(
+          megaprojectRemaining(state, c, p.id, m),
+          rounding: NumberRounding.up,
+        ),
       'timeTaken': formatDuration(megaprojectStageSeconds(m, level)),
       if (running != null)
         'note':

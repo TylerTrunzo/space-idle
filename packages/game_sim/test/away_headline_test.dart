@@ -35,6 +35,24 @@ void main() {
     autoDelivered: autoDelivered,
   );
 
+  test('rounds the net to whole credits, and float residue to 0', () {
+    // Round-4 casual bug 5: "net +0.59", "net -0.3" credits.
+    final paid = {
+      'mass_driver': {'credits': n(2.11e9)},
+    };
+    String net(num gained) => awayHeadline(
+      summary(gained: gained, earned: 2.67e9, autoDelivered: paid),
+      c,
+    ).split('net ').last;
+    expect(net(0.59), '+0');
+    expect(net(-0.3), '+0');
+    expect(net(-0.99), '+0');
+    expect(net(1.5), '+2');
+    expect(net(-2.4), '-2');
+    expect(net(560e6), '+560M');
+    expect(awayHeadline(summary(gained: 0.05), c), 'Away 1m; +0 credits');
+  });
+
   test('gives the change in credits, signed, when nothing was paid in', () {
     expect(
       awayHeadline(summary(gained: 36000, away: 3 * 3600), c),

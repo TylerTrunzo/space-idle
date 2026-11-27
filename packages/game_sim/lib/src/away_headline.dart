@@ -5,11 +5,12 @@ import 'package:game_core/game_core.dart';
 ///
 /// - The time away, and what of it counted when the cap cut it: "Away 4d
 ///   2h; 12h counted (cap)".
-/// - The credits: the change, "+1.2M credits", when nothing was paid in
-///   on its own; otherwise what was earned, what went to each megaproject
-///   and the change, "earned 2.67B credits, 2.11B to Mass Driver, net
-///   +560M", so a fall in credits that went into a megaproject does not
-///   read as a loss.
+/// - The credits: the change in whole credits, "+1.2M credits", when
+///   nothing was paid in on its own; otherwise what was earned, what went
+///   to each megaproject and the change, "earned 2.67B credits, 2.11B to
+///   Mass Driver, net +560M", so a fall in credits that went into a
+///   megaproject does not read as a loss. A change under one credit either
+///   way, float residue, shows as "+0".
 /// - A crew shortage on return: "Crew short: 41 housed for 67 assigned".
 /// - The highest level each megaproject reached while away: "Orbital
 ///   Station reached level 3".
@@ -46,5 +47,16 @@ String awayHeadline(OfflineSummary sum, Content c) {
   return parts.join('; ');
 }
 
-/// [v] formatted with its sign: "+1.2M", "-1.5K", "+0".
-String _signed(BigNum v) => '${v.isNegative ? '' : '+'}${formatNumber(v)}';
+/// [v] formatted with its sign, in whole credits: "+1.2M", "-1.5K", "+0".
+/// Float residue of what went in and out, such as 0.59 left of 2.67B
+/// earned and paid in, is no change: under a whole credit either way
+/// shows as "+0".
+String _signed(BigNum v) {
+  final d = v.toDouble();
+  final whole = d.abs() < 1
+      ? const BigNum.zero()
+      : d.abs() < 1e15
+      ? BigNum.from(d.roundToDouble())
+      : v;
+  return '${whole.isNegative ? '' : '+'}${formatNumber(whole)}';
+}

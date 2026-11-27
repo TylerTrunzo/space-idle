@@ -1149,6 +1149,124 @@ void main() {
     expect(out['topBottlenecks'], isA<List<Object?>>());
   });
 
+  test('contract progress never reads as done while a unit is owed', () {
+    // Round-4 casual bug 4: "(30K of 30K)" while 1 unit was owed.
+    final r = _runner();
+    final f = r.state.faction('player');
+    f.contracts
+      ..clear()
+      ..add(
+        ContractState(
+          id: 'c99',
+          templateId: r.engine.content.contractTemplates.keys.first,
+          resourceId: 'iron_ore',
+          quantity: BigNum.from(30000),
+          rewardCredits: BigNum.from(5),
+          postedAt: 0,
+        ),
+      );
+    r.state.body('kora').stock['iron_ore'] = BigNum.from(29999);
+    final out = r.handle({
+      'cmd': 'deliverContract',
+      'contractId': 'c99',
+      'bodyId': 'kora',
+      'amount': '29999',
+    });
+    expect(out['ok'], isTrue, reason: '$out');
+    expect(out['message'], endsWith('(29.9K of 30K, 1 still owed)'));
+  });
+
+  test('a group of buildings reads as one line, with its count', () {
+    // Round-4 casual bug 2: one row per dock filled the summary.
+    final r = _runner();
+    r.state.faction('player').baseCrew = 40;
+    for (var i = 0; i < 17; i++) {
+      r.state
+          .body('kora')
+          .buildings
+          .add(
+            BuildingState(
+              id: r.state.newId('b'),
+              defId: 'plate_press',
+              crew: 1,
+            ),
+          );
+    }
+    for (final id in ['hull_plate', 'copper_ore']) {
+      r.handle({
+        'cmd': 'setAutoSell',
+        'bodyId': 'kora',
+        'resourceId': id,
+        'keepAtLeast': '0',
+      });
+    }
+    final out = r.handle({'cmd': 'away', 'seconds': 3600});
+    final necks = (out['topBottlenecks']! as List).cast<Map<String, Object?>>();
+    final presses = necks.singleWhere((n) => n['resourceId'] == 'steel');
+    expect(presses['count'], 17);
+    expect(presses['buildingIds'], hasLength(17));
+    expect(presses['buildingId'], isNull);
+    expect(
+      presses['message'],
+      matches(
+        r'^17 Plate Presses on Kora are running at \d+%: '
+        r'not enough Steel$',
+      ),
+    );
+    final report = r.handle({'cmd': 'report'});
+    final grouped = (report['bottlenecks']! as List)
+        .cast<Map<String, Object?>>()
+        .where((n) => n['resourceId'] == 'steel');
+    expect(grouped.single['count'], 17);
+  });
+
+  test('away names what a keepAtLeast holds back from a megaproject', () {
+    // Round-4 casual bug 3: 469 reactor cores owed, 1K held under keep
+    // 1,000, and nothing said why auto-delivery left them.
+    final r = _runner();
+    final c = r.engine.content;
+    final station = c.megaprojects['orbital_station']!;
+    final f = r.state.faction('player')
+      ..megaprojectProgress['orbital_station'] = {
+        'reactor_core':
+            megaprojectCost(c, station, 0)['reactor_core']! - BigNum.from(469),
+      };
+    r.state.body('kora').stock['reactor_core'] = BigNum.from(1000);
+    for (final cmd in [
+      {
+        'cmd': 'setAutoSell',
+        'bodyId': 'kora',
+        'resourceId': 'reactor_core',
+        'keepAtLeast': '1000',
+      },
+      {
+        'cmd': 'setAutoSell',
+        'bodyId': 'kora',
+        'resourceId': 'copper_ore',
+        'keepAtLeast': '0',
+      },
+      {
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'orbital_station',
+        'goods': true,
+        'credits': false,
+      },
+    ]) {
+      expect(r.handle(cmd)['ok'], isTrue, reason: '$cmd');
+    }
+    expect(f.megaprojectAuto, contains('orbital_station'));
+    final out = r.handle({'cmd': 'report'});
+    final held = (out['bottlenecks']! as List)
+        .cast<Map<String, Object?>>()
+        .singleWhere((n) => n['kind'] == 'keepBlocksDelivery');
+    expect(
+      held['message'],
+      'Orbital Station still needs Reactor Core, but Kora keeps 469 of it '
+      'back for its auto-sell keepAtLeast 1K',
+    );
+    expect((held['heldByKeep']! as Map)['display'], '469');
+  });
+
   test('away marks bottlenecks that were there before it as ongoing', () {
     final r = _runner();
     r.handle({'cmd': 'assignCrew', 'buildingId': 'b1', 'crew': 0});
@@ -1223,6 +1341,15 @@ void main() {
     f.reachedMilestones.addAll([
       for (final m in r.engine.content.milestones) m.id,
     ]);
+    // A megaproject nothing pays credits to is not the next goal: credit
+    // auto-pay makes it one.
+    expect(r.handle({'cmd': 'away', 'seconds': 60})['nextGoal'], isNull);
+    r.handle({
+      'cmd': 'setMegaprojectAuto',
+      'megaprojectId': 'orbital_station',
+      'goods': false,
+      'credits': true,
+    });
     final station = r.handle({'cmd': 'away', 'seconds': 60});
     expect(station['nextGoal'], {
       'kind': 'megaproject',
@@ -1350,7 +1477,8 @@ void main() {
       expect(
         part['message'],
         'Delivered ${formatNumber(half)} $name from Kora to contract '
-        '${k.id} (${formatNumber(half)} of ${formatNumber(k.quantity)})',
+        '${k.id} (${formatNumber(half)} of ${formatNumber(k.quantity)}, '
+        '${formatNumber(k.quantity - half)} still owed)',
       );
 
       final rest = r.handle({
