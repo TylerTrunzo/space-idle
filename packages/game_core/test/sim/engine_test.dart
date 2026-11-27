@@ -726,6 +726,45 @@ void main() {
   });
 
   group('catchUpOffline', () {
+    test('a contract hold over a 6 h catch-up matches 1 s steps', () {
+      final s = engine.newGame(1);
+      final f = s.faction('player')..contractRefillAt.clear();
+      for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+        engine.apply(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+      }
+      // Kora makes 0.2 steel a second: the hold fills in about 40 min,
+      // then steel sells again.
+      f.contracts.add(
+        ContractState(
+          id: s.newId('c'),
+          templateId: c.contractTemplates.keys.first,
+          resourceId: 'steel',
+          quantity: n(500),
+          rewardCredits: n(1),
+          postedAt: 0,
+        ),
+      );
+      final rule = f.autoSell.last;
+      expect(autoSellKeep(s, c, rule, 60).contractHold, n(500));
+      final away = s.copy();
+      final live = s.copy();
+      engine.catchUpOffline(away, 21600);
+      engine.advance(live, 21600, maxStep: 1);
+      double steel(GameState x) => x.body('kora').stock['steel']!.toDouble();
+      expect(steel(away), closeTo(500, 1));
+      expect(steel(live), closeTo(500, 1));
+      final (a, l) = (
+        away.faction('player').credits.toDouble(),
+        live.faction('player').credits.toDouble(),
+      );
+      expect(a, closeTo(l, l * 1e-3));
+      // Steel sold once the hold was full.
+      expect(
+        away.faction('player').salesRevenue['steel']!.toDouble(),
+        greaterThan(0),
+      );
+    });
+
     test('caps at offlineCapSeconds by default', () {
       final s = engine.newGame(1);
       final sum = engine.catchUpOffline(s, 100000);
