@@ -521,6 +521,60 @@ final class ScriptRunner {
     return '$name is fed by hand only';
   }
 
+  /// What [m]'s bonuses add up to at [level], from the typed
+  /// [megaprojectBonusesAt]: "level 3: storage +30%, housing +15%, offline
+  /// cap +3h, market depth ×1.73", with " (tiers 0-1)" on a bonus limited
+  /// to some tiers; "level 0: no bonus yet".
+  String _bonusText(MegaprojectDef m, int level) {
+    if (level == 0) return 'level 0: no bonus yet';
+    String pct(double v) => '+${_short(v)}%';
+    String times(double v) => '×${_short(v)}';
+    final parts = [
+      for (final b in megaprojectBonusesAt(m, level))
+        '${switch (b.kind) {
+          BonusKind.storagePercent => 'storage ${pct(b.value)}',
+          BonusKind.housingPercent => 'housing ${pct(b.value)}',
+          BonusKind.offlineCapSeconds => 'offline cap +${formatDuration(b.value)}',
+          BonusKind.outputPercent => 'output ${pct(b.value)}',
+          BonusKind.marketDepthPercent => 'market depth ${pct(b.value)}',
+          BonusKind.marketDepthMultiplier => 'market depth ${times(b.value)}',
+          BonusKind.productionSpeedMultiplier => 'production speed ${times(b.value)}',
+        }}${switch (b.appliesToMaxTier) {
+          null => '',
+          0 => ' (tier 0)',
+          final t => ' (tiers 0-$t)',
+        }}',
+    ];
+    return 'level $level: ${parts.join(', ')}';
+  }
+
+  /// [v] with at most two decimals, trailing zeros dropped: 1.728 as
+  /// "1.73", 1.1 as "1.1", 30 as "30".
+  static String _short(double v) =>
+      v.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+
+  /// Why the player cannot deliver to [m] yet: "opens at Orbital Station
+  /// level 2 (now 1)"; null once it is open.
+  String? _lockedText(MegaprojectDef m) {
+    final lock = megaprojectLockedBy(state, engine.content, _player.id, m);
+    if (lock == null) return null;
+    final name = engine.content.megaprojects[lock.megaprojectId]!.name;
+    return 'opens at $name level ${lock.level} '
+        '(now ${_level(_player.id, lock.megaprojectId)})';
+  }
+
+  /// [auto] as "goods from every body, and credits above 1M", "goods from
+  /// every body, and no credits" or "credits above 1M, and no goods".
+  static String _autoSetting(MegaprojectAuto auto) {
+    final credits = switch (auto.creditReserve) {
+      final r? => 'credits above ${formatNumber(r)}',
+      null => 'no credits',
+    };
+    return auto.goods
+        ? 'goods from every body, and $credits'
+        : '$credits, and no goods';
+  }
+
   /// [factionId]'s level of megaproject [id]; 0 before its first stage.
   int _level(String factionId, String id) =>
       state.faction(factionId).megaprojectLevels[id] ?? 0;
@@ -591,6 +645,16 @@ final class ScriptRunner {
           _bottleneck(n, now: state.time, ongoing: sum.ongoingFor(n)),
       ],
       if (sum.nextGoal case final goal?) 'nextGoal': _goal(goal),
+      'autoDelivered': [
+        for (final MapEntry(key: id, value: got) in sum.autoDelivered.entries)
+          {
+            'id': id,
+            'name': engine.content.megaprojects[id]!.name,
+            'delivered': _nums(got),
+            'message':
+                '${engine.content.megaprojects[id]!.name} got ${_list(got)}',
+          },
+      ],
       'projectsCompleted': [
         for (final p in sum.projectsCompleted)
           {
@@ -669,6 +733,14 @@ final class ScriptRunner {
       'ok': true,
       'empireNet': _nums(r.empireNet),
       'creditsPerSec': _num(r.creditsPerSec),
+      if (r.autoDeliveredPerSec.isNotEmpty) ...{
+        'autoDeliveredPerSec': {
+          for (final MapEntry(key: m, value: got)
+              in r.autoDeliveredPerSec.entries)
+            m: _rates(got),
+        },
+        'autoDeliveredValuePerSec': _num(r.autoDeliveredValuePerSec),
+      },
       'bodies': [
         for (final b in r.bodies)
           {
@@ -728,6 +800,18 @@ final class ScriptRunner {
             'id': m.id,
             'name': m.name,
             'level': _level(p.id, m.id),
+            'bonuses': _bonusText(m, _level(p.id, m.id)),
+            'nextLevel': _bonusText(m, _level(p.id, m.id) + 1),
+            'locked': ?_lockedText(m),
+            if (p.megaprojectAuto[m.id] case final auto?)
+              'auto': {
+                'goods': auto.goods,
+                'creditReserve': switch (auto.creditReserve) {
+                  final v? => _num(v),
+                  null => null,
+                },
+                'text': _autoSetting(auto),
+              },
             if (p.megaprojectProgress[m.id] case final got?) ...{
               'delivered': _nums(got),
               'stillNeeded': _nums(megaprojectRemaining(state, c, p.id, m)),
@@ -857,13 +941,17 @@ final class ScriptRunner {
   /// Auto-sell [rule] as JSON, with what it keeps back in a 60 s step
   /// ([autoSellKeep]): "keeps 34 (keepAtLeast 10 + 24 local use)", with
   /// " + 200 for open contracts" when the rule's body holds back what open
-  /// contracts still need, and ", cut to the storage cap" inside the
-  /// brackets when the cap cut it.
+  /// contracts still need, " + 20K for megaprojects" for what megaprojects
+  /// fed on their own still need, and ", cut to the storage cap" inside
+  /// the brackets when the cap cut it.
   Map<String, Object?> _autoSellRule(AutoSellRule rule) {
     final k = autoSellKeep(state, engine.content, rule, 60);
     final held = k.contractHold.isZero
         ? ''
         : ' + ${formatNumber(k.contractHold)} for open contracts';
+    final fed = k.megaprojectHold.isZero
+        ? ''
+        : ' + ${formatNumber(k.megaprojectHold)} for megaprojects';
     final cut = k.cappedAtStorage ? ', cut to the storage cap' : '';
     return {
       'bodyId': rule.bodyId,
@@ -871,11 +959,12 @@ final class ScriptRunner {
       'keepAtLeast': _num(k.keepAtLeast),
       'localUse': _num(k.localUse),
       'contractHold': _num(k.contractHold),
+      'megaprojectHold': _num(k.megaprojectHold),
       'keeps': _num(k.keeps),
       'text':
           'keeps ${formatNumber(k.keeps)} (keepAtLeast '
           '${formatNumber(k.keepAtLeast)} + ${formatNumber(k.localUse)} '
-          'local use$held$cut)',
+          'local use$held$fed$cut)',
     };
   }
 
@@ -979,6 +1068,7 @@ final class ScriptRunner {
   Object _megaprojectCost(MegaprojectDef m) {
     final c = engine.content;
     final p = _player;
+    if (_lockedText(m) case final why?) return 'locked: $why';
     final level = megaprojectDeliveryLevel(state, p.id, m);
     final running = megaprojectStageOf(state, p.id, m.id);
     if (level >= SaveCodec.maxMegaprojectLevel) {

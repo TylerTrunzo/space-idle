@@ -48,10 +48,29 @@ GameState _checkIns(
   return s;
 }
 
+/// [s] with the player feeding both megaprojects on its own: the station
+/// goods and credits above 1M, the Mass Driver goods only.
+GameState _feeding(GameEngine e, GameState s) {
+  for (final cmd in [
+    SetMegaprojectAutoCommand(
+      'player',
+      'orbital_station',
+      true,
+      BigNum.from(1e6),
+    ),
+    const SetMegaprojectAutoCommand('player', 'mass_driver', true, null),
+  ]) {
+    expect(e.apply(s, cmd), isA<CommandOk>());
+  }
+  return s;
+}
+
 void main() {
   test('save/load and copy() at every check-in change nothing over 7 days', () {
     final e = _engine();
-    final straight = _encode(_checkIns(e, BalancedBot(), days: 7));
+    final straight = _encode(
+      _checkIns(e, BalancedBot(), days: 7, between: (s) => _feeding(e, s)),
+    );
     // Each check-in goes on from a copy's save, loaded: a field either one
     // drops shows as a difference by the end.
     final reloaded = _checkIns(
@@ -59,10 +78,14 @@ void main() {
       BalancedBot(),
       days: 7,
       between: (s) =>
-          (SaveCodec.decode(SaveCodec.encode(s.copy()), e.content) as SaveOk)
+          (SaveCodec.decode(SaveCodec.encode(_feeding(e, s).copy()), e.content)
+                  as SaveOk)
               .state,
     );
     expect(_encode(reloaded), straight);
+    // The settings were there to be saved, and fed something.
+    final f = reloaded.faction('player');
+    expect(f.megaprojectAuto.keys, ['orbital_station', 'mass_driver']);
   });
 
   test('milestone progress agrees with the milestones a bot run reaches', () {
@@ -138,7 +161,7 @@ void main() {
 
     Command next() {
       final f = pick(factions);
-      return switch (rng.nextInt(17)) {
+      return switch (rng.nextInt(18)) {
         0 => BuildCommand(
           f,
           pick(bodies),
@@ -188,6 +211,12 @@ void main() {
           pick(contracts()),
           pick(bodies),
           pick(amounts),
+        ),
+        16 => SetMegaprojectAutoCommand(
+          f,
+          pick(megaprojects),
+          rng.nextInt(2) == 0,
+          pick([null, ...amounts]),
         ),
         _ => DiscardContractCommand(f, pick(contracts())),
       };
@@ -250,6 +279,55 @@ void main() {
     final earned = away.creditsGained.toDouble() / 9000;
     expect(earned, greaterThan(0));
     expect(shown, closeTo(earned, earned * 0.1));
+  }, timeout: const Timeout(Duration(minutes: 1)));
+
+  test('a 6 h catch-up matches 1 s steps from a day-3 state, feeding '
+      'megaprojects on their own', () {
+    final e = _engine();
+    final played = _played(e, hours: 72);
+    final unfed = played.copy();
+    e.catchUpOffline(unfed, 21600);
+    final start = _feeding(e, played);
+    final away = start.copy();
+    final live = start.copy();
+    e.catchUpOffline(away, 21600);
+    e.advance(live, 21600, maxStep: 1);
+    final (a, l) = (away.faction('player'), live.faction('player'));
+    expect(
+      [for (final p in away.projects) (p.id, p.finishAt)],
+      [for (final p in live.projects) (p.id, p.finishAt)],
+    );
+    expect(a.megaprojectLevels, l.megaprojectLevels);
+    expect(
+      a.megaprojectProgress.keys.toList(),
+      l.megaprojectProgress.keys.toList(),
+    );
+    // Something went in on its own (the Mass Driver is still locked).
+    final hand = unfed.faction('player');
+    expect(
+      jsonEncode([l.megaprojectLevels, l.megaprojectProgress]),
+      isNot(jsonEncode([hand.megaprojectLevels, hand.megaprojectProgress])),
+    );
+    // Goods fed match; credits paid in differ by at most a minute's
+    // income, which 60 s steps pay in a minute later.
+    final minute = l.lifetimeCredits.toDouble() / start.time * 60;
+    for (final MapEntry(key: m, value: got) in l.megaprojectProgress.entries) {
+      for (final MapEntry(key: id, value: v) in got.entries) {
+        final want = v.toDouble();
+        expect(
+          a.megaprojectProgress[m]![id]!.toDouble(),
+          closeTo(want, id == 'credits' ? minute + want * 1e-3 : want * 0.02),
+          reason: '$m $id',
+        );
+      }
+    }
+    expect(
+      a.lifetimeCredits.toDouble(),
+      closeTo(
+        l.lifetimeCredits.toDouble(),
+        l.lifetimeCredits.toDouble() * 1e-3,
+      ),
+    );
   }, timeout: const Timeout(Duration(minutes: 1)));
 
   test('a 6 h catch-up matches 1 s steps from a day-3 state', () {

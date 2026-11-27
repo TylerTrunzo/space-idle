@@ -13,6 +13,12 @@ ScriptRunner _runner() {
   return ScriptRunner(engine, engine.newGame(1));
 }
 
+/// The id, name and level of each megaproject in a `state` reply.
+List<Map<String, Object?>> _levels(Map<String, Object?> state) => [
+  for (final m in (state['megaprojects']! as List).cast<Map<String, Object?>>())
+    {'id': m['id'], 'name': m['name'], 'level': m['level']},
+];
+
 /// Kora's entry in a `state` reply.
 Map<String, Object?> _kora(Map<String, Object?> state) =>
     (state['bodies']! as List).cast<Map<String, Object?>>().singleWhere(
@@ -734,9 +740,109 @@ void main() {
     expect(bad['error'], 'badCommand');
   });
 
+  test('state words each megaproject\'s bonuses, lock and auto-delivery', () {
+    final r = _runner();
+    final f = r.state.faction('player');
+    f.megaprojectLevels['orbital_station'] = 3;
+    Map<String, Object?> entry(String id) =>
+        (r.handle({'cmd': 'state'})['megaprojects']! as List)
+            .cast<Map<String, Object?>>()
+            .singleWhere((m) => m['id'] == id);
+    final station = entry('orbital_station');
+    expect(
+      station['bonuses'],
+      'level 3: storage +30%, housing +15%, offline cap +3h, market depth '
+      '×1.73',
+    );
+    expect(
+      station['nextLevel'],
+      'level 4: storage +40%, housing +20%, offline cap +4h, market depth '
+      '×2.07',
+    );
+    expect(station.containsKey('locked'), isFalse);
+    expect(station.containsKey('auto'), isFalse);
+    f.megaprojectLevels['orbital_station'] = 1;
+    final driver = entry('mass_driver');
+    expect(driver['bonuses'], 'level 0: no bonus yet');
+    expect(
+      driver['nextLevel'],
+      'level 1: production speed ×1.1 (tiers 0-1), market depth ×1.1 '
+      '(tiers 0-1)',
+    );
+    expect(driver['locked'], 'opens at Orbital Station level 2 (now 1)');
+    r.handle({
+      'cmd': 'setMegaprojectAuto',
+      'megaprojectId': 'mass_driver',
+      'goods': true,
+      'creditReserve': '1e6',
+    });
+    expect(entry('mass_driver')['auto'], {
+      'goods': true,
+      'creditReserve': {'value': '1e6', 'display': '1M'},
+      'text': 'goods from every body, and credits above 1M',
+    });
+    expect(
+      (r.handle({'cmd': 'costs'})['megaprojects']! as Map)['mass_driver'],
+      'locked: opens at Orbital Station level 2 (now 1)',
+    );
+  });
+
+  test('auto-delivery shows in auto-sell keeps, the report and away', () {
+    final r = _runner();
+    final f = r.state.faction('player');
+    f.megaprojectLevels['orbital_station'] = 2;
+    f.credits = BigNum.from(5000);
+    for (final cmd in [
+      {
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'mass_driver',
+        'goods': true,
+        'creditReserve': '1000',
+      },
+      {
+        'cmd': 'setAutoSell',
+        'bodyId': 'kora',
+        'resourceId': 'steel',
+        'keepAtLeast': '0',
+      },
+      {
+        'cmd': 'setAutoSell',
+        'bodyId': 'kora',
+        'resourceId': 'copper_ore',
+        'keepAtLeast': '0',
+      },
+    ]) {
+      expect(r.handle(cmd)['ok'], isTrue);
+    }
+    final rule = (r.handle({'cmd': 'state'})['autoSell']! as List)
+        .cast<Map<String, Object?>>()
+        .first;
+    expect(rule['megaprojectHold'], isA<Map<String, Object?>>());
+    expect(
+      rule['text'],
+      'keeps 1.2K (keepAtLeast 0 + 0 local use + 20K for megaprojects, cut to '
+      'the storage cap)',
+    );
+    final rep = r.handle({'cmd': 'report'});
+    final per = (rep['autoDeliveredPerSec']! as Map)['mass_driver']! as Map;
+    expect(per.keys, containsAll(['steel', 'credits']));
+    expect(rep['autoDeliveredValuePerSec'], isA<Map<String, Object?>>());
+    final away = r.handle({'cmd': 'away', 'seconds': 3600});
+    final fed = (away['autoDelivered']! as List).single as Map;
+    expect(fed['id'], 'mass_driver');
+    expect(
+      fed['message'],
+      allOf(
+        startsWith('Mass Driver got '),
+        contains('Steel'),
+        contains('credits'),
+      ),
+    );
+  });
+
   test('a megaproject stage starts, shows in state and raises the level', () {
     final r = _runner();
-    expect(r.handle({'cmd': 'state'})['megaprojects'], [
+    expect(_levels(r.handle({'cmd': 'state'})), [
       {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 0},
       {'id': 'mass_driver', 'name': 'Mass Driver', 'level': 0},
     ]);
@@ -774,7 +880,7 @@ void main() {
       },
     ]);
     expect(away['headline'], endsWith('; Orbital Station reached level 1'));
-    expect(r.handle({'cmd': 'state'})['megaprojects'], [
+    expect(_levels(r.handle({'cmd': 'state'})), [
       {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 1},
       {'id': 'mass_driver', 'name': 'Mass Driver', 'level': 0},
     ]);
