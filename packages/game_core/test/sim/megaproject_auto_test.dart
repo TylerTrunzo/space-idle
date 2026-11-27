@@ -1344,6 +1344,29 @@ void main() {
         );
       });
 
+      test('an away of 14,335 s and of 14,340 s agree: no diversion for a '
+          'stage not fed, the same feeding and the same top 3', () {
+        for (final owed in [2e9, 5000.0]) {
+          final a = near(owed: owed, held: owed < 1e6 ? 6000 : 1000);
+          final b = near(owed: owed, held: owed < 1e6 ? 6000 : 1000);
+          final x = e.catchUpOffline(a, 14335);
+          final y = e.catchUpOffline(b, 14340);
+          expect(setting(a).feedingLevel, owed < 1e6 ? 0 : isNull);
+          expect(setting(a).feedingLevel, setting(b).feedingLevel);
+          expect(
+            [for (final n in x.topBottlenecks) n.groupKey],
+            [for (final n in y.topBottlenecks) n.groupKey],
+            reason: '$owed',
+          );
+          if (setting(a).feedingLevel == null) {
+            expect(
+              x.topBottlenecks.map((n) => n.kind),
+              isNot(contains(BottleneckKind.megaprojectDiversion)),
+            );
+          }
+        }
+      });
+
       test('mixed settings: near ready at weight 3 beside always at weight '
           '0; the reserve holds at every step and steps agree', () {
         GameState make() {
