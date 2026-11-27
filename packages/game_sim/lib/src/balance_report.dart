@@ -537,7 +537,10 @@ BalanceReport runBotSession(
   final tracker = _Tracker(c, s, faction.id);
   final hits = <MilestoneHit>[];
   final lastDay = (end / _daySeconds).ceil();
-  int dayAt(double t) => math.min(t ~/ _daySeconds + 1, lastDay);
+  // An event seen exactly at a day's end, after the catch-up that brought
+  // it, belongs to the day that ends there, as the Days table counts it.
+  int dayAt(double t) =>
+      t <= 0 ? 1 : math.min((t / _daySeconds).ceil(), lastDay);
   final watch = _Watch(c, s, faction.id, dayAt);
   final events = <SessionEvent>[];
   final dayEnds = <DayEnd>[];

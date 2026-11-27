@@ -136,6 +136,13 @@ void main() {
     expect(r.daysWithNewThings(2), 2);
 
     expect(r.dayEnds.map((d) => d.day), [1, 2]);
+    // An event at a day's end (a check-in right after the catch-up that
+    // brought it) is that day's, as the day-end figures count it.
+    for (final e in r.events) {
+      final day = e.gameHours <= 0 ? 1 : (e.gameHours / 24).ceil();
+      expect(e.day, day, reason: '${e.gameHours} h: ${e.text}');
+    }
+    expect(r.events.where((e) => e.gameHours == 24), isNotEmpty);
     expect(r.dayEnds.last.bodiesOwned, greaterThanOrEqualTo(2));
     expect(r.dayEnds.last.megaprojectLevels.keys, [
       'orbital_station',
