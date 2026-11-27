@@ -1079,11 +1079,17 @@ void main() {
     });
 
     group('two stop-level routes into one store', () {
+      /// Ore each of Kora and Brine sent over [play]'s 6 h, its last call.
+      var sentBy = (0.0, 0.0);
+
       /// Three smelters on Hollow Reach, 1.2 iron ore a second, fed by
       /// routes from Kora (120 s away) and Brine (180 s away), both with
       /// [stop]; returns ore sent, ore used and ore wasted over 6 h after
       /// an hour, and Hollow Reach's stock at the end.
-      (double, double, double, double) play(double stop) {
+      (double, double, double, double) play(
+        double stop, {
+        double koraOre = 1e6,
+      }) {
         final s = engine.newGame(1);
         s.faction('player').baseCrew = 100;
         final reach = s.body('hollow_reach')..ownerId = 'player';
@@ -1098,7 +1104,7 @@ void main() {
         }
         for (final from in ['kora', 'brine']) {
           s.body(from)
-            ..stock['iron_ore'] = n(1e6)
+            ..stock['iron_ore'] = n(from == 'kora' ? koraOre : 1e6)
             ..stock['cargo_ship'] = n(1);
           engine.apply(
             s,
@@ -1114,10 +1120,10 @@ void main() {
           );
         }
         engine.advance(s, 3600);
-        double ore() =>
-            s.body('kora').stock['iron_ore']!.toDouble() +
-            s.body('brine').stock['iron_ore']!.toDouble();
+        double at(String id) => s.body(id).stock['iron_ore']!.toDouble();
+        double ore() => at('kora') + at('brine');
         final before = ore();
+        final (kora, brine) = (at('kora'), at('brine'));
         final steel = s.faction('player').lifetimeProduced['steel']!;
         var wasted = 0.0;
         for (var i = 0; i < 6 * 60; i++) {
@@ -1128,6 +1134,7 @@ void main() {
             (s.faction('player').lifetimeProduced['steel']! - steel)
                 .toDouble() *
             2;
+        sentBy = (kora - at('kora'), brine - at('brine'));
         return (
           before - ore(),
           used,
@@ -1149,6 +1156,27 @@ void main() {
         expect(wasted, lessThan(1));
         // A minute's use of a lot either way of the stop, not a second
         // trip's worth above it.
+        expect(held, closeTo(500, 1.2 * 60 + 1));
+      });
+
+      test('they share one target, and the nearer route sends first', () {
+        // Each route used to aim at its own stop plus its own trip's use:
+        // Brine's longer trip kept the store above Kora's target, and the
+        // nearer route stayed paused.
+        final (sent, _, _, _) = play(500);
+        final (kora, brine) = sentBy;
+        expect(kora, closeTo(sent, sent * 0.01));
+        expect(brine, lessThan(sent * 0.01));
+      });
+
+      test('with the nearer one out of stock, the other keeps the store '
+          'supplied', () {
+        final (sent, used, wasted, held) = play(500, koraOre: 0);
+        final (kora, brine) = sentBy;
+        expect(kora, 0);
+        expect(brine, closeTo(sent, 1e-6));
+        expect(used, closeTo(1.2 * 6 * 3600, 1.2 * 6 * 3600 * 0.01));
+        expect(wasted, lessThan(1));
         expect(held, closeTo(500, 1.2 * 60 + 1));
       });
     });

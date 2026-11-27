@@ -77,8 +77,11 @@ supply during the trip, has landed, and resumes once the destination uses
 some up. So a long trip keeps enough in flight that the destination never
 runs dry and settles near its level, and 60 s steps move what 1 s steps do.
 The store plus the cargo on its way never pass the storage cap, even when
-nothing there can use what arrives, and several routes into one store share
-its room in route order. A level
+nothing there can use what arrives. Several routes with stop levels into
+one store share one target (the highest of their levels, plus the trip's
+use of the nearest of them whose source has stock) and its room, the
+nearest sending first and the others topping it up, so none is left paused
+by another's longer trip. A level
 above the destination's storage cap is cut to the cap; the reply ends "The
 stop level was cut to Brine's storage cap: stock above it is wasted". Moved
 ships and landed cargo can be used at the arrival time a reply gave. `{"cmd":"updateRoute","routeId":"r4",
