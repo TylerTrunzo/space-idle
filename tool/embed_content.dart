@@ -9,6 +9,8 @@
 // content_source_test fails when this output is stale.
 import 'dart:io';
 
+final _blankFirstLine = RegExp(r'^[ \t]*\r?\n');
+
 void main() {
   final root = Directory.fromUri(Platform.script.resolve('..'));
   final contentDir = Directory.fromUri(root.uri.resolve('content/'));
@@ -39,9 +41,11 @@ void main() {
   for (final f in files) {
     final stem = f.uri.pathSegments.last.replaceAll('.json', '');
     final text = f.readAsStringSync();
-    // A raw ''' literal cannot hold ''' itself or end on a quote, and a
-    // leading newline would be dropped by the Dart multiline-string rule.
-    if (text.contains("'''") || text.endsWith("'") || text.startsWith('\n')) {
+    // A raw ''' literal cannot hold ''' itself or end on a quote, and Dart
+    // drops a multiline string's first line when it is only whitespace.
+    if (text.contains("'''") ||
+        text.endsWith("'") ||
+        _blankFirstLine.hasMatch(text)) {
       stderr.writeln('${f.path} cannot be embedded as a raw string literal');
       exit(1);
     }

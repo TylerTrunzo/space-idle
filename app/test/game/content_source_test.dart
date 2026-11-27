@@ -50,7 +50,7 @@ void main() {
         isA<StateError>().having(
           (e) => e.message,
           'message',
-          contains('rules'),
+          startsWith('Embedded content is invalid'),
         ),
       ),
     );
@@ -64,7 +64,7 @@ void main() {
         isA<StateError>().having(
           (e) => e.message,
           'message',
-          contains('rules'),
+          contains('rules.json is not valid JSON'),
         ),
       ),
     );

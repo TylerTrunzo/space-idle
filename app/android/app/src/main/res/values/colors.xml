@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palette.background: the app is always dark, so the window and the
+         launch screen use it in both light and dark system modes. -->
+    <color name="space_background">#0B1020</color>
+</resources>
