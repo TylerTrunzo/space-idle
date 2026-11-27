@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -143,9 +144,9 @@ class GameController extends ChangeNotifier {
   /// Every catch-up of at least [awaySummarySeconds] not yet seen, oldest
   /// first. Several build up when the app is backgrounded again before the
   /// away dialog is dismissed; the dialog shows them combined, then calls
-  /// [clearAwaySummary]. Unmodifiable.
+  /// [clearAwaySummary]. A read-only live view, not a copy.
   List<OfflineSummary> get pendingAwaySummaries =>
-      List.unmodifiable(_pendingAwaySummaries);
+      UnmodifiableListView(_pendingAwaySummaries);
 
   /// The stored text [start] could not load, kept so the UI can offer to
   /// export it; null once [newGame] or a successful [importSave] replaces

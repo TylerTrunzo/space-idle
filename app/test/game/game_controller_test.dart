@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -309,6 +310,19 @@ void main() {
       await c.start();
 
       expect(() => c.pendingAwaySummaries.clear(), throwsUnsupportedError);
+    });
+
+    test('pendingAwaySummaries is a live view, not a copy', () async {
+      await _playAndClose(store, clock);
+      clock.advance(const Duration(hours: 2));
+      final c = _controller(store, clock);
+      await c.start();
+      final view = c.pendingAwaySummaries;
+
+      expect(view, isA<UnmodifiableListView<OfflineSummary>>());
+      clock.advance(const Duration(minutes: 10));
+      await c.resume();
+      expect(view, hasLength(2));
     });
 
     test(
