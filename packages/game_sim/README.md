@@ -413,7 +413,13 @@ contracts out), and a Timeline of every completed project and contract.
   works toward the next milestone (and housing when crew runs out), and
   spends the rest on the best return.
 - `casual` plays like `balanced` but issues at most 15 commands per check-in
-  (auto-sell rules aside), a stand-in for a player with a few minutes.
+  (auto-sell rules aside), a stand-in for a player with a few minutes, and
+  taps buy-max (`buyUpgrades`) once each check-in, as one of the 15, as the
+  stage 2 app lets every player do. Its budget is the spare credits: those
+  its plan leaves, less what it saves for its next goal (a claim, say), and
+  while a megaproject can take credits on its own, no more than the shared
+  auto-pay reserve, the credits above it being the megaproject's. So the
+  reserve is its spending allowance. The round-4 pacing targets are its.
 
 The bots build with `autoCrew` on, so a new building takes its crew at once;
 they assign what crew is left (from new housing) themselves. Timed things come
@@ -422,14 +428,16 @@ their timers run while the player is away.
 
 - **Megaprojects.** Once a megaproject opens, each bot feeds it on its own
   (`setMegaprojectAuto`): goods from every body once a stage is near ready
-  (`"goods":"nearReady"`), credits at the default weight 1. Once credits are
-  all the stage being paid for still lacks, the bot pays them by hand when it
-  can and still keep a reserve of an hour of income; otherwise they go in on
-  their own above the shared auto-pay reserve of that hour (one for every
-  megaproject, set before any credits go in), and stop at the next decision
-  after the stage is paid (credits paid in earlier, or left flowing into the
-  next stage, sit idle in a stage still short of goods). The bots deliver by
-  hand only what auto-delivery does not cover. Stages go on being paid for
+  (`"goods":"nearReady"`), and credits once every good the stage being paid
+  for still lacks is made by a staffed building or held in full: from then
+  the stage waits only on what the economy makes, so its credits go in as
+  they are earned, above the shared auto-pay reserve (an hour of income plus
+  what the bot saves for its next goal, set before any credits go in), and
+  its goods start 12 h before its credits are in. The balanced bot gives the
+  Orbital Station weight 2 against the Mass Driver's 1 (a station level adds
+  about 8-19% of income on its days 7 to 21 against the Mass Driver's 5%);
+  the casual bot keeps the default 1. None pays credits by hand. The bots
+  deliver by hand only what auto-delivery does not cover. Stages go on being paid for
   while one runs, the next starting as the running one ends; the engine's
   auto-sell holds back what a fed stage still lacks. When at today's surplus a
   good a stage lacks would take more than a day to come (after what
@@ -442,7 +450,9 @@ their timers run while the player is away.
 - **Contracts** come before the station: the engine's auto-sell holds a
   contract's goods back, and the bots deliver once a body holds enough to
   finish it (or its store is nearly full), and discard a contract on a
-  resource they neither make nor hold.
+  resource they neither make nor hold; the balanced and casual bots also
+  discard one that their spare stock and a day of net production would not
+  fill, so a slot is not held for days by an order the empire uses up.
 - **Routes.** A route feeding buildings carries twice their demand and stops at
   what the destination keeps for them (`stopAtDestination`), so it keeps up as
   they grow without filling the store; the surplus is sold at the source. A
@@ -453,7 +463,8 @@ their timers run while the player is away.
   stands idle for an input, it routes the input in, grows the route, sends
   ships, or feeds the input's own makers in turn.
 
-`docs/balance/stage1_6-30day-*.md` hold the 30-day baselines of all three bots (seed 1, and a
-summary of the pacing targets on seeds 1 to 3); the stage 1.5 ones are kept for comparison. Rerun
+`docs/balance/stage1_7-30day-*.md` hold the 30-day baselines of all three bots (seed 1, and a
+summary of the pacing targets on seeds 1 to 3); the stage 1.6 and 1.5 ones are kept for
+comparison. Rerun
 them after changing `content/*.json` and compare.
 

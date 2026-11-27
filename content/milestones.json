@@ -60,8 +60,6 @@
   {"id": "credits_30t", "name": "Thirty Trillion", "condition": {"type": "creditsEarned", "amount": "3e13"}},
   {"id": "station_12", "name": "Orbital Commons", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 12}},
   {"id": "station_15", "name": "Harbor of Stars", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 15}},
-  {"id": "station_20", "name": "Second Moon", "condition": {"type": "megaprojectLevel", "megaproject": "orbital_station", "level": 20}},
   {"id": "driver_10", "name": "Sustained Fire", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 10}},
-  {"id": "driver_15", "name": "Freight Without Wings", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 15}},
-  {"id": "driver_20", "name": "Rail Without End", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 20}}
+  {"id": "driver_15", "name": "Freight Without Wings", "condition": {"type": "megaprojectLevel", "megaproject": "mass_driver", "level": 15}}
 ]

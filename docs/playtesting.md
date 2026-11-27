@@ -199,7 +199,10 @@ dart run game_sim:game_sim bot --bot greedy --hours 24 --format json
   toward the next milestone (and housing when crew runs out), and spends the rest on
   the best return. It plays like an attentive optimizer.
 - `casual` plays like `balanced` but with at most 15 commands per check-in
-  (auto-sell rules aside): the casual persona's pace.
+  (auto-sell rules aside), and taps buy-max (`buyUpgrades`) once each check-in
+  with its spare credits, as the stage 2 app's button will let every player
+  do: the casual persona's pace. While a megaproject takes credits on its own,
+  buy-max spends no more than the auto-pay reserve.
 
 The report shows when each milestone was first seen (check-in index and hours),
 the market income of each day with each resource's share, a Days table (new things
@@ -209,8 +212,8 @@ lines (days with anything new, and days with a milestone or project, contracts l
 out), a timeline of completed projects and contracts, dead zones (check-ins
 where the bot found nothing to do), resources never produced or never used, the
 final stock and credits, and the worst bottleneck at each check-in.
-`docs/balance/` holds the 30-day baselines (`stage1_6-30day-*.md`, and the stage 1.5 ones before
-them); use them to
+`docs/balance/` holds the 30-day baselines (`stage1_7-30day-*.md`, and the stage 1.6 and 1.5
+ones before them); use them to
 compare your experience against the bots', and rerun them after any content change.
 
 ## Personas
