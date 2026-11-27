@@ -33,6 +33,12 @@ bool _optBool(Map<String, Object?> j, String k, {required bool absent}) {
   throw FormatException('command field "$k" must be true or false', j);
 }
 
+bool _bool(Map<String, Object?> j, String k) {
+  final v = j[k];
+  if (v is bool) return v;
+  throw FormatException('command field "$k" must be true or false', j);
+}
+
 BigNum _big(Map<String, Object?> j, String k) => BigNum.parse(_str(j, k));
 
 BigNum? _optBig(Map<String, Object?> j, String k) {
@@ -167,6 +173,12 @@ sealed class Command {
         _str(j, 'megaprojectId'),
         _str(j, 'bodyId'),
         _bigs(j, 'amounts'),
+      ),
+      'setMegaprojectAuto' => SetMegaprojectAutoCommand(
+        f,
+        _str(j, 'megaprojectId'),
+        _bool(j, 'goods'),
+        _optBig(j, 'creditReserve'),
       ),
       'deliverContract' => DeliverContractCommand(
         f,
@@ -623,6 +635,40 @@ final class DeliverToMegaprojectCommand extends Command {
     'megaprojectId': megaprojectId,
     'bodyId': bodyId,
     'amounts': {for (final e in amounts.entries) e.key: e.value.toJson()},
+  };
+}
+
+/// Sets how the faction feeds a megaproject on its own, every game
+/// minute (`stepMegaprojectAuto`): with [goods], from every owned body
+/// above what each keeps; with a [creditReserve], the credits above it.
+/// Neither (false and null) clears the setting. It may be set while the
+/// megaproject is still locked; deliveries start once it opens.
+final class SetMegaprojectAutoCommand extends Command {
+  /// Creates a set-megaproject-auto command.
+  const SetMegaprojectAutoCommand(
+    super.factionId,
+    this.megaprojectId,
+    this.goods,
+    this.creditReserve,
+  );
+
+  /// Megaproject to feed.
+  final String megaprojectId;
+
+  /// Whether goods go in on their own.
+  final bool goods;
+
+  /// Credits always kept, at least zero; null pays no credits.
+  final BigNum? creditReserve;
+
+  @override
+  String get _cmd => 'setMegaprojectAuto';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'megaprojectId': megaprojectId,
+    'goods': goods,
+    'creditReserve': creditReserve?.toJson(),
   };
 }
 

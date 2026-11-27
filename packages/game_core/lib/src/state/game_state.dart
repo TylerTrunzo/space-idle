@@ -53,6 +53,36 @@ final class AutoSellRule {
   );
 }
 
+/// How a faction feeds one megaproject on its own: every game minute the
+/// engine delivers what the stage being paid for still lacks (see
+/// `stepMegaprojectAuto`). Immutable; a command replaces it.
+final class MegaprojectAuto {
+  /// Creates a setting.
+  const MegaprojectAuto({required this.goods, this.creditReserve});
+
+  /// Restores a setting written by [toJson].
+  factory MegaprojectAuto.fromJson(Map<String, Object?> j) => MegaprojectAuto(
+    goods: j['goods']! as bool,
+    creditReserve: switch (j['creditReserve']) {
+      null => null,
+      final v => BigNum.fromJson(v as String),
+    },
+  );
+
+  /// Whether goods go in from every owned body, above what each keeps.
+  final bool goods;
+
+  /// Credits the faction always keeps: only credits above it are paid in.
+  /// Null pays no credits at all.
+  final BigNum? creditReserve;
+
+  /// Serializes this setting; a null reserve is left out.
+  Map<String, Object?> toJson() => {
+    'goods': goods,
+    'creditReserve': ?creditReserve?.toJson(),
+  };
+}
+
 /// A bottleneck a faction has had since [firstSeenAt], kept so reports can
 /// tell a standing problem from a new one.
 ///
@@ -207,6 +237,7 @@ final class FactionState {
     List<SeenBottleneck>? seenBottlenecks,
     Map<String, int>? megaprojectLevels,
     Map<String, Map<String, BigNum>>? megaprojectProgress,
+    Map<String, MegaprojectAuto>? megaprojectAuto,
     List<ContractState>? contracts,
     List<double>? contractRefillAt,
     this.contractsCompleted = 0,
@@ -217,6 +248,7 @@ final class FactionState {
        autoSell = autoSell ?? [],
        megaprojectLevels = megaprojectLevels ?? {},
        megaprojectProgress = megaprojectProgress ?? {},
+       megaprojectAuto = megaprojectAuto ?? {},
        contracts = contracts ?? [],
        contractRefillAt = contractRefillAt ?? [],
        seenBottlenecks = seenBottlenecks ?? [],
@@ -272,6 +304,13 @@ final class FactionState {
         : {
             for (final e in _asMap(j['megaprojectProgress']).entries)
               e.key: _bigMap(e.value),
+          },
+    // Absent in saves from before auto-delivery existed.
+    megaprojectAuto: j['megaprojectAuto'] == null
+        ? null
+        : {
+            for (final e in _asMap(j['megaprojectAuto']).entries)
+              e.key: MegaprojectAuto.fromJson(_asMap(e.value)),
           },
     // All three absent in saves from before contracts existed.
     contracts: j['contracts'] == null
@@ -347,6 +386,11 @@ final class FactionState {
   /// `DeliverToMegaprojectCommand`.
   final Map<String, Map<String, BigNum>> megaprojectProgress;
 
+  /// Megaproject id to how the faction feeds it on its own
+  /// ([MegaprojectAuto]), in the order first set; absent means by hand
+  /// only. See `SetMegaprojectAutoCommand`.
+  final Map<String, MegaprojectAuto> megaprojectAuto;
+
   /// Its contracts board, in the order they were posted; at most
   /// [RulesDef.contractSlots]. Only the player has a board in stage 1.5.
   final List<ContractState> contracts;
@@ -395,6 +439,10 @@ final class FactionState {
       for (final MapEntry(key: id, value: got) in megaprojectProgress.entries)
         id: {for (final e in got.entries) e.key: e.value.toJson()},
     },
+    'megaprojectAuto': {
+      for (final MapEntry(key: id, value: a) in megaprojectAuto.entries)
+        id: a.toJson(),
+    },
     'contracts': [for (final k in contracts) k.toJson()],
     'contractRefillAt': List.of(contractRefillAt),
     'contractsCompleted': contractsCompleted,
@@ -421,6 +469,8 @@ final class FactionState {
       for (final MapEntry(key: id, value: got) in megaprojectProgress.entries)
         id: Map.of(got),
     },
+    // Settings are immutable, so a new map is a deep copy.
+    megaprojectAuto: Map.of(megaprojectAuto),
     contracts: [for (final k in contracts) k.copy()],
     contractRefillAt: List.of(contractRefillAt),
     contractsCompleted: contractsCompleted,

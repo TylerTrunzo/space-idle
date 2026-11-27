@@ -32,6 +32,7 @@ const _gameCommands = {
   'expandSlots',
   'startMegaprojectStage',
   'deliverToMegaproject',
+  'setMegaprojectAuto',
   'deliverContract',
   'discardContract',
 };
@@ -259,6 +260,7 @@ final class ScriptRunner {
         'Discarded contract ${o.contractId} for '
             '${formatNumber(o.quantity)} ${c.resources[o.resourceId]!.name}; '
             '${_nextContract(o.nextContractAt)}',
+      MegaprojectAutoSet() => _autoText(o),
       Upgraded(track: UpgradeTrack.capacity) => _capacityMessage(o),
       CrewAssigned() ||
       Upgraded() ||
@@ -496,6 +498,27 @@ final class ScriptRunner {
         'Delivered $paid to $name level $level; it still needs '
             '${_list(o.remaining)}',
     };
+  }
+
+  /// How [o] left a megaproject fed: "Orbital Station now takes goods
+  /// from every body each game minute, above what each keeps for its own
+  /// use and open contracts, and credits above 5M", "… and no credits", "…
+  /// takes credits above 5M each game minute, and no goods", or "Orbital
+  /// Station is fed by hand only".
+  String _autoText(MegaprojectAutoSet o) {
+    final name = engine.content.megaprojects[o.megaprojectId]!.name;
+    final reserve = o.creditReserve;
+    final credits = reserve == null
+        ? 'no credits'
+        : 'credits above ${formatNumber(reserve)}';
+    if (o.goods) {
+      return '$name now takes goods from every body each game minute, above '
+          'what each keeps for its own use and open contracts, and $credits';
+    }
+    if (reserve != null) {
+      return '$name now takes $credits each game minute, and no goods';
+    }
+    return '$name is fed by hand only';
   }
 
   /// [factionId]'s level of megaproject [id]; 0 before its first stage.

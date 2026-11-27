@@ -227,3 +227,37 @@ ProjectState _startStage(GameState s, FactionState f, MegaprojectDef def) {
     megaprojectStageSeconds(def, f.megaprojectLevels[def.id] ?? 0),
   );
 }
+
+CommandResult _setMegaprojectAuto(
+  GameState s,
+  Content c,
+  FactionState f,
+  SetMegaprojectAutoCommand cmd,
+) {
+  final def = c.megaprojects[cmd.megaprojectId];
+  if (def == null) {
+    return _fail(
+      CommandError.unknownDef,
+      'There is no megaproject ${cmd.megaprojectId}',
+    );
+  }
+  final reserve = cmd.creditReserve;
+  if (reserve != null && reserve < const BigNum.zero()) {
+    return _fail(CommandError.invalidAmount, 'A reserve must be 0 or more');
+  }
+  if (!cmd.goods && reserve == null) {
+    f.megaprojectAuto.remove(def.id);
+  } else {
+    f.megaprojectAuto[def.id] = MegaprojectAuto(
+      goods: cmd.goods,
+      creditReserve: reserve,
+    );
+  }
+  return CommandOk(
+    outcome: MegaprojectAutoSet(
+      megaprojectId: def.id,
+      goods: cmd.goods,
+      creditReserve: reserve,
+    ),
+  );
+}

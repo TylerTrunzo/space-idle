@@ -686,6 +686,54 @@ void main() {
     r.state.faction('player').credits = BigNum.from(1e9);
   }
 
+  test('setMegaprojectAuto says how the megaproject is fed', () {
+    final r = _runner();
+    final on = r.handle({
+      'cmd': 'setMegaprojectAuto',
+      'megaprojectId': 'orbital_station',
+      'goods': true,
+      'creditReserve': '5e6',
+    });
+    expect(on['ok'], isTrue, reason: '$on');
+    expect(
+      on['message'],
+      'Orbital Station now takes goods from every body each game minute, '
+      'above what each keeps for its own use and open contracts, and '
+      'credits above 5M',
+    );
+    expect(
+      r.handle({
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'mass_driver',
+        'goods': true,
+      })['message'],
+      endsWith('and no credits'),
+    );
+    expect(
+      r.handle({
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'orbital_station',
+        'goods': false,
+        'creditReserve': '0',
+      })['message'],
+      'Orbital Station now takes credits above 0 each game minute, and no '
+      'goods',
+    );
+    expect(
+      r.handle({
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'orbital_station',
+        'goods': false,
+      })['message'],
+      'Orbital Station is fed by hand only',
+    );
+    final bad = r.handle({
+      'cmd': 'setMegaprojectAuto',
+      'megaprojectId': 'orbital_station',
+    });
+    expect(bad['error'], 'badCommand');
+  });
+
   test('a megaproject stage starts, shows in state and raises the level', () {
     final r = _runner();
     expect(r.handle({'cmd': 'state'})['megaprojects'], [
