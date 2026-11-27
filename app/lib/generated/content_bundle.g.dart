@@ -300,7 +300,7 @@ const Map<String, String> contentJson = {
     "buildCost": {"credits": "1500", "habitat_module": "1"},
     "upgrades": {
       "efficiency": {"baseCredits": "1000", "growth": 1.2},
-      "capacity": {"baseCredits": "900", "growth": 2.5}
+      "capacity": {"baseCredits": "900", "growth": 2.0}
     }
   },
   {

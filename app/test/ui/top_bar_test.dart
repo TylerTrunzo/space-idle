@@ -8,7 +8,6 @@ import 'package:space_idle/game/save_store.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/top_bar.dart';
-import 'package:space_idle/view/body_actions_view.dart';
 
 final Content content = loadEmbeddedContent();
 
@@ -107,15 +106,29 @@ void main() {
     testWidgets('a tap shows what it would buy; Buy buys it', (tester) async {
       final c = _controller();
       c.state.faction('player').credits = BigNum.from(300);
-      final preview = buyMaxView(c);
+      // What the command itself buys on this state, whatever its rule.
+      final dry = c.engine.apply(
+        c.state.copy(),
+        BuyUpgradesCommand('player', BigNum.from(300)),
+      );
+      final o = (dry as CommandOk).outcome! as UpgradesBought;
+      expect(o.levels, greaterThan(0), reason: 'the test needs a buy');
+      String n(int count, String one) =>
+          count == 1 ? '1 $one' : '$count ${one}s';
+      final levels = n(o.levels, 'upgrade level');
+      final buildings = n(
+        {for (final p in o.purchases) p.buildingId}.length,
+        'building',
+      );
+      final cost = formatNumber(o.total);
+
       await tester.pumpWidget(_bar(c));
       await tester.tap(key('buy-max'));
       await tester.pump();
       expect(
-        find.textContaining('${preview.levels} upgrade levels'),
+        find.textContaining('Buy $levels on $buildings for $cost of 300'),
         findsOneWidget,
       );
-      expect(find.textContaining('${preview.cost} of 300'), findsOneWidget);
       expect(
         c.state.faction('player').credits,
         BigNum.from(300),
@@ -125,9 +138,12 @@ void main() {
       await tester.tap(key('buy-max-confirm'));
       await tester.pump();
       expect(key('buy-max-confirm'), findsNothing);
-      expect(find.textContaining('Bought ${preview.levels}'), findsOneWidget);
+      expect(
+        find.textContaining('Bought $levels on $buildings'),
+        findsOneWidget,
+      );
       final spent = BigNum.from(300) - c.state.faction('player').credits;
-      expect(formatNumber(spent), preview.cost, reason: 'what it showed');
+      expect(formatNumber(spent), cost, reason: 'what it showed');
     });
 
     testWidgets('Cancel buys nothing', (tester) async {
