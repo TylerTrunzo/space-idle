@@ -95,7 +95,7 @@ void main() {
       expect(content.megaprojects.keys, ['orbital_station', 'mass_driver']);
       expect(station.name, 'Orbital Station');
       expect(station.hostBodyType, isNull);
-      expect(station.costGrowth, 3);
+      expect(station.costGrowth, 2.5);
       expect(station.stageSeconds, 7200);
       expect(station.stageSecondsGrowth, 1.15);
       expect(
@@ -104,7 +104,7 @@ void main() {
           (BonusKind.storagePercent, 10),
           (BonusKind.housingPercent, 5),
           (BonusKind.offlineCapSeconds, 3600),
-          (BonusKind.marketDepthMultiplier, 1.2),
+          (BonusKind.marketDepthMultiplier, 1.25),
         ],
       );
     });
@@ -130,20 +130,21 @@ void main() {
       'player',
       'mass_driver',
       'kora',
-      {'steel': n(1)},
+      {'copper_wire': n(1)},
     );
 
-    test('costs credits and bulk tier 0-2 goods, ×2.5 a level', () {
+    test('costs credits and bulk tier 0-2 goods, ×2.3 a level', () {
       expect(driver.name, 'Mass Driver');
       expect(driver.hostBodyType, isNull);
-      expect(driver.costGrowth, 2.5);
+      expect(driver.costGrowth, 2.3);
+      // No food (habitats eat all a casual player makes) and no steel
+      // (plate presses for the station take it): stage 1.6 task 5.
       expect(driver.baseCost.keys, [
         'credits',
-        'steel',
         'hull_plate',
         'copper_wire',
         'water',
-        'food',
+        'silicon_wafer',
       ]);
       for (final MapEntry(key: id, value: v) in driver.baseCost.entries) {
         if (id == 'credits') continue;
@@ -152,64 +153,61 @@ void main() {
       }
     });
 
-    test('speeds up and deepens the markets of tiers 0 and 1, compounding', () {
+    test('speeds up tiers 0 and 1, compounding', () {
+      // No market depth: deeper tier 0-1 markets made them most of an
+      // optimizer's sales by day 14 (stage 1.6 task 5).
       expect(
         [
           for (final b in driver.bonusesPerLevel)
             (b.kind, b.amount, b.appliesToMaxTier),
         ],
-        [
-          (BonusKind.productionSpeedMultiplier, 1.1, 1),
-          (BonusKind.marketDepthMultiplier, 1.1, 1),
-        ],
+        [(BonusKind.productionSpeedMultiplier, 1.15, 1)],
       );
     });
 
-    test('opens at Orbital Station level 2', () {
-      expect(driver.requiresMegaproject, {'orbital_station': 2});
+    test('opens at Orbital Station level 1', () {
+      expect(driver.requiresMegaproject, {'orbital_station': 1});
       final s = rich();
-      s.body('kora').stock['steel'] = n(10);
-      for (final level in [0, 1]) {
-        s.faction('player').megaprojectLevels['orbital_station'] = level;
-        expect(megaprojectLockedBy(s, content, 'player', driver), (
-          megaprojectId: 'orbital_station',
-          level: 2,
-        ));
-        expect(
-          megaprojectTakesDeliveries(s, content, 'player', driver),
-          isFalse,
-        );
-        final why = fails(s, deliver, CommandError.megaprojectLocked);
-        expect(
-          why,
-          'Mass Driver opens at Orbital Station level 2 (you have level '
-          '$level)',
-        );
-        fails(
-          s,
-          const StartMegaprojectStageCommand('player', 'mass_driver', 'kora'),
-          CommandError.megaprojectLocked,
-        );
-      }
-      s.faction('player').megaprojectLevels['orbital_station'] = 2;
+      s.body('kora').stock['copper_wire'] = n(10);
+      const level = 0;
+      s.faction('player').megaprojectLevels['orbital_station'] = level;
+      expect(megaprojectLockedBy(s, content, 'player', driver), (
+        megaprojectId: 'orbital_station',
+        level: 1,
+      ));
+      expect(megaprojectTakesDeliveries(s, content, 'player', driver), isFalse);
+      final why = fails(s, deliver, CommandError.megaprojectLocked);
+      expect(
+        why,
+        'Mass Driver opens at Orbital Station level 1 (you have level '
+        '$level)',
+      );
+      fails(
+        s,
+        const StartMegaprojectStageCommand('player', 'mass_driver', 'kora'),
+        CommandError.megaprojectLocked,
+      );
+      s.faction('player').megaprojectLevels['orbital_station'] = 1;
       expect(megaprojectLockedBy(s, content, 'player', driver), isNull);
       expect(megaprojectTakesDeliveries(s, content, 'player', driver), isTrue);
       ok(s, deliver);
       expect(s.faction('player').megaprojectProgress['mass_driver'], {
-        'steel': n(1),
+        'copper_wire': n(1),
       });
     });
   });
 
   group('costs', () {
-    test('grow ×3 a level', () {
+    test('grow ×2.5 a level', () {
       final base = megaprojectCost(content, station, 0);
       expect(base, station.baseCost);
       for (final level in [1, 2, 5]) {
         final cost = megaprojectCost(content, station, level);
         expect(cost.keys, base.keys);
         for (final MapEntry(:key, :value) in cost.entries) {
-          final want = base[key]!.toDouble() * math.pow(3, level);
+          // Whole units, rounded up.
+          final want = (base[key]!.toDouble() * math.pow(2.5, level))
+              .ceilToDouble();
           expect(value.toDouble(), closeTo(want, want * 1e-12), reason: key);
         }
       }
@@ -1141,7 +1139,8 @@ void main() {
           ],
         );
         expect([for (final b in at3.take(3)) b.value], [30, 15, 10800]);
-        expect(at3.last.value, closeTo(1.728, 1e-12));
+        // 1.25 cubed: the shipped station deepens markets ×1.25 a level.
+        expect(at3.last.value, closeTo(1.953125, 1e-12));
         final boosted = megaprojectBonusesAt(boost, 2);
         expect(boosted.first.appliesToMaxTier, 1);
         expect(boosted.first.value, closeTo(1.44, 1e-12));

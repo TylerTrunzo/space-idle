@@ -752,24 +752,20 @@ void main() {
     expect(
       station['bonuses'],
       'level 3: storage +30%, housing +15%, offline cap +3h, market depth '
-      '×1.73',
+      '×1.95',
     );
     expect(
       station['nextLevel'],
       'level 4: storage +40%, housing +20%, offline cap +4h, market depth '
-      '×2.07',
+      '×2.44',
     );
     expect(station.containsKey('locked'), isFalse);
     expect(station.containsKey('auto'), isFalse);
-    f.megaprojectLevels['orbital_station'] = 1;
+    f.megaprojectLevels['orbital_station'] = 0;
     final driver = entry('mass_driver');
     expect(driver['bonuses'], 'level 0: no bonus yet');
-    expect(
-      driver['nextLevel'],
-      'level 1: production speed ×1.1 (tiers 0-1), market depth ×1.1 '
-      '(tiers 0-1)',
-    );
-    expect(driver['locked'], 'opens at Orbital Station level 2 (now 1)');
+    expect(driver['nextLevel'], 'level 1: production speed ×1.15 (tiers 0-1)');
+    expect(driver['locked'], 'opens at Orbital Station level 1 (now 0)');
     r.handle({
       'cmd': 'setMegaprojectAuto',
       'megaprojectId': 'mass_driver',
@@ -783,7 +779,7 @@ void main() {
     });
     expect(
       (r.handle({'cmd': 'costs'})['megaprojects']! as Map)['mass_driver'],
-      'locked: opens at Orbital Station level 2 (now 1)',
+      'locked: opens at Orbital Station level 1 (now 0)',
     );
   });
 
@@ -792,6 +788,12 @@ void main() {
     final f = r.state.faction('player');
     f.megaprojectLevels['orbital_station'] = 2;
     f.credits = BigNum.from(5000);
+    // A wire mill on Kora, which mines copper ore: the Mass Driver takes
+    // copper wire.
+    r.state
+        .body('kora')
+        .buildings
+        .add(BuildingState(id: 'wm', defId: 'wire_mill', crew: 1));
     for (final cmd in [
       {
         'cmd': 'setMegaprojectAuto',
@@ -802,13 +804,13 @@ void main() {
       {
         'cmd': 'setAutoSell',
         'bodyId': 'kora',
-        'resourceId': 'steel',
+        'resourceId': 'copper_wire',
         'keepAtLeast': '0',
       },
       {
         'cmd': 'setAutoSell',
         'bodyId': 'kora',
-        'resourceId': 'copper_ore',
+        'resourceId': 'steel',
         'keepAtLeast': '0',
       },
     ]) {
@@ -825,7 +827,7 @@ void main() {
     );
     final rep = r.handle({'cmd': 'report'});
     final per = (rep['autoDeliveredPerSec']! as Map)['mass_driver']! as Map;
-    expect(per.keys, containsAll(['steel', 'credits']));
+    expect(per.keys, containsAll(['copper_wire', 'credits']));
     expect(rep['autoDeliveredValuePerSec'], isA<Map<String, Object?>>());
     final away = r.handle({'cmd': 'away', 'seconds': 3600});
     final fed = (away['autoDelivered']! as List).single as Map;
@@ -834,7 +836,7 @@ void main() {
       fed['message'],
       allOf(
         startsWith('Mass Driver got '),
-        contains('Steel'),
+        contains('Copper Wire'),
         contains('credits'),
       ),
     );
@@ -986,7 +988,7 @@ void main() {
                 as Map)['orbital_station']!
             as Map);
     expect(later['nextLevel'], 2);
-    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '4.5K');
+    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '3.75K');
     expect(later.containsKey('stillNeeded'), isFalse);
   });
 

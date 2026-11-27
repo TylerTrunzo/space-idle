@@ -84,7 +84,7 @@ counts are plain integers.
 | `{"cmd":"expandSlots","bodyId":"kora"}` | Buy one more build slot on a body you own; each one costs more (see `costs`) |
 | `{"cmd":"deliverToMegaproject","megaprojectId":"orbital_station","bodyId":"kora","amounts":{"hull_plate":"120","credits":"5e5"}}` | Hand goods (from that body) and credits to the Orbital Station's next level; deliveries add up from any of your bodies, and the one that completes the level starts its timer. While a level is being built, deliveries pay for the level after it, which then starts by itself the moment the running one is done |
 | `{"cmd":"startMegaprojectStage","megaprojectId":"orbital_station","bodyId":"kora"}` | Deliver everything the next level still needs from one body at once |
-| `{"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station","goods":true,"creditReserve":"5e6"}` | Feed a megaproject on its own every game minute: goods from every body above what each keeps (its own use, its auto-sell `keepAtLeast`, open contract needs), and credits above the reserve (leave `creditReserve` out for none). `"goods":false` with no reserve stops it. The Mass Driver opens at Orbital Station level 2 (`state.megaprojects` shows `locked` until then, and each megaproject's `bonuses` and `nextLevel`) |
+| `{"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station","goods":true,"creditReserve":"5e6"}` | Feed a megaproject on its own every game minute: goods from every body above what each keeps (its own use, its auto-sell `keepAtLeast`, open contract needs), and credits above the reserve (leave `creditReserve` out for none). `"goods":false` with no reserve stops it. The Mass Driver opens at Orbital Station level 1 (`state.megaprojects` shows `locked` until then, and each megaproject's `bonuses` and `nextLevel`) |
 | `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora","amount":"500"}` / `{"cmd":"discardContract","contractId":"c12"}` | Work the contracts board (`state.contracts`): deliveries add up and the reward is paid with the last unit; a discard costs nothing. The reply says when the next contract arrives (the soonest refill) |
 
 Deliveries to contracts and megaprojects move whole units (rounded down; less
@@ -129,7 +129,7 @@ Things worth knowing:
 - Contracts ask only for goods you make now from steady supply (a stockpile
   nothing refills does not count), about 1 h (bulk), 2 h (components) or 3 h
   (advanced goods) of what your buildings make that way, and pay 3× the base
-  price, between 10 minutes and 1 hour of your income (the larger of what
+  price, between 20 minutes and 1 hour of your income (the larger of what
   auto-sell earns and what your steady production is worth, so selling by
   hand counts too) and never less than 500 credits. The very first one has no
   cap and pays at least 7,500, enough for your first claim. Food, water and

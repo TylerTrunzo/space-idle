@@ -100,7 +100,7 @@ void main() {
         // 1 to 3 h of production, longer for higher tiers.
         expect(t.quantitySeconds, inInclusiveRange(3600, 10800));
         expect(t.rewardMultiplier, 3);
-        expect(t.rewardIncomeSeconds, 600);
+        expect(t.rewardIncomeSeconds, 1200);
         expect(t.rewardCapIncomeSeconds, 3600);
         expect(t.lifeSupportWeight, 0.25);
         expect(t.minRewardCredits > const BigNum.zero(), isTrue);

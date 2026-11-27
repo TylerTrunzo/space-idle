@@ -48,7 +48,7 @@ level 3 … it starts when level 2 is done" while a stage runs), or fails with
 `cannotAfford`. Each completed stage raises the megaproject's level, a
 permanent bonus. A megaproject with `requiresMegaproject` refuses deliveries
 with `megaprojectLocked` until it opens ("Mass Driver opens at Orbital Station
-level 2 (you have level 1)").
+level 1 (you have level 0)").
 
 `{"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station","goods":true,
 "creditReserve":"5e6"}` feeds a megaproject on its own every game minute:
@@ -110,7 +110,7 @@ surveyed one with `alreadySurveyed`.
 The Veyra Exchange posts up to 3 contracts on the player's board. They never
 expire. Each asks for 1–3 h of what the player's buildings make of a good
 now from steady supply (a good made at a trickle, or only from a stockpile
-nothing refills, gets none) and pays 3× its base price, between 10 minutes
+nothing refills, gets none) and pays 3× its base price, between 20 minutes
 and 1 hour of income (the larger of auto-sale income and the value of steady
 net production), at least 500 credits; the first contract ever posted has
 no cap and pays at least 7,500 (see `content/README.md`). `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
@@ -158,8 +158,8 @@ commands:
 - `{"cmd":"state"}` time, credits, crew, reached milestones, the level of
   every megaproject (`megaprojects`: `id`, `name`, `level`, `bonuses` and
   `nextLevel` such as `"level 3: storage +30%, housing +15%, offline cap +3h,
-  market depth ×1.73"`, `locked` such as `"opens at Orbital Station level 2
-  (now 1)"` while it is, and `auto` with `goods`, `creditReserve` and a `text`
+  market depth ×1.95"`, `locked` such as `"opens at Orbital Station level 1
+  (now 0)"` while it is, and `auto` with `goods`, `creditReserve` and a `text`
   when it is fed on its own), the contracts
   board (`contracts`: `id`, `issuer`, `resourceId`, `resource` name,
   `quantity`, `delivered`, `reward` in credits) and when its empty slots

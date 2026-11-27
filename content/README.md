@@ -7,8 +7,8 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Markets.** Raw (tier 0) and refined (tier 1) goods have shallow markets and floors near zero: they
   pay early, but bulk sales earn almost nothing. Components (tier 2) and advanced goods (tier 3) have
   deep markets, so late income comes from them and is spread over several goods, because each market
-  pays less per unit the more of it is sold. Orbital Station levels deepen every market ×1.2 a level,
-  compounding (×1.73 at level 3).
+  pays less per unit the more of it is sold. Orbital Station levels deepen every market ×1.25 a level,
+  compounding (×1.95 at level 3).
 - **Upgrades.** Speed and capacity on a building share one counter: each speed or capacity upgrade
   makes the next one of either 17% pricier, so the order you buy them in hardly matters, and one more
   crew never pays back more than about 1.7× faster than a speed level (capacity's base is 6× speed's).
@@ -24,7 +24,7 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   gross of what your own buildings use (1 h of bulk goods, 2 h of components, 3 h of advanced
   goods), but never more than one of your bodies can store, nor the template's `maxQuantity` (5,000,
   1,000 and 100) × (1 + your megaproject levels summed). It pays 3× the base price per unit, at least
-  `rewardIncomeSeconds` (10 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it is
+  `rewardIncomeSeconds` (20 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it is
   posted, both at least `minRewardCredits` (500). Income here is the larger of what auto-sell earns
   a second and the value of what your buildings steadily make beyond what they use, at current
   prices, so it does not matter which goods you auto-sell or whether you sell by hand, and a
@@ -36,10 +36,13 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   body with a rule that holds the most of it.
 - **Orbital Station.** Each level's goods and credits are delivered bit by bit, from any body, so a
   level may cost far more than one body holds; its timer starts once the last of it is in.
-- **Mass Driver.** Opens at Orbital Station level 2 (`requiresMegaproject`). It takes credits and bulk
-  goods that otherwise saturate (steel, hull plate, copper wire, water, food), costs ×2.5 a level, and
-  each level runs extractors and tier-1 buildings ×1.1 faster (inputs and outputs) and deepens tier 0–1
-  markets ×1.1, both compounding. Its quantities are a first value; stage 1.6 task 5 retunes them.
+- **Mass Driver.** Opens at Orbital Station level 1 (`requiresMegaproject`). It takes credits and bulk
+  goods that otherwise saturate (hull plate, copper wire, water, silicon wafers), costs ×2.3 a level,
+  and each level runs extractors and tier-1 buildings ×1.15 faster (inputs and outputs), compounding.
+  It asks for no food (habitats eat all a young economy makes) and no steel (plate presses take it for
+  the station's hull plates), and it does not deepen markets: deeper tier 0–1 markets made those goods
+  most of an optimizer's sales. Tuned in stage 1.6 so a casual player opens it on days 6–8 and gets a
+  level about every 2–4 days through day 21.
 - **Megaproject bonuses.** `bonusesPerLevel` kinds: `storagePercent`, `housingPercent`,
   `outputPercent` and `marketDepthPercent` add `amount` percent a level; `offlineCapSeconds` adds
   seconds; `marketDepthMultiplier` and `productionSpeedMultiplier` multiply by `amount^level`

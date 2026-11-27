@@ -172,10 +172,21 @@ void main() {
   });
 
   group('auto-delivery', () {
+    // These tests feed the Mass Driver Kora's starting steel, so they run
+    // on the shipped content with steel added to its cost, whatever the
+    // shipped cost asks for.
+    final content = _withDriverSteel();
+    final e = GameEngine(content);
     final driver = content.megaprojects['mass_driver']!;
 
-    /// A new game at Orbital Station level 2, so the Mass Driver is open,
-    /// with no contracts on the board and none due, and
+    CommandOk ok(GameState s, Command cmd) {
+      final r = e.apply(s, cmd);
+      expect(r, isA<CommandOk>(), reason: r is CommandFailed ? r.message : '');
+      return r as CommandOk;
+    }
+
+    /// A new game at Orbital Station level 2, past where the Mass Driver
+    /// opens, with no contracts on the board and none due, and
     /// [goods]/[reserve] auto-delivery to the Mass Driver.
     GameState open({bool goods = true, BigNum? reserve}) {
       final s = e.newGame(1);
@@ -333,7 +344,7 @@ void main() {
     test('delivers nothing to a locked megaproject, and auto-sell sells '
         'its goods', () {
       final s = open();
-      s.faction('player').megaprojectLevels['orbital_station'] = 1;
+      s.faction('player').megaprojectLevels['orbital_station'] = 0;
       s.body('kora').stock['steel'] = n(500);
       expect(stepMegaprojectAuto(s, content, 60), isEmpty);
       final rule = AutoSellRule(
@@ -555,4 +566,15 @@ void main() {
       expect(encode(away), encode(ticks));
     });
   });
+}
+
+/// The shipped content with the Mass Driver also asking for 20,000 steel
+/// a level, as it did when these tests were written.
+Content _withDriverSteel() {
+  final b = shippedBundle();
+  final driver = (b['megaprojects']! as List)
+      .cast<Map<String, Object?>>()
+      .firstWhere((m) => m['id'] == 'mass_driver');
+  (driver['baseCost']! as Map<String, Object?>)['steel'] = '20000';
+  return (Content.fromBundle(b) as ContentOk).content;
 }
