@@ -256,6 +256,42 @@ void main() {
     );
   });
 
+  test('state shows what an auto-sell rule holds back for open contracts', () {
+    final r = _runner();
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'steel',
+      'keepAtLeast': '0',
+    });
+    final f = r.state.faction('player');
+    f.contracts
+      ..clear()
+      ..add(
+        ContractState(
+          id: r.state.newId('c'),
+          templateId: r.engine.content.contractTemplates.keys.first,
+          resourceId: 'steel',
+          quantity: BigNum.from(300),
+          delivered: BigNum.from(100),
+          rewardCredits: BigNum.from(1000),
+          postedAt: r.state.time,
+        ),
+      );
+    f.contractRefillAt
+      ..clear()
+      ..addAll([1e9, 1e9]);
+    final rule = (r.handle({'cmd': 'state'})['autoSell']! as List)
+        .cast<Map<String, Object?>>()
+        .single;
+    expect((rule['contractHold']! as Map)['display'], '200');
+    expect((rule['keeps']! as Map)['display'], '200');
+    expect(
+      rule['text'],
+      'keeps 200 (keepAtLeast 0 + 0 local use + 200 for open contracts)',
+    );
+  });
+
   test('a new game posts what contracts it can at once and shows no refill '
       'due in 0s', () {
     final r = _runner();

@@ -348,4 +348,101 @@ void main() {
     expect(stock(), n(500));
     expect(s.faction('p').credits.isZero, isTrue);
   });
+
+  group('auto-sell holds back what open contracts still need', () {
+    /// Puts a contract for [quantity] ore, [delivered] of it in, on p's
+    /// board.
+    ContractState order(num quantity, {num delivered = 0}) {
+      final k = ContractState(
+        id: s.newId('c'),
+        templateId: 'any',
+        resourceId: 'ore',
+        quantity: n(quantity),
+        delivered: n(delivered),
+        rewardCredits: n(1),
+        postedAt: 0,
+      );
+      s.faction('p').contracts.add(k);
+      return k;
+    }
+
+    void sellAllOn(String bodyId) => s
+        .faction('p')
+        .autoSell
+        .add(
+          AutoSellRule(bodyId: bodyId, resourceId: 'ore', keepAtLeast: n(0)),
+        );
+
+    test('on top of keepAtLeast, and less once some is delivered', () {
+      s
+          .faction('p')
+          .autoSell
+          .add(
+            AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(50)),
+          );
+      final k = order(300);
+      order(100, delivered: 40);
+      final keep = autoSellKeep(s, c, s.faction('p').autoSell.single, 60);
+      expect(
+        (keep.keepAtLeast, keep.contractHold, keep.keeps),
+        (n(50), n(360), n(410)),
+      );
+      stepMarket(s, c, 60);
+      expect(stock(), n(410));
+      k.delivered = n(200);
+      stepMarket(s, c, 60);
+      expect(stock(), n(210));
+    });
+
+    test('no more than the body can store', () {
+      sellAllOn('a');
+      s.body('a').stock['ore'] = n(1500);
+      order(5000);
+      final keep = autoSellKeep(s, c, s.faction('p').autoSell.single, 60);
+      expect((keep.contractHold, keep.keeps), (n(1000), n(1000)));
+      stepMarket(s, c, 60);
+      expect(stock(), n(1000));
+    });
+
+    test('on the body with the most of it, when several sell it', () {
+      s.body('c').ownerId = 'p';
+      sellAllOn('a');
+      sellAllOn('c');
+      s.body('c').stock['ore'] = n(600);
+      order(300);
+      final [onA, onC] = s.faction('p').autoSell;
+      expect(autoSellKeep(s, c, onA, 60).contractHold, n(0));
+      expect(autoSellKeep(s, c, onC, 60).contractHold, n(300));
+      stepMarket(s, c, 60);
+      expect(stock(), n(0));
+      expect(s.body('c').stock['ore'], n(300));
+    });
+
+    test('only for its own faction, and nothing without a contract', () {
+      sellAllOn('a');
+      final keep = autoSellKeep(s, c, s.faction('p').autoSell.single, 60);
+      expect(keep.contractHold, n(0));
+      s.factions.add(
+        FactionState(
+          id: 'q',
+          name: 'Q',
+          isPlayer: false,
+          credits: n(0),
+          baseCrew: 0,
+          contracts: [
+            ContractState(
+              id: 'c900',
+              templateId: 'any',
+              resourceId: 'ore',
+              quantity: n(300),
+              rewardCredits: n(1),
+              postedAt: 0,
+            ),
+          ],
+        ),
+      );
+      stepMarket(s, c, 60);
+      expect(stock(), n(0));
+    });
+  });
 }

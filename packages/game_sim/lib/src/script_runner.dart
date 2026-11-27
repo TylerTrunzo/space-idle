@@ -832,21 +832,27 @@ final class ScriptRunner {
   }
 
   /// Auto-sell [rule] as JSON, with what it keeps back in a 60 s step
-  /// ([autoSellKeep]): "keeps 34 (keepAtLeast 10 + 24 local use)", plus
-  /// ", cut to the storage cap" inside the brackets when the cap cut it.
+  /// ([autoSellKeep]): "keeps 34 (keepAtLeast 10 + 24 local use)", with
+  /// " + 200 for open contracts" when the rule's body holds back what open
+  /// contracts still need, and ", cut to the storage cap" inside the
+  /// brackets when the cap cut it.
   Map<String, Object?> _autoSellRule(AutoSellRule rule) {
     final k = autoSellKeep(state, engine.content, rule, 60);
+    final held = k.contractHold.isZero
+        ? ''
+        : ' + ${formatNumber(k.contractHold)} for open contracts';
     final cut = k.cappedAtStorage ? ', cut to the storage cap' : '';
     return {
       'bodyId': rule.bodyId,
       'resourceId': rule.resourceId,
       'keepAtLeast': _num(k.keepAtLeast),
       'localUse': _num(k.localUse),
+      'contractHold': _num(k.contractHold),
       'keeps': _num(k.keeps),
       'text':
           'keeps ${formatNumber(k.keeps)} (keepAtLeast '
           '${formatNumber(k.keepAtLeast)} + ${formatNumber(k.localUse)} '
-          'local use$cut)',
+          'local use$held$cut)',
     };
   }
 

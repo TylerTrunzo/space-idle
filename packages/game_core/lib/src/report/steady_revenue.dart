@@ -139,8 +139,10 @@ BigNum steadySaleRevenue(
     if (spare == null || spare <= const BigNum.zero()) continue;
     if (limits[body.id]?.containsKey(rule.resourceId) ?? false) continue;
     (limits[body.id] ??= {})[rule.resourceId] = spare;
-    // A full keep, as in steady play, plus this second's spare.
-    final keep = autoSellKeep(market, c, rule, 1).keeps;
+    // A full keep, as in steady play, plus this second's spare. The keep
+    // counts the contract need as held here: setting stocks may move the
+    // need to another body, whose keep is then never above this one.
+    final keep = autoSellKeep(market, c, rule, 1, asHolder: true).keeps;
     body.stock[rule.resourceId] = keep.min(storageCap(market, c, body)) + spare;
   }
   if (limits.isEmpty) return const BigNum.zero();

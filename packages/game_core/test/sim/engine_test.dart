@@ -811,6 +811,8 @@ void main() {
 
     test('summarizes stock, credits, milestones and bottlenecks', () {
       final s = engine.newGame(1);
+      // No board: a contract would hold copper ore back from auto-sell.
+      s.faction('player').contractRefillAt.clear();
       engine.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
       // Leave the iron mine unstaffed so the smelter runs dry.
       engine.apply(s, const AssignCrewCommand('player', 'b1', 0));

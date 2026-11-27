@@ -95,15 +95,19 @@ SaleResult sell(
 /// Runs [dt] game seconds of the market: saturation recovery and every
 /// faction's auto-sell rules.
 ///
-/// A rule sells what the body holds beyond `keepAtLeast` plus what the
+/// A rule sells what the body holds beyond `keepAtLeast`, plus what the
 /// body's own buildings would use of the resource at full supply
 /// ([fullRateFlow]) over the keep horizon, `max(dt,
-/// shipmentMergeSeconds)` ([RulesDef.shipmentMergeSeconds]), the two
-/// together kept no higher than the body's [storageCap] unless
+/// shipmentMergeSeconds)` ([RulesDef.shipmentMergeSeconds]), plus what
+/// its faction's open contracts still need of it when this body holds
+/// them back, all kept no higher than the body's [storageCap] unless
 /// `keepAtLeast` alone is ([autoSellKeep]); only while its faction owns
-/// the body. A rule sees the stock less what earlier rules on the same
-/// body and resource queued, so duplicate rules (which saves reject)
-/// never sell more than is held. Keeping that demand back means
+/// the body. A contract's need is held on one body: of the faction's
+/// bodies with a rule on the resource, the one holding the most of it
+/// at the step's start (the first in rule order on a tie), and no more
+/// than it can store. A rule sees the stock less what earlier rules on
+/// the same body and resource queued, so duplicate rules (which saves
+/// reject) never sell more than is held. Keeping that demand back means
 /// auto-selling an input never starves the factories that use it, however
 /// long the step; and since a route's sends land in lots up to
 /// `shipmentMergeSeconds` apart, short steps keep enough of a lot to last
@@ -142,6 +146,7 @@ void stepMarket(
   final queued = <String, Map<String, BigNum>>{};
   for (final f in s.factions) {
     double? crewEff;
+    final holds = _contractHolds(s, c, f);
     for (final rule in f.autoSell) {
       final body = s.body(rule.bodyId);
       if (body.ownerId != f.id) continue;
@@ -155,7 +160,14 @@ void stepMarket(
       final held =
           (body.stock[rule.resourceId] ?? _zero) -
           (taken[rule.resourceId] ?? _zero);
-      final keep = _keep(s, c, body, rule, used).keeps;
+      final keep = _keep(
+        s,
+        c,
+        body,
+        rule,
+        used,
+        holds[body.id]?[rule.resourceId] ?? _zero,
+      ).keeps;
       var excess = held - keep;
       if (limits != null) {
         excess = excess.min(
@@ -204,26 +216,33 @@ void stepMarket(
 typedef AutoSellKeep = ({
   BigNum keepAtLeast,
   BigNum localUse,
+  BigNum contractHold,
   BigNum keeps,
   bool cappedAtStorage,
 });
 
 /// What [rule] keeps on its body in a market step of [dt] seconds (the
 /// engine's ticks are 60 s by default), as [stepMarket] works it out:
-/// `keepAtLeast` plus the body's own buildings' use of the resource at
-/// full supply over `max(dt, shipmentMergeSeconds)` ([localUse]), the sum
-/// ([keeps]) no higher than the body's storage cap unless `keepAtLeast`
-/// alone is ([cappedAtStorage] when the cap cut it).
+/// `keepAtLeast`, plus the body's own buildings' use of the resource at
+/// full supply over `max(dt, shipmentMergeSeconds)` ([localUse]), plus
+/// what the owner's open contracts still need of it when this body holds
+/// it back for them ([contractHold]: on the body with a rule on it that
+/// holds the most, at most its storage cap), the sum ([keeps]) no higher
+/// than the body's storage cap unless `keepAtLeast` alone is
+/// ([cappedAtStorage] when the cap cut it).
 ///
 /// The rule sells only what the body holds above [keeps]. The buildings
 /// run at the crew efficiency of the body's owner (full for an unowned
-/// body, whose rules sell nothing).
+/// body, whose rules sell nothing). With [asHolder], the contract need is
+/// counted as if this body held it, whichever does: no keep [stepMarket]
+/// works out for the rule is above that one.
 AutoSellKeep autoSellKeep(
   GameState s,
   Content c,
   AutoSellRule rule,
-  double dt,
-) {
+  double dt, {
+  bool asHolder = false,
+}) {
   final body = s.body(rule.bodyId);
   final owner = body.ownerId;
   final used = _stepDemand(
@@ -232,29 +251,83 @@ AutoSellKeep autoSellKeep(
     math.max(dt, c.rules.shipmentMergeSeconds),
     owner == null ? 1 : crewEfficiency(s, c, owner),
   );
-  return _keep(s, c, body, rule, used);
+  final BigNum hold;
+  if (owner == null) {
+    hold = _zero;
+  } else if (asHolder) {
+    final need = _contractNeeds(s.faction(owner))[rule.resourceId] ?? _zero;
+    hold = need.min(storageCap(s, c, body));
+  } else {
+    hold =
+        _contractHolds(s, c, s.faction(owner))[body.id]?[rule.resourceId] ??
+        _zero;
+  }
+  return _keep(s, c, body, rule, used, hold);
 }
 
 /// [autoSellKeep] for [rule] on [body], given [used], what the body's
-/// buildings use over the keep horizon.
+/// buildings use over the keep horizon, and [hold], what it holds back
+/// for contracts.
 AutoSellKeep _keep(
   GameState s,
   Content c,
   BodyState body,
   AutoSellRule rule,
   Map<String, BigNum> used,
+  BigNum hold,
 ) {
   final local = used[rule.resourceId] ?? _zero;
-  final wanted = rule.keepAtLeast + local;
+  final wanted = rule.keepAtLeast + local + hold;
   // The demand kept never pushes stock past the cap, where the end of the
   // tick would waste it instead.
   final most = rule.keepAtLeast.max(storageCap(s, c, body));
   return (
     keepAtLeast: rule.keepAtLeast,
     localUse: local,
+    contractHold: hold,
     keeps: wanted.min(most),
     cappedAtStorage: wanted > most,
   );
+}
+
+/// Resource id to the units [f]'s open contracts still need of it, in
+/// board order.
+Map<String, BigNum> _contractNeeds(FactionState f) {
+  final need = <String, BigNum>{};
+  for (final k in f.contracts) {
+    need[k.resourceId] = (need[k.resourceId] ?? _zero) + k.remaining;
+  }
+  return need;
+}
+
+/// Body id to resource id to what [f]'s auto-sell rules hold back there
+/// for its open contracts: each resource's need ([_contractNeeds]) on the
+/// body, among those [f] owns with a rule on it, that holds the most of
+/// it now (the first in rule order on a tie), at most its storage cap.
+Map<String, Map<String, BigNum>> _contractHolds(
+  GameState s,
+  Content c,
+  FactionState f,
+) {
+  if (f.contracts.isEmpty) return const {};
+  final need = _contractNeeds(f);
+  final holder = <String, BodyState>{};
+  for (final rule in f.autoSell) {
+    if (!need.containsKey(rule.resourceId)) continue;
+    final body = s.body(rule.bodyId);
+    if (body.ownerId != f.id) continue;
+    final best = holder[rule.resourceId];
+    if (best == null ||
+        (body.stock[rule.resourceId] ?? _zero) >
+            (best.stock[rule.resourceId] ?? _zero)) {
+      holder[rule.resourceId] = body;
+    }
+  }
+  final holds = <String, Map<String, BigNum>>{};
+  for (final MapEntry(key: id, value: body) in holder.entries) {
+    (holds[body.id] ??= {})[id] = need[id]!.min(storageCap(s, c, body));
+  }
+  return holds;
 }
 
 /// Selling at a steady rate over [dt] seconds from saturation [s0] while

@@ -254,6 +254,8 @@ void main() {
     });
 
     test('net per second is the steady flow', () {
+      // No board: a contract would hold goods back, so stock would move.
+      s.faction('player').contractRefillAt.clear();
       autoSellAll();
       engine.advance(s, 4 * 3600);
       final f = koraFlow(buildFlowReport(s, c, 'player'));
