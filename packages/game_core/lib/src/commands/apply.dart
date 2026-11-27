@@ -8,6 +8,7 @@ import '../sim/contracts.dart';
 import '../sim/crew.dart';
 import '../sim/logistics.dart';
 import '../sim/market.dart';
+import '../sim/megaproject_auto.dart' show startNearReady;
 import '../sim/megaprojects.dart';
 import '../sim/production.dart';
 import '../sim/projects.dart';

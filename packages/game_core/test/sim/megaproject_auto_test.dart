@@ -1270,6 +1270,19 @@ void main() {
         expect(setting(s).feedingLevel, isNull);
       });
 
+      test('set near ready while the credits held pay for the stage, it is '
+          'fed at once: none of its goods sell meanwhile', () {
+        final s = near(owed: 2e9);
+        s.faction('player').credits = n(3e9);
+        expect(setting(s).feedingLevel, isNull);
+        feed(s, 'mass_driver', false, null, mode: GoodsFeedMode.nearReady);
+        expect(setting(s).feedingLevel, 0);
+        expect(hold(s), n(20000));
+        e.advance(s, 60);
+        expect(progress(s)['steel']!.toDouble(), greaterThanOrEqualTo(400));
+        expect(s.faction('player').salesRevenue['steel'], isNull);
+      });
+
       test('once started, feeding goes on until that stage is paid', () {
         final s = near(owed: 5000, held: 6000);
         e.advance(s, 60);

@@ -263,6 +263,9 @@ CommandResult _setMegaprojectAuto(
           ? was?.feedingLevel
           : null,
     );
+    if (cmd.goods == GoodsFeedMode.nearReady) {
+      startNearReady(s, c, f, atMinute: false);
+    }
   }
   return CommandOk(
     outcome: MegaprojectAutoSet(

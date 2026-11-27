@@ -107,7 +107,7 @@ AutoDeliveries stepMegaprojectAuto(
 /// [autoDeliverySeconds]; a step that reaches none pays nothing. Returns
 /// what went in. Then, at the same minute, it starts feeding goods to the
 /// stages of [GoodsFeedMode.nearReady] megaprojects that are now near
-/// ready ([_startNearReady]).
+/// ready ([startNearReady]).
 ///
 /// The credits above the reserve are split among the credit-fed
 /// megaprojects that still owe credits for the stage they pay for
@@ -139,7 +139,7 @@ AutoDeliveries stepMegaprojectCredits(GameState s, Content c, double dt) {
     if (!onMinute) return;
     _payCredits(s, c, out);
     for (final f in s.factions) {
-      _startNearReady(s, c, f);
+      startNearReady(s, c, f);
     }
   });
   return out;
@@ -349,9 +349,12 @@ List<(MegaprojectDef, BigNum, int)> _owingCredits(
 }
 
 /// Starts feeding goods to the stage each [GoodsFeedMode.nearReady]
-/// megaproject of [f] pays for (at `s.time`, a game minute, after the
-/// credits are paid) once it is near ready, and forgets a stage being fed
-/// once it is paid for ([MegaprojectAuto.feedingLevel]).
+/// megaproject of [f] pays for once it is near ready, and forgets a stage
+/// being fed once it is paid for ([MegaprojectAuto.feedingLevel]): at
+/// `s.time`, a game minute after the credits are paid
+/// ([stepMegaprojectCredits]), or as a `SetMegaprojectAutoCommand` sets a
+/// megaproject's goods near ready, so a stage near ready then is fed from
+/// the next minute and its goods are not sold meanwhile.
 ///
 /// A stage is near ready when the credits it still owes are no more than,
 /// with credit auto-pay on for it, the credits above the reserve plus
@@ -360,21 +363,27 @@ List<(MegaprojectDef, BigNum, int)> _owingCredits(
 /// ([FactionState.incomeMark]) times its share by weight among the
 /// credit-fed megaprojects still owing ([_owingCredits]); with credit
 /// auto-pay off, no more than the credits held. The first minute with no
-/// mark measures nothing, so only the credits held count then. A stage
+/// mark measures nothing, so only the credits held count then; nor does a
+/// command between minutes ([atMinute] false), which leaves the mark. A stage
 /// that owes no credits is near ready. Once fed, a stage stays fed until
 /// it is paid for, whatever happens to the credits.
-void _startNearReady(GameState s, Content c, FactionState f) {
+void startNearReady(
+  GameState s,
+  Content c,
+  FactionState f, {
+  bool atMinute = true,
+}) {
   final near = [
     for (final m in c.megaprojects.values)
       if (f.megaprojectAuto[m.id] case final a?
           when a.goods == GoodsFeedMode.nearReady)
         (m, a),
   ];
-  final measures = near.any((x) => x.$2.credits);
-  if (!measures) {
-    f.incomeMark = null;
-    if (near.isEmpty) return;
-  }
+  // Only a game minute measures (and marks) the income: a command between
+  // minutes counts the credits held alone.
+  final measures = atMinute && near.any((x) => x.$2.credits);
+  if (atMinute && !measures) f.incomeMark = null;
+  if (near.isEmpty) return;
   // Sales a second since the last mark, then a new mark.
   var income = 0.0;
   if (measures) {
