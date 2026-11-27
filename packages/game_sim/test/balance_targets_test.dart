@@ -1,9 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
-// The reward cap's own income basis, which the package does not export.
-// ignore: implementation_imports
-import 'package:game_core/src/sim/contracts.dart' show incomeBasis;
 import 'package:game_sim/src/balance_report.dart';
 import 'package:game_sim/src/bots/bot.dart';
 import 'package:game_sim/src/content_files.dart';
@@ -26,12 +23,6 @@ final class _Tally implements Bot {
   /// The state as check-in 56 begins: the end of day 14.
   GameState? day14;
 
-  /// Each contract after the first, as first seen at a decision: its
-  /// reward in hours of the faction's income basis then (the basis the
-  /// engine's reward cap uses, `incomeBasis`).
-  final Map<String, double> rewardHours = {};
-  bool _firstSeen = false;
-
   @override
   String get name => inner.name;
 
@@ -49,24 +40,6 @@ final class _Tally implements Bot {
           }
         }
       }
-    }
-    for (final k in s.faction(factionId).contracts) {
-      if (rewardHours.containsKey(k.id)) continue;
-      if (!_firstSeen) {
-        // The first contract has no cap: it is the hook.
-        _firstSeen = true;
-        rewardHours[k.id] = 0;
-        continue;
-      }
-      final basis = incomeBasis(
-        s,
-        e.content,
-        factionId,
-        buildFlowReport(s, e.content, factionId),
-      ).toDouble();
-      rewardHours[k.id] = basis > 0
-          ? k.rewardCredits.toDouble() / basis / 3600
-          : 0;
     }
     return inner.decide(e, s, factionId);
   }
@@ -95,11 +68,10 @@ void main() {
     hours: 504,
     onFinished: (s) => end = s,
   );
-  late _Tally casualTally;
   BalanceReport? casualRun;
   BalanceReport casual() => casualRun ??= runBotSession(
     GameEngine(content),
-    casualTally = _Tally(CasualBot()),
+    CasualBot(),
     seed: 1,
     hours: 504,
   );
@@ -243,9 +215,11 @@ void main() {
       _contractsAtMost(report, 0.15);
     });
 
-    test('is offered no reward above 1 h of income, the first excepted', () {
-      _rewardsAtMostAnHour(tally);
-    });
+    // Findings §4's "no reward above 1 h of income (first excepted)" is
+    // the engine's reward cap, checked at posting, where the income basis
+    // it caps by is known, in game_core's
+    // test/sim/contract_reward_cap_test.dart: a session reads the basis
+    // hours later, when it can have swung severalfold.
   });
 
   // Seed 1 only, to keep the suite quick; docs/balance/ has seeds 1 to 3.
@@ -305,10 +279,6 @@ void main() {
       _contractsAtMost(report, 0.15);
       expect(report.rejectedCommands, 0);
     });
-
-    test('is offered no reward above 1 h of income, the first excepted', () {
-      _rewardsAtMostAnHour(casualTally);
-    });
   });
 
   test('the greedy bot earns no more than 15% from contracts on days 1, 7 '
@@ -335,17 +305,5 @@ void _contractsAtMost(BalanceReport report, double share) {
           '${report.botName} day $day: ${d.contractCredits} of '
           '${d.earned}',
     );
-  }
-}
-
-/// Expects every contract [t] saw after the first to pay at most an hour
-/// of the income basis (findings §4; the controller's ruling measures it
-/// against the basis the engine's cap uses). Seen at the first decision
-/// after it was posted, often a catch-up later, so 1% is allowed for the
-/// basis having moved since.
-void _rewardsAtMostAnHour(_Tally t) {
-  expect(t.rewardHours.length, greaterThan(5));
-  for (final MapEntry(:key, :value) in t.rewardHours.entries) {
-    expect(value, lessThanOrEqualTo(1.01), reason: key);
   }
 }
