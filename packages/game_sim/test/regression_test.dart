@@ -361,4 +361,69 @@ void main() {
       closeTo(l.credits.toDouble(), l.credits.toDouble() * 1e-3),
     );
   }, timeout: const Timeout(Duration(minutes: 1)));
+
+  test('feeding the Mass Driver water never costs housing, at 1 s or 60 s '
+      'steps', () {
+    // Auto-delivery leaves a body only a few seconds of its own use, so a
+    // Mass Driver fed the habitats' water could starve them.
+    final e = _engine();
+    final c = e.content;
+    final played = _played(e, hours: 72);
+    final f = played.faction('player');
+    // The Mass Driver open, two levels in, so it wants plenty of both.
+    f.megaprojectLevels
+      ..['orbital_station'] = 2
+      ..['mass_driver'] = 2;
+    final driver = c.megaprojects['mass_driver']!;
+    // Habitats use food, water and oxygen.
+    final habitat = c.buildings['habitat']!;
+    final shared = [
+      for (final id in megaprojectCost(c, driver, 2).keys)
+        if (habitat.inputs.containsKey(id)) id,
+    ];
+    expect(shared, isNotEmpty);
+    final unfed = played.copy();
+    expect(
+      e.apply(
+        played,
+        const SetMegaprojectAutoCommand('player', 'mass_driver', true, null),
+      ),
+      isA<CommandOk>(),
+    );
+    final runs = {
+      'unfed 1 s': (unfed.copy(), 1.0),
+      'unfed 60 s': (unfed, 60.0),
+      'fed 1 s': (played.copy(), 1.0),
+      'fed 60 s': (played, 60.0),
+    };
+    final least = {for (final k in runs.keys) k: 1 << 30};
+    final start = crewTotals(played, c, 'player').supported;
+    expect(start, greaterThan(f.baseCrew));
+    // Four hours, crew read each game minute.
+    for (var minute = 0; minute < 240; minute++) {
+      for (final MapEntry(key: k, value: (g, step)) in runs.entries) {
+        e.advance(g, 60, maxStep: step);
+        final housed = crewTotals(g, c, 'player').supported;
+        if (housed < least[k]!) least[k] = housed;
+      }
+    }
+    // What habitats use went in.
+    final fed = runs['fed 1 s']!.$1.faction('player');
+    final got = fed.megaprojectProgress['mass_driver'] ?? const {};
+    for (final id in shared) {
+      expect(got[id], isNotNull, reason: '$id: $got');
+    }
+    for (final step in ['1 s', '60 s']) {
+      expect(
+        least['fed $step'],
+        greaterThanOrEqualTo(least['unfed $step']!),
+        reason: '$least',
+      );
+    }
+    expect(
+      least['fed 1 s']!.toDouble(),
+      closeTo(least['fed 60 s']!.toDouble(), least['fed 60 s']! * 0.02),
+      reason: '$least',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
