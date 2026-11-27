@@ -115,6 +115,7 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
       controller: _controller,
       child: MaterialApp(
         title: 'Space Idle',
+        debugShowCheckedModeBanner: false,
         theme: buildTheme(),
         home: switch (_started) {
           null => const _Loading(),

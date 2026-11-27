@@ -20,8 +20,15 @@ final class LabelTarget {
 /// Pixels between a body's edge and its label.
 const double labelGap = 4;
 
+/// How far further from its body, in [_step] px steps, a label may move
+/// down or up when every close spot collides.
+const double _reachMore = 32;
+const double _step = 4;
+
 /// Where each body's label goes, in [bodies]' order: below the body, else
-/// above it, else on its side away from the [star], else the star's side,
+/// above it (both slid sideways to stay on the canvas if need be), else on
+/// its side away from the [star], else the star's side, else below or
+/// above a little further away,
 /// whichever comes first that stays inside [canvas] and clear of the star,
 /// every body's disc and every label placed before it. When none is clear,
 /// the one that collides least.
@@ -37,7 +44,7 @@ List<Rect> placeLabels({
   for (final b in bodies) {
     Rect? best;
     var fewest = 1 << 30;
-    for (final c in _candidates(b, star.center)) {
+    for (final c in _candidates(b, star.center, canvas)) {
       var hits = 0;
       if (!_inside(canvas, c)) hits++;
       if (c.overlaps(star)) hits++;
@@ -54,8 +61,10 @@ List<Rect> placeLabels({
   return placed;
 }
 
-/// Below, above, outward (away from the star), then inward.
-List<Rect> _candidates(LabelTarget b, Offset star) {
+/// Below, above, outward (away from the star), then inward; then below
+/// and above stepped further away, up to [_reachMore]. Below and above
+/// slide sideways to stay on [canvas], for a body near its edge.
+List<Rect> _candidates(LabelTarget b, Offset star, Rect canvas) {
   final Size(:width, :height) = b.size;
   final c = b.center;
   final reach = b.radius + labelGap;
@@ -67,11 +76,19 @@ List<Rect> _candidates(LabelTarget b, Offset star) {
     width,
     height,
   );
+  final x = (c.dx - width / 2).clamp(
+    canvas.left,
+    canvas.right - width < canvas.left ? canvas.left : canvas.right - width,
+  );
   return [
-    Rect.fromLTWH(c.dx - width / 2, c.dy + reach, width, height),
-    Rect.fromLTWH(c.dx - width / 2, c.dy - reach - height, width, height),
+    Rect.fromLTWH(x, c.dy + reach, width, height),
+    Rect.fromLTWH(x, c.dy - reach - height, width, height),
     if (outwardRight) right else left,
     if (outwardRight) left else right,
+    for (var more = _step; more <= _reachMore; more += _step) ...[
+      Rect.fromLTWH(x, c.dy + reach + more, width, height),
+      Rect.fromLTWH(x, c.dy - reach - more - height, width, height),
+    ],
   ];
 }
 

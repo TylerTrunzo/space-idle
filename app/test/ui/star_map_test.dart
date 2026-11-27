@@ -296,6 +296,12 @@ void main() {
           );
         }
         expect(labels[a.id]!.overlaps(star), isFalse, reason: 'star ${a.id}');
+        final canvas = tester.getRect(paint);
+        expect(
+          canvas.expandToInclude(labels[a.id]!),
+          canvas,
+          reason: 'label ${a.id} off the map',
+        );
         for (final other in bodies) {
           expect(
             labels[a.id]!.overlaps(circle(other.position, other.radius)),

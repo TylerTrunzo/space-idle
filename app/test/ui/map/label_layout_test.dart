@@ -41,6 +41,34 @@ void main() {
     expect(rects.first.left, greaterThan(300));
   });
 
+  test('a label below a body near the edge slides along to stay on', () {
+    final rects = placeLabels(
+      bodies: const [LabelTarget(Offset(10, 100), 6, label)],
+      star: star,
+      canvas: canvas,
+    );
+    expect(rects.single.left, 0);
+    expect(rects.single.top, 100 + 6 + labelGap, reason: 'still below');
+  });
+
+  test('when every close spot collides, a label steps further down', () {
+    // Near the left edge, beside the star: centred or slid, below and
+    // above both cross the star or its neighbour's disc.
+    const tight = Rect.fromLTWH(132, 459, 35, 35);
+    final rects = placeLabels(
+      bodies: const [
+        LabelTarget(Offset(51, 466), 9, Size(140, 32)),
+        LabelTarget(Offset(151, 422), 12, Size.zero),
+      ],
+      star: tight,
+      canvas: const Rect.fromLTWH(0, 0, 412, 915),
+    );
+    final r = rects.first;
+    expect(r.overlaps(tight), isFalse);
+    expect(r.top, greaterThan(466), reason: 'below');
+    expect(r.top - (466 + 9), lessThanOrEqualTo(labelGap + 32));
+  });
+
   test('never over another label or off the canvas', () {
     final rects = placeLabels(
       bodies: const [
