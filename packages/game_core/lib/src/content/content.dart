@@ -785,6 +785,7 @@ final class ContractTemplateDef {
     this.maxQuantity,
     this.rewardIncomeSeconds = 0,
     this.rewardCapIncomeSeconds,
+    this.lifeSupportWeight = 1,
   }) : minQuantity = minQuantity ?? BigNum.from(defaultMinQuantity);
 
   /// [quantitySeconds] when a template does not set it: 4 hours.
@@ -834,6 +835,12 @@ final class ContractTemplateDef {
   /// than that much play; null for no cap. The first contract a faction
   /// is ever offered is exempt (see `stepContracts`).
   final double? rewardCapIncomeSeconds;
+
+  /// Weight, in `(0, 1]`, of a resource a habitat consumes when a contract
+  /// from this template is drawn, every other resource weighing 1, so
+  /// orders seldom compete with crew upkeep; 1 (no lower weight) by
+  /// default. See `stepContracts`.
+  final double lifeSupportWeight;
 }
 
 /// All game content, validated.

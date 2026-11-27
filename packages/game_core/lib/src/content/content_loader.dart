@@ -132,6 +132,7 @@ final class _Loader {
               'maxQuantity',
               'rewardIncomeSeconds',
               'rewardCapIncomeSeconds',
+              'lifeSupportWeight',
             },
             _contractTemplate,
           )
@@ -896,6 +897,12 @@ final class _Loader {
         'must be >= rewardIncomeSeconds (${_fmt(rewardIncomeSeconds)})',
       );
     }
+    final lifeSupportWeight = f.number(
+      'lifeSupportWeight',
+      fallback: 1,
+      gt: 0,
+      le: 1,
+    );
     if (_errors.length > before) return null;
     return ContractTemplateDef(
       id: id,
@@ -908,6 +915,7 @@ final class _Loader {
       maxQuantity: maxQuantity,
       rewardIncomeSeconds: rewardIncomeSeconds!,
       rewardCapIncomeSeconds: rewardCapIncomeSeconds,
+      lifeSupportWeight: lifeSupportWeight!,
     );
   }
 

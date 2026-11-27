@@ -19,9 +19,10 @@ import 'production.dart';
 /// they use) is at least the template's `minQuantity / quantitySeconds`
 /// a second, so a trickle never gets an order. The template is drawn
 /// first among those with such a resource, then the resource, each in
-/// proportion to its weight: 1 for most goods, [lifeSupportWeight] for
-/// what a habitat consumes, so orders seldom compete with crew upkeep; a
-/// template weighs as much as its heaviest resource.
+/// proportion to its weight: 1 for most goods, the template's
+/// [ContractTemplateDef.lifeSupportWeight] for what a habitat consumes, so
+/// orders seldom compete with crew upkeep; a template weighs as much as
+/// its heaviest resource.
 ///
 /// Its quantity is the gross rate × `quantitySeconds`, rounded to two
 /// significant figures, at most the template's `maxQuantity` × (1 + the
@@ -76,17 +77,18 @@ void stepContracts(GameState s, Content c, double now) {
             (t, ok),
       ];
       if (choices.isEmpty) break;
-      final weights = _weights(c);
-      double weight(String id) => weights[id] ?? 1;
+      final lifeSupport = _lifeSupport(c);
+      double weight(ContractTemplateDef t, String id) =>
+          lifeSupport.contains(id) ? t.lifeSupportWeight : 1;
       final rng = Rng.fromState(s.rngState);
       final (template, resources) = _draw(rng, choices, (choice) {
         var most = 0.0;
         for (final id in choice.$2) {
-          most = math.max(most, weight(id));
+          most = math.max(most, weight(choice.$1, id));
         }
         return most;
       });
-      final resourceId = _draw(rng, resources, weight);
+      final resourceId = _draw(rng, resources, (id) => weight(template, id));
       s.rngState = rng.state;
       final quantity = _quantity(
         s,
@@ -111,19 +113,14 @@ void stepContracts(GameState s, Content c, double now) {
   }
 }
 
-/// Weight of a resource a habitat consumes when a contract's template and
-/// resource are drawn; every other resource weighs 1.
-const double lifeSupportWeight = 0.25;
-
-/// Resource id to its draw weight where it is not 1: [lifeSupportWeight]
-/// for every input of a habitat in [c]. Worked out once per content.
-Map<String, double> _weights(Content c) => _weightsOf[c] ??= {
+/// Ids of the resources a habitat in [c] consumes, which contracts weigh
+/// at [ContractTemplateDef.lifeSupportWeight]. Worked out once per content.
+Set<String> _lifeSupport(Content c) => _lifeSupportOf[c] ??= {
   for (final b in c.buildings.values)
-    if (b.kind == BuildingKind.habitat)
-      for (final id in b.inputs.keys) id: lifeSupportWeight,
+    if (b.kind == BuildingKind.habitat) ...b.inputs.keys,
 };
 
-final _weightsOf = Expando<Map<String, double>>('contractWeights');
+final _lifeSupportOf = Expando<Set<String>>('lifeSupport');
 
 /// One of [items], drawn from [rng] in proportion to [weight] (all above
 /// zero): one number drawn. With equal weights it is the item

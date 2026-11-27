@@ -101,6 +101,7 @@ void main() {
         expect(t.rewardMultiplier, 3);
         expect(t.rewardIncomeSeconds, 600);
         expect(t.rewardCapIncomeSeconds, 3600);
+        expect(t.lifeSupportWeight, 0.25);
         for (var i = t.minTier; i <= t.maxTier; i++) {
           tiers.add(i);
         }
@@ -136,6 +137,7 @@ void main() {
       expect(t.maxQuantity, isNull);
       expect(t.rewardIncomeSeconds, 0);
       expect(t.rewardCapIncomeSeconds, isNull);
+      expect(t.lifeSupportWeight, 1);
     });
 
     test('a reward cap of at least the floor loads', () {
@@ -218,6 +220,14 @@ void main() {
           ..['rewardIncomeSeconds'] = 0
           ..['rewardCapIncomeSeconds'] = 0,
         'rewardCapIncomeSeconds: must be > 0',
+      ),
+      'a zero life-support weight': (
+        (t) => t['lifeSupportWeight'] = 0,
+        'lifeSupportWeight: must be > 0',
+      ),
+      'a life-support weight above 1': (
+        (t) => t['lifeSupportWeight'] = 1.5,
+        'lifeSupportWeight: must be <= 1',
       ),
       'an unknown field': (
         (t) => t['expires'] = 3600,
@@ -669,6 +679,24 @@ void main() {
         // template's.
         final share = lifeSupportShare(makes(['water', 'hull_plate']), 400);
         expect(share, closeTo(0.2, 0.05));
+      });
+
+      test("weigh what their template's lifeSupportWeight says", () {
+        final c = contentWith((b) {
+          for (final t
+              in (b['contracts']! as List).cast<Map<String, Object?>>()) {
+            t['lifeSupportWeight'] = 1;
+          }
+        });
+        final s = makes(['steel', 'water']);
+        var hits = 0;
+        for (var i = 0; i < 400; i++) {
+          final x = s.copy()..rngState = i * 7919 + 1;
+          stepContracts(x, c, x.time);
+          if (player(x).contracts.single.resourceId == 'water') hits++;
+        }
+        // Unweighted, water and steel are drawn alike.
+        expect(hits / 400, closeTo(0.5, 0.07));
       });
 
       test('are still asked for when nothing else is made', () {
