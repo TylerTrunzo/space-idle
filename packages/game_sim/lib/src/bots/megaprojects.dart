@@ -17,9 +17,10 @@ extension _Megaprojects on _View {
   /// One delivery toward the stage being paid for of the first
   /// megaproject, in content order, that still lacks something (while a
   /// stage is under way, the one after it): the goods it still lacks from
-  /// the first owned body holding more of them than it keeps for its own
-  /// use ([keepForUse]), body order; once every good is in, the credits,
-  /// when the faction holds them all. Null if there is nothing to deliver.
+  /// the first owned body holding at least one whole unit more of them
+  /// than it keeps for its own use ([keepForUse]), body order; once every
+  /// good is in, the credits, when the faction holds them all. Null if
+  /// there is nothing to deliver.
   ///
   /// Deliveries add up, so goods go in as they are made, from every body,
   /// and the stage's timer starts as soon as the last of its cost is in,
@@ -35,7 +36,8 @@ extension _Megaprojects on _View {
         final give = <String, BigNum>{};
         for (final MapEntry(key: id, value: need) in owed.entries) {
           if (id == 'credits') continue;
-          final spare = stock(body, id) - keepForUse(body, id);
+          // Deliveries move whole units.
+          final spare = (stock(body, id) - keepForUse(body, id)).floor();
           if (spare > const BigNum.zero()) give[id] = spare.min(need);
         }
         if (give.isNotEmpty) {

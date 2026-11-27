@@ -56,6 +56,18 @@ void main() {
     expect(a.mulDouble(1.5), BigNum.from(4.5));
     expect(a.mulDouble(0).isZero, isTrue);
   });
+  test('floor and ceil give whole numbers, snapping float residue', () {
+    expect(BigNum.from(40.7).floor(), BigNum.from(40));
+    expect(BigNum.from(40.2).ceil(), BigNum.from(41));
+    expect(BigNum.from(60 - 1e-12).floor(), BigNum.from(60));
+    expect(BigNum.from(60 + 1e-12).ceil(), BigNum.from(60));
+    expect(BigNum.from(0.6).floor().isZero, isTrue);
+    expect(BigNum.from(-1.5).floor(), BigNum.from(-2));
+    expect(const BigNum.zero().ceil().isZero, isTrue);
+    final big = BigNum.parse('1.234567e20');
+    expect(big.floor(), big);
+    expect(big.ceil(), big);
+  });
   test('hashCode matches equality', () {
     expect(
       (BigNum.from(950) + BigNum.from(50)).hashCode,

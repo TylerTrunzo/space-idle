@@ -161,9 +161,11 @@ final class ContractState {
   /// Game time in seconds at which it was posted.
   final double postedAt;
 
-  /// Units still to deliver: [quantity] less [delivered], never below zero.
+  /// Units still to deliver: [quantity] less [delivered], never below
+  /// zero, rounded up to whole units (deliveries move whole units, so a
+  /// fraction can only come from an older save).
   BigNum get remaining =>
-      takeFrom(quantity, delivered).max(const BigNum.zero());
+      takeFrom(quantity, delivered).max(const BigNum.zero()).ceil();
 
   /// Serializes this contract.
   Map<String, Object?> toJson() => {

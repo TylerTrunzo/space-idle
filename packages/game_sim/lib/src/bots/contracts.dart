@@ -31,7 +31,9 @@ extension _Contracts on _View {
         final held = stock(body, id);
         // At most half of what a body holds is kept back from a contract,
         // so a good its own buildings use heavily can still be delivered.
-        final spare = held - keepForUse(body, id).min(held.mulDouble(0.5));
+        // Deliveries move whole units.
+        final spare = (held - keepForUse(body, id).min(held.mulDouble(0.5)))
+            .floor();
         if (spare <= const BigNum.zero()) continue;
         if (spare >= k.remaining ||
             stock(body, id) >= storageCap(s, c, body).mulDouble(_fullShare)) {

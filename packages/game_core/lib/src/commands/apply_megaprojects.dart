@@ -53,6 +53,7 @@ CommandResult _deliverToMegaproject(
     if (amount <= const BigNum.zero()) {
       return _fail(CommandError.invalidAmount, 'Amounts must be above 0');
     }
+    if (amount < _oneUnit) return _wholeUnitsOnly();
   }
   final wanted = [
     for (final id in cmd.amounts.keys)
@@ -66,12 +67,15 @@ CommandResult _deliverToMegaproject(
     );
   }
   final take = <String, BigNum>{};
+  var someHeld = false;
   for (final id in wanted) {
     final held = id == _credits
         ? f.credits
         : body.stock[id] ?? const BigNum.zero();
-    final n = cmd.amounts[id]!.min(owed[id]!).min(held);
+    // Whole units only; what is owed is whole, so it stays whole.
+    final n = cmd.amounts[id]!.min(owed[id]!).min(held).floor();
     if (n > const BigNum.zero()) take[id] = n;
+    if (held > const BigNum.zero()) someHeld = true;
   }
   if (take.isEmpty) {
     final names = [for (final id in wanted) _costName(c, id)];
@@ -80,7 +84,9 @@ CommandResult _deliverToMegaproject(
         : ' on ${body.name}';
     return _fail(
       CommandError.cannotAfford,
-      'There is no ${_or(names)}$where to deliver',
+      someHeld
+          ? 'There is less than one whole ${_or(names)}$where to deliver'
+          : 'There is no ${_or(names)}$where to deliver',
     );
   }
 

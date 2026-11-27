@@ -111,15 +111,16 @@ double offlineCapFor(GameState s, Content c, String factionId) => math.min(
 );
 
 /// Cost of the stage that takes [m] from [level] to `level + 1`:
-/// `baseCost × costGrowth^level`, each entry; the key `credits` or a
-/// resource id, as in [MegaprojectDef.baseCost].
+/// `baseCost × costGrowth^level`, each entry rounded up to whole units
+/// ([BigNum.ceil]); the key `credits` or a resource id, as in
+/// [MegaprojectDef.baseCost].
 ///
 /// [BigNum] keeps it finite at any level a save may hold.
 Map<String, BigNum> megaprojectCost(Content c, MegaprojectDef m, int level) {
   final growth = BigNum.from(m.costGrowth).powInt(level);
   return {
     for (final MapEntry(key: id, value: base) in m.baseCost.entries)
-      id: base * growth,
+      id: (base * growth).ceil(),
   };
 }
 
@@ -136,7 +137,10 @@ int megaprojectDeliveryLevel(GameState s, String factionId, MegaprojectDef m) {
 /// for (from [megaprojectDeliveryLevel]): each entry of that level's
 /// [megaprojectCost] less what has been delivered toward it
 /// (`FactionState.megaprojectProgress`), in cost order; entries delivered
-/// in full are left out, so it is empty once nothing is owed. While a
+/// in full are left out, so it is empty once nothing is owed. Each entry
+/// is whole: deliveries move whole units, and a fraction left by an older
+/// save is rounded up, so delivering what it shows completes the entry.
+/// While a
 /// stage is under way, that is the stage after it, which starts when the
 /// one under way completes if it is paid for in full by then. A faction
 /// that does not exist owes level 0's full cost.
@@ -158,7 +162,7 @@ Map<String, BigNum> megaprojectRemaining(
       m,
       level,
     ).entries)
-      if (need - (got[id] ?? const BigNum.zero()) case final left
+      if ((need - (got[id] ?? const BigNum.zero())).ceil() case final left
           when left > const BigNum.zero())
         id: left,
   };

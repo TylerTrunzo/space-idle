@@ -351,6 +351,59 @@ void main() {
       expect(s.faction('player').credits, const BigNum.zero());
     });
 
+    test('deliveries move whole units, so delivering what is shown still '
+        'needed completes the cost', () {
+      final s = twoBodies();
+      final kora = s.body('kora')..stock['hull_plate'] = n(10.7);
+      ok(s, deliver('kora', {'hull_plate': n(1e6)}));
+      // Only whole units leave: 10 delivered, 0.7 kept.
+      expect(progress(s)['hull_plate'], n(10));
+      expect(kora.stock['hull_plate']!.toDouble(), closeTo(0.7, 1e-9));
+      final shown = megaprojectRemaining(
+        s,
+        content,
+        'player',
+        station,
+      )['hull_plate']!;
+      expect(shown, n(1490));
+      kora.stock['hull_plate'] = kora.stock['hull_plate']! + shown;
+      ok(s, deliver('kora', {'hull_plate': shown}));
+      expect(
+        megaprojectRemaining(s, content, 'player', station),
+        isNot(contains('hull_plate')),
+      );
+      expect(kora.stock['hull_plate']!.toDouble(), closeTo(0.7, 1e-9));
+    });
+
+    test('progress with a fraction in it (an older save) still shows whole '
+        'units still needed, and that amount completes it', () {
+      final s = twoBodies();
+      s.faction('player').megaprojectProgress['orbital_station'] = {
+        'station_segment': n(3.4),
+      };
+      final shown = megaprojectRemaining(
+        s,
+        content,
+        'player',
+        station,
+      )['station_segment']!;
+      expect(shown, n(197));
+      s.body('kora').stock['station_segment'] = shown;
+      ok(s, deliver('kora', {'station_segment': shown}));
+      expect(progress(s)['station_segment'], n(200));
+    });
+
+    test('less than one whole unit is nothing to deliver', () {
+      final s = twoBodies();
+      s.body('kora').stock['hull_plate'] = n(0.6);
+      final msg = fails(
+        s,
+        deliver('kora', {'hull_plate': n(5)}),
+        CommandError.cannotAfford,
+      );
+      expect(msg, 'There is less than one whole Hull Plate on Kora to deliver');
+    });
+
     test('the timer starts on the final delivery', () {
       final s = twoBodies();
       s.body('kora').stock.addAll(goods());

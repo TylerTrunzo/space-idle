@@ -42,11 +42,14 @@ void main() {
     return (r as CommandOk).createdId;
   }
 
-  void fails(GameState s, Command cmd, CommandError error) {
+  /// Applies [cmd], expects [error] and no change to [s], and returns the
+  /// failure's message.
+  String fails(GameState s, Command cmd, CommandError error) {
     final before = encode(s);
     final r = e.apply(s, cmd);
     expect(r, isA<CommandFailed>().having((f) => f.error, 'error', error));
     expect(encode(s), before);
+    return (r as CommandFailed).message;
   }
 
   /// A new game with a full board, every refill used.
@@ -543,6 +546,56 @@ void main() {
       );
       expect(player(s).credits, credits + n(5000), reason: 'paid once');
       expect(player(s).contractsCompleted, 1);
+    });
+
+    test('deliveries move whole units, so delivering what is shown left '
+        'completes it', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100, reward: 5000);
+      final kora = s.body('kora')..stock['steel'] = n(40.7);
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1000)));
+      expect(k.delivered, n(40));
+      expect(kora.stock['steel']!.toDouble(), closeTo(0.7, 1e-9));
+      expect(k.remaining, n(60));
+      kora.stock['steel'] = kora.stock['steel']! + k.remaining;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(60)));
+      expect(player(s).credits, credits + n(5000));
+      expect(kora.stock['steel']!.toDouble(), closeTo(0.7, 1e-9));
+    });
+
+    test('an amount asked for is cut to whole units', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100);
+      s.body('kora').stock['steel'] = n(50);
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(12.5)));
+      expect(k.delivered, n(12));
+      final msg = fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(0.5)),
+        CommandError.invalidAmount,
+      );
+      expect(msg, 'Deliver at least 1 unit: deliveries move whole units');
+      s.body('kora').stock['steel'] = n(0.9);
+      expect(
+        fails(
+          s,
+          DeliverContractCommand('player', k.id, 'kora', n(5)),
+          CommandError.invalidAmount,
+        ),
+        'Kora has less than one whole Steel to deliver',
+      );
+    });
+
+    test('what is left shows whole units even after a fractional delivery '
+        'from an older save', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100)..delivered = n(3.4);
+      expect(k.remaining, n(97));
+      s.body('kora').stock['steel'] = n(97);
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', k.remaining));
+      expect(player(s).credits, greaterThan(credits));
     });
 
     test('a delivery that completes it exactly pays it', () {

@@ -148,6 +148,26 @@ final class BigNum implements Comparable<BigNum> {
   /// The larger of this and [o].
   BigNum max(BigNum o) => this >= o ? this : o;
 
+  /// Rounded down to a whole number, as for goods that move in whole
+  /// units.
+  ///
+  /// A value just below a whole number, by at most 1e-9 or a relative
+  /// 1e-14 (whichever is more), is float residue of it and gives that
+  /// number, so 59.9999999999 is 60. At 1e15 and up a value is whole at
+  /// this precision and comes back as it is.
+  BigNum floor() => _whole((v) => (v + _residue(v)).floorToDouble());
+
+  /// Rounded up to a whole number, as for a cost or an amount still owed.
+  ///
+  /// A value just above a whole number gives that number, so
+  /// 60.0000000001 is 60; see [floor].
+  BigNum ceil() => _whole((v) => (v - _residue(v)).ceilToDouble());
+
+  BigNum _whole(double Function(double) round) =>
+      exponent >= 15 ? this : BigNum.from(round(toDouble()));
+
+  static double _residue(double v) => math.max(1e-9, v.abs() * 1e-14);
+
   /// Converts to `double`; yields signed infinity above exponent 308.
   double toDouble() {
     if (isZero) return 0;

@@ -27,6 +27,7 @@ CommandResult _deliverContract(
   if (cmd.amount <= const BigNum.zero()) {
     return _fail(CommandError.invalidAmount, 'Amount must be above 0');
   }
+  if (cmd.amount < _oneUnit) return _wholeUnitsOnly();
   final held = body.stock[k.resourceId] ?? const BigNum.zero();
   if (held <= const BigNum.zero()) {
     return _fail(
@@ -34,8 +35,16 @@ CommandResult _deliverContract(
       '${body.name} has no ${_resourceName(c, k.resourceId)} to deliver',
     );
   }
+  if (held.floor().isZero) {
+    return _fail(
+      CommandError.invalidAmount,
+      '${body.name} has less than one whole '
+      '${_resourceName(c, k.resourceId)} to deliver',
+    );
+  }
 
-  final amount = cmd.amount.min(held).min(k.remaining);
+  // Whole units only, so what is left stays whole too.
+  final amount = cmd.amount.min(held).min(k.remaining).floor();
   body.take(k.resourceId, amount);
   k.delivered = k.delivered + amount;
   final done = k.delivered >= k.quantity;

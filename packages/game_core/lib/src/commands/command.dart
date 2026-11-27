@@ -581,7 +581,9 @@ final class StartMegaprojectStageCommand extends Command {
 /// bodies over any time, so a stage may cost more than one body can store.
 ///
 /// Each amount is clamped to what the stage still needs of it and to what
-/// is held (the body's stock; the faction's credits for `credits`).
+/// is held (the body's stock; the faction's credits for `credits`), then
+/// rounded down to whole units: deliveries move whole units, so an amount
+/// below 1 fails with [CommandError.invalidAmount].
 /// Credits are paid as they are delivered, like goods. The delivery that
 /// completes the last cost entry starts the stage's timer at once, as a
 /// megaproject-stage project, and clears the progress. A megaproject with a
@@ -624,8 +626,10 @@ final class DeliverToMegaprojectCommand extends Command {
 }
 
 /// Delivers up to [amount] of a contract's resource from an owned body's
-/// stock to the faction's contract; partial deliveries add up, and the
-/// reward is paid when the last unit is delivered (see `stepContracts`).
+/// stock to the faction's contract, in whole units (rounded down; an
+/// amount below 1 fails with [CommandError.invalidAmount]); partial
+/// deliveries add up, and the reward is paid when the last unit is
+/// delivered (see `stepContracts`).
 final class DeliverContractCommand extends Command {
   /// Creates a deliver-contract command.
   const DeliverContractCommand(

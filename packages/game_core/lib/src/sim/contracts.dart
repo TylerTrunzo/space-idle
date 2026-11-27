@@ -15,7 +15,7 @@ import 'production.dart';
 /// has all made, and that has a base price and is not already on its board.
 /// The template is drawn first among those with such a resource, then the
 /// resource. Its quantity is `max(minQuantity, net production rate ×
-/// quantitySeconds)`, rounded to two significant figures
+/// quantitySeconds)`, rounded to two significant figures, in whole units
 /// ([twoSignificantFigures]), with the rate from the flow report's steady
 /// rates ([FlowReport.netProducedPerSec]); its reward is `quantity ×
 /// basePrice × rewardMultiplier` credits.
@@ -127,7 +127,8 @@ void freeContractSlot(FactionState f, Content c, double now) {
 /// [rate] of the resource: `rate × quantitySeconds` rounded to two
 /// significant figures, at most the largest storage cap among the bodies
 /// [f] owns and [ContractTemplateDef.maxQuantity] (each rounded down to two
-/// figures), and at least [ContractTemplateDef.minQuantity].
+/// figures), and at least [ContractTemplateDef.minQuantity]; then rounded
+/// down to whole units, at least 1.
 BigNum _quantity(
   GameState s,
   Content c,
@@ -147,7 +148,8 @@ BigNum _quantity(
       : largest.min(most);
   var q = twoSignificantFigures(rate.mulDouble(t.quantitySeconds));
   if (ceiling != null) q = q.min(_twoFiguresDown(ceiling));
-  return q.max(t.minQuantity);
+  // Deliveries move whole units, so the quantity is whole, at least 1.
+  return q.max(t.minQuantity).floor().max(BigNum.from(1));
 }
 
 /// [v], positive, rounded down to two significant figures.

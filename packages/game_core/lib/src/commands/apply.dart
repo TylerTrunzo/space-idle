@@ -67,6 +67,16 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
 CommandFailed _fail(CommandError e, String message) =>
     CommandFailed(e, message);
 
+/// One unit: the least a delivery to a contract or megaproject moves, as
+/// deliveries move whole units.
+final _oneUnit = BigNum.from(1);
+
+/// The failure for a delivery asking for less than [_oneUnit].
+CommandFailed _wholeUnitsOnly() => _fail(
+  CommandError.invalidAmount,
+  'Deliver at least 1 unit: deliveries move whole units',
+);
+
 CommandFailed _unknownBody(String id) =>
     _fail(CommandError.unknownBody, 'There is no body $id');
 
