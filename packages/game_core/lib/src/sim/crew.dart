@@ -50,6 +50,23 @@ double habitatHousing(RulesDef r, BuildingDef def, BuildingState b) =>
 /// Base, supported, assigned and free crew of [factionId] over the bodies
 /// it owns; see [CrewTotals]. Throws if the faction does not exist.
 CrewTotals crewTotals(GameState s, Content c, String factionId) {
+  final (:base, :housing, :assigned) = _crew(s, c, factionId);
+  // The small epsilon keeps products such as 0.29 × 100 from flooring to 28.
+  return CrewTotals(
+    base: base,
+    supported: base + (housing + 1e-9).floor(),
+    assigned: assigned,
+  );
+}
+
+/// [factionId]'s base crew, the crew its habitats house unrounded
+/// (habitat housing at each habitat's last run fraction, times the housing
+/// bonus) and its assigned crew.
+({int base, double housing, int assigned}) _crew(
+  GameState s,
+  Content c,
+  String factionId,
+) {
   var housing = 0.0;
   var assigned = 0;
   for (final body in s.bodies) {
@@ -64,12 +81,7 @@ CrewTotals crewTotals(GameState s, Content c, String factionId) {
   }
   final base = s.faction(factionId).baseCrew;
   housing *= bonusesFor(s, c, factionId).housingMultiplier;
-  // The small epsilon keeps products such as 0.29 × 100 from flooring to 28.
-  return CrewTotals(
-    base: base,
-    supported: base + (housing + 1e-9).floor(),
-    assigned: assigned,
-  );
+  return (base: base, housing: housing, assigned: assigned);
 }
 
 /// Crew [factionId] can still assign: base crew plus habitat housing scaled
@@ -82,13 +94,20 @@ int availableCrew(GameState s, Content c, String factionId) =>
     crewTotals(s, c, factionId).free;
 
 /// Share of [factionId]'s assigned crew its housing supports:
-/// `min(1, supported / assigned)`, or 1 when no crew is assigned.
+/// [crewShare] of the crew its base crew and habitats house, unrounded
+/// (habitat housing at each habitat's last run fraction, times the
+/// housing bonus), so 9.5 crew housed for 10 assigned is 0.95.
 ///
-/// Supported crew follows the same rule as [availableCrew]. Every crewed
-/// building of the faction works at this fraction of its crew.
-/// Throws if the faction does not exist.
+/// Every crewed building of the faction works at this fraction of its
+/// crew. Production settles each step on the fraction that step's own
+/// housing gives (`stepProduction`), so this is also the fraction the
+/// last step ran at. Throws if the faction does not exist.
 double crewEfficiency(GameState s, Content c, String factionId) {
-  final t = crewTotals(s, c, factionId);
-  if (t.assigned == 0) return 1;
-  return math.min(1, t.supported / t.assigned);
+  final (:base, :housing, :assigned) = _crew(s, c, factionId);
+  return crewShare(base + housing, assigned);
 }
+
+/// Share of [assigned] crew that [housed] crew of housing supports:
+/// `min(1, housed / assigned)`, or 1 when no crew is assigned.
+double crewShare(double housed, int assigned) =>
+    assigned == 0 ? 1 : math.min(1, housed / assigned);

@@ -617,10 +617,12 @@ void main() {
       return b;
     }
 
-    setUp(() {
+    void fresh() {
       gs = newGameState(shipped, 1)..faction('player').baseCrew = 50;
       kora = gs.body('kora')..buildings.clear();
-    });
+    }
+
+    setUp(fresh);
 
     test('short of water and oxygen, the habitat is served before the '
         'electrolyzer and fuel refinery that also use them', () {
@@ -636,15 +638,18 @@ void main() {
         ..['food'] = n(100)
         ..['hydrogen'] = n(100);
       stepProduction(gs, shipped, 60);
-      // Oxygen limits it: 3 of 6.
-      expect(hab.lastRunFraction, closeTo(0.5, 1e-12));
-      expect(hab.lastLimitReason, 'input:oxygen');
-      // What the habitat claimed was not there for the others.
-      expect(electrolyzer.lastRunFraction, 0);
+      // Oxygen limits it. Claiming all 6 water it would run at 3 of 6 and
+      // leave water unused; it claims the 10/3 it can use, and the
+      // electrolyzer turns the other 2/3 into the 1/3 oxygen that lets it
+      // run at 5/9.
+      expect(hab.lastRunFraction, closeTo(5 / 9, 1e-9));
+      expect(hab.lastLimitReason, isNotNull);
+      expect(electrolyzer.lastRunFraction, closeTo((2 / 3) / 20, 1e-9));
       expect(electrolyzer.lastLimitReason, 'input:water');
-      expect(refinery.lastRunFraction, 0);
-      expect(stock(kora, 'oxygen').isZero, isTrue);
-      expect(stock(kora, 'water'), near(1));
+      // What the habitat claimed was not there for the refinery.
+      expect(refinery.lastRunFraction, closeTo(0, 1e-9));
+      expect(stock(kora, 'oxygen'), near(0));
+      expect(stock(kora, 'water'), near(0));
     });
 
     test('a habitat with capacity levels claims its raised need first', () {
@@ -654,14 +659,117 @@ void main() {
       kora.stock
         ..clear()
         ..['water'] = n(9)
-        ..['oxygen'] = n(4.5)
+        ..['oxygen'] = n(100)
         ..['food'] = n(100);
       stepProduction(gs, shipped, 60);
-      expect(hab.lastRunFraction, closeTo(0.5, 1e-12));
-      expect(hab.lastLimitReason, 'input:oxygen');
+      expect(hab.lastRunFraction, 1);
       // The habitat's full 9 water was held back from the electrolyzer.
       expect(electrolyzer.lastRunFraction, 0);
-      expect(stock(kora, 'water'), near(4.5));
+      expect(stock(kora, 'water'), near(0));
+    });
+
+    // Round-3 new-player bug 1, and a seed-2 casual bot on Brine: the
+    // habitat's food comes from a farm that shares water with an
+    // electrolyzer, and the habitat's own water claim is more than it can
+    // use. What it claimed and left in stock went to the farm the step
+    // after, so housing swung between two values every tick.
+    BuildingState farmChain() {
+      final hab = put('habitat', crew: 0)..levels[UpgradeTrack.capacity] = 2;
+      put('ice_melter').levels[UpgradeTrack.speed] = 5;
+      put('electrolyzer').levels[UpgradeTrack.speed] = 5;
+      put('farm');
+      kora.stock
+        ..clear()
+        ..['water_ice'] = n(1e6)
+        ..['fertilizer'] = n(1e6)
+        ..['food'] = n(2);
+      return hab;
+    }
+
+    test('housing holds steady when a habitat input hovers near zero', () {
+      final hab = farmChain();
+      final runs = <double>[];
+      for (var i = 0; i < 40; i++) {
+        stepProduction(gs, shipped, 60);
+        runs.add(hab.lastRunFraction);
+      }
+      // Settled: the last ten steps all run the habitat alike.
+      final last = runs.sublist(30);
+      for (final f in last) {
+        expect(f, closeTo(last.first, 1e-3), reason: '$last');
+      }
+      expect(last.first, lessThan(1));
+    });
+
+    test('housing is the same in 1 s and 60 s steps', () {
+      double settled(double dt) {
+        fresh();
+        final hab = farmChain();
+        for (var t = 0.0; t < 3600; t += dt) {
+          stepProduction(gs, shipped, dt);
+        }
+        return hab.lastRunFraction;
+      }
+
+      final minute = settled(60);
+      expect(settled(1), closeTo(minute, minute * 0.02));
+    });
+
+    // Water comes in from outside at 24 a minute. The electrolyzer runs
+    // before the farm and takes water first, so with more crew housed it
+    // leaves the farm less, and the habitat gets less food. Crew
+    // efficiency read from the step before swung housing between 3 and 13
+    // every step.
+    BuildingState crewChain() {
+      gs.faction('player').baseCrew = 3;
+      final hab = put('habitat', crew: 0);
+      put('electrolyzer', crew: 2).levels[UpgradeTrack.speed] = 3;
+      put('farm', crew: 2);
+      put('smelter', crew: 5);
+      kora.stock
+        ..clear()
+        ..['fertilizer'] = n(1e6)
+        ..['iron_ore'] = n(1e6)
+        ..['food'] = n(2);
+      return hab;
+    }
+
+    void stepWithWater(double dt) {
+      kora.stock['water'] = stock(kora, 'water') + n(24 * dt / 60);
+      stepProduction(gs, shipped, dt);
+    }
+
+    test('housing holds steady when more crew means less food', () {
+      final hab = crewChain();
+      final housed = <int>[];
+      for (var i = 0; i < 40; i++) {
+        stepWithWater(60);
+        housed.add(crewTotals(gs, shipped, 'player').supported);
+      }
+      final last = housed.sublist(30);
+      expect(last.toSet(), hasLength(1), reason: '$last');
+      expect(hab.lastRunFraction, inExclusiveRange(0, 1));
+      // The step ran at the crew efficiency its own housing gives.
+      final t = crewTotals(gs, shipped, 'player');
+      expect(
+        crewEfficiency(gs, shipped, 'player'),
+        closeTo((3 + 20 * hab.lastRunFraction) / t.assigned, 1e-12),
+      );
+    });
+
+    test('housing is the same in 1 s and 60 s steps when crew and food '
+        'work on each other', () {
+      double settled(double dt) {
+        fresh();
+        crewChain();
+        for (var t = 0.0; t < 3600; t += dt) {
+          stepWithWater(dt);
+        }
+        return crewEfficiency(gs, shipped, 'player');
+      }
+
+      final minute = settled(60);
+      expect(settled(1), closeTo(minute, minute * 0.02));
     });
 
     test('the habitat still uses what the body makes in the same step', () {

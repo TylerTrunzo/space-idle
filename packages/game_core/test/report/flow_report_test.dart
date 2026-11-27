@@ -578,6 +578,41 @@ void main() {
     expect(b.runFraction, closeTo(2 / 3, 1e-12));
   });
 
+  test('state and report agree on housing in the same tick', () {
+    // Round-3 new-player bug 1: `state` showed one housing figure while
+    // `report` showed the habitats running as they would the tick after,
+    // and the two swapped every tick. Here the habitat's food comes from a
+    // farm that shares the melter's water with an electrolyzer.
+    s.faction('player').baseCrew = 2;
+    kora.buildings
+      ..clear()
+      ..addAll([
+        BuildingState(id: 'h1', defId: 'habitat', crew: 0)
+          ..levels[UpgradeTrack.capacity] = 2,
+        BuildingState(id: 'm1', defId: 'ice_melter', crew: 1)
+          ..levels[UpgradeTrack.speed] = 5,
+        BuildingState(id: 'e1', defId: 'electrolyzer', crew: 1)
+          ..levels[UpgradeTrack.speed] = 5,
+        BuildingState(id: 'f1', defId: 'farm', crew: 1),
+      ]);
+    kora.stock
+      ..clear()
+      ..['water_ice'] = n(1e5)
+      ..['fertilizer'] = n(1e5)
+      ..['food'] = n(2);
+    engine.advance(s, 1800);
+    final hab = kora.buildings.first;
+    for (var i = 0; i < 4; i++) {
+      final r = buildFlowReport(s, c, 'player');
+      final shown = koraFlow(
+        r,
+      ).buildings.singleWhere((b) => b.buildingId == 'h1');
+      expect(shown.runFraction, lessThan(1));
+      expect(shown.runFraction, closeTo(hab.lastRunFraction, 1e-3));
+      engine.advance(s, 60);
+    }
+  });
+
   test('a crewless habitat reports its supply, not a missing crew', () {
     s.faction('player').baseCrew = 3;
     kora.buildings.add(BuildingState(id: 'h1', defId: 'habitat', crew: 0));

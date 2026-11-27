@@ -59,54 +59,116 @@ BigNum storageCap(GameState s, Content c, BodyState b) {
 
 /// Runs every building on every owned body for [dt] game seconds.
 ///
-/// Bodies run in list order. On each body, habitats are planned first:
-/// life support has first claim on its inputs. Their full-rate demand is
-/// held back from the stock as it comes in, so no other building takes
-/// food, water or oxygen a habitat needs. The other buildings then run in
-/// groups by [recipeDepth], lowest first, list order within a group: each
-/// group's input demand is summed per resource and shared out in
-/// proportion from the body's stock less what the habitats claimed, so no
-/// stock goes negative, and its outputs are added before the next group
-/// plans its inputs. The habitats run last, on everything the body holds,
-/// so they use what the body made of their inputs in the same step. So a
-/// chain on one body moves its goods from extractor to final product
-/// within a step, whatever the step's length. Outputs are added in full,
-/// even past the body's
-/// [storageCap]: the engine ships and auto-sells first and clamps to the
-/// cap at the end of the tick ([clampStorage]), so a long step loses no
-/// more to the cap than many short ones. Each building's
-/// [BuildingState.lastRunFraction] and [BuildingState.lastLimitReason] are
-/// updated: the limit is `noCrew`, `input:<resourceId>` for the input that
-/// ran shortest, `understaffed` for a fully supplied building with crew
-/// below its base slots, or null; habitat run fractions set next step's
-/// [crewEfficiency]. What
-/// each body makes is added to its owner's
+/// Factions run in list order, each one's bodies in list order. On each
+/// body, habitats are planned first: life support has first claim on its
+/// inputs. Their demand is held back from the stock as it comes in, so no
+/// other building takes food, water or oxygen a habitat needs; but they
+/// claim only the share they can use, so a habitat short of one input
+/// does not sit on another that would have made it ([_runBody]). The
+/// other buildings then run in groups by [recipeDepth], lowest first,
+/// list order within a group: each group's input demand is summed per
+/// resource and shared out in proportion from the body's stock less what
+/// the habitats claimed, so no stock goes negative, and its outputs are
+/// added before the next group plans its inputs. The habitats run last,
+/// on everything the body holds, so they use what the body made of their
+/// inputs in the same step. So a chain on one body moves its goods from
+/// extractor to final product within a step, whatever the step's length.
+/// Outputs are added in full, even past the body's [storageCap]: the
+/// engine ships and auto-sells first and clamps to the cap at the end of
+/// the tick ([clampStorage]), so a long step loses no more to the cap
+/// than many short ones. Each building's [BuildingState.lastRunFraction]
+/// and [BuildingState.lastLimitReason] are updated: the limit is
+/// `noCrew`, `input:<resourceId>` for the input that ran shortest,
+/// `understaffed` for a fully supplied building with crew below its base
+/// slots, or null. What each body makes is added to its owner's
 /// [FactionState.lifetimeProduced].
 ///
 /// Every building's output is scaled by its owner's
-/// [EmpireBonuses.outputMultiplier].
-///
-/// Crew efficiency and bonuses are read once per faction before any body
-/// runs, so the result does not depend on body order. Habitats with no
-/// crew slots run at full rate whatever the crew ([runsWithoutCrew]);
-/// other buildings with no crew slots (warehouses) and unowned bodies run
-/// nothing.
+/// [EmpireBonuses.outputMultiplier], and its crew work at the faction's
+/// crew efficiency for the step: the share of its crew that the step's own
+/// habitat run fractions house, so [crewEfficiency] read after the step
+/// is the one it ran at ([_stepFaction]). Habitats with no crew slots run
+/// at full rate whatever the crew ([runsWithoutCrew]); other buildings
+/// with no crew slots (warehouses) and unowned bodies run nothing.
 void stepProduction(GameState s, Content c, double dt) {
-  final crewEff = {
-    for (final f in s.factions) f.id: crewEfficiency(s, c, f.id),
-  };
-  final bonuses = {for (final f in s.factions) f.id: bonusesFor(s, c, f.id)};
-  for (final body in s.bodies) {
-    final owner = body.ownerId;
-    if (owner == null) continue;
-    _stepBody(
-      c,
-      body,
-      dt,
-      crewEff[owner]!,
-      bonuses[owner]!,
-      s.faction(owner).lifetimeProduced,
-    );
+  for (final f in s.factions) {
+    final bodies = [
+      for (final b in s.bodies)
+        if (b.ownerId == f.id) b,
+    ];
+    if (bodies.isNotEmpty) _stepFaction(s, c, f, bodies, dt);
+  }
+}
+
+/// Crew efficiencies [_stepFaction] tells apart.
+const double _crewTolerance = 1e-9;
+
+/// Steps [_stepFaction] tries at most after the first.
+const int _maxCrewPasses = 12;
+
+/// Runs [f]'s buildings on its owned [bodies] for [dt] game seconds at
+/// the crew efficiency the step's own housing gives.
+///
+/// Housing and crew work on each other: habitats house the crew, and the
+/// crew make the habitats' inputs, or take what the habitats' inputs are
+/// made from. Read from the step before, the crew efficiency can swing
+/// housing every step. So the step is first run at [crewEfficiency] (the
+/// last step's housing); if its own habitats then house a different share
+/// of the crew, it is run again at efficiencies between the two until
+/// they agree, within [_crewTolerance], and that run is kept: a fixed-point
+/// step while the two move the same way, false position (Illinois) once
+/// they bracket the answer.
+void _stepFaction(
+  GameState s,
+  Content c,
+  FactionState f,
+  List<BodyState> bodies,
+  double dt,
+) {
+  final bonuses = bonusesFor(s, c, f.id);
+  var assigned = 0;
+  for (final body in bodies) {
+    for (final b in body.buildings) {
+      assigned += b.crew;
+    }
+  }
+  List<_BodyRun> run(double crewEff) => [
+    for (final body in bodies) _runBody(c, body, dt, crewEff, bonuses),
+  ];
+  // How far the share of crew a run's habitats house is off [crewEff].
+  double gap(List<_BodyRun> runs, double crewEff) {
+    var housing = 0.0;
+    for (final r in runs) {
+      housing += r.housing(c.rules);
+    }
+    return crewShare(
+          f.baseCrew + housing * bonuses.housingMultiplier,
+          assigned,
+        ) -
+        crewEff;
+  }
+
+  var e = crewEfficiency(s, c, f.id);
+  var runs = run(e);
+  var fe = gap(runs, e);
+  // The other end of a bracket, once there is one.
+  double? a;
+  double? fa;
+  for (var i = 0; i < _maxCrewPasses && fe.abs() > _crewTolerance; i++) {
+    final next = a == null || fa == null || fa == fe
+        ? e + fe
+        : e - fe * (e - a) / (fe - fa);
+    final nextRuns = run(next);
+    final fn = gap(nextRuns, next);
+    if (a != null && fa != null && fn.sign == fe.sign) {
+      fa /= 2;
+    } else if (fn.sign != fe.sign) {
+      (a, fa) = (e, fe);
+    }
+    (e, fe, runs) = (next, fn, nextRuns);
+  }
+  for (final r in runs) {
+    r.commit(f.lifetimeProduced);
   }
 }
 
@@ -258,18 +320,57 @@ final class _Run {
   /// Inputs and outputs at full input supply.
   final BuildingFlow flow;
 
-  /// Fraction of [flow] actually run; set once satisfaction is known.
+  /// Fraction of [flow] actually run in the latest pass.
   double fraction = 0;
+
+  /// Its limit in the latest pass, as [BuildingState.lastLimitReason].
+  String? limit;
 }
 
-/// Runs the buildings on [body], adding what they make to [produced].
-void _stepBody(
+/// One pass of a body's buildings, run on a copy of its stock with the
+/// habitats' claim scaled by [share].
+final class _Pass {
+  _Pass(this.share, this.stock, this.produced, this.runs, this.habitats);
+
+  /// Share of their full-rate inputs the habitats claimed.
+  final double share;
+
+  /// The body's stock after the pass.
+  final Map<String, BigNum> stock;
+
+  /// Resource id to units made.
+  final Map<String, BigNum> produced;
+
+  /// Each building's run fraction and limit, in the body's run order.
+  final List<(double, String?)> runs;
+
+  /// The lowest run fraction of a habitat; 1 with no habitats.
+  final double habitats;
+}
+
+/// Claim shares [_settleShare] tells apart: it stops once the share the
+/// habitats can use is known this closely.
+const double _shareTolerance = 1e-4;
+
+/// Passes [_settleShare] tries at most after the first.
+const int _maxSettlePasses = 12;
+
+/// Runs the buildings on [body] on a copy of its stock, with its owner's
+/// crew working at [crewEff], for [_BodyRun.commit] to keep.
+///
+/// Habitats claim their inputs first, but only as much as they can use:
+/// a claim they cannot use (a habitat short of food holding back water
+/// the farm needed to make it) would stay in stock to feed the other
+/// buildings a step late, and housing would swing every step. So when a
+/// habitat runs below full, the step is run again with the claim scaled
+/// down to the share the habitats run at ([_settleShare]), and that run
+/// is kept.
+_BodyRun _runBody(
   Content c,
   BodyState body,
   double dt,
   double crewEff,
   EmpireBonuses bonuses,
-  Map<String, BigNum> produced,
 ) {
   final depth = recipeDepth(c);
   final habitats = <_Run>[];
@@ -283,20 +384,6 @@ void _stepBody(
     );
     (def.kind == BuildingKind.habitat ? habitats : others).add(run);
   }
-  // What the habitats need, claimed first from the stock as it comes in.
-  final need = <String, BigNum>{};
-  for (final run in habitats) {
-    for (final MapEntry(key: id, value: d) in run.flow.inputs.entries) {
-      need[id] = (need[id] ?? _zero) + d;
-    }
-  }
-  final reserved = <String, BigNum>{};
-  void claim() {
-    for (final MapEntry(key: id, value: d) in need.entries) {
-      reserved[id] = (body.stock[id] ?? _zero).min(d);
-    }
-  }
-
   // A stable sort: ties keep list order.
   final order = [for (var i = 0; i < others.length; i++) i]
     ..sort((x, y) {
@@ -305,33 +392,172 @@ void _stepBody(
       );
       return byDepth != 0 ? byDepth : x.compareTo(y);
     });
-  var start = 0;
-  while (start < order.length) {
-    final d = depth[others[order[start]].b.defId]!;
-    var end = start;
-    while (end < order.length && depth[others[order[end]].b.defId]! == d) {
-      end++;
+  final groups = <List<_Run>>[];
+  for (final i in order) {
+    final run = others[i];
+    if (groups.isEmpty ||
+        depth[groups.last.first.b.defId]! != depth[run.b.defId]!) {
+      groups.add([]);
     }
-    claim();
-    _runGroup(
-      c,
-      body,
-      [for (final i in order.sublist(start, end)) others[i]],
-      reserved,
-      produced,
-    );
-    start = end;
+    groups.last.add(run);
   }
-  if (habitats.isNotEmpty) _runGroup(c, body, habitats, const {}, produced);
+  final all = [...others, ...habitats];
+
+  _Pass pass(double share) {
+    final stock = Map.of(body.stock);
+    final made = <String, BigNum>{};
+    final low = _runPass(c, stock, habitats, groups, share, made);
+    return _Pass(share, stock, made, [
+      for (final r in all) (r.fraction, r.limit),
+    ], low);
+  }
+
+  var kept = pass(1);
+  if (kept.habitats < 1) kept = _settleShare(kept, pass);
+  return _BodyRun(c, body, [for (final r in all) r.b], kept);
 }
 
-/// Runs [runs], buildings on [body], on the stock the body holds now less
-/// [reserved] (resource id to units held back for habitats): shares each
-/// input in proportion to demand, takes the inputs, then adds the outputs
-/// to the stock and to [produced].
+/// A run of one body's buildings, not yet kept.
+final class _BodyRun {
+  _BodyRun(this._c, this.body, this.buildings, this.pass);
+
+  final Content _c;
+
+  /// The body run.
+  final BodyState body;
+
+  /// The buildings that ran, in [_Pass.runs] order.
+  final List<BuildingState> buildings;
+
+  /// The run itself.
+  final _Pass pass;
+
+  /// Crew the body's habitats house at the run fractions of [pass],
+  /// before the housing bonus, unrounded.
+  double housing(RulesDef r) {
+    var total = 0.0;
+    for (final (i, b) in buildings.indexed) {
+      final def = _c.buildings[b.defId]!;
+      if (def.kind != BuildingKind.habitat) continue;
+      total += habitatHousing(r, def, b) * pass.runs[i].$1;
+    }
+    return total;
+  }
+
+  /// Keeps the run: the body's stock, each building's run fraction and
+  /// limit, and what was made added to [produced].
+  void commit(Map<String, BigNum> produced) {
+    body.stock
+      ..clear()
+      ..addAll(pass.stock);
+    for (final MapEntry(key: id, value: v) in pass.produced.entries) {
+      produced[id] = (produced[id] ?? _zero) + v;
+    }
+    for (final (i, b) in buildings.indexed) {
+      final (fraction, limit) = pass.runs[i];
+      b
+        ..lastRunFraction = fraction
+        ..lastLimitReason = limit;
+    }
+  }
+}
+
+/// The pass at the largest claim share the habitats run at in full, found
+/// from [full], the pass at share 1, by trying shares with [pass]: within
+/// [_shareTolerance], from below.
+///
+/// A habitat claiming share `r` runs at `g(r)`; claiming less leaves more
+/// for the buildings that make its inputs, so `g` never rises with `r`,
+/// and the habitats use all they claim while `g(r) ≥ r`. Shares where
+/// they do not tell how far off they are: `g(r) − r` falls with `r`
+/// there, in a straight line while one input holds them back and its
+/// claim is below its stock. So the search steps to where the secant
+/// through the last two of those meets zero, and checks a share just
+/// above it; when that check runs in full too, the line was not straight
+/// (a claim reached its stock in between), and it halves the bracket
+/// until the next pair.
+_Pass _settleShare(_Pass full, _Pass Function(double share) pass) {
+  // Every share up to what the habitats ran at is usable in full.
+  var lo = full.habitats;
+  _Pass? atLo;
+  var hi = 1.0;
+  var (r1, f1) = (1.0, full.habitats - 1);
+  double? r2;
+  double? f2;
+  for (var i = 0; i < _maxSettlePasses && hi - lo > _shareTolerance; i++) {
+    var r = (lo + hi) / 2;
+    var check = false;
+    if (r2 != null && f2 != null && f2 != f1) {
+      final secant = r2 - f2 * (r2 - r1) / (f2 - f1);
+      if (secant > lo && secant < hi) {
+        r = secant;
+      } else if (secant <= lo) {
+        r = math.min(hi, lo + _shareTolerance / 2);
+        check = true;
+      }
+    }
+    final p = pass(r);
+    // Float residue aside, it ran at the share it claimed.
+    if (p.habitats >= r - 1e-9) {
+      lo = r;
+      atLo = p;
+      if (check) {
+        // The older point lies past a bend: wait for a fresh pair.
+        (r1, f1) = (r2!, f2!);
+        r2 = f2 = null;
+      }
+    } else {
+      hi = r;
+      if (r2 != null && f2 != null) (r1, f1) = (r2, f2);
+      (r2, f2) = (r, p.habitats - r);
+    }
+  }
+  return atLo ?? pass(lo);
+}
+
+/// Runs one pass of a body's buildings on [stock], changing it: the
+/// [groups] in order, each after the [habitats] claim [share] of their
+/// full-rate inputs from the stock as it comes in, then the habitats on
+/// everything left. Adds what is made to [produced] and returns the
+/// lowest habitat run fraction, 1 with no habitats.
+double _runPass(
+  Content c,
+  Map<String, BigNum> stock,
+  List<_Run> habitats,
+  List<List<_Run>> groups,
+  double share,
+  Map<String, BigNum> produced,
+) {
+  // What the habitats need, claimed first from the stock as it comes in.
+  final need = <String, BigNum>{};
+  for (final run in habitats) {
+    for (final MapEntry(key: id, value: d) in run.flow.inputs.entries) {
+      need[id] = (need[id] ?? _zero) + d.mulDouble(share);
+    }
+  }
+  final reserved = <String, BigNum>{};
+  for (final group in groups) {
+    for (final MapEntry(key: id, value: d) in need.entries) {
+      reserved[id] = (stock[id] ?? _zero).min(d);
+    }
+    _runGroup(c, stock, group, reserved, produced);
+  }
+  if (habitats.isEmpty) return 1;
+  _runGroup(c, stock, habitats, const {}, produced);
+  var low = 1.0;
+  for (final run in habitats) {
+    low = math.min(low, run.fraction);
+  }
+  return low;
+}
+
+/// Runs [runs] on [stock] less [reserved] (resource id to units held
+/// back for habitats): shares each input in proportion to demand, takes
+/// the inputs, then adds the outputs to the stock and to [produced]. Sets
+/// each run's fraction and limit.
 void _runGroup(
   Content c,
-  BodyState body,
+  Map<String, BigNum> stock,
   List<_Run> runs,
   Map<String, BigNum> reserved,
   Map<String, BigNum> produced,
@@ -344,7 +570,7 @@ void _runGroup(
   }
   final satisfaction = <String, double>{};
   for (final MapEntry(key: id, value: d) in demand.entries) {
-    final free = (body.stock[id] ?? _zero) - (reserved[id] ?? _zero);
+    final free = (stock[id] ?? _zero) - (reserved[id] ?? _zero);
     satisfaction[id] = d.isZero
         ? 1.0
         : free.isNegative || free.isZero
@@ -363,17 +589,15 @@ void _runGroup(
       }
     }
     final b = run.b;
-    if (b.crew == 0 && !runsWithoutCrew(c.buildings[b.defId]!)) {
-      run.fraction = 0;
-      b
-        ..lastRunFraction = 0
-        ..lastLimitReason = 'noCrew';
+    final def = c.buildings[b.defId]!;
+    if (b.crew == 0 && !runsWithoutCrew(def)) {
+      run
+        ..fraction = 0
+        ..limit = 'noCrew';
     } else {
-      run.fraction = f;
-      final def = c.buildings[b.defId]!;
-      b
-        ..lastRunFraction = f
-        ..lastLimitReason = limit != null
+      run
+        ..fraction = f
+        ..limit = limit != null
             ? 'input:$limit'
             : !runsWithoutCrew(def) && b.crew < def.crewSlots
             ? 'understaffed'
@@ -389,12 +613,12 @@ void _runGroup(
     }
   }
   for (final MapEntry(key: id, value: used) in consumed.entries) {
-    final have = body.stock[id] ?? _zero;
+    final have = stock[id] ?? _zero;
     final left = have - used;
     // Shares sum to at most the stock, so `left` is off zero only by float
     // residue; snap that to exactly zero without hiding a real overdraw.
     final residue = have.mulDouble(1e-12);
-    body.stock[id] = left <= residue && left >= -residue ? _zero : left;
+    stock[id] = left <= residue && left >= -residue ? _zero : left;
   }
 
   for (final run in runs) {
@@ -402,7 +626,7 @@ void _runGroup(
     for (final MapEntry(key: id, value: made) in run.flow.outputs.entries) {
       final amount = made.mulDouble(run.fraction);
       if (amount.isZero) continue;
-      body.stock[id] = (body.stock[id] ?? _zero) + amount;
+      stock[id] = (stock[id] ?? _zero) + amount;
       produced[id] = (produced[id] ?? _zero) + amount;
     }
   }
