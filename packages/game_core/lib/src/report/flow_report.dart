@@ -180,13 +180,42 @@ final class Bottleneck {
   /// that can be worked out: for [BottleneckKind.storageFull] the wasted
   /// units' value; for [BottleneckKind.input] the value of the output the
   /// building does not make; for [BottleneckKind.noSales] the value of
-  /// the faction's net production of goods that sell. Null for the other
-  /// kinds.
+  /// the faction's net production of goods that sell; for
+  /// [BottleneckKind.crewShortage] the value of the output its crewed
+  /// buildings do not make at their run fractions against full staffing
+  /// (zero when none of them runs). Null for the other kinds.
   final BigNum? lostCreditsPerHour;
+
+  /// Restores a bottleneck written by [toJson].
+  factory Bottleneck.fromJson(Map<String, Object?> j) => Bottleneck(
+    kind: BottleneckKind.values.byName(j['kind']! as String),
+    bodyId: j['bodyId'] as String?,
+    buildingId: j['buildingId'] as String?,
+    resourceId: j['resourceId'] as String?,
+    runFraction: (j['runFraction']! as num).toDouble(),
+    message: j['message']! as String,
+    firstSeenAt: (j['firstSeenAt']! as num).toDouble(),
+    lostCreditsPerHour: switch (j['lostCreditsPerHour']) {
+      final String v => BigNum.fromJson(v),
+      _ => null,
+    },
+  );
 
   /// [kind], [bodyId], [buildingId] and [resourceId] as one key, as in
   /// [SeenBottleneck.key].
   String get key => bottleneckKey(kind.name, bodyId, buildingId, resourceId);
+
+  /// This bottleneck as JSON, null fields left out.
+  Map<String, Object?> toJson() => {
+    'kind': kind.name,
+    'bodyId': ?bodyId,
+    'buildingId': ?buildingId,
+    'resourceId': ?resourceId,
+    'runFraction': runFraction,
+    'message': message,
+    'firstSeenAt': firstSeenAt,
+    'lostCreditsPerHour': ?lostCreditsPerHour?.toJson(),
+  };
 
   Bottleneck _with({double? firstSeenAt, BigNum? lostCreditsPerHour}) =>
       Bottleneck(
@@ -346,6 +375,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
 
   final bodies = <BodyFlow>[];
   final bottlenecks = <(int, Bottleneck)>[if (crewNeck != null) (0, crewNeck)];
+  // What the crew shortage costs: each crewed building's output at full
+  // staffing, at the run fraction it settled on, less what it made.
+  final crewLost = <String, BigNum>{};
   void addNeck(Bottleneck? neck) {
     if (neck != null) bottlenecks.add((bottlenecks.length, neck));
   }
@@ -366,6 +398,20 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
       );
       final inputs = _scaled(flow.inputs, b.lastRunFraction);
       final outputs = _scaled(flow.outputs, b.lastRunFraction);
+      if (crewNeck != null && !runsWithoutCrew(def)) {
+        final staffed = fullRateFlow(
+          c,
+          body,
+          b,
+          _sampleSeconds,
+          1,
+          bonuses: bonuses,
+        );
+        _addAll(
+          crewLost,
+          _scaled(staffed.outputs, b.lastRunFraction * (1 - crewEff)),
+        );
+      }
       _addAll(produced, outputs);
       _addAll(consumed, inputs);
       final neck = _bottleneck(c, body, b);
@@ -417,6 +463,12 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         wastedPerSec: _ordered(c, body.wastedThisStep),
         buildings: statuses,
       ),
+    );
+  }
+  if (crewNeck != null) {
+    bottlenecks[0] = (
+      0,
+      crewNeck._with(lostCreditsPerHour: _valuePerHour(s, c, crewLost)),
     );
   }
   final unsold = _unsoldNet(

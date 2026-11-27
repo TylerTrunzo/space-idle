@@ -13,6 +13,13 @@ final class CrewTotals {
     required this.assigned,
   });
 
+  /// Restores totals written by [toJson].
+  factory CrewTotals.fromJson(Map<String, Object?> j) => CrewTotals(
+    base: j['base']! as int,
+    supported: j['supported']! as int,
+    assigned: j['assigned']! as int,
+  );
+
   /// Crew available without habitats.
   final int base;
 
@@ -32,6 +39,13 @@ final class CrewTotals {
   /// below 0; above 0 when starving habitats house fewer crew than are
   /// assigned, which slows every crewed building ([crewEfficiency]).
   int get overAssigned => math.max(0, assigned - supported);
+
+  /// These totals as JSON.
+  Map<String, Object?> toJson() => {
+    'base': base,
+    'supported': supported,
+    'assigned': assigned,
+  };
 }
 
 /// How much habitat [b]'s capacity levels scale it:

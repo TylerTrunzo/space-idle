@@ -777,9 +777,14 @@ void main() {
         stockGained: const {},
         creditsGained: n(-1500),
         totalWasted: const BigNum.zero(),
+        wastedValue: const BigNum.zero(),
         milestonesReached: const [],
         topBottlenecks: const [],
         projectsCompleted: const [],
+        housingBefore: const CrewTotals(base: 3, supported: 3, assigned: 3),
+        housingAfter: const CrewTotals(base: 3, supported: 3, assigned: 3),
+        creditsPerSecBefore: const BigNum.zero(),
+        creditsPerSecAfter: const BigNum.zero(),
       );
       expect(down.headline, 'Away 1m; -1.5K credits');
     });

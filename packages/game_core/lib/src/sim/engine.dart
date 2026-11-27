@@ -5,131 +5,17 @@ import '../commands/command.dart';
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../num/change.dart';
-import '../num/format.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
 import 'contracts.dart';
+import 'crew.dart';
 import 'logistics.dart';
 import 'market.dart';
 import 'megaprojects.dart';
 import 'milestones.dart';
+import 'offline_summary.dart';
 import 'production.dart';
 import 'projects.dart';
-
-/// A project that completed while the player was away.
-final class CompletedProject {
-  /// Creates a record.
-  const CompletedProject({
-    required this.kind,
-    required this.targetId,
-    required this.name,
-    this.level,
-  });
-
-  /// What the project did.
-  final ProjectKind kind;
-
-  /// Body or megaproject it acted on.
-  final String targetId;
-
-  /// Display name of [targetId].
-  final String name;
-
-  /// For a megaproject stage, the level it brought the megaproject to;
-  /// null for other kinds.
-  final int? level;
-}
-
-/// What happened to the player while the game was closed.
-final class OfflineSummary {
-  /// Creates a summary; the collections are copied unmodifiable.
-  OfflineSummary({
-    required this.awayFrom,
-    required this.secondsSimulated,
-    required this.secondsAway,
-    required this.capSeconds,
-    required Map<String, BigNum> stockGained,
-    required this.creditsGained,
-    required this.totalWasted,
-    required List<String> milestonesReached,
-    required List<Bottleneck> topBottlenecks,
-    required List<CompletedProject> projectsCompleted,
-    List<String> contractsPosted = const [],
-  }) : contractsPosted = List.unmodifiable(contractsPosted),
-       stockGained = Map.unmodifiable(stockGained),
-       milestonesReached = List.unmodifiable(milestonesReached),
-       topBottlenecks = List.unmodifiable(topBottlenecks),
-       projectsCompleted = List.unmodifiable(projectsCompleted);
-
-  /// Game time in seconds at which the absence began; a bottleneck in
-  /// [topBottlenecks] first seen before it was there all along.
-  final double awayFrom;
-
-  /// Game seconds actually simulated: the time away, capped.
-  final double secondsSimulated;
-
-  /// Seconds the player was away, as passed in.
-  final double secondsAway;
-
-  /// The offline cap this catch-up ran under, in seconds: the most of an
-  /// absence it simulates.
-  final double capSeconds;
-
-  /// Whether the absence was longer than [capSeconds], so only part of it
-  /// counted.
-  bool get capped => secondsAway > capSeconds;
-
-  /// The return in one line for the player, such as "Away 4d 2h; 12h
-  /// counted (cap); +1.2M credits", or "Away 3h; +36K credits" when the
-  /// whole absence counted, then the highest level each megaproject
-  /// reached while away, such as "; Orbital Station reached level 3".
-  String get headline {
-    final counted = capped
-        ? '; ${formatDuration(secondsSimulated)} counted (cap)'
-        : '';
-    final sign = creditsGained.isNegative ? '' : '+';
-    final levels = <String, (String, int)>{};
-    for (final p in projectsCompleted) {
-      if (p.level case final level?) levels[p.targetId] = (p.name, level);
-    }
-    return 'Away ${formatDuration(secondsAway)}$counted; '
-        '$sign${formatNumber(creditsGained)} credits'
-        '${[for (final (name, level) in levels.values) '; $name reached level $level'].join()}';
-  }
-
-  /// Resource id to the change in the player's stock summed over the bodies
-  /// it owns, in content order; negative for resources used up. Resources
-  /// whose total did not change, or changed only by float residue (within
-  /// a relative 1e-12), are left out.
-  final Map<String, BigNum> stockGained;
-
-  /// Change in the player's credits; negative if it fell.
-  final BigNum creditsGained;
-
-  /// Units cut by storage caps on the player's bodies while away, every
-  /// resource summed. Zero means nothing was wasted.
-  ///
-  /// Cargo lost because the player no longer owns either end of its route
-  /// is recorded on a body the player does not own, so it is not counted.
-  final BigNum totalWasted;
-
-  /// Ids of milestones the player reached while away, in content order.
-  final List<String> milestonesReached;
-
-  /// The player's worst bottlenecks after catching up, at most three: those
-  /// with an estimate of the credits they lose an hour first, most first
-  /// ([Bottleneck.lostCreditsPerHour]), then the rest in report order.
-  final List<Bottleneck> topBottlenecks;
-
-  /// The player's projects that completed while away, in the order they
-  /// completed (`finishAt`, then the order they were started), stages that
-  /// started while away included (`stepProjects`).
-  final List<CompletedProject> projectsCompleted;
-
-  /// Ids of the contracts posted to the player's board while away, in the
-  /// order they were posted; they are on the board.
-  final List<String> contractsPosted;
-}
 
 /// Step of [GameEngine.catchUpOffline] and default step of
 /// [GameEngine.advance], in game seconds.
@@ -280,6 +166,10 @@ final class GameEngine {
     final reachedBefore = Set.of(player.reachedMilestones);
     final contractsBefore = {for (final k in player.contracts) k.id};
     final awayFrom = s.time;
+    final housingBefore = crewTotals(s, content, player.id);
+    // The report plays copies of the state, so its credits a second can be
+    // read once the catch-up is done.
+    final reportBefore = buildFlowReport(s, content, player.id);
     // Stages can start while away, as a stage paid for in full follows the
     // one under way, so completions are noted tick by tick.
     var running = runningProjects(s, player.id);
@@ -287,12 +177,12 @@ final class GameEngine {
     final levels = Map.of(player.megaprojectLevels);
     final stageLevels = <ProjectState, int>{};
 
-    var wasted = const BigNum.zero();
+    final wasted = <String, BigNum>{};
     _advance(s, simulated, _offlineStepSeconds, () {
       for (final b in s.bodies) {
         if (b.ownerId != player.id) continue;
-        for (final v in b.wastedThisStep.values) {
-          wasted = wasted + v;
+        for (final MapEntry(key: id, value: v) in b.wastedThisStep.entries) {
+          wasted[id] = (wasted[id] ?? const BigNum.zero()) + v;
         }
       }
       final now = runningProjects(s, player.id);
@@ -315,18 +205,20 @@ final class GameEngine {
       );
       if (!delta.isZero) gained[id] = delta;
     }
-    final necks =
-        buildFlowReport(s, content, player.id).bottlenecks.indexed.toList()
-          ..sort((x, y) {
-            final (a, b) = (x.$2.lostCreditsPerHour, y.$2.lostCreditsPerHour);
-            if (a != null && b != null) {
-              final byLoss = b.compareTo(a);
-              if (byLoss != 0) return byLoss;
-            } else if (a != null || b != null) {
-              return a != null ? -1 : 1;
-            }
-            return x.$1.compareTo(y.$1);
-          });
+    var totalWasted = const BigNum.zero();
+    var wastedValue = const BigNum.zero();
+    for (final id in content.resources.keys) {
+      final v = wasted[id];
+      if (v == null) continue;
+      totalWasted = totalWasted + v;
+      wastedValue = wastedValue + v * price(s, content, id);
+    }
+    final report = buildFlowReport(s, content, player.id);
+    final top = [
+      for (final (_, b) in _ranked(report.bottlenecks).take(topBottleneckCount))
+        b,
+    ];
+    final before = {for (final b in reportBefore.bottlenecks) b.key: b};
     return OfflineSummary(
       awayFrom: awayFrom,
       secondsSimulated: simulated,
@@ -334,14 +226,20 @@ final class GameEngine {
       capSeconds: cap,
       stockGained: gained,
       creditsGained: player.credits - creditsBefore,
-      totalWasted: wasted,
+      totalWasted: totalWasted,
+      wastedValue: wastedValue,
       milestonesReached: [
         for (final m in content.milestones)
           if (player.reachedMilestones.contains(m.id) &&
               !reachedBefore.contains(m.id))
             m.id,
       ],
-      topBottlenecks: [for (final (_, b) in necks.take(topBottleneckCount)) b],
+      topBottlenecks: top,
+      ongoing: [
+        for (final b in top)
+          if (b.firstSeenAt < awayFrom)
+            _ongoing(b, before[b.key]?.lostCreditsPerHour),
+      ],
       projectsCompleted: [
         for (final p in completed)
           CompletedProject(
@@ -355,6 +253,48 @@ final class GameEngine {
         for (final k in player.contracts)
           if (!contractsBefore.contains(k.id)) k.id,
       ],
+      housingBefore: housingBefore,
+      housingAfter: crewTotals(s, content, player.id),
+      creditsPerSecBefore: reportBefore.creditsPerSec,
+      creditsPerSecAfter: report.creditsPerSec,
+      nextGoal: nextGoal(s, content, player.id, report),
+    );
+  }
+
+  /// [necks] with their report index, ranked for [OfflineSummary]: a crew
+  /// shortage that costs credits first, then those with an estimate of the
+  /// credits they lose an hour, most first, then the rest, each in report
+  /// order on a tie.
+  static List<(int, Bottleneck)> _ranked(List<Bottleneck> necks) {
+    bool crewFirst(Bottleneck b) =>
+        b.kind == BottleneckKind.crewShortage &&
+        (b.lostCreditsPerHour?.isZero == false);
+    return necks.indexed.toList()..sort((x, y) {
+      final (a, b) = (x.$2, y.$2);
+      if (crewFirst(a) != crewFirst(b)) return crewFirst(a) ? -1 : 1;
+      final (la, lb) = (a.lostCreditsPerHour, b.lostCreditsPerHour);
+      if (la != null && lb != null) {
+        final byLoss = lb.compareTo(la);
+        if (byLoss != 0) return byLoss;
+      } else if (la != null || lb != null) {
+        return la != null ? -1 : 1;
+      }
+      return x.$1.compareTo(y.$1);
+    });
+  }
+
+  /// [b], there since before the absence, against [lostBefore], what it
+  /// cost an hour as the absence began.
+  static OngoingBottleneck _ongoing(Bottleneck b, BigNum? lostBefore) {
+    final lost = b.lostCreditsPerHour;
+    return OngoingBottleneck(
+      key: b.key,
+      since: b.firstSeenAt,
+      lostBefore: lostBefore,
+      worseThanBefore:
+          lost != null &&
+          lostBefore != null &&
+          lost > lostBefore.mulDouble(OngoingBottleneck.worseGrowth),
     );
   }
 

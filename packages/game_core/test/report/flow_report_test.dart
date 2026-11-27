@@ -533,6 +533,51 @@ void main() {
     expect(b.runFraction, closeTo(2 / 3, 1e-12));
   });
 
+  test('crew shortage says what it costs an hour against full staffing', () {
+    // Two of three crew housed: every crewed building makes 2/3 of what it
+    // would. Each still runs fully on its inputs (40 ore in stock), so the
+    // loss is a third of the full-crew output: 0.4 iron ore, 0.32 copper
+    // ore and 0.2 steel a second.
+    s.faction('player').baseCrew = 2;
+    final b = held(
+      buildFlowReport(s, c, 'player'),
+    ).singleWhere((b) => b.kind == BottleneckKind.crewShortage);
+    final perSec =
+        0.4 * price(s, c, 'iron_ore').toDouble() +
+        0.32 * price(s, c, 'copper_ore').toDouble() +
+        0.2 * price(s, c, 'steel').toDouble();
+    expect(b.lostCreditsPerHour!.toDouble(), closeTo(perSec / 3 * 3600, 1e-6));
+    // Covered crew costs nothing, so there is no bottleneck at all.
+    s.faction('player').baseCrew = 3;
+    expect(
+      buildFlowReport(
+        s,
+        c,
+        'player',
+      ).bottlenecks.where((b) => b.kind == BottleneckKind.crewShortage),
+      isEmpty,
+    );
+  });
+
+  test('crew shortage loses nothing when no crewed building runs', () {
+    // One crew housed for the smelter's two; it has no ore anyway.
+    s.faction('player').baseCrew = 1;
+    kora.stock['iron_ore'] = n(0);
+    for (final b in kora.buildings) {
+      b.crew = 0;
+      if (b.defId == 'smelter') {
+        b
+          ..levels[UpgradeTrack.capacity] = 1
+          ..crew = 2;
+      }
+    }
+    final b = held(
+      buildFlowReport(s, c, 'player'),
+    ).singleWhere((b) => b.kind == BottleneckKind.crewShortage);
+    expect(b.runFraction, closeTo(0.5, 1e-12));
+    expect(b.lostCreditsPerHour, const BigNum.zero());
+  });
+
   test('crew shortage sorts with the other bottlenecks by run fraction', () {
     // Two crew assigned, one supported. At crew efficiency 0.5 the smelter
     // wants 0.2 ore and gets 0.15; the iron mine is idle.
