@@ -314,6 +314,37 @@ void main() {
     });
   });
 
+  test('a claim started before closing completes during catch-up '
+      '(Review Focus 6)', () async {
+    final first = _controller(store, clock);
+    await first.start();
+    // Fixture: enough credits and outpost kits for the first claim.
+    first.state.faction('player').credits = BigNum.from(1e7);
+    first.state.body(_home).stock['outpost_kit'] = BigNum.from(100);
+    final claim = first.run(
+      const ClaimBodyCommand('player', 'hollow_reach', _home),
+    );
+    expect(claim, isA<CommandOk>(), reason: first.lastError);
+    final project = first.engine.projectsFor(first.state, 'player').single;
+    final left = project.finishAt - first.state.time;
+    expect(left, greaterThan(GameController.awaySummarySeconds));
+    await first.save();
+    first.dispose();
+
+    clock.advance(Duration(seconds: left.ceil() + 60));
+    final c = _controller(store, clock);
+    expect(await c.start(), isA<Loaded>());
+
+    final done = c.pendingAwaySummary!.projectsCompleted;
+    expect(
+      done.map((p) => (p.kind, p.targetId)),
+      contains((ProjectKind.claim, 'hollow_reach')),
+    );
+    expect(c.state.body('hollow_reach').ownerId, 'player');
+    // Its countdown is gone, not stuck at or below zero.
+    expect(c.engine.projectsFor(c.state, 'player'), isEmpty);
+  });
+
   group('time', () {
     test('tickSeconds(10) advances state.time by 10 and notifies', () async {
       final c = _controller(store, clock);
