@@ -221,6 +221,16 @@ void main() {
       expect((r as SaveError).kind, SaveErrorKind.unknownContentId);
     });
 
+    test('an auto-pay reserve that is not an encoded number is refused, '
+        'not read as an older save', () {
+      for (final bad in [5, true, 'lots', <String, Object?>{}]) {
+        final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
+        playerOf(m)['autoPayReserve'] = bad;
+        final r = SaveCodec.decode(jsonEncode(m), content);
+        expect(r, isA<SaveError>(), reason: '$bad');
+      }
+    });
+
     test('a negative auto-pay reserve is refused', () {
       final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
       playerOf(m)['autoPayReserve'] = '-1';

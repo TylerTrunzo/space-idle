@@ -313,7 +313,8 @@ final class FactionState {
       final String v => BigNum.fromJson(v),
       // Absent in saves from before the reserve was shared: the lowest of
       // the per-megaproject reserves, which took the credits above it.
-      _ => _lowestReserve(j['megaprojectAuto']),
+      null => _lowestReserve(j['megaprojectAuto']),
+      final v => throw FormatException('autoPayReserve is not a number', v),
     },
     // All three absent in saves from before contracts existed.
     contracts: j['contracts'] == null
