@@ -73,13 +73,16 @@ Map<String, Object?> _rates(Map<String, BigNum> m) => {
     e.key: {'value': e.value.toJson(), 'display': _rateText(e.value)},
 };
 
-/// A bottleneck as JSON. With [awayFrom], the start of an absence that
-/// ended at [now], one first seen before it also says how long it has been
-/// going on, such as "for 3h 10m".
+/// A bottleneck as JSON. With [ongoing], its record in an away summary
+/// as one that was there before the absence, and [now], the game time,
+/// it adds `since` (the game time it began), `worseThanBefore`, and
+/// `ongoing`: how long it has gone on, such as "for 3h 10m", and ", and
+/// worse than before" when its credits lost an hour grew by more than a
+/// quarter.
 Map<String, Object?> _bottleneck(
   Bottleneck n, {
-  double? awayFrom,
   double? now,
+  OngoingBottleneck? ongoing,
 }) => {
   'kind': n.kind.name,
   'bodyId': n.bodyId,
@@ -92,8 +95,13 @@ Map<String, Object?> _bottleneck(
     final v? => _num(v),
     null => null,
   },
-  if (awayFrom != null && now != null && n.firstSeenAt < awayFrom)
-    'ongoing': 'for ${formatDuration(now - n.firstSeenAt)}',
+  if (ongoing != null && now != null) ...{
+    'since': ongoing.since,
+    'worseThanBefore': ongoing.worseThanBefore,
+    'ongoing':
+        'for ${formatDuration(now - ongoing.since)}'
+        '${ongoing.worseThanBefore ? ', and worse than before' : ''}',
+  },
 };
 
 Map<String, Object?> _fail(String error, String message) => {
@@ -547,13 +555,19 @@ final class ScriptRunner {
       'creditsGained': _num(sum.creditsGained),
       'stockGained': _nums(sum.stockGained),
       'totalWasted': _num(sum.totalWasted),
+      'wastedValue': _num(sum.wastedValue),
+      'housingBefore': sum.housingBefore.toJson(),
+      'housingAfter': sum.housingAfter.toJson(),
+      'creditsPerSecBefore': _num(sum.creditsPerSecBefore),
+      'creditsPerSecAfter': _num(sum.creditsPerSecAfter),
       'milestonesReached': [
         for (final id in sum.milestonesReached) {'id': id, 'name': names[id]},
       ],
       'topBottlenecks': [
         for (final n in sum.topBottlenecks)
-          _bottleneck(n, awayFrom: sum.awayFrom, now: state.time),
+          _bottleneck(n, now: state.time, ongoing: sum.ongoingFor(n)),
       ],
+      if (sum.nextGoal case final goal?) 'nextGoal': _goal(goal),
       'projectsCompleted': [
         for (final p in sum.projectsCompleted)
           {
@@ -577,6 +591,44 @@ final class ScriptRunner {
             },
       ],
     };
+  }
+
+  /// [goal] as JSON, with a `message` for the player such as "Next: First
+  /// Foundry (Make 30 Steel), 12 of 30, in 1m 30s" or "Next: Orbital
+  /// Station level 1 still needs 5M credits and 200 Station Segment; in
+  /// 40m".
+  Map<String, Object?> _goal(NextGoal goal) {
+    final c = engine.content;
+    final eta = switch (goal.etaSeconds) {
+      null => 'not in reach at the current rates',
+      final t when t <= 0 => 'you can start it now',
+      final t => 'in ${formatDuration(t)}',
+    };
+    switch (goal) {
+      case MilestoneGoal(:final milestoneId, :final current, :final target):
+        final m = c.milestones.firstWhere((m) => m.id == milestoneId);
+        return {
+          'kind': 'milestone',
+          'id': milestoneId,
+          'name': m.name,
+          'etaSeconds': goal.etaSeconds,
+          'message':
+              'Next: ${m.name} (${milestoneGoalText(c, m)}), '
+              '${formatNumber(current)} of ${formatNumber(target)}, $eta',
+        };
+      case MegaprojectGoal(:final megaprojectId, :final level):
+        final name = c.megaprojects[megaprojectId]!.name;
+        return {
+          'kind': 'megaproject',
+          'id': megaprojectId,
+          'name': name,
+          'level': level,
+          'etaSeconds': goal.etaSeconds,
+          'message':
+              'Next: $name level $level still needs '
+              '${_list(goal.remaining)}; $eta',
+        };
+    }
   }
 
   /// What a project completed while away did, such as "Brine claimed" or

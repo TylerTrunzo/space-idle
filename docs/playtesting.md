@@ -39,7 +39,7 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 | `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what auto-sell earns a second in steady play: goods made from a stock nothing refills, and stock above an auto-sell keep, do not count, and a short run of play confirms it; it matches what a few hours away earn), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
 | `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), the survey cost and time, the next extra build slot on each body you own, and each megaproject's next level (`cost`, plus `stillNeeded` once part of it is delivered). Anything you cannot start right now says why instead of a cost, such as `"busy: an extra slot arrives in 25m"` or `"busy: level 3 is paid for and starts when level 2 is done, in 1h"` |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
-| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h, more with Orbital Station levels) and shows the away summary: a one-line `headline` ("Away 4d 2h; 12h counted (cap); +1.2M credits"), the cap and whether you passed it (`capSeconds`, `capped`), credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks, those costing the most credits an hour first, each marked `"ongoing": "for 3h 10m"` (how long it has held) if it was already there when you left, the projects that completed with a line for each (`message`, such as "Brine claimed" or "Orbital Station reached level 3", and `level` for a megaproject stage; the headline names the level too), and the contracts posted while you were away (`contractsPosted`) |
+| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h, more with Orbital Station levels) and shows the away summary: a one-line `headline` ("Away 4d 2h; 12h counted (cap); +1.2M credits"), the cap and whether you passed it (`capSeconds`, `capped`), credits and stock gained, units wasted to storage caps and their worth in credits (`wastedValue`), crew housed and assigned before and after (`housingBefore`, `housingAfter`; a shortage also goes in the headline: "Crew short: 41 housed for 67 assigned"), credits a second before and after, milestones reached and the top bottlenecks (a crew shortage that costs credits first, then those costing the most credits an hour), each marked `"ongoing": "for 3h 10m"` (how long it has held, with `since`, its start) if it was already there when you left, and ", and worse than before" (`worseThanBefore`) when its loss grew by more than a quarter, one `nextGoal` (the milestone your current rates reach soonest, or the next megaproject stage when that is sooner, with its ETA), the projects that completed with a line for each (`message`, such as "Brine claimed" or "Orbital Station reached level 3", and `level` for a megaproject stage; the headline names the level too), and the contracts posted while you were away (`contractsPosted`) |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
 
 `advance` and `away` step the engine the same way (60 s ticks; every chain on a
@@ -57,8 +57,9 @@ wasted), or `noSales` ("Nothing is being sold: turn on auto-sell or sell goods":
 you make goods that sell and have no auto-sell rule). Each bottleneck also has
 `firstSeenAt` (game time since when it has held without a break) and
 `lostCreditsPerHour` (what a full store or a starved building costs an hour at
-current prices, or for `noSales` what your net production would sell for; null
-for the other kinds).
+current prices, for `noSales` what your net production would sell for, for
+`crewShortage` the output your crewed buildings lose against full staffing;
+null for the other kinds).
 
 ### Game commands (act)
 

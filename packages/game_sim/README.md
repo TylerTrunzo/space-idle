@@ -113,9 +113,21 @@ commands:
   `headline` such as `"Away 4d 2h; 12h counted (cap); +1.2M credits"`,
   seconds away and simulated, the cap (`capSeconds`) and whether the absence
   passed it (`capped`), credits and stock gained, units wasted to
-  storage caps, milestones reached and the top bottlenecks, those losing the
-  most credits an hour first; one that was there before the absence says
-  how long it has held, `"ongoing": "for 3h 10m"`; the projects that
+  storage caps (`totalWasted`) and their worth in credits (`wastedValue`),
+  crew before and after (`housingBefore`, `housingAfter`: `base`,
+  `supported`, `assigned`; when fewer are housed than assigned the headline
+  adds `"; Crew short: 41 housed for 67 assigned"`), credits a second before
+  and after (`creditsPerSecBefore`, `creditsPerSecAfter`), milestones
+  reached and the top bottlenecks: a crew shortage that costs credits
+  first, then those losing the most credits an hour; one that was there
+  before the absence gives `since` (the game time it began),
+  `worseThanBefore` (its loss grew by more than a quarter) and how long it
+  has held, `"ongoing": "for 3h 10m, and worse than before"`; one
+  `nextGoal`: the milestone the current rates reach soonest, or a
+  megaproject's next stage when that comes sooner (`kind`, `id`, `name`,
+  `level` for a stage, `etaSeconds`, null when not in reach, and a
+  `message` such as `"Next: First Foundry (Make 30 Steel), 12 of 30, in 1m
+  30s"`); the projects that
   completed (`projectsCompleted`: `kind`, `targetId`, `name`, `level` for a
   megaproject stage, and a `message` such as `"Orbital Station reached level
   3"`, which the headline also ends with), stages that started while away
@@ -214,7 +226,8 @@ sold: turn on auto-sell or sell goods"; `bodyId` and `buildingId` are null).
 Each also gives `firstSeenAt`, the game time since which it has held without
 a break, and `lostCreditsPerHour`, an estimate at current prices of what it
 costs (the wasted units for `storageFull`, the output not made for `input`,
-the net production left unsold for `noSales`; null for the other kinds).
+the net production left unsold for `noSales`, the output crewed buildings
+lose against full staffing for `crewShortage`; null for the other kinds).
 
 ## Bot runs
 

@@ -954,6 +954,78 @@ void main() {
     expect(necks.every((n) => n.containsKey('lostCreditsPerHour')), isTrue);
   });
 
+  test('away shows housing, income, waste in credits and worse ongoing '
+      'bottlenecks', () {
+    final r = _runner();
+    final kora = r.state.body('kora');
+    // Round-3 casual bug 2: housing below the crew assigned.
+    r.state.faction('player').baseCrew = 2;
+    r.handle({'cmd': 'assignCrew', 'buildingId': 'b1', 'crew': 0});
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'steel',
+      'keepAtLeast': '0',
+    });
+    kora.stock['iron_ore'] = BigNum.zero();
+    kora.stock['copper_ore'] = storageCap(r.state, r.engine.content, kora);
+    r.handle({'cmd': 'advance', 'seconds': 60});
+    kora.stock['iron_ore'] = BigNum.from(0.2);
+    final out = r.handle({'cmd': 'away', 'seconds': 3600});
+    expect(out['housingBefore'], {'base': 2, 'supported': 2, 'assigned': 2});
+    expect(out['housingAfter'], {'base': 2, 'supported': 2, 'assigned': 2});
+    expect((out['creditsPerSecBefore']! as Map)['display'], isA<String>());
+    expect((out['creditsPerSecAfter']! as Map)['display'], isA<String>());
+    final waste = out['wastedValue']! as Map;
+    expect(BigNum.fromJson(waste['value']! as String) > BigNum.zero(), isTrue);
+    final necks = (out['topBottlenecks']! as List).cast<Map<String, Object?>>();
+    final smelter = necks.singleWhere((n) => n['buildingId'] == 'b3');
+    expect(smelter['since'], 0.0);
+    expect(smelter['worseThanBefore'], isTrue);
+    expect(smelter['ongoing'], 'for 1h 1m, and worse than before');
+  });
+
+  test('away names a crew shortage in its headline', () {
+    final r = _runner();
+    r.state.faction('player').baseCrew = 2;
+    final out = r.handle({'cmd': 'away', 'seconds': 3600});
+    expect(out['headline'], endsWith('; Crew short: 2 housed for 3 assigned'));
+    final first = (out['topBottlenecks']! as List).first as Map;
+    expect(first['kind'], 'crewShortage');
+  });
+
+  test('away gives one next goal', () {
+    final r = _runner();
+    final out = r.handle({'cmd': 'away', 'seconds': 60});
+    expect(out['nextGoal'], {
+      'kind': 'milestone',
+      'id': 'first_steel',
+      'name': 'First Foundry',
+      'etaSeconds': closeTo(90, 1e-6),
+      'message': 'Next: First Foundry (Make 30 Steel), 12 of 30, in 1m 30s',
+    });
+    final f = r.state.faction('player');
+    f.reachedMilestones.addAll([
+      for (final m in r.engine.content.milestones) m.id,
+    ]);
+    final station = r.handle({'cmd': 'away', 'seconds': 60});
+    expect(station['nextGoal'], {
+      'kind': 'megaproject',
+      'id': 'orbital_station',
+      'name': 'Orbital Station',
+      'level': 1,
+      'etaSeconds': null,
+      'message': startsWith(
+        'Next: Orbital Station level 1 still needs 5M credits and 200 '
+        'Station Segment and ',
+      ),
+    });
+    expect(
+      (station['nextGoal']! as Map)['message'],
+      endsWith('; not in reach at the current rates'),
+    );
+  });
+
   test('away needs a number of seconds', () {
     final r = _runner();
     expect(r.handle({'cmd': 'away'})['error'], 'badCommand');
