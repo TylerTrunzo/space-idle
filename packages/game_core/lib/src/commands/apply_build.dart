@@ -268,6 +268,19 @@ CommandResult _upgrade(
 
   _pay(f, body, cost);
   b.levels[cmd.track] = b.levels[cmd.track]! + 1;
+  // A capacity level's new crew slots fill from the free crew, as a build
+  // with autoCrew does; base slots left empty stay so.
+  final added = cmd.track == UpgradeTrack.capacity
+      ? math.max(
+          0,
+          [
+            c.rules.capacityCrewPerLevel,
+            availableCrew(s, c, f.id),
+            maxCrew(c.rules, def, b) - b.crew,
+          ].reduce(math.min),
+        )
+      : 0;
+  b.crew += added;
   return CommandOk(
     outcome: Upgraded(
       bodyId: body.id,
@@ -275,6 +288,7 @@ CommandResult _upgrade(
       track: cmd.track,
       level: b.levels[cmd.track]!,
       spent: cost,
+      crewAdded: added,
     ),
   );
 }

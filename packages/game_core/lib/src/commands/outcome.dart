@@ -106,6 +106,7 @@ final class Upgraded extends CommandOutcome {
     required this.track,
     required this.level,
     super.spent,
+    this.crewAdded = 0,
   });
 
   @override
@@ -119,6 +120,11 @@ final class Upgraded extends CommandOutcome {
 
   /// Its level now.
   final int level;
+
+  /// Crew moved from the free crew into the crew slots a capacity level
+  /// added: as many as are free, up to the slots added; 0 for the other
+  /// tracks and for buildings without crew slots (habitats, warehouses).
+  final int crewAdded;
 }
 
 /// A `CreateRouteCommand` opened [routeId], taking its cargo ships from

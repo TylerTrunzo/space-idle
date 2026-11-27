@@ -20,6 +20,42 @@ Map<String, Object?> _kora(Map<String, Object?> state) =>
     );
 
 void main() {
+  test('a capacity upgrade says when free crew filled its new slot', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    final up = r.handle({
+      'cmd': 'upgrade',
+      'buildingId': 'b1',
+      'track': 'capacity',
+    });
+    expect(up['ok'], isTrue, reason: '$up');
+    expect(up['crewAdded'], 1);
+    expect(
+      up['message'],
+      'Mine on Kora (b1) is at capacity level 1; 1 free crew moved into '
+      'its new slot (2 of 2 crew)',
+    );
+    r.state.faction('player').baseCrew = 0;
+    final empty = r.handle({
+      'cmd': 'upgrade',
+      'buildingId': 'b1',
+      'track': 'capacity',
+    });
+    expect(empty['crewAdded'], isNull);
+    expect(
+      empty['message'],
+      'Mine on Kora (b1) is at capacity level 2; its new slot is empty '
+      '(no free crew; 2 of 3 crew)',
+    );
+    // Speed says nothing beyond what it spent.
+    final speed = r.handle({
+      'cmd': 'upgrade',
+      'buildingId': 'b1',
+      'track': 'speed',
+    });
+    expect(speed['message'], isNull);
+  });
+
   test('advance then state shows time passing and stock/credits', () {
     final r = _runner();
     final before = r.handle({'cmd': 'state'});

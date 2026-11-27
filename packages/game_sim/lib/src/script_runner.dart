@@ -176,6 +176,8 @@ final class ScriptRunner {
             'inputsPerSec': _rates(recipe.inputs),
           if (recipe != null && recipe.outputs.isNotEmpty)
             'outputsPerSec': _rates(recipe.outputs),
+          if (o case Upgraded(:final crewAdded) when crewAdded > 0)
+            'crewAdded': crewAdded,
         };
     }
   }
@@ -197,8 +199,9 @@ final class ScriptRunner {
   String _until(double at) => formatDuration(at - state.time);
 
   /// A sentence on what [cmd] did, from its outcome [o]; null for
-  /// crew, upgrades, sales, auto-sell rules and closed routes, whose
-  /// `spent` and `gained` say it all.
+  /// crew, upgrades other than capacity on a crewed building, sales,
+  /// auto-sell rules and closed routes, whose `spent` and `gained` say it
+  /// all.
   String? _message(Command cmd, CommandOutcome o) {
     final c = engine.content;
     String body(String id) => state.body(id).name;
@@ -248,12 +251,39 @@ final class ScriptRunner {
         'Discarded contract ${o.contractId} for '
             '${formatNumber(o.quantity)} ${c.resources[o.resourceId]!.name}; '
             '${_nextContract(o.nextContractAt)}',
+      Upgraded(track: UpgradeTrack.capacity) => _capacityMessage(o),
       CrewAssigned() ||
       Upgraded() ||
       Sold() ||
       AutoSellSet() ||
       RouteRemoved() => null,
     };
+  }
+
+  /// What a capacity level [o] did to its building's crew: "Mine on Kora
+  /// (b1) is at capacity level 1; 1 free crew moved into its new slot (2
+  /// of 2 crew)", or that the new slot is empty when no crew was free;
+  /// null for a building without crew slots (a habitat's capacity adds
+  /// housing).
+  String? _capacityMessage(Upgraded o) {
+    final c = engine.content;
+    final b = state
+        .body(o.bodyId)
+        .buildings
+        .firstWhere((x) => x.id == o.buildingId);
+    final def = c.buildings[b.defId]!;
+    final max = maxCrew(c.rules, def, b);
+    if (max == 0) return null;
+    final what =
+        '${_describe(b.defId, o.bodyId, b.id)} is at capacity level '
+        '${o.level}';
+    final slots = c.rules.capacityCrewPerLevel == 1 ? 'slot' : 'slots';
+    if (o.crewAdded > 0) {
+      return '$what; ${o.crewAdded} free crew moved into its new $slots '
+          '(${b.crew} of $max crew)';
+    }
+    return '$what; its new $slots ${slots == 'slot' ? 'is' : 'are'} empty '
+        '(no free crew; ${b.crew} of $max crew)';
   }
 
   /// When the board's next contract arrives, from its soonest refill [at]:

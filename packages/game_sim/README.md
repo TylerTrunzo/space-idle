@@ -168,6 +168,10 @@ length does not change what is earned. The only difference is that `away`
 caps the time at the offline limit and summarizes it.
 
 Replies are `{"ok":true,...}` or `{"ok":false,"error":"...","message":"..."}`.
+A capacity upgrade on a crewed building fills its new slot from free crew:
+the reply has `crewAdded` and a message such as `"Mine on Kora (b1) is at
+capacity level 1; 1 free crew moved into its new slot (2 of 2 crew)"`, or
+says the slot is empty when no crew is free.
 Error messages are plain sentences with display names: an unknown building
 type lists what the body can build with each one's cost (`"Mine (mine, 100
 credits), Smelter (smelter, 150 credits), ..."`), an upgrade track the

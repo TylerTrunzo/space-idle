@@ -70,7 +70,7 @@ counts are plain integers.
 |---|---|
 | `{"cmd":"build","bodyId":"kora","defId":"mine","depositResourceId":"silicon"}` | Build; extractors name the deposit they mine. The new building takes free crew up to its base slots (add `"autoCrew":false` to leave it empty). The reply has the new `createdId`, says how much crew it took and gives its whole recipe a second (`"At full crew it uses 0.0333 Steel and 0.0133 Circuit a second and makes 0.00333 Cargo Ship a second"`, also as `inputsPerSec` and `outputsPerSec`) |
 | `{"cmd":"assignCrew","buildingId":"b4","crew":1}` | Set a building's crew (an absolute count) |
-| `{"cmd":"upgrade","buildingId":"b1","track":"speed"}` | Buy one level of `speed`, `efficiency` or `capacity` |
+| `{"cmd":"upgrade","buildingId":"b1","track":"speed"}` | Buy one level of `speed`, `efficiency` or `capacity`. A capacity level on a crewed building fills its new slot from free crew; the reply says so (`crewAdded`), or that the slot is empty when no crew is free |
 | `{"cmd":"setAutoSell","bodyId":"kora","resourceId":"steel","keepAtLeast":"100"}` | Sell everything above 100 automatically; `null` removes the rule |
 | `{"cmd":"sell","bodyId":"kora","resourceId":"steel","amount":"50"}` | Sell once |
 | `{"cmd":"createRoute","fromBodyId":"kora","toBodyId":"brine","resourceId":"circuit","ratePerSecond":"0.2","cargoShips":1,"stopAtDestination":"500"}` | Ship goods between your bodies; the cargo ships come from the source body's stock. `stopAtDestination` is optional: the stock Brine keeps. The route pauses while Brine holds 500 once what is on its way (on any route), less what Brine's buildings use during the trip, has landed: a long trip keeps enough in flight that Brine never runs dry, and Brine settles near 500. Brine's stock plus the cargo on its way never pass its storage cap. A level above Brine's storage cap is cut to the cap, and the reply says so |
@@ -105,9 +105,9 @@ at the arrival time the reply gave.
 Things worth knowing:
 
 - Upgrade tracks: `speed` makes more per second (inputs and outputs alike),
-  `efficiency` cuts the inputs per output, `capacity` adds a crew slot and
-  some storage on the body. On a habitat, `capacity` adds a quarter more
-  housing per level instead.
+  `efficiency` cuts the inputs per output, `capacity` adds a crew slot
+  (filled from free crew, if any) and some storage on the body. On a
+  habitat, `capacity` adds a quarter more housing per level instead.
 - Habitats need no crew. They house crew as long as they get food, water and
   oxygen. Food comes from a hydroponic farm (water and fertilizer, from
   ammonia) or a protein vat (water and hydrogen, which an electrolyzer also

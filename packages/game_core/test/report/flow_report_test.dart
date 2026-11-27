@@ -171,7 +171,9 @@ void main() {
       s,
       const UpgradeCommand('player', 'b3', UpgradeTrack.capacity),
     );
-    // With the iron mine idle, the smelter has only the stock to use.
+    // The capacity level crewed its new slot from free crew. With the iron
+    // mine idle, the smelter has only the stock to use: 0.2 of the 0.8
+    // ore its 2 crew want.
     engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
     kora.stock['iron_ore'] = n(0.2);
     final st = koraFlow(buildFlowReport(s, c, 'player')).buildings;
@@ -181,9 +183,9 @@ void main() {
     expect(st[0].limitReason, 'noCrew');
     expect(st[1].runFraction, 1);
     expect(st[1].limitReason, isNull);
-    expect(st[2].runFraction, closeTo(0.5, 1e-12));
+    expect(st[2].runFraction, closeTo(0.25, 1e-12));
     expect(st[2].limitReason, 'input:iron_ore');
-    expect(st[2].crew, 1);
+    expect(st[2].crew, 2);
     expect(st[2].slots, 2);
   });
 

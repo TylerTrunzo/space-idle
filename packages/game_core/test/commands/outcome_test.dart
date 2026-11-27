@@ -76,6 +76,53 @@ void main() {
     );
   });
 
+  test('a capacity upgrade fills its new slot from free crew and says how '
+      'many', () {
+    final s = rich();
+    final mine = s.body('kora').buildings.first;
+    final perLevel = content.rules.capacityCrewPerLevel;
+    final free = availableCrew(s, content, 'player');
+    expect(free, greaterThanOrEqualTo(perLevel));
+    final up = outcome<Upgraded>(
+      s,
+      UpgradeCommand('player', mine.id, UpgradeTrack.capacity),
+    );
+    expect(up.crewAdded, perLevel);
+    expect(mine.crew, content.buildings[mine.defId]!.crewSlots + perLevel);
+    expect(availableCrew(s, content, 'player'), free - perLevel);
+    // With no free crew the slot stays empty.
+    s.faction('player').baseCrew = 0;
+    final none = outcome<Upgraded>(
+      s,
+      UpgradeCommand('player', mine.id, UpgradeTrack.capacity),
+    );
+    expect(none.crewAdded, 0);
+    expect(mine.crew, content.buildings[mine.defId]!.crewSlots + perLevel);
+    // Other tracks add no crew.
+    s.faction('player').baseCrew = 100;
+    final speed = outcome<Upgraded>(
+      s,
+      UpgradeCommand('player', mine.id, UpgradeTrack.speed),
+    );
+    expect(speed.crewAdded, 0);
+  });
+
+  test('a capacity upgrade on a building with empty base slots fills only '
+      'the new slot', () {
+    final s = rich();
+    final smelter = s
+        .body('kora')
+        .buildings
+        .firstWhere((b) => b.defId == 'smelter');
+    e.apply(s, AssignCrewCommand('player', smelter.id, 0));
+    final up = outcome<Upgraded>(
+      s,
+      UpgradeCommand('player', smelter.id, UpgradeTrack.capacity),
+    );
+    expect(up.crewAdded, content.rules.capacityCrewPerLevel);
+    expect(smelter.crew, content.rules.capacityCrewPerLevel);
+  });
+
   test('a stop level above the destination storage cap is cut to the cap, '
       'and the outcome says so', () {
     final s = rich();
