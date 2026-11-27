@@ -31,7 +31,8 @@ import 'production.dart';
 /// orders seldom compete with crew upkeep; a template weighs as much as
 /// its heaviest resource.
 ///
-/// Its quantity sells, at the current price ([price]), for the faction's
+/// Its quantity sells, at what the faction's sales earn now ([salePrice]:
+/// the market price with its sale-price bonus), for the faction's
 /// income basis ([incomeBasis]) over a span rolled between the template's
 /// `quantityIncomeSecondsMin` and `quantityIncomeSecondsMax` (10 to 30
 /// minutes), rounded to two significant figures, at most the storage caps
@@ -98,7 +99,7 @@ void stepContracts(GameState s, Content c, double now) {
             (t, ok),
       ];
       if (steady.isEmpty) break;
-      final income = incomeBasis(s, c, made);
+      final income = incomeBasis(s, c, f.id, made);
       final choices = _worthChoosing(s, c, f, steady, made, income);
       final lifeSupport = _lifeSupport(c);
       double weight(ContractTemplateDef t, String id) =>
@@ -222,8 +223,9 @@ bool _couldQualify(
 
 /// What a contract from [t] for [quantity] of [resourceId] pays [f], whose
 /// income basis ([incomeBasis]) is [income] a second: its sale value at
-/// current prices ([price]) times `rewardMultiplier`, at least the floor
-/// and at most the cap, which are `rewardIncomeSeconds` and
+/// [f]'s sale prices ([salePrice], so a reward beats selling the goods
+/// whatever the sale-price bonus) times `rewardMultiplier`, at least the
+/// floor and at most the cap, which are `rewardIncomeSeconds` and
 /// `rewardCapIncomeSeconds` of the income, neither below
 /// `minRewardCredits`; then never below the sale value times
 /// `minRewardMultiplier`, cap or not, and in whole credits (rounded down).
@@ -238,7 +240,7 @@ BigNum _reward(
   BigNum quantity,
   BigNum income,
 ) {
-  final sale = quantity * price(s, c, resourceId);
+  final sale = quantity * salePrice(s, c, f.id, resourceId);
   final floor = t.minRewardCredits.max(income.mulDouble(t.rewardIncomeSeconds));
   var reward = sale.mulDouble(t.rewardMultiplier).max(floor);
   if (f.contractsPosted == 0) {
@@ -254,17 +256,24 @@ BigNum _reward(
 /// Credits a second a contract's reward is measured against, for the
 /// faction [report] is about: the larger of its steady auto-sale income
 /// ([FlowReport.creditsPerSec]) and the value of what is left over with
-/// every flow steady, at [s]'s market prices (each resource's
-/// [FlowReport.steadySurplusPerSec] × [price]). So the floor and cap do
+/// every flow steady, at what [factionId]'s sales of it earn (each
+/// resource's [FlowReport.steadySurplusPerSec] × [salePrice]). So the floor and cap do
 /// not depend on which goods auto-sell: a player who sells by hand, or
 /// turns auto-sell off before a refill, is measured like one who
 /// auto-sells. And as for credits per second, output fed from a stock
 /// nothing refills does not count, so a stockpile does not raise it.
-BigNum incomeBasis(GameState s, Content c, FlowReport report) {
+BigNum incomeBasis(
+  GameState s,
+  Content c,
+  String factionId,
+  FlowReport report,
+) {
   var made = const BigNum.zero();
   for (final id in c.resources.keys) {
     final left = report.steadySurplusPerSec(id);
-    if (left > const BigNum.zero()) made = made + left * price(s, c, id);
+    if (left > const BigNum.zero()) {
+      made = made + left * salePrice(s, c, factionId, id);
+    }
   }
   return report.creditsPerSec.max(made);
 }
@@ -321,8 +330,8 @@ void freeContractSlot(FactionState f, Content c, double now) {
 /// basis ([incomeBasis]) is [income] a second, given a [roll] in `[0, 1)`:
 /// what sells for the income of a span rolled between
 /// [ContractTemplateDef.quantityIncomeSecondsMin] and
-/// [ContractTemplateDef.quantityIncomeSecondsMax] at the current price
-/// ([price]), rounded to two significant figures; at most the storage caps
+/// [ContractTemplateDef.quantityIncomeSecondsMax] at the faction's sale
+/// price ([salePrice]), rounded to two significant figures; at most the storage caps
 /// of the bodies [f] owns, summed (an order can be filled from several),
 /// [ContractTemplateDef.quantityProductionSecondsMax] of [rate], what [f]
 /// makes of it a second (steady and gross), and
@@ -347,7 +356,7 @@ BigNum _quantity(
       (t.quantityIncomeSecondsMax - t.quantityIncomeSecondsMin) * roll;
   // Every market's price is above zero: its floor is.
   var q = twoSignificantFigures(
-    income.mulDouble(seconds) / price(s, c, resourceId),
+    income.mulDouble(seconds) / salePrice(s, c, f.id, resourceId),
   );
   if (ceiling != null) q = q.min(ceiling);
   // Deliveries move whole units, so the quantity is whole, at least 1.
@@ -419,7 +428,7 @@ List<(ContractTemplateDef, List<String>)> _worthChoosing(
   for (final (t, ids) in steady) {
     for (final id in ids) {
       final most = _ceiling(s, c, f, t, report.steadyProducedPerSec(id));
-      final worth = most == null ? null : most * price(s, c, id);
+      final worth = most == null ? null : most * salePrice(s, c, f.id, id);
       valued.add((
         t: t,
         id: id,

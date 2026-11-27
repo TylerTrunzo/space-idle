@@ -1088,29 +1088,45 @@ void main() {
         expect(lost(2)!.toDouble(), closeTo(plain * 1.44, plain * 1e-9));
       });
 
-      test('contracts value goods at the plain price', () {
-        ContractState posted(int level) {
-          final s = at(level);
-          expect(
-            price(s, c, 'steel'),
-            c.resources['steel']!.basePrice,
-            reason: 'the market price takes no bonus',
-          );
-          s.faction('player').contractRefillAt
+      test('a contract for a good it covers pays at least 1.5 times what '
+          'selling the goods earns', () {
+        var checked = 0;
+        for (var seed = 1; seed <= 12; seed++) {
+          final s = eng.newGame(seed);
+          final f = s.faction('player')..megaprojectLevels['boost'] = 4;
+          // An income, so orders are sized and paid by it.
+          eng.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+          s.body('kora').stock['iron_ore'] = n(900);
+          eng.advance(s, 1800);
+          f.contracts.clear();
+          f.contractRefillAt
             ..clear()
-            ..add(30);
-          eng.advance(s, 120);
-          return s.faction('player').contracts.single;
+            ..addAll([s.time, s.time, s.time]);
+          stepContracts(s, c, s.time);
+          for (final k in f.contracts) {
+            if (c.resources[k.resourceId]!.tier == 0) continue;
+            final sold = s.copy();
+            sold.body('kora').stock[k.resourceId] = k.quantity;
+            final earned = sell(
+              sold,
+              c,
+              'player',
+              'kora',
+              k.resourceId,
+              k.quantity,
+            ).revenue;
+            final atPrice =
+                k.quantity * salePrice(s, c, 'player', k.resourceId);
+            expect(earned <= atPrice, isTrue, reason: k.resourceId);
+            expect(
+              k.rewardCredits.toDouble(),
+              greaterThanOrEqualTo(atPrice.toDouble() * 1.5 - 1),
+              reason: '${k.resourceId} at seed $seed',
+            );
+            checked++;
+          }
         }
-
-        // Nothing auto-sold, so no income either way: the same order, paid
-        // the same, with the bonus or without.
-        final k = posted(3);
-        final p = posted(0);
-        expect(
-          (k.resourceId, k.quantity, k.rewardCredits),
-          (p.resourceId, p.quantity, p.rewardCredits),
-        );
+        expect(checked, greaterThan(0));
       });
 
       test('takes a tier range and a factor of at least 1, like the other '

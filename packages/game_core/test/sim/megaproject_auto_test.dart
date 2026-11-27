@@ -1611,11 +1611,13 @@ void main() {
       final withFeed = incomeBasis(
         fed,
         content,
+        'player',
         buildFlowReport(fed, content, 'player'),
       );
       final without = incomeBasis(
         sold,
         content,
+        'player',
         buildFlowReport(sold, content, 'player'),
       );
       expect(withFeed.toDouble(), greaterThan(0));

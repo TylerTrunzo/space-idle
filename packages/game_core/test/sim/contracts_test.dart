@@ -418,6 +418,7 @@ void main() {
       final income = incomeBasis(
         s,
         content,
+        'player',
         buildFlowReport(s, content, 'player'),
       );
       // The template, the resource, then the roll.
@@ -562,6 +563,7 @@ void main() {
           final basis = incomeBasis(
             s,
             content,
+            'player',
             buildFlowReport(s, content, 'player'),
           );
           stepContracts(s, content, s.time);
@@ -1147,7 +1149,7 @@ void main() {
           'copper_ore',
         );
         final r = buildFlowReport(s, content, 'player');
-        final income = incomeBasis(s, content, r);
+        final income = incomeBasis(s, content, 'player', r);
         final tenMinutes = income.mulDouble(600);
         expect(achievable(s, content, r, 'copper_ore') < tenMinutes, isTrue);
         expect(achievable(s, content, r, 'steel') >= tenMinutes, isTrue);
@@ -1182,7 +1184,7 @@ void main() {
               id: n(1),
           });
         final r = buildFlowReport(s, c, 'player');
-        final income = incomeBasis(s, c, r);
+        final income = incomeBasis(s, c, 'player', r);
         // Kora's 1,000 of each at its base price: steel, wire, copper ore,
         // then iron ore.
         final worth = {
@@ -1218,7 +1220,7 @@ void main() {
         expect(f.contractsPosted, greaterThan(0));
         f.contracts.clear();
         final r = buildFlowReport(s, content, 'player');
-        final income = incomeBasis(s, content, r);
+        final income = incomeBasis(s, content, 'player', r);
         // Every good an order may ask for: priced, made, and made fast
         // enough for its template.
         final worth = <String, BigNum>{
@@ -1278,6 +1280,7 @@ void main() {
         final income = incomeBasis(
           s,
           content,
+          'player',
           buildFlowReport(s, content, 'player'),
         );
         final copper = price(s, content, 'copper_ore');
@@ -1419,6 +1422,7 @@ void main() {
             return incomeBasis(
               s,
               content,
+              'player',
               buildFlowReport(s, content, 'player'),
             );
           }
