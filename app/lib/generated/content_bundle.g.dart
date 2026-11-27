@@ -436,7 +436,7 @@ const Map<String, String> contentJson = {
     "stageSeconds": 7200,
     "stageSecondsGrowth": 1.15,
     "bonusesPerLevel": [
-      {"kind": "salePriceMultiplier", "amount": 1.25, "appliesToMinTier": 1, "appliesToMaxTier": 2}
+      {"kind": "salePriceMultiplier", "amount": 1.05, "appliesToMinTier": 1, "appliesToMaxTier": 2}
     ]
   }
 ]
