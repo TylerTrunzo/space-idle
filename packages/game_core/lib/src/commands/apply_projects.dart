@@ -128,6 +128,14 @@ CommandResult _survey(
     if (next == null) return none!;
     hidden = next;
   }
+  // The system first: a body out of reach is told nothing more about.
+  if (hidden.systemId != source.systemId) {
+    return _fail(
+      CommandError.routeInvalid,
+      "Survey drones from ${source.name} can't reach that body: it is in "
+      'another system',
+    );
+  }
   if (hidden.surveyed) {
     return _fail(
       CommandError.alreadySurveyed,
@@ -138,13 +146,6 @@ CommandResult _survey(
     return _fail(
       CommandError.projectInProgress,
       'A survey of that body is already under way',
-    );
-  }
-  if (hidden.systemId != source.systemId) {
-    return _fail(
-      CommandError.routeInvalid,
-      "Survey drones from ${source.name} can't reach that body: it is in "
-      'another system',
     );
   }
   if (source.ownerId != f.id) return _notYours(s, f, source);

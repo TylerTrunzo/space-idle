@@ -220,6 +220,22 @@ void main() {
     );
   });
 
+  test('a new game posts what contracts it can at once and shows no refill '
+      'due in 0s', () {
+    final r = _runner();
+    final st = r.handle({'cmd': 'state'});
+    // Nothing made yet: the first refill waits for something to ask for.
+    expect(st['contracts'], isEmpty);
+    final refills = (st['contractRefills']! as List)
+        .cast<Map<String, Object?>>();
+    expect(refills.map((x) => x['timeLeft']), isNot(contains('0s')));
+    expect(refills, hasLength(2));
+    expect(st['contractsDue'], {
+      'count': 1,
+      'note': 'Posted as soon as you make something a contract can ask for',
+    });
+  });
+
   test('claim, demolish and route replies say what they took and gave', () {
     final r = _runner();
     r.state.faction('player').credits = BigNum.from(1e6);
@@ -802,6 +818,25 @@ void main() {
     );
   });
 
+  test('costs say the last stage is under way, not that it is at its '
+      'highest level', () {
+    final r = _runner();
+    const max = SaveCodec.maxMegaprojectLevel;
+    r.state.faction('player').megaprojectLevels['orbital_station'] = max - 1;
+    startProject(
+      r.state,
+      'player',
+      ProjectKind.megaprojectStage,
+      'orbital_station',
+      3600,
+    );
+    final costs = r.handle({'cmd': 'costs'});
+    expect(
+      (costs['megaprojects']! as Map)['orbital_station'],
+      'busy: level $max, its highest, is under way, done in 1h',
+    );
+  });
+
   test('a delivery while a stage runs says when the next one starts', () {
     final r = _runner();
     stockStation(r);
@@ -1073,6 +1108,16 @@ void main() {
       final started = r.handle({'cmd': 'survey', 'sourceBodyId': 'kora'});
       expect(started['ok'], isTrue, reason: '$started');
       expect(started['message'], endsWith('done in 3h'));
+      final during = r.handle({'cmd': 'state'});
+      // The signal under survey no longer counts, and the project does not
+      // name the hidden body it targets.
+      expect(during['unsurveyedSignals'], [
+        {'systemId': 'veyra', 'name': 'Veyra', 'count': 1},
+      ]);
+      final project = (during['projects']! as List).single as Map;
+      expect(project['name'], 'an unsurveyed body');
+      expect(project.containsKey('targetId'), isFalse);
+      expect(jsonEncode(during), isNot(contains('tessaly')));
       r.handle({'cmd': 'advance', 'seconds': 10860});
       final after = r.handle({'cmd': 'state'});
       expect(bodyIds(after), contains('tessaly'));

@@ -152,8 +152,15 @@ final class GameEngine {
   /// Bottlenecks [catchUpOffline] reports at most.
   static const int topBottleneckCount = 3;
 
-  /// Builds the starting world, seeding its random generator with [seed].
-  GameState newGame(int seed) => newGameState(content, seed);
+  /// Builds the starting world, seeding its random generator with [seed],
+  /// and posts the contracts already due ([stepContracts]), as a tick
+  /// would, so a board does not wait for the first tick to fill what it
+  /// can.
+  GameState newGame(int seed) {
+    final s = newGameState(content, seed);
+    stepContracts(s, content, s.time);
+    return s;
+  }
 
   /// Validates [cmd] against [s] and applies it; see [applyCommand].
   CommandResult apply(GameState s, Command cmd) =>

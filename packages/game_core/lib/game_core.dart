@@ -16,7 +16,9 @@ export 'src/sim/engine.dart';
 export 'src/sim/logistics.dart';
 export 'src/sim/market.dart';
 export 'src/sim/megaprojects.dart';
-export 'src/sim/milestones.dart';
+// The engine's own milestone helpers stay inside the package.
+export 'src/sim/milestones.dart'
+    hide factionStock, hiddenBodies, milestoneProgressAt;
 export 'src/sim/production.dart';
 export 'src/sim/projects.dart';
 export 'src/sim/survey.dart';

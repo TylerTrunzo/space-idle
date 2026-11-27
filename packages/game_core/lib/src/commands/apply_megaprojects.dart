@@ -178,13 +178,21 @@ CommandFailed? _checkMegaproject(
     );
   }
   final level = megaprojectDeliveryLevel(s, f.id, def);
-  if (level >= SaveCodec.maxMegaprojectLevel) {
-    return _fail(
-      CommandError.invalidAmount,
-      '${def.name} is at its highest level (${SaveCodec.maxMegaprojectLevel})',
-    );
-  }
   final running = megaprojectStageOf(s, f.id, def.id);
+  if (level >= SaveCodec.maxMegaprojectLevel) {
+    // While the last stage runs, the level is not reached yet: say so.
+    return running != null
+        ? _fail(
+            CommandError.projectInProgress,
+            '${def.name} level $level, its highest, is under way '
+            '(${_left(s, running)} left); there is nothing more to deliver',
+          )
+        : _fail(
+            CommandError.invalidAmount,
+            '${def.name} is at its highest level '
+            '(${SaveCodec.maxMegaprojectLevel})',
+          );
+  }
   if (running != null && megaprojectStageQueued(s, c, f.id, def)) {
     return _fail(
       CommandError.projectInProgress,

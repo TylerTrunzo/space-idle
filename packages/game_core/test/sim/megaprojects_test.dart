@@ -534,6 +534,30 @@ void main() {
       fails(top, deliver('kora', goods()), CommandError.invalidAmount);
     });
 
+    test('while the last stage is under way, deliveries say so, not that it '
+        'is at its highest level', () {
+      final s = twoBodies()..body('kora').stock.addAll(goods());
+      const max = SaveCodec.maxMegaprojectLevel;
+      s.faction('player').megaprojectLevels['orbital_station'] = max - 1;
+      startProject(
+        s,
+        'player',
+        ProjectKind.megaprojectStage,
+        'orbital_station',
+        3600,
+      );
+      final msg = fails(
+        s,
+        deliver('kora', goods()),
+        CommandError.projectInProgress,
+      );
+      expect(
+        msg,
+        'Orbital Station level $max, its highest, is under way (1h left); '
+        'there is nothing more to deliver',
+      );
+    });
+
     test('a megaproject with a host body type needs one owned', () {
       final c = contentWithMegaprojects([
         {...stationJson(), 'hostBodyType': 'gas_giant'},

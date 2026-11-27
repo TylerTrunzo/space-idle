@@ -512,13 +512,13 @@ void main() {
       expect(capFirst / speedFirst, lessThan(ratio));
     });
 
-    test('track the building lacks is unknownDef', () {
+    test('track the building lacks is noSuchTrack', () {
       final s = fresh();
       final mine = s.body('kora').buildings.first;
       expectFails(
         s,
         UpgradeCommand('player', mine.id, UpgradeTrack.efficiency),
-        CommandError.unknownDef,
+        CommandError.noSuchTrack,
       );
     });
 
@@ -1332,6 +1332,18 @@ void main() {
         ),
         'Needs 1 more crew (you have 0 free)',
       );
+      // Over-assigned, the reply says by how much: freeing crew only helps
+      // once that many are off.
+      s.faction('player').baseCrew = 1;
+      expect(
+        expectFails(
+          s,
+          AssignCrewCommand('player', id, 1),
+          CommandError.crewUnavailable,
+        ),
+        'Needs 1 more crew (you have 0 free: 2 crew are assigned beyond the '
+        '1 your housing supports)',
+      );
     });
 
     test('no such upgrade', () {
@@ -1339,7 +1351,7 @@ void main() {
         expectFails(
           fresh(),
           const UpgradeCommand('player', 'b1', UpgradeTrack.efficiency),
-          CommandError.unknownDef,
+          CommandError.noSuchTrack,
         ),
         'Mine has no efficiency upgrade',
       );

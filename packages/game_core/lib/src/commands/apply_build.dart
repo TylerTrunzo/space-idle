@@ -206,11 +206,17 @@ CommandResult _assignCrew(
     );
   }
   final delta = cmd.crew - b.crew;
-  final free = availableCrew(s, c, f.id);
+  final crew = crewTotals(s, c, f.id);
+  final free = crew.free;
   if (delta > 0 && free < delta) {
+    // Over-assigned, free crew stays 0 until that many are unassigned.
+    final over = crew.overAssigned == 0
+        ? ''
+        : ': ${crew.overAssigned} crew are assigned beyond the '
+              '${crew.supported} your housing supports';
     return _fail(
       CommandError.crewUnavailable,
-      'Needs $delta more crew (you have $free free)',
+      'Needs $delta more crew (you have $free free$over)',
     );
   }
 
@@ -238,7 +244,7 @@ CommandResult _upgrade(
   final def = c.buildings[b.defId]!;
   if (!def.upgrades.containsKey(cmd.track)) {
     return _fail(
-      CommandError.unknownDef,
+      CommandError.noSuchTrack,
       '${def.name} has no ${cmd.track.name} upgrade',
     );
   }

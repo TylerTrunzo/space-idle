@@ -1,6 +1,7 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
+import 'projects.dart';
 
 /// Whether [b] is in sight of faction [factionId]: it has been surveyed
 /// (every body but a hidden one starts so) or the faction owns it.
@@ -33,8 +34,10 @@ double surveySeconds(Content c) => c.rules.surveySeconds.clamp(
 );
 
 /// Unsurveyed signals [factionId] picks up in system [systemId]: the
-/// hidden bodies there that nothing has surveyed yet, counting any under
-/// survey, if the faction owns a body in the system; else 0.
+/// hidden bodies there that nothing has surveyed yet and no survey is
+/// under way on, if the faction owns a body in the system; else 0. So the
+/// count drops as a survey starts, as the id-less `SurveyCommand` moves on
+/// to the next one.
 ///
 /// It tells the player there is something to find without naming it; a
 /// `SurveyCommand` without a body id surveys the next one.
@@ -49,5 +52,9 @@ int unsurveyedSignals(
       if (b.systemId == systemId) b,
   ];
   if (!inSystem.any((b) => b.ownerId == factionId)) return 0;
-  return inSystem.where((b) => !b.surveyed).length;
+  return inSystem
+      .where(
+        (b) => !b.surveyed && projectOn(s, ProjectKind.survey, b.id) == null,
+      )
+      .length;
 }

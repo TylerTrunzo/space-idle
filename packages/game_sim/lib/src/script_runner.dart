@@ -641,10 +641,19 @@ final class ScriptRunner {
             'reward': _num(k.rewardCredits),
           },
       ],
+      // A refill already due waits for something a contract can ask for;
+      // it is counted apart rather than shown due in "0s".
       'contractRefills': [
         for (final t in p.contractRefillAt)
-          {'at': t, 'timeLeft': formatDuration(t - state.time)},
+          if (t > state.time)
+            {'at': t, 'timeLeft': formatDuration(t - state.time)},
       ],
+      if (p.contractRefillAt.where((t) => t <= state.time).length case final due
+          when due > 0)
+        'contractsDue': {
+          'count': due,
+          'note': 'Posted as soon as you make something a contract can ask for',
+        },
       'bodies': [
         for (final b in visibleBodies(state, p.id))
           {
@@ -713,7 +722,10 @@ final class ScriptRunner {
           {
             'id': pr.id,
             'kind': pr.kind.name,
-            'targetId': pr.targetId,
+            // A survey's hidden target stays unnamed until it is found.
+            if (pr.kind != ProjectKind.survey ||
+                state.body(pr.targetId).surveyed)
+              'targetId': pr.targetId,
             'name': projectTargetName(state, c, pr),
             'startedAt': pr.startedAt,
             'finishAt': pr.finishAt,
@@ -857,8 +869,13 @@ final class ScriptRunner {
     final c = engine.content;
     final p = _player;
     final level = megaprojectDeliveryLevel(state, p.id, m);
-    if (level >= SaveCodec.maxMegaprojectLevel) return 'at its highest level';
     final running = megaprojectStageOf(state, p.id, m.id);
+    if (level >= SaveCodec.maxMegaprojectLevel) {
+      return running == null
+          ? 'at its highest level'
+          : 'busy: level $level, its highest, is under way, done in '
+                '${_until(running.finishAt)}';
+    }
     if (running != null && megaprojectStageQueued(state, c, p.id, m)) {
       return 'busy: level ${level + 1} is paid for and starts when level '
           '$level is done, in ${_until(running.finishAt)}';

@@ -266,10 +266,12 @@ void main() {
       },
     );
 
-    test('still count a body under survey, and drop it once surveyed', () {
+    test('drop a body while it is under survey, and stay down once it is '
+        'surveyed', () {
       final s = rich();
       ok(s, surveyTessaly);
-      expect(unsurveyedSignals(s, content, 'player', 'veyra'), 2);
+      // Round-3 new player: the count stayed at 2 while the survey ran.
+      expect(unsurveyedSignals(s, content, 'player', 'veyra'), 1);
       e.advance(s, 10800);
       e.tick(s, 1);
       expect(s.body('tessaly').surveyed, isTrue);
@@ -381,6 +383,22 @@ void main() {
             ),
       );
       expect(encode(s), before);
+      // The system is checked first, so the reply says nothing more about
+      // a body out of reach: not that it is under survey, nor surveyed.
+      startProject(s, 'player', ProjectKind.survey, 'far_rock', 600);
+      final busy = far.apply(
+        s,
+        const SurveyCommand('player', 'far_rock', 'kora'),
+      );
+      expect((busy as CommandFailed).error, CommandError.routeInvalid);
+      s.projects.clear();
+      s.body('far_rock').surveyed = true;
+      final seen = far.apply(
+        s,
+        const SurveyCommand('player', 'far_rock', 'kora'),
+      );
+      expect((seen as CommandFailed).error, CommandError.routeInvalid);
+      s.body('far_rock').surveyed = false;
       expect(
         far.apply(s, const SurveyCommand('player', 'tessaly', 'kora')),
         isA<CommandOk>(),

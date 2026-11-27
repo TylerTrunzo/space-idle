@@ -144,7 +144,10 @@ void main() {
 
   test('newGame and apply delegate to state setup and commands', () {
     final s = engine.newGame(3);
-    expect(encode(s), encode(newGameState(c, 3)));
+    // A new game posts the contracts already due, as a tick would.
+    final set = newGameState(c, 3);
+    stepContracts(set, c, set.time);
+    expect(encode(s), encode(set));
     final r = engine.apply(
       s,
       const BuildCommand(

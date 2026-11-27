@@ -689,9 +689,11 @@ enum CommandError {
   /// The named building does not exist.
   unknownBuilding,
 
-  /// A named building type, resource, upgrade track or megaproject does
-  /// not exist.
+  /// A named building type, resource or megaproject does not exist.
   unknownDef,
+
+  /// The building's type has no upgrade track of that name.
+  noSuchTrack,
 
   /// The faction does not own what the command touches.
   notOwner,
