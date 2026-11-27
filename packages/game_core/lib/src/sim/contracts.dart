@@ -414,21 +414,22 @@ List<(ContractTemplateDef, List<String>)> _worthChoosing(
 ) {
   // Each pair with what its achievable quantity sells for (null: no
   // ceiling, so any quantity can be asked) and whether that is enough.
-  final valued = <({ContractTemplateDef t, String id, BigNum? worth, bool ok})>[
-    for (final (t, ids) in steady)
-      for (final id in ids)
-        if (_ceiling(s, c, f, t, report.steadyProducedPerSec(id))
-            case final most)
-          if (most == null ? null : most * price(s, c, id) case final worth)
-            (
-              t: t,
-              id: id,
-              worth: worth,
-              ok:
-                  worth == null ||
-                  worth >= income.mulDouble(t.quantityIncomeSecondsMin),
-            ),
-  ];
+  final valued =
+      <({ContractTemplateDef t, String id, BigNum? worth, bool ok})>[];
+  for (final (t, ids) in steady) {
+    for (final id in ids) {
+      final most = _ceiling(s, c, f, t, report.steadyProducedPerSec(id));
+      final worth = most == null ? null : most * price(s, c, id);
+      valued.add((
+        t: t,
+        id: id,
+        worth: worth,
+        ok:
+            worth == null ||
+            worth >= income.mulDouble(t.quantityIncomeSecondsMin),
+      ));
+    }
+  }
   var pick = [
     for (final v in valued)
       if (v.ok) v,
