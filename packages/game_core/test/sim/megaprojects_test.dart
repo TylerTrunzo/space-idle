@@ -154,21 +154,20 @@ void main() {
       }
     });
 
-    test('raises what tier 1-2 sales earn, ×1.25 a level, compounding', () {
+    test('raises what tier 1-2 sales earn, ×1.05 a level, compounding', () {
       // No market depth: deeper tier 0-1 markets made them most of an
       // optimizer's sales by day 14 (stage 1.6 task 5). No production
       // speed: no tier range of it lifted mid-game income (stage 1.7). The
-      // sale price of tiers 1-2 adds about 25% of steady income a level on
-      // the balanced bot's day 7 and 14; tiers 0-1 made tier 0-1 goods
-      // most of its day-14 sales, ×1.15 left the casual bot's day 21 short
-      // of twice its day 14 once contracts paid the bonused price, and
-      // ×1.2 and ×1.225 failed the report-vs-away probe (stage-timing).
+      // sale price of tiers 1-2 at ×1.05 adds about 5% of steady income a
+      // level on the balanced bot's day 7 and 14, past the plan's 3%,
+      // without the economy running away (twelve levels are about ×1.8);
+      // stage 1.7 task 4's retune owns the final factor.
       expect(
         [
           for (final b in driver.bonusesPerLevel)
             (b.kind, b.amount, b.appliesToMinTier, b.appliesToMaxTier),
         ],
-        [(BonusKind.salePriceMultiplier, 1.25, 1, 2)],
+        [(BonusKind.salePriceMultiplier, 1.05, 1, 2)],
       );
     });
 

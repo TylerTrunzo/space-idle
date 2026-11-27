@@ -1283,6 +1283,25 @@ void main() {
         expect(s.faction('player').salesRevenue['steel'], isNull);
       });
 
+      test('credits a second count a stage that starts being fed within '
+          'the report\'s run as fed from its start', () {
+        // Set within 12 h of income with auto-pay: the first minute marks
+        // the income, the second starts the feeding, inside the run.
+        final rate = income(near(owed: 2e9, credits: true), 1200);
+        final s = near(owed: rate * 6 * 3600, credits: true);
+        expect(setting(s).feedingLevel, isNull);
+        final shown = buildFlowReport(
+          s,
+          content,
+          'player',
+        ).creditsPerSec.toDouble();
+        // What is earned once it is fed: the steel goes in, copper ore
+        // sells.
+        final later = income(s, 1200);
+        expect(later, lessThan(rate * 0.9));
+        expect(shown, closeTo(later, later * 0.08));
+      });
+
       test('the income mark goes once nothing measures income', () {
         final s = near(owed: 2e9, credits: true);
         e.advance(s, 120);

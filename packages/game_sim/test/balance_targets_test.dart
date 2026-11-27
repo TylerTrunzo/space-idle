@@ -213,10 +213,13 @@ void main() {
       }
     });
 
-    test('earns twice as much on day 21 as on day 14', () {
+    test('earns 1.5 times as much on day 21 as on day 14', () {
+      // The stage 1.7 target (docs/playtests/2026-11-27-round4-findings.md
+      // §4, casual bot: "income at day 21 ≥ 1.5× day 14"); 2× was stage
+      // 1.5's.
       expect(
         report.days[20].earned.toDouble(),
-        greaterThanOrEqualTo(report.days[13].earned.toDouble() * 2),
+        greaterThanOrEqualTo(report.days[13].earned.toDouble() * 1.5),
       );
     });
 

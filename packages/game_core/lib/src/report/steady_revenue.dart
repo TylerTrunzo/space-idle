@@ -140,6 +140,26 @@ SteadyIncome _saleRevenuePerSec(
   for (final copy in [s, market]) {
     _completeStagesWithin(copy, c, factionId, _warmUpSeconds + _measureSeconds);
   }
+  // A good a fed megaproject finishes taking within the run (its stage
+  // paid for, or that good of it in full), or starts taking (a stage near
+  // ready starting to be fed), would make the run's sales of it jump or
+  // drop partway: a good long unsold sells far above its settled price for
+  // a while, and only once. So a first run shows where the megaprojects
+  // stand by its end, and if what they take changed, both copies start
+  // from there instead: what the run sees is then what the hours after it
+  // see.
+  SteadyIncome? played;
+  if (_feedsGoods(s.faction(factionId))) {
+    final dry = s.copy();
+    final first = measuredSaleRevenue(dry, c, factionId);
+    if (_takes(dry, c, factionId) == _takes(s, c, factionId)) {
+      played = first;
+    } else {
+      for (final copy in [s, market]) {
+        _takeMegaprojectsFrom(dry, copy, factionId);
+      }
+    }
+  }
   // The steady sales are valued at the prices the market settles at over
   // the next hours: right after an upgrade spree it has not yet caught up
   // with the new volume, and today's prices would overstate what the next
@@ -170,7 +190,7 @@ SteadyIncome _saleRevenuePerSec(
       soldPerSec: const {},
     );
   }
-  final measured = measuredSaleRevenue(s, c, factionId);
+  final measured = played ?? measuredSaleRevenue(s, c, factionId);
   final earned = steadyRevenue <= const BigNum.zero()
       ? const BigNum.zero()
       : steadyRevenue.min(measured.creditsPerSec).max(const BigNum.zero());
@@ -345,6 +365,62 @@ BigNum steadySaleRevenue(
   final before = f.credits;
   stepMarket(market, c, 1, limits: limits);
   return f.credits - before;
+}
+
+/// Whether [f] feeds any megaproject goods on its own, now or once near
+/// ready.
+bool _feedsGoods(FactionState f) =>
+    f.megaprojectAuto.values.any((a) => a.goods != GoodsFeedMode.off);
+
+/// What [factionId]'s megaprojects take of goods in [s], as a key: for
+/// each, in content order, whether it is fed goods now
+/// ([megaprojectGoodsFed]) and, if so, the goods its stage still owes,
+/// with its delivery level.
+String _takes(GameState s, Content c, String factionId) {
+  final f = s.faction(factionId);
+  return [
+    for (final m in c.megaprojects.values)
+      if (megaprojectGoodsFed(s, f, m) &&
+          megaprojectTakesDeliveries(s, c, factionId, m))
+        '${m.id}@${megaprojectDeliveryLevel(s, factionId, m)}:'
+            '${[for (final id in megaprojectRemaining(s, c, factionId, m).keys)
+              if (id != creditsKey) id].join(',')}',
+  ].join(';');
+}
+
+/// Gives [to] the megaproject standing [factionId] has in [from]: levels,
+/// progress, settings (with the stages being fed) and stages under way.
+void _takeMegaprojectsFrom(GameState from, GameState to, String factionId) {
+  final a = from.faction(factionId);
+  final b = to.faction(factionId);
+  b.megaprojectLevels
+    ..clear()
+    ..addAll(a.megaprojectLevels);
+  b.megaprojectProgress
+    ..clear()
+    ..addAll({
+      for (final MapEntry(key: id, value: got) in a.megaprojectProgress.entries)
+        id: Map.of(got),
+    });
+  b.megaprojectAuto
+    ..clear()
+    ..addAll(a.megaprojectAuto);
+  bool stage(ProjectState p) =>
+      p.factionId == factionId && p.kind == ProjectKind.megaprojectStage;
+  to.projects
+    ..removeWhere(stage)
+    ..addAll([
+      for (final p in from.projects)
+        if (stage(p))
+          ProjectState(
+            id: p.id,
+            factionId: p.factionId,
+            kind: p.kind,
+            targetId: p.targetId,
+            startedAt: p.startedAt,
+            finishAt: p.finishAt,
+          ),
+    ]);
 }
 
 /// Completes [factionId]'s megaproject stages under way that finish
