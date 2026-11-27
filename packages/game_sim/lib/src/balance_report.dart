@@ -59,13 +59,14 @@ final class DeadZone {
   };
 }
 
-/// What the market paid during one day of a session.
+/// What the market and contracts paid during one day of a session.
 final class DayIncome {
   /// Creates a day's income; [share] is copied unmodifiable.
   DayIncome({
     required this.day,
     required this.credits,
     required Map<String, double> share,
+    this.contractCredits = const BigNum.zero(),
   }) : share = Map.unmodifiable(share);
 
   /// Day number from 1: day 1 is the first 24 h. The last day may be
@@ -75,14 +76,22 @@ final class DayIncome {
   /// Credits earned from market sales that day.
   final BigNum credits;
 
-  /// Resource id to its share of [credits], in `[0, 1]`, in content order;
-  /// resources that earned nothing are left out.
+  /// Credits contract rewards paid that day.
+  final BigNum contractCredits;
+
+  /// Everything earned that day: [credits] plus [contractCredits].
+  BigNum get earned => credits + contractCredits;
+
+  /// Resource id to its share of [credits], market sales only, in
+  /// `[0, 1]`, in content order; resources that earned nothing are left
+  /// out.
   final Map<String, double> share;
 
   /// Serializes this day.
   Map<String, Object?> toJson() => {
     'day': day,
     'credits': formatNumber(credits),
+    'contractCredits': formatNumber(contractCredits),
     'share': share,
   };
 }
@@ -262,19 +271,41 @@ final class BalanceReport {
   int newThingsOn(int day) => events.where((e) => e.day == day).length;
 
   /// Days among the first [days] on which something new was seen.
-  int daysWithNewThings(int days) => [
-    for (var d = 1; d <= days; d++)
-      if (newThingsOn(d) > 0) d,
-  ].length;
+  int daysWithNewThings(int days) => _daysWith(days, (_) => true);
 
   /// The fewest days with something new in any 7 days in a row within the
   /// first [days]; 7 if every day had something.
-  int worstWeekWithNewThings(int days) {
+  int worstWeekWithNewThings(int days) => _worstWeekWith(days, (_) => true);
+
+  /// Days among the first [days] on which a milestone or a completed
+  /// project (claim, survey, extra slot or megaproject stage) was seen:
+  /// [daysWithNewThings] without contracts.
+  int daysWithMilestoneOrProject(int days) =>
+      _daysWith(days, _milestoneOrProject);
+
+  /// The fewest days with a milestone or project ([daysWithMilestoneOrProject])
+  /// in any 7 days in a row within the first [days]; 7 if every day had one.
+  int worstWeekWithMilestoneOrProject(int days) =>
+      _worstWeekWith(days, _milestoneOrProject);
+
+  static bool _milestoneOrProject(SessionEvent e) =>
+      e.kind != SessionEventKind.contract;
+
+  /// Whether an event that [counts] was seen on day [day].
+  bool _seenOn(int day, bool Function(SessionEvent) counts) =>
+      events.any((e) => e.day == day && counts(e));
+
+  int _daysWith(int days, bool Function(SessionEvent) counts) => [
+    for (var d = 1; d <= days; d++)
+      if (_seenOn(d, counts)) d,
+  ].length;
+
+  int _worstWeekWith(int days, bool Function(SessionEvent) counts) {
     var worst = 7;
     for (var start = 1; start + 6 <= days; start++) {
       var n = 0;
       for (var d = start; d < start + 7; d++) {
-        if (newThingsOn(d) > 0) n++;
+        if (_seenOn(d, counts)) n++;
       }
       worst = math.min(worst, n);
     }
@@ -420,14 +451,25 @@ extension on BalanceReport {
       )
       ..writeln()
       ..writeln(
+        'Days with a milestone or project in the first $first: '
+        '${daysWithMilestoneOrProject(first)}; worst 7 days: '
+        '${worstWeekWithMilestoneOrProject(first)}.',
+      )
+      ..writeln()
+      ..writeln(
+        'Earned is market sales plus contract rewards; the tier shares are '
+        'of market sales only.',
+      )
+      ..writeln()
+      ..writeln(
         '| Day | New | Milestones | Projects | Contracts total | Bodies '
         '${[for (final m in megaprojects) '| $m '].join()}'
-        '| Earned | Tier 0-1 '
+        '| Contracts paid | Earned | Tier 0-1 '
         '${[for (final t in highTiers) '| Tier $t '].join()}|',
       )
       ..writeln(
         '|---:|---:|---:|---:|---:|---:'
-        '${'|---:' * megaprojects.length}|---:|---:'
+        '${'|---:' * megaprojects.length}|---:|---:|---:'
         '${'|---:' * highTiers.length}|',
       );
     for (final income in days) {
@@ -445,7 +487,8 @@ extension on BalanceReport {
         '| ${end?.contractsCompleted ?? ''} '
         '| ${end?.bodiesOwned ?? ''} '
         '${[for (final m in megaprojects) '| ${end?.megaprojectLevels[m] ?? ''} '].join()}'
-        '| ${formatNumber(income.credits)} | ${pct(low)} '
+        '| ${formatNumber(income.contractCredits)} '
+        '| ${formatNumber(income.earned)} | ${pct(low)} '
         '${[for (final t in highTiers) '| ${pct(tierShare(income, t))} '].join()}|',
       );
     }
@@ -503,14 +546,21 @@ BalanceReport runBotSession(
   var rejected = 0;
   var clock = 0.0;
   var checkIn = 0;
-  // Sales revenue at the start of each day, then at the end.
+  // Sales revenue at the start of each day, then at the end, and the
+  // contract rewards paid by then.
   final revenueAt = [Map.of(faction.salesRevenue)];
+  BigNum contractsPaid() => faction.salesRevenue.values.fold(
+    faction.lifetimeCredits,
+    (t, v) => t - v,
+  );
+  final contractsAt = [contractsPaid()];
   // Notes the start of every day that begins by session time [t], one at a
   // time, so a gap of more than a day still records each boundary.
   void noteDaysUpTo(double t) {
     while (revenueAt.length * _daySeconds <= t &&
         revenueAt.length * _daySeconds < end) {
       revenueAt.add(Map.of(faction.salesRevenue));
+      contractsAt.add(contractsPaid());
       dayEnds.add(watch.dayEnd(revenueAt.length - 1));
     }
   }
@@ -597,6 +647,7 @@ BalanceReport runBotSession(
   }
 
   revenueAt.add(Map.of(faction.salesRevenue));
+  contractsAt.add(contractsPaid());
   dayEnds.add(watch.dayEnd(revenueAt.length - 1));
   onFinished?.call(s);
   final stock = tracker.stock();
@@ -621,7 +672,13 @@ BalanceReport runBotSession(
     rejectedCommands: rejected,
     days: [
       for (var i = 1; i < revenueAt.length; i++)
-        _dayIncome(c, i, revenueAt[i - 1], revenueAt[i]),
+        _dayIncome(
+          c,
+          i,
+          revenueAt[i - 1],
+          revenueAt[i],
+          contracts: changeBetween(contractsAt[i], contractsAt[i - 1]),
+        ),
     ],
     events: events,
     dayEnds: dayEnds,
@@ -629,13 +686,15 @@ BalanceReport runBotSession(
   );
 }
 
-/// Day [day]'s income: sales revenue [after] the day less [before] it.
+/// Day [day]'s income: sales revenue [after] the day less [before] it,
+/// and the [contracts] rewards paid in it.
 DayIncome _dayIncome(
   Content c,
   int day,
   Map<String, BigNum> before,
-  Map<String, BigNum> after,
-) {
+  Map<String, BigNum> after, {
+  required BigNum contracts,
+}) {
   final earned = {
     for (final id in c.resources.keys)
       if ((after[id] ?? const BigNum.zero()) -
@@ -647,6 +706,7 @@ DayIncome _dayIncome(
   return DayIncome(
     day: day,
     credits: total,
+    contractCredits: contracts.max(const BigNum.zero()),
     share: {
       for (final MapEntry(key: id, value: v) in earned.entries)
         id: (v / total).toDouble(),

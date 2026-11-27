@@ -144,10 +144,38 @@ void main() {
       ].fold(0.0, (a, b) => a + b);
       expect(total, closeTo(1, 1e-9));
     }
+    // Without contracts, a day can only have fewer new things.
+    expect(
+      r.daysWithMilestoneOrProject(2),
+      lessThanOrEqualTo(r.daysWithNewThings(2)),
+    );
+    expect(
+      r.worstWeekWithMilestoneOrProject(2),
+      lessThanOrEqualTo(r.worstWeekWithNewThings(2)),
+    );
+    // Contract rewards are earnings beside sales, day by day.
+    final paid = r.days.fold(
+      const BigNum.zero(),
+      (t, d) => t + d.contractCredits,
+    );
+    expect(paid > const BigNum.zero(), isTrue, reason: 'contracts were paid');
+    for (final d in r.days) {
+      expect(d.earned, d.credits + d.contractCredits);
+    }
     final md = r.toMarkdown();
     expect(md, contains('## Days'));
     expect(md, contains('| Day | New | Milestones | Projects |'));
+    expect(md, contains('| Contracts paid | Earned | Tier 0-1 '));
     expect(md, contains('Days with something new'));
+    expect(
+      md,
+      contains(
+        'Days with a milestone or project in the first 2: '
+        '${r.daysWithMilestoneOrProject(2)}; worst 7 days: '
+        '${r.worstWeekWithMilestoneOrProject(2)}.',
+      ),
+    );
+    expect(md, contains('the tier shares are of market sales only'));
     expect(md, contains('## Timeline'));
     expect(md, contains(claimed.text));
   });
