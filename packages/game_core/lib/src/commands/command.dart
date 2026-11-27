@@ -313,6 +313,13 @@ final class UpgradeCommand extends Command {
 /// would take the total past [budget] or the credits held, or
 /// [maxPurchases] levels are bought.
 ///
+/// One rule comes before cost: while crew is free, a capacity level on a
+/// building whose crew slots are all filled is bought first, the cheapest
+/// of those (same ties), for the crew it lets in. Capacity shares speed's
+/// price counter at a higher base, so by cost alone it would never be
+/// bought on a building with speed, and free crew would sit idle. Once the
+/// cheapest of them does not fit the budget, the rest go by cost alone.
+///
 /// Each level is bought exactly as an [UpgradeCommand] buys it (a capacity
 /// level fills its new crew slots from the free crew), so the command ends
 /// where that loop of single commands would. The outcome is

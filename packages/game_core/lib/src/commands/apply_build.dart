@@ -335,13 +335,19 @@ CommandResult _buyUpgrades(
   }
   final limit = cmd.budget.min(f.credits);
   final offers = SplayTreeSet<_Offer>(_byCost);
-  // Each building's offers in [offers], to replace once a level is bought.
+  // Capacity levels of buildings whose crew slots are all filled, which
+  // come first while crew is free ([BuyUpgradesCommand]).
+  final crewOffers = SplayTreeSet<_Offer>(_byCost);
+  // Each building's offers in [offers] and [crewOffers], to replace once a
+  // level is bought.
   final byBuilding = <BuildingState, List<_Offer>>{};
   void offer(BodyState body, BuildingState b) {
     final mine = byBuilding[b] ??= [];
     offers.removeAll(mine);
+    crewOffers.removeAll(mine);
     mine.clear();
-    for (final t in c.buildings[b.defId]!.upgrades.keys) {
+    final def = c.buildings[b.defId]!;
+    for (final t in def.upgrades.keys) {
       if (upgradeMaxedReason(c, b, t) != null) continue;
       final o = (
         cost: upgradeCost(c, b, t)[_credits]!,
@@ -351,6 +357,12 @@ CommandResult _buyUpgrades(
       );
       mine.add(o);
       offers.add(o);
+      if (t == UpgradeTrack.capacity &&
+          def.crewSlots > 0 &&
+          c.rules.capacityCrewPerLevel > 0 &&
+          b.crew >= maxCrew(c.rules, def, b)) {
+        crewOffers.add(o);
+      }
     }
   }
 
@@ -363,19 +375,34 @@ CommandResult _buyUpgrades(
   final bought = <(BuildingState, UpgradeTrack), UpgradePurchase>{};
   var total = const BigNum.zero();
   var count = 0;
+  // Crew free to fill new slots; only this command's capacity levels move
+  // it.
+  var freeCrew = availableCrew(s, c, f.id);
+  var crewFirst = true;
+  // Whether [cost] fits what is left: the budget, and the upgrade's own
+  // test on the credits left (summed costs and credits paid down can
+  // differ by an ulp at the budget's edge).
+  bool fits(BigNum cost) => total + cost <= limit && f.credits >= cost;
   UpgradeBuyStop? stop;
   while (stop == null) {
-    if (offers.isEmpty) {
+    _Offer? next;
+    if (crewFirst && freeCrew > 0 && crewOffers.isNotEmpty) {
+      // Costs only rise and the budget only falls, so once the cheapest
+      // does not fit, none will.
+      if (fits(crewOffers.first.cost)) {
+        next = crewOffers.first;
+      } else {
+        crewFirst = false;
+      }
+    }
+    if (next == null && offers.isEmpty) {
       stop = UpgradeBuyStop.nothingToBuy;
     } else if (count >= cmd.maxPurchases) {
       stop = UpgradeBuyStop.maxPurchases;
-    } else if (total + offers.first.cost > limit ||
-        // The upgrade's own test, on the credits left: summed costs and
-        // credits paid down can differ by an ulp at the budget's edge.
-        f.credits < offers.first.cost) {
+    } else if (next == null && !fits(offers.first.cost)) {
       stop = UpgradeBuyStop.budget;
     } else {
-      final o = offers.first;
+      final o = next ?? offers.first;
       final r = _upgrade(s, c, f, UpgradeCommand(f.id, o.b.id, o.track));
       // The offer passed every check the command makes, so it buys; were
       // it refused all the same, the levels bought stand and the budget
@@ -394,6 +421,7 @@ CommandResult _buyUpgrades(
           cost: (was?.cost ?? const BigNum.zero()) + o.cost,
           crewAdded: (was?.crewAdded ?? 0) + up.crewAdded,
         );
+        freeCrew -= up.crewAdded;
         offer(o.body, o.b);
       } else {
         stop = UpgradeBuyStop.budget;

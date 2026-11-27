@@ -61,7 +61,47 @@ void main() {
     final done = <UpgradeCommand>[];
     var spent = const BigNum.zero();
     final limit = budget.min(s.faction('player').credits);
+    var crewFirst = true;
+    bool fits(BigNum cost) =>
+        spent + cost <= limit && s.faction('player').credits >= cost;
     while (done.length < max) {
+      // While crew is free, a capacity level on a building whose crew
+      // slots are all filled comes first, the cheapest of them; once the
+      // cheapest does not fit, no more of them.
+      if (crewFirst && availableCrew(s, cc, 'player') > 0) {
+        (BigNum, String)? slot;
+        for (final body in s.bodies.where((b) => b.ownerId == 'player')) {
+          for (final b in body.buildings) {
+            final d = cc.buildings[b.defId]!;
+            if (!d.upgrades.containsKey(UpgradeTrack.capacity) ||
+                d.crewSlots == 0 ||
+                b.crew < maxCrew(cc.rules, d, b) ||
+                upgradeMaxedReason(cc, b, UpgradeTrack.capacity) != null) {
+              continue;
+            }
+            final cost = upgradeCost(cc, b, UpgradeTrack.capacity)['credits']!;
+            if (slot == null ||
+                cost < slot.$1 ||
+                (cost == slot.$1 && b.id.compareTo(slot.$2) < 0)) {
+              slot = (cost, b.id);
+            }
+          }
+        }
+        if (slot != null) {
+          if (fits(slot.$1)) {
+            final cmd = UpgradeCommand(
+              'player',
+              slot.$2,
+              UpgradeTrack.capacity,
+            );
+            expect(applyCommand(s, cc, cmd), isA<CommandOk>());
+            spent = spent + slot.$1;
+            done.add(cmd);
+            continue;
+          }
+          crewFirst = false;
+        }
+      }
       (BigNum, String, UpgradeTrack)? best;
       for (final body in s.bodies.where((b) => b.ownerId == 'player')) {
         for (final b in body.buildings) {
@@ -80,11 +120,7 @@ void main() {
           }
         }
       }
-      if (best == null ||
-          spent + best.$1 > limit ||
-          s.faction('player').credits < best.$1) {
-        break;
-      }
+      if (best == null || !fits(best.$1)) break;
       final cmd = UpgradeCommand('player', best.$2, best.$3);
       final r = applyCommand(s, cc, cmd);
       expect(r, isA<CommandOk>());
@@ -180,6 +216,36 @@ void main() {
       );
     });
 
+    test('a building whose crew slots are all filled gets capacity first '
+        'while crew is free', () {
+      // Kora's mines and smelter each hold their one crew, and 17 crew are
+      // free. Capacity shares speed's price counter at six times the base,
+      // so cheapest first alone would never buy it.
+      final s = game();
+      expect(availableCrew(s, content, 'player'), greaterThan(0));
+      final o = bought(s, BuyUpgradesCommand('player', n(400)));
+      expect(
+        [for (final p in o.purchases) (p.buildingId, p.track, p.crewAdded)],
+        [('b1', UpgradeTrack.capacity, 1), ('b2', UpgradeTrack.speed, 0)],
+      );
+      final ref = game();
+      oneByOne(ref, n(400));
+      expect(encode(s), encode(ref));
+    });
+
+    test('with no crew free, crew slots do not come first', () {
+      final s = game()..faction('player').baseCrew = 3;
+      expect(availableCrew(s, content, 'player'), 0);
+      final o = bought(s, BuyUpgradesCommand('player', n(2000)));
+      expect(
+        o.purchases.where((p) => p.track == UpgradeTrack.capacity),
+        isEmpty,
+      );
+      final ref = game()..faction('player').baseCrew = 3;
+      oneByOne(ref, n(2000));
+      expect(encode(s), encode(ref));
+    });
+
     test('a capacity level fills its new slot from free crew, as a single '
         'upgrade does', () {
       final c = withMineUpgrades(speed: 50, capacity: 40);
@@ -244,8 +310,6 @@ void main() {
           expect(r.stop, UpgradeBuyStop.budget);
           expect(r.total <= credits, isTrue);
           expect(b.faction('player').credits >= const BigNum.zero(), isTrue);
-          // Within a level of the partial sum.
-          expect((r.levels - k).abs(), lessThanOrEqualTo(1));
         }
       }
       expect(tries, greaterThan(1000));
@@ -283,7 +347,10 @@ void main() {
     test('ties go by building id, then track', () {
       // A mine whose capacity level costs what its speed level does.
       final c = withMineUpgrades(speed: 50, capacity: 50);
-      final s = newGameState(c, 1)..faction('player').credits = n(1e4);
+      // No free crew, so no capacity goes first for crew.
+      final s = newGameState(c, 1)
+        ..faction('player').credits = n(1e4)
+        ..faction('player').baseCrew = 3;
       final mines = [
         for (final b in s.body('kora').buildings)
           if (b.defId == 'mine') b.id,
