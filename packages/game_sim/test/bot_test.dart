@@ -274,7 +274,7 @@ void main() {
             .whereType<SetMegaprojectAutoCommand>()
             .where((c) => c.megaprojectId == 'orbital_station')
             .toList();
-        expect(settings.first.goods, isTrue);
+        expect(settings.first.goods, GoodsFeedMode.always);
         expect(settings.map((c) => c.credits), everyElement(isFalse));
         expect(
           megaprojectStageOf(s, 'player', 'orbital_station'),
@@ -317,7 +317,7 @@ void main() {
         'player',
       ).creditsPerSec.toDouble();
       expect(income, greaterThan(0));
-      expect(cmd.goods, isTrue);
+      expect(cmd.goods, GoodsFeedMode.always);
       expect(cmd.credits, isTrue);
       // The shared reserve is set first, before any credits go in.
       final reserve = cmds.whereType<SetAutoPayReserveCommand>().single;

@@ -57,8 +57,17 @@ GameState _checkIns(
 /// goods and credits above 1M, the Mass Driver goods only.
 GameState _feeding(GameEngine e, GameState s) {
   for (final cmd in [
-    const SetMegaprojectAutoCommand('player', 'orbital_station', true, true),
-    const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+    const SetMegaprojectAutoCommand(
+      'player',
+      'orbital_station',
+      goods: GoodsFeedMode.always,
+      credits: true,
+    ),
+    const SetMegaprojectAutoCommand(
+      'player',
+      'mass_driver',
+      goods: GoodsFeedMode.always,
+    ),
     SetAutoPayReserveCommand('player', BigNum.from(1e6)),
   ]) {
     expect(e.apply(s, cmd), isA<CommandOk>());
@@ -269,8 +278,10 @@ void main() {
         16 => SetMegaprojectAutoCommand(
           f,
           pick(megaprojects),
-          rng.nextInt(2) == 0,
-          rng.nextInt(2) == 0,
+          goods: GoodsFeedMode.values[rng.nextInt(GoodsFeedMode.values.length)],
+          credits: rng.nextInt(2) == 0,
+          // Out of range now and then, so the refusal is fuzzed too.
+          creditWeight: rng.nextInt(13) - 1,
         ),
         17 => SetAutoPayReserveCommand(f, pick(amounts)),
         _ => DiscardContractCommand(f, pick(contracts())),
@@ -447,7 +458,11 @@ void main() {
     expect(
       e.apply(
         played,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'mass_driver',
+          goods: GoodsFeedMode.always,
+        ),
       ),
       isA<CommandOk>(),
     );

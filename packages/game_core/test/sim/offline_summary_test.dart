@@ -451,8 +451,7 @@ void main() {
         const SetMegaprojectAutoCommand(
           'player',
           'orbital_station',
-          true,
-          false,
+          goods: GoodsFeedMode.always,
         ),
       );
       e.advance(s, 120);
@@ -472,8 +471,8 @@ void main() {
         const SetMegaprojectAutoCommand(
           'player',
           'orbital_station',
-          true,
-          true,
+          goods: GoodsFeedMode.always,
+          credits: true,
         ),
       );
       expect((goal()! as MegaprojectGoal).megaprojectId, station.id);
@@ -495,7 +494,7 @@ void main() {
       e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
       // Both take credits on their own, so both are the player's goals.
       for (final m in ['orbital_station', 'mass_driver']) {
-        e.apply(s, SetMegaprojectAutoCommand('player', m, false, true));
+        e.apply(s, SetMegaprojectAutoCommand('player', m, credits: true));
       }
       e.advance(s, 60);
       final report = buildFlowReport(s, c, 'player');
@@ -598,8 +597,8 @@ void main() {
             const SetMegaprojectAutoCommand(
               'player',
               'mass_driver',
-              true,
-              true,
+              goods: GoodsFeedMode.always,
+              credits: true,
             ),
           )
           ..apply(s, SetAutoPayReserveCommand('player', n(1000)));
@@ -625,8 +624,8 @@ void main() {
             const SetMegaprojectAutoCommand(
               'player',
               'orbital_station',
-              true,
-              true,
+              goods: GoodsFeedMode.always,
+              credits: true,
             ),
           )
           ..apply(s, SetAutoPayReserveCommand('player', n(1000)));
@@ -646,7 +645,15 @@ void main() {
           'mass_driver': {'credits': 6000},
         }, credits: 3000);
         for (final m in [station, driver]) {
-          e.apply(s, SetMegaprojectAutoCommand('player', m.id, true, true));
+          e.apply(
+            s,
+            SetMegaprojectAutoCommand(
+              'player',
+              m.id,
+              goods: GoodsFeedMode.always,
+              credits: true,
+            ),
+          );
         }
         e
           ..apply(s, SetAutoPayReserveCommand('player', n(1000)))
@@ -692,6 +699,130 @@ void main() {
         expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
       });
 
+      test('weighted credits: the ETA is the one a run without commands '
+          'gives', () {
+        // Station at weight 3 owing 9K, the Mass Driver at weight 1 owing
+        // 6K: the station is done once 12K has gone in, the Mass Driver
+        // once 15K has.
+        for (final (sw, dw, first) in [
+          (3, 1, 'orbital_station'),
+          (1, 3, 'mass_driver'),
+          (0, 1, 'mass_driver'),
+        ]) {
+          final s = shape({
+            'orbital_station': {'credits': 9000},
+            'mass_driver': {'credits': 6000},
+          }, credits: 3000);
+          e
+            ..apply(
+              s,
+              SetMegaprojectAutoCommand(
+                'player',
+                'orbital_station',
+                credits: true,
+                creditWeight: sw,
+              ),
+            )
+            ..apply(
+              s,
+              SetMegaprojectAutoCommand(
+                'player',
+                'mass_driver',
+                goods: GoodsFeedMode.always,
+                credits: true,
+                creditWeight: dw,
+              ),
+            )
+            ..apply(s, SetAutoPayReserveCommand('player', n(1000)))
+            ..advance(s, 120);
+          final goal =
+              nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
+                  as MegaprojectGoal;
+          expect(goal.megaprojectId, first, reason: '$sw:$dw');
+          // The station has no stage under way: paid for, it starts.
+          final m = c.megaprojects[first]!;
+          final from = s.time;
+          while (!megaprojectStageQueued(s, c, 'player', m) &&
+              (m != station || megaprojectStageOf(s, 'player', m.id) == null)) {
+            e.advance(s, 60);
+            expect(s.time - from, lessThan(4e5));
+          }
+          final actual = s.time - from;
+          expect(
+            goal.etaSeconds,
+            closeTo(actual, actual * 0.15),
+            reason: '$sw:$dw',
+          );
+        }
+      });
+
+      test('goods near ready: the ETA waits for the feeding to start, as a '
+          'run without commands does', () {
+        // The station fed goods near ready, its credits paid by hand: its
+        // plates, which sell until then, start going in once the credits
+        // it owes are held, and take hours more to make.
+        GameState start({required double credits, double? plates}) {
+          final s = shape({}, credits: 0);
+          final f = s.faction('player');
+          final cost = megaprojectCost(c, station, 1);
+          f.megaprojectProgress['orbital_station'] = {
+            for (final MapEntry(key: id, value: v) in cost.entries)
+              id: switch (id) {
+                'credits' => v - n(credits),
+                'hull_plate' => v - n(plates ?? 1),
+                _ => v,
+              },
+          };
+          f.baseCrew += 1;
+          s
+              .body('kora')
+              .buildings
+              .add(
+                BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+              );
+          e
+            ..apply(s, SetAutoSellCommand('player', 'kora', 'hull_plate', n(0)))
+            ..apply(
+              s,
+              const SetMegaprojectAutoCommand(
+                'player',
+                'orbital_station',
+                goods: GoodsFeedMode.nearReady,
+              ),
+            )
+            ..advance(s, 600);
+          return s;
+        }
+
+        final probe = buildFlowReport(start(credits: 1e12), c, 'player');
+        final income = probe.creditsPerSec.toDouble();
+        final plates = probe.netProducedPerSec('hull_plate').toDouble();
+        expect(income, greaterThan(0));
+        expect(plates, greaterThan(0));
+        // Credits held after 10 h; then 4 h of plates.
+        final s = start(credits: income * 10 * 3600, plates: plates * 4 * 3600);
+        final goal =
+            nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
+                as MegaprojectGoal;
+        expect(goal.megaprojectId, 'orbital_station');
+        final f = s.faction('player');
+        bool can() {
+          final left = megaprojectRemaining(s, c, 'player', station);
+          return left.keys.every((k) => k == 'credits') &&
+              f.credits >= (left['credits'] ?? n(0));
+        }
+
+        final from = s.time;
+        while (!can()) {
+          e.advance(s, 60);
+          expect(s.time - from, lessThan(4e5));
+        }
+        final actual = s.time - from;
+        // 10 h of saving, then 4 h of plates: about 14 h, not 10.
+        expect(actual, greaterThan(13 * 3600));
+        expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
+      });
+
       test('a good held for both goes to the first fed it, then what is '
           'made', () {
         // Hull plates for both, as many held as the station lacks: the
@@ -707,7 +838,14 @@ void main() {
           )
           ..stock['hull_plate'] = n(30);
         for (final m in [station, driver]) {
-          e.apply(s, SetMegaprojectAutoCommand('player', m.id, true, false));
+          e.apply(
+            s,
+            SetMegaprojectAutoCommand(
+              'player',
+              m.id,
+              goods: GoodsFeedMode.always,
+            ),
+          );
         }
         final goal =
             nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!

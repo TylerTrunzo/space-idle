@@ -1070,7 +1070,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   // Prices as the report is built, for goods fed to megaprojects.
   final prices = {
     for (final m in c.megaprojects.values)
-      if (s.faction(factionId).megaprojectAuto[m.id]?.goods ?? false)
+      if (megaprojectGoodsFed(s, s.faction(factionId), m))
         for (final id in m.baseCost.keys)
           if (id != creditsKey) id: price(s, c, id),
   };
@@ -1284,7 +1284,7 @@ List<Bottleneck> _keepBlocks(GameState s, Content c, String factionId) {
   if (rules.isEmpty) return const [];
   final fed = [
     for (final m in c.megaprojects.values)
-      if ((f.megaprojectAuto[m.id]?.goods ?? false) &&
+      if (megaprojectGoodsFed(s, f, m) &&
           megaprojectTakesDeliveries(s, c, factionId, m))
         m,
   ];
@@ -1498,7 +1498,7 @@ BigNum _staffingGain(
   // would sell, while it takes deliveries and its stage still owes them.
   final fed = {
     for (final m in c.megaprojects.values)
-      if ((f.megaprojectAuto[m.id]?.goods ?? false) &&
+      if (megaprojectGoodsFed(actual, f, m) &&
           megaprojectTakesDeliveries(actual, c, factionId, m))
         for (final id in megaprojectRemaining(actual, c, factionId, m).keys)
           if (id != 'credits') id,

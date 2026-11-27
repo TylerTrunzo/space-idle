@@ -391,6 +391,23 @@ ProjectState? megaprojectStageOf(
   return null;
 }
 
+/// Whether [f] feeds [m] goods on its own now
+/// ([MegaprojectAuto.goods]): always with [GoodsFeedMode.always]; with
+/// [GoodsFeedMode.nearReady] only while the stage it pays for is the one
+/// being fed since it was near ready ([MegaprojectAuto.feedingLevel], at
+/// its [megaprojectDeliveryLevel]); never with [GoodsFeedMode.off] or no
+/// setting. What auto-delivery takes, what auto-sell holds back for it,
+/// and what the report and its ETAs count as fed all go by it.
+bool megaprojectGoodsFed(GameState s, FactionState f, MegaprojectDef m) =>
+    switch (f.megaprojectAuto[m.id]) {
+      null => false,
+      MegaprojectAuto(goods: GoodsFeedMode.off) => false,
+      MegaprojectAuto(goods: GoodsFeedMode.always) => true,
+      MegaprojectAuto(goods: GoodsFeedMode.nearReady, :final feedingLevel) =>
+        feedingLevel != null &&
+            feedingLevel == megaprojectDeliveryLevel(s, f.id, m),
+    };
+
 /// Key of the credits entry in a megaproject cost
 /// ([MegaprojectDef.baseCost]); every other key is a resource id.
 const String creditsKey = 'credits';

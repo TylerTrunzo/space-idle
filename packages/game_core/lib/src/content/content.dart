@@ -204,6 +204,7 @@ final class RulesDef {
     this.claimSecondsPerOwned = defaultClaimSecondsPerOwned,
     this.expandSlotsSeconds = defaultExpandSlotsSeconds,
     this.contractRefillSeconds = defaultContractRefillSeconds,
+    this.nearReadyHorizonSeconds = defaultNearReadyHorizonSeconds,
     this.surveyDrones = defaultSurveyDrones,
     BigNum? surveyCredits,
     this.surveySeconds = defaultSurveySeconds,
@@ -353,6 +354,16 @@ final class RulesDef {
   /// zero. Refills bank one after another (see `freeContractSlot`), so a
   /// board emptied while the player is away is full again when they return.
   final double contractRefillSeconds;
+
+  /// [nearReadyHorizonSeconds] when the rules do not set it: 12 hours.
+  static const double defaultNearReadyHorizonSeconds = 43200;
+
+  /// How near ready a stage of a megaproject fed goods
+  /// `GoodsFeedMode.nearReady` must be before its goods go in, in seconds
+  /// of the credits credit auto-pay gives it: its credits still owed are
+  /// at most the credits above the auto-pay reserve plus this many seconds
+  /// of them. Zero or more.
+  final double nearReadyHorizonSeconds;
 
   /// [surveyDrones] when the rules do not set it.
   static const int defaultSurveyDrones = 3;

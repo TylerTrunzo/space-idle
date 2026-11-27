@@ -18,7 +18,7 @@ export 'src/sim/crew.dart';
 export 'src/sim/engine.dart';
 export 'src/sim/logistics.dart' hide landArrivals;
 export 'src/sim/market.dart' hide DeliveryKeeps, autoDeliveryKeeps;
-export 'src/sim/megaprojects.dart';
+export 'src/sim/megaprojects.dart' hide bonusVectorsKept;
 // The engine's own milestone helpers stay inside the package.
 export 'src/sim/milestones.dart'
     hide factionStock, hiddenBodies, milestoneProgressAt;

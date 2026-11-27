@@ -407,7 +407,7 @@ Map<String, double> settledSaturation(
   final f = s.faction(factionId);
   final fed = {
     for (final m in c.megaprojects.values)
-      if ((f.megaprojectAuto[m.id]?.goods ?? false) &&
+      if (megaprojectGoodsFed(s, f, m) &&
           megaprojectTakesDeliveries(s, c, factionId, m))
         ...megaprojectRemaining(s, c, factionId, m).keys,
   };

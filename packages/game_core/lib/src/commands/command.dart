@@ -1,5 +1,6 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../state/game_state.dart' show GoodsFeedMode, MegaprojectAuto;
 import 'outcome.dart';
 
 String _str(Map<String, Object?> j, String k) {
@@ -33,11 +34,19 @@ bool _optBool(Map<String, Object?> j, String k, {required bool absent}) {
   throw FormatException('command field "$k" must be true or false', j);
 }
 
-bool _bool(Map<String, Object?> j, String k) {
-  final v = j[k];
-  if (v is bool) return v;
-  throw FormatException('command field "$k" must be true or false', j);
-}
+/// A set-megaproject-auto command's `goods`: a [GoodsFeedMode] name, or
+/// true or false as written before goods had modes ([GoodsFeedMode.always]
+/// or [GoodsFeedMode.off]); absent is off.
+GoodsFeedMode _goodsMode(Map<String, Object?> j) => switch (j['goods']) {
+  null || false => GoodsFeedMode.off,
+  true => GoodsFeedMode.always,
+  final String name when GoodsFeedMode.values.any((m) => m.name == name) =>
+    GoodsFeedMode.values.byName(name),
+  _ => throw FormatException(
+    'command field "goods" must be off, nearReady or always',
+    j,
+  ),
+};
 
 BigNum _big(Map<String, Object?> j, String k) => BigNum.parse(_str(j, k));
 
@@ -177,8 +186,9 @@ sealed class Command {
       'setMegaprojectAuto' => SetMegaprojectAutoCommand(
         f,
         _str(j, 'megaprojectId'),
-        _bool(j, 'goods'),
-        _optBool(j, 'credits', absent: false),
+        goods: _goodsMode(j),
+        credits: _optBool(j, 'credits', absent: false),
+        creditWeight: _optInt(j, 'creditWeight') ?? 1,
       ),
       'setAutoPayReserve' => SetAutoPayReserveCommand(f, _big(j, 'credits')),
       'deliverContract' => DeliverContractCommand(
@@ -640,28 +650,39 @@ final class DeliverToMegaprojectCommand extends Command {
 }
 
 /// Sets how the faction feeds a megaproject on its own, every game
-/// minute (`stepMegaprojectAuto`): with [goods], from every owned body
-/// above what each keeps; with [credits], a share of the credits above the
-/// faction's auto-pay reserve ([SetAutoPayReserveCommand]). Neither clears
-/// the setting. It may be set while the megaproject is still locked;
-/// deliveries start once it opens.
+/// minute (`stepMegaprojectAuto`): goods from every owned body above what
+/// each keeps, as [goods] says ([GoodsFeedMode]); with [credits], a share,
+/// by [creditWeight], of the credits above the faction's auto-pay reserve
+/// ([SetAutoPayReserveCommand]). No goods and no credits clears the
+/// setting. It may be set while the megaproject is still locked;
+/// deliveries start once it opens. A [creditWeight] outside
+/// [MegaprojectAuto.minCreditWeight]–[MegaprojectAuto.maxCreditWeight]
+/// fails with [CommandError.invalidAmount].
+///
+/// In a command log, `goods` true or false (written before goods had
+/// modes) reads as [GoodsFeedMode.always] or [GoodsFeedMode.off].
 final class SetMegaprojectAutoCommand extends Command {
-  /// Creates a set-megaproject-auto command.
+  /// Creates a set-megaproject-auto command: by default no goods, no
+  /// credits, weight 1.
   const SetMegaprojectAutoCommand(
     super.factionId,
-    this.megaprojectId,
-    this.goods,
-    this.credits,
-  );
+    this.megaprojectId, {
+    this.goods = GoodsFeedMode.off,
+    this.credits = false,
+    this.creditWeight = 1,
+  });
 
   /// Megaproject to feed.
   final String megaprojectId;
 
-  /// Whether goods go in on their own.
-  final bool goods;
+  /// When goods go in on their own.
+  final GoodsFeedMode goods;
 
   /// Whether credits go in on their own, above the shared reserve.
   final bool credits;
+
+  /// Its weight in the split of those credits, 0 to 10.
+  final int creditWeight;
 
   @override
   String get _cmd => 'setMegaprojectAuto';
@@ -669,15 +690,16 @@ final class SetMegaprojectAutoCommand extends Command {
   @override
   Map<String, Object?> get _fields => {
     'megaprojectId': megaprojectId,
-    'goods': goods,
+    'goods': goods.name,
     'credits': credits,
+    'creditWeight': creditWeight,
   };
 }
 
 /// Sets the credits the faction always keeps from auto-pay
 /// (`FactionState.autoPayReserve`): each game minute the credits above
-/// [credits] are shared out evenly among the megaprojects it feeds
-/// credits on their own. At least zero.
+/// [credits] are shared out, by their weights, among the megaprojects it
+/// feeds credits on their own. At least zero.
 final class SetAutoPayReserveCommand extends Command {
   /// Creates a set-auto-pay-reserve command.
   const SetAutoPayReserveCommand(super.factionId, this.credits);

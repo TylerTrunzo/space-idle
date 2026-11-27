@@ -53,31 +53,107 @@ final class AutoSellRule {
   );
 }
 
+/// When auto-delivery feeds a megaproject goods
+/// ([MegaprojectAuto.goods]).
+enum GoodsFeedMode {
+  /// Never: its goods are delivered by hand.
+  off,
+
+  /// From the game minute a stage is near ready, as `stepMegaprojectCredits`
+  /// decides, until that stage is paid for: its credits still owed are no
+  /// more than the credits above the auto-pay reserve plus
+  /// `RulesDef.nearReadyHorizonSeconds` of the credits auto-pay gives it a
+  /// second (with credit auto-pay off, no more than the credits held).
+  /// Until then its goods sell as if it were not fed.
+  nearReady,
+
+  /// Every game minute, whatever the stage still owes.
+  always,
+}
+
 /// How a faction feeds one megaproject on its own: every game minute the
 /// engine delivers what the stage being paid for still lacks (see
-/// `stepMegaprojectAuto`). Immutable; a command replaces it.
+/// `stepMegaprojectAuto`). Immutable; a command replaces it, and the
+/// engine replaces it with a copy once a [GoodsFeedMode.nearReady] stage
+/// starts being fed ([feeding]).
 final class MegaprojectAuto {
   /// Creates a setting.
-  const MegaprojectAuto({required this.goods, this.credits = false});
+  const MegaprojectAuto({
+    this.goods = GoodsFeedMode.off,
+    this.credits = false,
+    this.creditWeight = 1,
+    this.feedingLevel,
+  });
 
-  /// Restores a setting written by [toJson]. A setting from before the
-  /// reserve was shared has a `creditReserve` instead of `credits`: credits
-  /// went in when it had one.
+  /// Restores a setting written by [toJson]. A setting from before goods
+  /// had modes has `goods` true (read as [GoodsFeedMode.always]) or false
+  /// ([GoodsFeedMode.off]); one from before weights has weight 1. One from
+  /// before the reserve was shared has a `creditReserve` instead of
+  /// `credits`: credits went in when it had one.
+  ///
+  /// Throws [FormatException] for a mode it does not know.
   factory MegaprojectAuto.fromJson(Map<String, Object?> j) => MegaprojectAuto(
-    goods: j['goods']! as bool,
+    goods: switch (j['goods']) {
+      true => GoodsFeedMode.always,
+      false => GoodsFeedMode.off,
+      final String name => GoodsFeedMode.values.firstWhere(
+        (m) => m.name == name,
+        orElse: () => throw FormatException('unknown goods mode', name),
+      ),
+      final v => throw FormatException('goods is not a mode', v),
+    },
     credits: (j['credits'] as bool?) ?? j['creditReserve'] != null,
+    creditWeight: (j['creditWeight'] as int?) ?? 1,
+    feedingLevel: j['feeding'] as int?,
   );
 
-  /// Whether goods go in from every owned body, above what each keeps.
-  final bool goods;
+  /// The lowest [creditWeight].
+  static const int minCreditWeight = 0;
+
+  /// The highest [creditWeight].
+  static const int maxCreditWeight = 10;
+
+  /// When goods go in from every owned body, above what each keeps.
+  final GoodsFeedMode goods;
 
   /// Whether it takes a share of the credits above the faction's
   /// [FactionState.autoPayReserve].
   final bool credits;
 
-  /// Serializes this setting.
-  Map<String, Object?> toJson() => {'goods': goods, 'credits': credits};
+  /// Its share of those credits against the other credit-fed megaprojects
+  /// still owing: in proportion to the weights, from [minCreditWeight] to
+  /// [maxCreditWeight]. At 0 it takes credits only when none owing has a
+  /// weight above 0.
+  final int creditWeight;
+
+  /// With [GoodsFeedMode.nearReady], the delivery level (see
+  /// `megaprojectDeliveryLevel`) of the stage being fed since it was near
+  /// ready; null when none is. Stale once that stage is paid for, which
+  /// moves the delivery level on.
+  final int? feedingLevel;
+
+  /// This setting with the stage at delivery level [level] being fed, or
+  /// none when null.
+  MegaprojectAuto feeding(int? level) => MegaprojectAuto(
+    goods: goods,
+    credits: credits,
+    creditWeight: creditWeight,
+    feedingLevel: level,
+  );
+
+  /// Serializes this setting; [feedingLevel] only when set.
+  Map<String, Object?> toJson() => {
+    'goods': goods.name,
+    'credits': credits,
+    'creditWeight': creditWeight,
+    'feeding': ?feedingLevel,
+  };
 }
+
+/// What a faction had earned from sales by a game time: the start of the
+/// window over which auto-pay measures the credits it hands a
+/// [GoodsFeedMode.nearReady] megaproject a second.
+typedef IncomeMark = ({double time, BigNum sales});
 
 /// A bottleneck a faction has had since [firstSeenAt], kept so reports can
 /// tell a standing problem from a new one.
@@ -236,6 +312,7 @@ final class FactionState {
     Map<String, MegaprojectAuto>? megaprojectAuto,
     Set<String>? megaprojectAutoSet,
     this.autoPayReserve = const BigNum.zero(),
+    this.incomeMark,
     List<ContractState>? contracts,
     List<double>? contractRefillAt,
     this.contractsCompleted = 0,
@@ -247,7 +324,7 @@ final class FactionState {
        megaprojectLevels = megaprojectLevels ?? {},
        megaprojectProgress = megaprojectProgress ?? {},
        megaprojectAuto = megaprojectAuto ?? {},
-       megaprojectAutoSet = megaprojectAutoSet ?? {},
+       megaprojectAutoSet = megaprojectAutoSet ?? {...?megaprojectAuto?.keys},
        contracts = contracts ?? [],
        contractRefillAt = contractRefillAt ?? [],
        seenBottlenecks = seenBottlenecks ?? [],
@@ -311,10 +388,20 @@ final class FactionState {
             for (final e in _asMap(j['megaprojectAuto']).entries)
               e.key: MegaprojectAuto.fromJson(_asMap(e.value)),
           },
-    // Absent in saves from before it was kept: no setting chosen.
-    megaprojectAutoSet: {
-      for (final id in (j['megaprojectAutoSet'] as List?) ?? const [])
-        id as String,
+    // Absent in saves from before it was kept, and when empty: what the
+    // save has settings for was set, so a credits-off choice stays one.
+    megaprojectAutoSet: switch (j['megaprojectAutoSet']) {
+      final List<Object?> ids => {for (final id in ids) id! as String},
+      null => {...?(j['megaprojectAuto'] as Map?)?.keys.cast<String>()},
+      final v => throw FormatException('megaprojectAutoSet is not a list', v),
+    },
+    incomeMark: switch (j['incomeMark']) {
+      null => null,
+      final Map<String, Object?> m => (
+        time: (m['time']! as num).toDouble(),
+        sales: BigNum.fromJson(m['sales']! as String),
+      ),
+      final v => throw FormatException('incomeMark is not an object', v),
     },
     autoPayReserve: switch (j['autoPayReserve']) {
       final String v => BigNum.fromJson(v),
@@ -415,6 +502,11 @@ final class FactionState {
   /// `SetAutoPayReserveCommand`.
   BigNum autoPayReserve;
 
+  /// Its sales revenue at the last game minute auto-pay measured it, while
+  /// a megaproject it feeds goods [GoodsFeedMode.nearReady] takes credit
+  /// auto-pay too; null otherwise. See `stepMegaprojectCredits`.
+  IncomeMark? incomeMark;
+
   /// The lowest `creditReserve` among the settings of an older save's
   /// `megaprojectAuto` JSON, zero when none has one.
   static BigNum _lowestReserve(Object? auto) {
@@ -485,6 +577,8 @@ final class FactionState {
     if (megaprojectAutoSet.isNotEmpty)
       'megaprojectAutoSet': megaprojectAutoSet.toList(),
     'autoPayReserve': autoPayReserve.toJson(),
+    if (incomeMark case (:final time, :final sales))
+      'incomeMark': {'time': time, 'sales': sales.toJson()},
     'contracts': [for (final k in contracts) k.toJson()],
     'contractRefillAt': List.of(contractRefillAt),
     'contractsCompleted': contractsCompleted,
@@ -515,6 +609,7 @@ final class FactionState {
     megaprojectAuto: Map.of(megaprojectAuto),
     megaprojectAutoSet: Set.of(megaprojectAutoSet),
     autoPayReserve: autoPayReserve,
+    incomeMark: incomeMark,
     contracts: [for (final k in contracts) k.copy()],
     contractRefillAt: List.of(contractRefillAt),
     contractsCompleted: contractsCompleted,

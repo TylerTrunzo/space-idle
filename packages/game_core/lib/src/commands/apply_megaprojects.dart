@@ -239,13 +239,29 @@ CommandResult _setMegaprojectAuto(
       'There is no megaproject ${cmd.megaprojectId}',
     );
   }
+  if (cmd.creditWeight < MegaprojectAuto.minCreditWeight ||
+      cmd.creditWeight > MegaprojectAuto.maxCreditWeight) {
+    return _fail(
+      CommandError.invalidAmount,
+      'A credit weight must be ${MegaprojectAuto.minCreditWeight} to '
+      '${MegaprojectAuto.maxCreditWeight}',
+    );
+  }
   f.megaprojectAutoSet.add(def.id);
-  if (!cmd.goods && !cmd.credits) {
+  if (cmd.goods == GoodsFeedMode.off && !cmd.credits) {
     f.megaprojectAuto.remove(def.id);
   } else {
+    // A stage fed near ready stays fed while goods stay near ready.
+    final was = f.megaprojectAuto[def.id];
     f.megaprojectAuto[def.id] = MegaprojectAuto(
       goods: cmd.goods,
       credits: cmd.credits,
+      creditWeight: cmd.creditWeight,
+      feedingLevel:
+          cmd.goods == GoodsFeedMode.nearReady &&
+              was?.goods == GoodsFeedMode.nearReady
+          ? was?.feedingLevel
+          : null,
     );
   }
   return CommandOk(
@@ -253,6 +269,7 @@ CommandResult _setMegaprojectAuto(
       megaprojectId: def.id,
       goods: cmd.goods,
       credits: cmd.credits,
+      creditWeight: cmd.creditWeight,
     ),
   );
 }

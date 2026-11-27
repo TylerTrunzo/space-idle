@@ -393,7 +393,8 @@ void _byStockDescending(List<BodyState> bodies, String id) {
 }
 
 /// Resource id to what the megaprojects [f] feeds goods to on their own
-/// still need of it, summed: each one's [megaprojectRemaining] while it
+/// now ([megaprojectGoodsFed]: one fed near ready only while its stage is
+/// being fed, so until then its goods sell) still need of it, summed: each one's [megaprojectRemaining] while it
 /// takes deliveries ([megaprojectTakesDeliveries]), in content order. Auto-
 /// sell holds it back on every body with a rule on it, so what is made
 /// between the minutes auto-delivery runs is there for it, however short
@@ -402,7 +403,7 @@ Map<String, BigNum> _megaprojectHolds(GameState s, Content c, FactionState f) {
   if (f.megaprojectAuto.isEmpty) return const {};
   final hold = <String, BigNum>{};
   for (final m in c.megaprojects.values) {
-    if (!(f.megaprojectAuto[m.id]?.goods ?? false)) continue;
+    if (!megaprojectGoodsFed(s, f, m)) continue;
     if (!megaprojectTakesDeliveries(s, c, f.id, m)) continue;
     for (final MapEntry(key: id, value: v) in megaprojectRemaining(
       s,

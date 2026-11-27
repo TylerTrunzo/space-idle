@@ -37,42 +37,42 @@ void main() {
         const SetMegaprojectAutoCommand(
           'player',
           'orbital_station',
-          true,
-          true,
+          goods: GoodsFeedMode.always,
+          credits: true,
         ),
       );
       expect(
         r.outcome,
         isA<MegaprojectAutoSet>()
             .having((o) => o.megaprojectId, 'megaprojectId', 'orbital_station')
-            .having((o) => o.goods, 'goods', isTrue)
+            .having((o) => o.goods, 'goods', GoodsFeedMode.always)
             .having((o) => o.credits, 'credits', isTrue)
             .having((o) => o.bodyId, 'bodyId', isNull),
       );
-      expect(auto['orbital_station']!.goods, isTrue);
+      expect(auto['orbital_station']!.goods, GoodsFeedMode.always);
       expect(auto['orbital_station']!.credits, isTrue);
       ok(
         s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'mass_driver',
+          goods: GoodsFeedMode.always,
+        ),
       );
       ok(
         s,
         const SetMegaprojectAutoCommand(
           'player',
           'orbital_station',
-          false,
-          true,
+          credits: true,
         ),
       );
       expect(auto.keys, ['orbital_station', 'mass_driver']);
-      expect(auto['orbital_station']!.goods, isFalse);
+      expect(auto['orbital_station']!.goods, GoodsFeedMode.off);
       expect(auto['orbital_station']!.credits, isTrue);
       expect(auto['mass_driver']!.credits, isFalse);
       // Neither goods nor credits: the setting goes.
-      ok(
-        s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', false, false),
-      );
+      ok(s, const SetMegaprojectAutoCommand('player', 'mass_driver'));
       expect(auto.keys, ['orbital_station']);
     });
 
@@ -80,16 +80,27 @@ void main() {
       final s = e.newGame(1);
       ok(
         s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'mass_driver',
+          goods: GoodsFeedMode.always,
+        ),
       );
-      expect(s.faction('player').megaprojectAuto['mass_driver']!.goods, isTrue);
+      expect(
+        s.faction('player').megaprojectAuto['mass_driver']!.goods,
+        GoodsFeedMode.always,
+      );
     });
 
     test('refuses an unknown megaproject and an unknown faction', () {
       final s = e.newGame(1);
       fails(
         s,
-        const SetMegaprojectAutoCommand('player', 'dyson', true, false),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'dyson',
+          goods: GoodsFeedMode.always,
+        ),
         CommandError.unknownDef,
       );
       fails(
@@ -97,8 +108,7 @@ void main() {
         const SetMegaprojectAutoCommand(
           'ghost',
           'orbital_station',
-          true,
-          false,
+          goods: GoodsFeedMode.always,
         ),
         CommandError.unknownFaction,
       );
@@ -131,10 +141,10 @@ void main() {
         const SetMegaprojectAutoCommand(
           'player',
           'orbital_station',
-          true,
-          true,
+          goods: GoodsFeedMode.always,
+          credits: true,
         ),
-        const SetMegaprojectAutoCommand('player', 'mass_driver', false, false),
+        const SetMegaprojectAutoCommand('player', 'mass_driver'),
         SetAutoPayReserveCommand('player', n(5e6)),
       ]) {
         final back = Command.fromJson(
@@ -146,6 +156,139 @@ void main() {
     });
   });
 
+  group('the goods mode and credit weight', () {
+    test('are set, kept and shown in the outcome', () {
+      final s = e.newGame(1);
+      final r = ok(
+        s,
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          goods: GoodsFeedMode.nearReady,
+          credits: true,
+          creditWeight: 3,
+        ),
+      );
+      expect(
+        r.outcome,
+        isA<MegaprojectAutoSet>()
+            .having((o) => o.goods, 'goods', GoodsFeedMode.nearReady)
+            .having((o) => o.credits, 'credits', isTrue)
+            .having((o) => o.creditWeight, 'creditWeight', 3),
+      );
+      final a = s.faction('player').megaprojectAuto['orbital_station']!;
+      expect(a.goods, GoodsFeedMode.nearReady);
+      expect(a.credits, isTrue);
+      expect(a.creditWeight, 3);
+      // The defaults: no goods, no credits, weight 1; nothing left set.
+      const plain = SetMegaprojectAutoCommand('player', 'mass_driver');
+      expect(plain.goods, GoodsFeedMode.off);
+      expect(plain.credits, isFalse);
+      expect(plain.creditWeight, 1);
+      ok(s, plain);
+      expect(s.faction('player').megaprojectAuto.keys, ['orbital_station']);
+      expect(s.faction('player').megaprojectAutoSet, {
+        'orbital_station',
+        'mass_driver',
+      });
+    });
+
+    test('a weight outside 0-10 is refused, changing nothing', () {
+      final s = e.newGame(1);
+      for (final w in [-1, 11, 100]) {
+        fails(
+          s,
+          SetMegaprojectAutoCommand(
+            'player',
+            'orbital_station',
+            credits: true,
+            creditWeight: w,
+          ),
+          CommandError.invalidAmount,
+        );
+      }
+      for (final w in [0, 10]) {
+        ok(
+          s,
+          SetMegaprojectAutoCommand(
+            'player',
+            'orbital_station',
+            credits: true,
+            creditWeight: w,
+          ),
+        );
+      }
+    });
+
+    test('a command written with goods as true or false reads as always or '
+        'off, at weight 1', () {
+      for (final (goods, mode) in [
+        (true, GoodsFeedMode.always),
+        (false, GoodsFeedMode.off),
+      ]) {
+        final cmd =
+            Command.fromJson({
+                  'cmd': 'setMegaprojectAuto',
+                  'factionId': 'player',
+                  'megaprojectId': 'orbital_station',
+                  'goods': goods,
+                  'credits': true,
+                })
+                as SetMegaprojectAutoCommand;
+        expect(cmd.goods, mode);
+        expect(cmd.credits, isTrue);
+        expect(cmd.creditWeight, 1);
+      }
+      expect(
+        () => Command.fromJson({
+          'cmd': 'setMegaprojectAuto',
+          'factionId': 'player',
+          'megaprojectId': 'orbital_station',
+          'goods': 'sometimes',
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('changing the weight of a stage being fed near ready keeps it '
+        'fed; turning the goods off ends it', () {
+      final s = e.newGame(1);
+      final f = s.faction('player');
+      ok(
+        s,
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          goods: GoodsFeedMode.nearReady,
+        ),
+      );
+      f.megaprojectAuto['orbital_station'] = f
+          .megaprojectAuto['orbital_station']!
+          .feeding(0);
+      ok(
+        s,
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          goods: GoodsFeedMode.nearReady,
+          credits: true,
+          creditWeight: 2,
+        ),
+      );
+      expect(f.megaprojectAuto['orbital_station']!.feedingLevel, 0);
+      ok(
+        s,
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          goods: GoodsFeedMode.always,
+          credits: true,
+        ),
+      );
+      expect(f.megaprojectAuto['orbital_station']!.feedingLevel, isNull);
+    });
+  });
+
   group('saves with auto-delivery', () {
     GameState withAuto() {
       final s = e.newGame(1);
@@ -154,13 +297,17 @@ void main() {
         const SetMegaprojectAutoCommand(
           'player',
           'orbital_station',
-          true,
-          true,
+          goods: GoodsFeedMode.always,
+          credits: true,
         ),
       );
       ok(
         s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'mass_driver',
+          goods: GoodsFeedMode.always,
+        ),
       );
       ok(s, SetAutoPayReserveCommand('player', n(250)));
       return s;
@@ -239,6 +386,98 @@ void main() {
       expect(r.message, contains('auto-pay reserve'));
     });
 
+    test('the goods mode, weight and a stage being fed survive save and '
+        'load, and copies', () {
+      final s = e.newGame(1);
+      ok(
+        s,
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          goods: GoodsFeedMode.nearReady,
+          credits: true,
+          creditWeight: 4,
+        ),
+      );
+      final f = s.faction('player');
+      f
+        ..megaprojectAuto['orbital_station'] = f
+            .megaprojectAuto['orbital_station']!
+            .feeding(0)
+        ..incomeMark = (time: 0, sales: n(1234));
+      final back =
+          (SaveCodec.decode(SaveCodec.encode(s), content) as SaveOk).state;
+      expect(encode(back), encode(s));
+      final a = back.faction('player').megaprojectAuto['orbital_station']!;
+      expect(
+        (a.goods, a.credits, a.creditWeight, a.feedingLevel),
+        (GoodsFeedMode.nearReady, true, 4, 0),
+      );
+      expect(back.faction('player').incomeMark, (time: 0.0, sales: n(1234)));
+      expect(encode(s.copy()), encode(s));
+    });
+
+    test('an older save\'s goods true reads as always, its credits at '
+        'weight 1, and what it set counts as chosen', () {
+      final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
+      playerOf(m)
+        ..remove('megaprojectAutoSet')
+        ..['megaprojectAuto'] = {
+          'orbital_station': {'goods': true, 'credits': false},
+          'mass_driver': {'goods': false, 'credits': true},
+        };
+      final r = SaveCodec.decode(jsonEncode(m), content);
+      expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+      final f = (r as SaveOk).state.faction('player');
+      final station = f.megaprojectAuto['orbital_station']!;
+      final driver = f.megaprojectAuto['mass_driver']!;
+      expect(station.goods, GoodsFeedMode.always);
+      expect(station.credits, isFalse);
+      expect(driver.goods, GoodsFeedMode.off);
+      expect((driver.credits, driver.creditWeight), (true, 1));
+      // An explicit credits-off survives the load: the station counts as
+      // chosen not to fund.
+      expect(f.megaprojectAutoSet, {'orbital_station', 'mass_driver'});
+      expect(f.incomeMark, isNull);
+    });
+
+    test('a setting for a megaproject not in the chosen set is refused', () {
+      final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
+      playerOf(m)['megaprojectAutoSet'] = ['orbital_station'];
+      final r = SaveCodec.decode(jsonEncode(m), content);
+      expect((r as SaveError).kind, SaveErrorKind.invalidValue);
+      expect(r.message, contains('mass_driver'));
+    });
+
+    test('a weight outside 0-10, an unknown mode or a bad stage being fed '
+        'is refused', () {
+      for (final bad in <Map<String, Object?>>[
+        {'goods': 'always', 'credits': true, 'creditWeight': 11},
+        {'goods': 'always', 'credits': true, 'creditWeight': -1},
+        {'goods': 'whenever'},
+        {'goods': 'nearReady', 'feeding': -1},
+        {'goods': 'nearReady', 'feeding': SaveCodec.maxMegaprojectLevel + 1},
+      ]) {
+        final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
+        (playerOf(m)['megaprojectAuto']! as Map)['orbital_station'] = bad;
+        final r = SaveCodec.decode(jsonEncode(m), content);
+        expect(r, isA<SaveError>(), reason: '$bad');
+      }
+    });
+
+    test('an income mark from the future or below zero is refused', () {
+      for (final bad in [
+        {'time': 1e9, 'sales': '0'},
+        {'time': 0, 'sales': '-5'},
+        {'time': -1, 'sales': '0'},
+      ]) {
+        final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
+        playerOf(m)['incomeMark'] = bad;
+        final r = SaveCodec.decode(jsonEncode(m), content);
+        expect(r, isA<SaveError>(), reason: '$bad');
+      }
+    });
+
     test('a setting that is not an object is malformed', () {
       final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
       (playerOf(m)['megaprojectAuto']! as Map)['orbital_station'] = 5;
@@ -261,10 +500,26 @@ void main() {
       return r as CommandOk;
     }
 
-    /// Feeds [m] [goods], and credits above the shared [reserve] when one
-    /// is given.
-    void feed(GameState s, String m, bool goods, BigNum? reserve) {
-      ok(s, SetMegaprojectAutoCommand('player', m, goods, reserve != null));
+    /// Feeds [m] goods always when [goods] (or as [mode] says), and
+    /// credits above the shared [reserve] at [weight] when one is given.
+    void feed(
+      GameState s,
+      String m,
+      bool goods,
+      BigNum? reserve, {
+      GoodsFeedMode? mode,
+      int weight = 1,
+    }) {
+      ok(
+        s,
+        SetMegaprojectAutoCommand(
+          'player',
+          m,
+          goods: mode ?? (goods ? GoodsFeedMode.always : GoodsFeedMode.off),
+          credits: reserve != null,
+          creditWeight: weight,
+        ),
+      );
       if (reserve != null) ok(s, SetAutoPayReserveCommand('player', reserve));
     }
 
@@ -683,6 +938,177 @@ void main() {
         }
       });
 
+      /// Sets the station's credit weight to [station] and the Mass
+      /// Driver's to [driverWeight], both fed credits, no goods.
+      void weigh(GameState s, int station, int driverWeight) {
+        final reserve = s.faction('player').autoPayReserve;
+        feed(s, 'orbital_station', false, reserve, weight: station);
+        feed(s, 'mass_driver', false, reserve, weight: driverWeight);
+      }
+
+      test('weights 1:3 give a 1:3 split', () {
+        final s = both({'orbital_station': 1e6, 'mass_driver': 1e6});
+        weigh(s, 1, 3);
+        final f = s.faction('player')..credits = n(101000);
+        final got = stepMegaprojectCredits(s, content, 60)['player']!;
+        expect(got['orbital_station'], {'credits': n(25000)});
+        expect(got['mass_driver'], {'credits': n(75000)});
+        expect(f.credits, n(1000));
+      });
+
+      test('the odd credits of a weighted split go in content order', () {
+        final s = both({'orbital_station': 1e6, 'mass_driver': 1e6});
+        weigh(s, 1, 3);
+        // 1,003 above the reserve: 250 and 752 by weight, one left over.
+        s.faction('player').credits = n(2003);
+        final got = stepMegaprojectCredits(s, content, 60)['player']!;
+        expect(got['orbital_station'], {'credits': n(251)});
+        expect(got['mass_driver'], {'credits': n(752)});
+      });
+
+      test('weight 0 gets nothing while another owes, and takes the rest '
+          'once it is the only one owing', () {
+        final s = both({'orbital_station': 1e6, 'mass_driver': 1e6});
+        weigh(s, 0, 1);
+        s.faction('player').credits = n(101000);
+        var got = stepMegaprojectCredits(s, content, 60)['player']!;
+        expect(got.keys, ['mass_driver']);
+        expect(got['mass_driver'], {'credits': n(100000)});
+        // The Mass Driver owes 10K: it is topped off and queued, and the
+        // station, now the only one owing, takes the rest.
+        final t = both({'orbital_station': 1e6, 'mass_driver': 10000});
+        weigh(t, 0, 1);
+        t.faction('player').credits = n(101000);
+        final owed = megaprojectRemaining(t, content, 'player', driver);
+        got = stepMegaprojectCredits(t, content, 60)['player']!;
+        expect(got['mass_driver'], owed);
+        expect(got['orbital_station'], {
+          'credits': n(100000) - owed['credits']!,
+        });
+      });
+
+      test('a locked megaproject takes no share, whatever its weight', () {
+        final s = both({'orbital_station': 1e6, 'mass_driver': 1e6});
+        weigh(s, 1, 3);
+        final f = s.faction('player')
+          ..megaprojectLevels['orbital_station'] = 0
+          ..credits = n(101000);
+        // The station's next stage, at its new level, owes 1M credits.
+        f.megaprojectProgress['orbital_station'] = {
+          for (final MapEntry(key: id, value: v) in megaprojectCost(
+            content,
+            station,
+            megaprojectDeliveryLevel(s, 'player', station),
+          ).entries)
+            id: id == 'credits' ? v - n(1e6) : v,
+        };
+        expect(megaprojectLockedBy(s, content, 'player', driver), isNotNull);
+        final got = stepMegaprojectCredits(s, content, 60)['player']!;
+        expect(got.keys, ['orbital_station']);
+        expect(got['orbital_station'], {'credits': n(100000)});
+      });
+
+      test('weights of 0 for all of them share evenly', () {
+        final s = both({'orbital_station': 1e6, 'mass_driver': 1e6});
+        weigh(s, 0, 0);
+        s.faction('player').credits = n(101000);
+        final got = stepMegaprojectCredits(s, content, 60)['player']!;
+        expect(got['orbital_station'], {'credits': n(50000)});
+        expect(got['mass_driver'], {'credits': n(50000)});
+      });
+
+      test('a share one owing less cannot use goes to the others by '
+          'weight, and the reserve always holds', () {
+        const owed = [1, 7, 500, 1e5, 1e6];
+        for (final (a, b) in [(1, 3), (0, 1), (3, 1), (0, 0), (10, 1)]) {
+          for (final x in owed) {
+            for (final y in owed) {
+              for (final spare in [0, 1, 2, 3, 99, 5000, 2e5, 9e6]) {
+                final s = both({'orbital_station': x, 'mass_driver': y});
+                weigh(s, a, b);
+                final f = s.faction('player')..credits = n(1000 + spare);
+                final before = {
+                  for (final m in [station, driver])
+                    m.id: megaprojectRemaining(s, content, 'player', m),
+                };
+                final got =
+                    stepMegaprojectCredits(s, content, 60)['player'] ??
+                    const {};
+                final why = '$a:$b, owed $x and $y, $spare spare';
+                expect(f.credits >= n(1000), isTrue, reason: why);
+                var paid = 0.0;
+                for (final m in [station, driver]) {
+                  final give = got[m.id]?['credits']?.toDouble() ?? 0;
+                  paid += give;
+                  expect(
+                    give,
+                    lessThanOrEqualTo(before[m.id]!['credits']!.toDouble()),
+                    reason: why,
+                  );
+                }
+                expect(paid, lessThanOrEqualTo(spare + 1e-6), reason: why);
+                // Nothing is left above the reserve while anything owes.
+                final stillOwing = [
+                  for (final m in [station, driver])
+                    if (megaprojectTakesDeliveries(s, content, 'player', m) &&
+                        megaprojectRemaining(
+                          s,
+                          content,
+                          'player',
+                          m,
+                        ).containsKey('credits'))
+                      m,
+                ];
+                if (stillOwing.isNotEmpty) {
+                  expect(
+                    (f.credits - n(1000)).toDouble(),
+                    lessThan(1),
+                    reason: why,
+                  );
+                }
+              }
+            }
+          }
+        }
+      });
+
+      test('weighted, a catch-up pays as 60 s steps do to the credit, and 1 '
+          's steps in the same ratio', () {
+        GameState start() {
+          final s = both({'orbital_station': 4e6, 'mass_driver': 4e6});
+          weigh(s, 1, 3);
+          ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+          ok(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+          s.faction('player').credits = n(5000);
+          return s;
+        }
+
+        final from = start();
+        final live = start();
+        final ticks = start();
+        final away = start();
+        e.advance(live, 3600, maxStep: 1);
+        e.advance(ticks, 3600);
+        e.catchUpOffline(away, 3600);
+        expect(encode(away), encode(ticks));
+        double gained(GameState g, String m) =>
+            (paid(g, m) - paid(from, m)).toDouble();
+        for (final g in [live, ticks]) {
+          final a = gained(g, 'orbital_station');
+          final b = gained(g, 'mass_driver');
+          expect(a, greaterThan(1000));
+          // 1:3, give or take an odd credit a minute.
+          expect(b, closeTo(3 * a, 4 * 60));
+        }
+        expect(
+          gained(live, 'mass_driver'),
+          closeTo(
+            gained(ticks, 'mass_driver'),
+            gained(ticks, 'mass_driver') * 0.02,
+          ),
+        );
+      });
+
       test('1 s and 60 s steps pay both alike, never below the reserve', () {
         GameState run(double step) {
           final s = both({'orbital_station': 4e6, 'mass_driver': 4e6});
@@ -725,6 +1151,232 @@ void main() {
               .abs(),
           lessThanOrEqualTo(60),
         );
+      });
+    });
+
+    group('goods near ready', () {
+      /// [open] with Kora's steel and copper ore auto-sold, 400 steel on
+      /// Kora, the Mass Driver fed goods near ready (credits too, above
+      /// 1000, with [credits]), owing [owed] credits for its stage, and
+      /// [held] credits held.
+      GameState near({
+        required num owed,
+        num held = 1000,
+        bool credits = false,
+      }) {
+        final s = open(goods: false);
+        feed(
+          s,
+          'mass_driver',
+          false,
+          credits ? n(1000) : null,
+          mode: GoodsFeedMode.nearReady,
+        );
+        ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+        ok(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+        final cost = megaprojectCost(content, driver, 0);
+        s.body('kora').stock['steel'] = n(400);
+        s.faction('player')
+          ..credits = n(held)
+          ..megaprojectProgress['mass_driver'] = {
+            'credits': cost['credits']! - n(owed),
+          };
+        return s;
+      }
+
+      MegaprojectAuto setting(GameState s) =>
+          s.faction('player').megaprojectAuto['mass_driver']!;
+
+      BigNum hold(GameState s) => autoSellKeep(
+        s,
+        content,
+        s.faction('player').autoSell.firstWhere((r) => r.resourceId == 'steel'),
+        60,
+      ).megaprojectHold;
+
+      /// Kora's steel and copper ore sales a second over [seconds] of 60 s
+      /// steps from a copy of [s].
+      double income(GameState s, double seconds) {
+        final t = s.copy();
+        BigNum sales() => t
+            .faction('player')
+            .salesRevenue
+            .values
+            .fold(const BigNum.zero(), (a, v) => a + v);
+        e.advance(t, 600);
+        final from = sales();
+        e.advance(t, seconds);
+        return (sales() - from).toDouble() / seconds;
+      }
+
+      test('a stage days away is not fed, and its goods are sold', () {
+        for (final credits in [false, true]) {
+          final s = near(owed: 2e9, credits: credits);
+          expect(hold(s).isZero, isTrue);
+          e.advance(s, 600);
+          expect(setting(s).feedingLevel, isNull, reason: '$credits');
+          expect(progress(s)['steel'], isNull, reason: '$credits');
+          expect(
+            s.faction('player').salesRevenue['steel']!.toDouble(),
+            greaterThan(0),
+          );
+          expect(hold(s).isZero, isTrue);
+        }
+      });
+
+      test('with credit auto-pay off, a stage the credits held pay for is '
+          'fed from the next game minute, and held back from auto-sell', () {
+        final s = near(owed: 5000, held: 6000);
+        e.advance(s, 30);
+        expect(setting(s).feedingLevel, isNull);
+        e.advance(s, 30);
+        expect(setting(s).feedingLevel, 0);
+        expect(hold(s), n(20000));
+        // Until then its steel sold; from now on it is held and goes in.
+        s.body('kora').stock['steel'] = n(400);
+        e.advance(s, 60);
+        expect(progress(s)['steel']!.toDouble(), greaterThanOrEqualTo(400));
+      });
+
+      test('with credit auto-pay on, a stage within 12 h of income is fed; '
+          'one 24 h away is not', () {
+        final probe = near(owed: 2e9, credits: true);
+        final rate = income(probe, 1200);
+        expect(rate, greaterThan(0.5));
+        for (final (hours, fed) in [(6, true), (24, false)]) {
+          final s = near(owed: rate * hours * 3600, credits: true);
+          e.advance(s, 600);
+          expect(setting(s).feedingLevel, fed ? 0 : isNull, reason: '$hours h');
+          expect(progress(s)['steel'] != null, fed, reason: '$hours h');
+        }
+      });
+
+      test('the credits share counts: weight 0 behind another owing waits', () {
+        final probe = near(owed: 2e9, credits: true);
+        final rate = income(probe, 1200);
+        final s = near(owed: rate * 6 * 3600, credits: true);
+        // The station takes every credit above the reserve: the Mass
+        // Driver, at weight 0, gets none of them.
+        feed(
+          s,
+          'mass_driver',
+          false,
+          n(1000),
+          mode: GoodsFeedMode.nearReady,
+          weight: 0,
+        );
+        feed(s, 'orbital_station', false, n(1000));
+        e.advance(s, 600);
+        expect(setting(s).feedingLevel, isNull);
+      });
+
+      test('once started, feeding goes on until that stage is paid', () {
+        final s = near(owed: 5000, held: 6000);
+        e.advance(s, 60);
+        expect(setting(s).feedingLevel, 0);
+        // The credits go elsewhere: the stage is still fed.
+        s.faction('player').credits = n(0);
+        s.body('kora').stock['steel'] = n(300);
+        final before = progress(s)['steel']?.toDouble() ?? 0;
+        e.advance(s, 600);
+        expect(setting(s).feedingLevel, 0);
+        expect(
+          progress(s)['steel']!.toDouble(),
+          greaterThanOrEqualTo(before + 300),
+        );
+        // Paid for: the next stage starts unfed, and its steel sells.
+        final f = s.faction('player');
+        f
+          ..credits = n(1e12)
+          ..megaprojectProgress['mass_driver'] = {
+            for (final MapEntry(key: id, value: v) in megaprojectCost(
+              content,
+              driver,
+              0,
+            ).entries)
+              if (id != 'credits') id: v,
+          };
+        ok(
+          s,
+          DeliverToMegaprojectCommand('player', 'mass_driver', 'kora', {
+            'credits': megaprojectRemaining(
+              s,
+              content,
+              'player',
+              driver,
+            )['credits']!,
+          }),
+        );
+        expect(megaprojectDeliveryLevel(s, 'player', driver), 1);
+        f.credits = n(0);
+        s.body('kora').stock['steel'] = n(300);
+        e.advance(s, 120);
+        expect(setting(s).feedingLevel, isNull);
+        expect(progress(s)['steel'], isNull);
+        expect(hold(s).isZero, isTrue);
+      });
+
+      test('off feeds no goods; always feeds them at once', () {
+        final off = near(owed: 5000, held: 6000);
+        feed(off, 'mass_driver', false, null, mode: GoodsFeedMode.off);
+        feed(off, 'mass_driver', false, n(1000));
+        e.advance(off, 600);
+        expect(progress(off)['steel'], isNull);
+        final always = near(owed: 2e9);
+        feed(always, 'mass_driver', true, null);
+        e.advance(always, 60);
+        expect(
+          progress(always)['steel']!.toDouble(),
+          greaterThanOrEqualTo(400),
+        );
+      });
+
+      test('1 s steps, 60 s steps, 55 s and 5 s, and a catch-up start '
+          'feeding at the same minute and deliver alike', () {
+        final rate = income(near(owed: 2e9, credits: true), 1200);
+        for (final credits in [false, true]) {
+          GameState make() => credits
+              ? near(owed: rate * 6 * 3600, credits: true)
+              : near(owed: 5000, held: 6000);
+          double? startedAt(GameState s, double step, double until) {
+            double? at;
+            while (s.time < until - 1e-9) {
+              e.advance(s, step, maxStep: step);
+              if (at == null && setting(s).feedingLevel != null) at = s.time;
+            }
+            return at;
+          }
+
+          final live = make();
+          final ticks = make();
+          final split = make();
+          final away = make();
+          final a = startedAt(live, 1, 1800);
+          final b = startedAt(ticks, 60, 1800);
+          final sixty = make();
+          e
+            ..advance(split, 55)
+            ..advance(split, 5)
+            ..advance(sixty, 60);
+          expect(
+            setting(split).feedingLevel,
+            setting(sixty).feedingLevel,
+            reason: '$credits',
+          );
+          // Without auto-pay, the first minute decides; with it, the first
+          // minute only marks the income, and the second decides.
+          expect(setting(sixty).feedingLevel, credits ? isNull : 0);
+          e.catchUpOffline(away, 1800);
+          expect(a, isNotNull, reason: '$credits');
+          expect(a, b, reason: '$credits');
+          expect(encode(away), encode(ticks), reason: '$credits');
+          final want = progress(ticks)['steel']!.toDouble();
+          expect(
+            progress(live)['steel']!.toDouble(),
+            closeTo(want, want * 0.02 + 1),
+            reason: '$credits',
+          );
+        }
       });
     });
 

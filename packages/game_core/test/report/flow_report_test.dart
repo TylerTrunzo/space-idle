@@ -710,7 +710,11 @@ void main() {
     final unfed = lost();
     e.apply(
       t,
-      const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+      const SetMegaprojectAutoCommand(
+        'player',
+        'mass_driver',
+        goods: GoodsFeedMode.always,
+      ),
     );
     final ore = 0.32 * price(t, fed, 'copper_ore').toDouble() / 3 * 3600;
     expect(lost().toDouble() - unfed.toDouble(), closeTo(ore, 1e-6));
@@ -1281,10 +1285,11 @@ void main() {
       for (final id in ['hull_plate', 'copper_ore']) {
         engine.apply(t, SetAutoSellCommand('player', 'kora', id, n(0)));
       }
-      f.megaprojectAuto[station] = const MegaprojectAuto(
-        goods: true,
-        credits: false,
-      );
+      f
+        ..megaprojectAutoSet.add(station)
+        ..megaprojectAuto[station] = const MegaprojectAuto(
+          goods: GoodsFeedMode.always,
+        );
       engine.advance(t, 600);
       return t;
     }
@@ -1344,6 +1349,30 @@ void main() {
       );
     });
 
+    test('no diversion, and no keep block, for a stage near-ready feeding '
+        'does not feed yet; both once it does', () {
+      final t = plating();
+      final f = t.faction('player');
+      f.megaprojectAuto[station] = const MegaprojectAuto(
+        goods: GoodsFeedMode.nearReady,
+      );
+      List<BottleneckKind> kinds(GameState g) => [
+        for (final b in buildFlowReport(g, c, 'player').groupedBottlenecks)
+          b.kind,
+      ];
+      // Far from ready (no credits): its plates sell, nothing is diverted.
+      f.credits = n(0);
+      expect(kinds(t), isNot(contains(BottleneckKind.megaprojectDiversion)));
+      final r = buildFlowReport(t, c, 'player');
+      expect(r.autoDeliveredPerSec[station]?['hull_plate'], isNull);
+      // Fed: the diversion shows again.
+      f.megaprojectAuto[station] = f.megaprojectAuto[station]!.feeding(
+        megaprojectDeliveryLevel(t, 'player', get(station)),
+      );
+      engine.advance(t, 600);
+      expect(kinds(t), contains(BottleneckKind.megaprojectDiversion));
+    });
+
     test("a keepAtLeast that holds back what a megaproject owes says so", () {
       // Round-4 casual bug 3: Station L4 needed 469 reactor cores while
       // Cinder held 1K of them under keepAtLeast 1,000.
@@ -1351,9 +1380,9 @@ void main() {
       final f = t.faction('player');
       final cost = megaprojectCost(c, get(station), 0);
       f
+        ..megaprojectAutoSet.add(station)
         ..megaprojectAuto[station] = const MegaprojectAuto(
-          goods: true,
-          credits: false,
+          goods: GoodsFeedMode.always,
         )
         ..megaprojectProgress[station] = {
           'reactor_core': cost['reactor_core']! - n(469),

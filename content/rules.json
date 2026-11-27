@@ -26,6 +26,7 @@
   "claimSecondsPerOwned": 1800,
   "expandSlotsSeconds": 3600,
   "contractRefillSeconds": 14400,
+  "nearReadyHorizonSeconds": 43200,
   "surveyDrones": 3,
   "surveyCredits": "2e4",
   "surveySeconds": 10800

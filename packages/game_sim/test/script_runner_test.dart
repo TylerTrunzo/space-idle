@@ -774,6 +774,7 @@ void main() {
     final bad = r.handle({
       'cmd': 'setMegaprojectAuto',
       'megaprojectId': 'orbital_station',
+      'goods': 'sometimes',
     });
     expect(bad['error'], 'badCommand');
   });
@@ -812,7 +813,7 @@ void main() {
       'credits': true,
     });
     expect(entry('mass_driver')['auto'], {
-      'goods': true,
+      'goods': 'always',
       'credits': true,
       'text':
           'goods from every body, and a share of the credits above the '

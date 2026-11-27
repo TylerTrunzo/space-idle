@@ -128,7 +128,7 @@ void main() {
     e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
     e.apply(
       s,
-      const SetMegaprojectAutoCommand('player', 'mass_driver', false, true),
+      const SetMegaprojectAutoCommand('player', 'mass_driver', credits: true),
     );
     f.credits = n(5000);
     final sum = e.catchUpOffline(s, 3600);

@@ -58,8 +58,17 @@ extension _Megaprojects on _View {
           : null;
       final payCredits = owedCredits != null && !_affordable(owedCredits);
       anyCredits = anyCredits || payCredits;
-      if (now != null && now.goods && now.credits == payCredits) continue;
-      setting ??= SetMegaprojectAutoCommand(factionId, m.id, true, payCredits);
+      if (now != null &&
+          now.goods == GoodsFeedMode.always &&
+          now.credits == payCredits) {
+        continue;
+      }
+      setting ??= SetMegaprojectAutoCommand(
+        factionId,
+        m.id,
+        goods: GoodsFeedMode.always,
+        credits: payCredits,
+      );
     }
     if (anyCredits) {
       final want = _creditReserve();
@@ -95,7 +104,8 @@ extension _Megaprojects on _View {
 
   /// Whether goods go into [m] on their own ([autoDeliver]).
   bool _fedGoods(MegaprojectDef m) =>
-      faction.megaprojectAuto[m.id]?.goods ?? false;
+      (faction.megaprojectAuto[m.id]?.goods ?? GoodsFeedMode.off) !=
+      GoodsFeedMode.off;
 
   /// Whether [m] takes credits on its own ([autoDeliver]).
   bool _fedCredits(MegaprojectDef m) =>

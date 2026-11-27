@@ -694,7 +694,7 @@ final class ScriptRunner {
   String _autoText(MegaprojectAutoSet o) {
     final name = _megaprojectName(o.megaprojectId);
     final credits = o.credits ? _creditShare() : 'no credits';
-    if (o.goods) {
+    if (o.goods != GoodsFeedMode.off) {
       return '$name now takes goods from every body each game minute, above '
           'what each keeps for its own use and open contracts, and $credits';
     }
@@ -763,7 +763,7 @@ final class ScriptRunner {
   /// goods".
   String _autoSetting(MegaprojectAuto auto) {
     final credits = auto.credits ? _creditShare() : 'no credits';
-    return auto.goods
+    return auto.goods != GoodsFeedMode.off
         ? 'goods from every body, and $credits'
         : '$credits, and no goods';
   }
@@ -1004,7 +1004,7 @@ final class ScriptRunner {
             'locked': ?_lockedText(m),
             if (p.megaprojectAuto[m.id] case final auto?)
               'auto': {
-                'goods': auto.goods,
+                'goods': auto.goods.name,
                 'credits': auto.credits,
                 'text': _autoSetting(auto),
               },

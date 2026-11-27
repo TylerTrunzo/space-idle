@@ -301,6 +301,7 @@ final class _Loader {
       'claimSecondsPerOwned',
       'expandSlotsSeconds',
       'contractRefillSeconds',
+      'nearReadyHorizonSeconds',
       'surveyDrones',
       'surveyCredits',
       'surveySeconds',
@@ -372,6 +373,11 @@ final class _Loader {
       fallback: RulesDef.defaultContractRefillSeconds,
       gt: 0,
     );
+    final nearReadyHorizonSeconds = f.number(
+      'nearReadyHorizonSeconds',
+      fallback: RulesDef.defaultNearReadyHorizonSeconds,
+      ge: 0,
+    );
     final surveyDrones = f.integer(
       'surveyDrones',
       fallback: RulesDef.defaultSurveyDrones,
@@ -416,6 +422,7 @@ final class _Loader {
       claimSecondsPerOwned: claimSecondsPerOwned!,
       expandSlotsSeconds: expandSlotsSeconds!,
       contractRefillSeconds: contractRefillSeconds!,
+      nearReadyHorizonSeconds: nearReadyHorizonSeconds!,
       surveyDrones: surveyDrones!,
       surveyCredits: surveyCredits,
       surveySeconds: surveySeconds!,

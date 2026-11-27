@@ -216,6 +216,31 @@ final class SaveCodec {
       if (f.autoPayReserve < zero) {
         return 'faction ${f.id}: negative auto-pay reserve';
       }
+      for (final MapEntry(key: id, value: a) in f.megaprojectAuto.entries) {
+        if (a.creditWeight < MegaprojectAuto.minCreditWeight ||
+            a.creditWeight > MegaprojectAuto.maxCreditWeight) {
+          return 'faction ${f.id}: $id credit weight ${a.creditWeight} '
+              'outside [${MegaprojectAuto.minCreditWeight}, '
+              '${MegaprojectAuto.maxCreditWeight}]';
+        }
+        if (a.feedingLevel case final level?
+            when level < 0 || level > maxMegaprojectLevel) {
+          return 'faction ${f.id}: $id fed at level $level, outside '
+              '[0, $maxMegaprojectLevel]';
+        }
+        // An unknown id is reported as one (see the content-id checks).
+        if (c.megaprojects.containsKey(id) &&
+            !f.megaprojectAutoSet.contains(id)) {
+          return 'faction ${f.id}: auto-delivery to $id, which it never set';
+        }
+      }
+      if (f.incomeMark case (:final time, :final sales)) {
+        if (!time.isFinite || time < 0 || time > s.time) {
+          return 'faction ${f.id}: income marked at $time, outside '
+              '[0, ${s.time}]';
+        }
+        if (sales < zero) return 'faction ${f.id}: negative income mark';
+      }
       if (!f.wasteFreeSince.isFinite ||
           f.wasteFreeSince < 0 ||
           f.wasteFreeSince > s.time) {

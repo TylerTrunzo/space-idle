@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../commands/apply.dart';
 import '../commands/command.dart';
 import '../commands/outcome.dart';
@@ -103,28 +105,42 @@ AutoDeliveries stepMegaprojectAuto(
 /// shared reserve ([FactionState.autoPayReserve]), in a step of [dt]
 /// seconds from `s.time` that reaches a whole multiple of
 /// [autoDeliverySeconds]; a step that reaches none pays nothing. Returns
-/// what went in.
+/// what went in. Then, at the same minute, it starts feeding goods to the
+/// stages of [GoodsFeedMode.nearReady] megaprojects that are now near
+/// ready ([_startNearReady]).
 ///
-/// The credits above the reserve are split evenly among the credit-fed
-/// megaprojects that still owe credits for the stage they pay for (current
-/// or queued), in whole credits, the odd ones to the first in content
-/// order; a share a megaproject cannot use, owing less, goes on to the
-/// others in another round. So every credit-fed megaproject progresses,
-/// whatever its place in content order, and credits never end below the
-/// reserve (float residue of the payments included). Each payment is a
-/// [DeliverToMegaprojectCommand]: a stage paid in full starts (or waits),
-/// and the next one, owing credits again, joins the later rounds.
+/// The credits above the reserve are split among the credit-fed
+/// megaprojects that still owe credits for the stage they pay for
+/// (current or queued) in proportion to their [MegaprojectAuto.creditWeight],
+/// in whole credits, the odd ones one each to the first in content order;
+/// one at weight 0 takes none while another owing has a weight above 0
+/// (when all owing are at 0 they share evenly). A share a megaproject
+/// cannot use, owing less, goes on to the others, again by weight, in
+/// another round. So every credit-fed megaproject with a weight
+/// progresses, whatever its place in content order, and credits never end
+/// below the reserve (float residue of the payments included). Each
+/// payment is a [DeliverToMegaprojectCommand]: a stage paid in full starts
+/// (or waits), and the next one, owing credits again, joins the later
+/// rounds.
 ///
 /// The engine runs it after the market, so a step pays in what was earned
 /// up to the minute, whatever its length. Payments are made as at the
 /// minute, factions in list order.
 AutoDeliveries stepMegaprojectCredits(GameState s, Content c, double dt) {
-  if (!s.factions.any((f) => f.megaprojectAuto.values.any((a) => a.credits))) {
+  if (!s.factions.any(
+    (f) => f.megaprojectAuto.values.any(
+      (a) => a.credits || a.goods == GoodsFeedMode.nearReady,
+    ),
+  )) {
     return const {};
   }
   final out = <String, Map<String, Map<String, BigNum>>>{};
   _atMinute(s, dt, (onMinute) {
-    if (onMinute) _payCredits(s, c, out);
+    if (!onMinute) return;
+    _payCredits(s, c, out);
+    for (final f in s.factions) {
+      _startNearReady(s, c, f);
+    }
   });
   return out;
 }
@@ -189,7 +205,7 @@ void _deliverGoods(
 }) {
   final c = cache.c;
   for (final f in s.factions) {
-    final goods = _fedGoods(c, f);
+    final goods = _fedGoods(s, c, f);
     if (goods.isEmpty) continue;
     final owned = [
       for (final b in s.bodies)
@@ -201,10 +217,13 @@ void _deliverGoods(
     if (over.isEmpty) continue;
     DeliveryKeeps? keeps;
     for (final m in c.megaprojects.values) {
-      if (!(f.megaprojectAuto[m.id]?.goods ?? false)) continue;
+      if (!megaprojectGoodsFed(s, f, m)) continue;
       final got = <String, BigNum>{};
       for (var pass = 0; pass < _maxPasses; pass++) {
-        if (!megaprojectTakesDeliveries(s, c, f.id, m)) break;
+        if (!megaprojectTakesDeliveries(s, c, f.id, m) ||
+            !megaprojectGoodsFed(s, f, m)) {
+          break;
+        }
         final level = megaprojectDeliveryLevel(s, f.id, m);
         var delivered = false;
         keeps ??= autoDeliveryKeeps(s, cache, f, goods, dt);
@@ -248,36 +267,37 @@ void _payCredits(
   for (final f in s.factions) {
     final fed = [
       for (final m in c.megaprojects.values)
-        if (f.megaprojectAuto[m.id]?.credits ?? false) m,
+        if (f.megaprojectAuto[m.id] case final a? when a.credits)
+          (m, a.creditWeight),
     ];
     if (fed.isEmpty) continue;
     final payer = s.bodies.where((b) => b.ownerId == f.id).firstOrNull;
     if (payer == null) continue;
-    final got = {for (final m in fed) m.id: <String, BigNum>{}};
+    final got = {for (final (m, _) in fed) m.id: <String, BigNum>{}};
     // Stages paid for in full per megaproject: at most [_maxPasses].
-    final paid = {for (final m in fed) m.id: 0};
+    final paid = {for (final (m, _) in fed) m.id: 0};
     for (var round = 0; round < fed.length * (_maxPasses + 1); round++) {
       final spare = (f.credits - f.autoPayReserve).floor();
       if (spare < _oneUnit) break;
-      final owing = [
-        for (final m in fed)
-          if (paid[m.id]! < _maxPasses &&
-              megaprojectTakesDeliveries(s, c, f.id, m))
-            if (megaprojectRemaining(s, c, f.id, m)[creditsKey]
-                case final owed?)
-              (m, owed),
-      ];
+      final owing = _owingCredits(s, c, f, [
+        for (final (m, w) in fed)
+          if (paid[m.id]! < _maxPasses) (m, w),
+      ]);
       if (owing.isEmpty) break;
-      final n = BigNum.from(owing.length);
-      final share = (spare / n).floor();
+      final total = owing.fold(0, (t, x) => t + x.$3);
+      final shares = [
+        for (final (_, _, w) in owing)
+          (spare * BigNum.from(w) / BigNum.from(total)).floor(),
+      ];
       // The odd credits, one each, to the first in content order.
-      final odd = (spare - share * n).toDouble().floor().clamp(
-        0,
-        owing.length - 1,
-      );
+      var left = spare;
+      for (final share in shares) {
+        left = left - share;
+      }
+      final odd = left.toDouble().floor().clamp(0, owing.length - 1);
       var moved = false;
-      for (final (i, (m, owed)) in owing.indexed) {
-        final give = (i < odd ? share + _oneUnit : share).min(owed);
+      for (final (i, (m, owed, _)) in owing.indexed) {
+        final give = (i < odd ? shares[i] + _oneUnit : shares[i]).min(owed);
         if (give < _oneUnit) continue;
         final level = megaprojectDeliveryLevel(s, f.id, m);
         if (!_deliver(s, c, f, m, payer, {creditsKey: give}, got[m.id]!)) {
@@ -296,9 +316,107 @@ void _payCredits(
     if (f.credits < f.autoPayReserve && got.values.any((g) => g.isNotEmpty)) {
       f.credits = f.autoPayReserve;
     }
-    for (final m in fed) {
+    for (final (m, _) in fed) {
       if (got[m.id]!.isNotEmpty) (out[f.id] ??= {})[m.id] = got[m.id]!;
     }
+  }
+}
+
+/// Of [fed], credit-fed megaprojects of [f] with their weights, those that
+/// take deliveries and still owe credits, with what they owe and the
+/// weight they share by, in content order: those at weight 0 are left out
+/// while any owing has a weight above 0, and when none has, all of them
+/// share at weight 1.
+List<(MegaprojectDef, BigNum, int)> _owingCredits(
+  GameState s,
+  Content c,
+  FactionState f,
+  List<(MegaprojectDef, int)> fed,
+) {
+  final owing = [
+    for (final (m, w) in fed)
+      if (megaprojectTakesDeliveries(s, c, f.id, m))
+        if (megaprojectRemaining(s, c, f.id, m)[creditsKey] case final owed?)
+          (m, owed, w),
+  ];
+  if (owing.any((x) => x.$3 > 0)) {
+    return [
+      for (final x in owing)
+        if (x.$3 > 0) x,
+    ];
+  }
+  return [for (final (m, owed, _) in owing) (m, owed, 1)];
+}
+
+/// Starts feeding goods to the stage each [GoodsFeedMode.nearReady]
+/// megaproject of [f] pays for (at `s.time`, a game minute, after the
+/// credits are paid) once it is near ready, and forgets a stage being fed
+/// once it is paid for ([MegaprojectAuto.feedingLevel]).
+///
+/// A stage is near ready when the credits it still owes are no more than,
+/// with credit auto-pay on for it, the credits above the reserve plus
+/// [RulesDef.nearReadyHorizonSeconds] of what auto-pay gives it a second:
+/// the faction's sales a second since the last minute measured
+/// ([FactionState.incomeMark]) times its share by weight among the
+/// credit-fed megaprojects still owing ([_owingCredits]); with credit
+/// auto-pay off, no more than the credits held. The first minute with no
+/// mark measures nothing, so only the credits held count then. A stage
+/// that owes no credits is near ready. Once fed, a stage stays fed until
+/// it is paid for, whatever happens to the credits.
+void _startNearReady(GameState s, Content c, FactionState f) {
+  final near = [
+    for (final m in c.megaprojects.values)
+      if (f.megaprojectAuto[m.id] case final a?
+          when a.goods == GoodsFeedMode.nearReady)
+        (m, a),
+  ];
+  final measures = near.any((x) => x.$2.credits);
+  if (!measures) {
+    f.incomeMark = null;
+    if (near.isEmpty) return;
+  }
+  // Sales a second since the last mark, then a new mark.
+  var income = 0.0;
+  if (measures) {
+    var sales = const BigNum.zero();
+    for (final v in f.salesRevenue.values) {
+      sales = sales + v;
+    }
+    if (f.incomeMark case (:final time, sales: final was) when s.time > time) {
+      income = math.max(0, (sales - was).toDouble() / (s.time - time));
+    }
+    f.incomeMark = (time: s.time, sales: sales);
+  }
+  final owing = _owingCredits(s, c, f, [
+    for (final m in c.megaprojects.values)
+      if (f.megaprojectAuto[m.id] case final a? when a.credits)
+        (m, a.creditWeight),
+  ]);
+  final weights = owing.fold(0, (t, x) => t + x.$3);
+  final spare = (f.credits - f.autoPayReserve).max(const BigNum.zero());
+  for (final (m, a) in near) {
+    final takes = megaprojectTakesDeliveries(s, c, f.id, m);
+    final level = megaprojectDeliveryLevel(s, f.id, m);
+    if (takes && a.feedingLevel == level) continue;
+    var starts = false;
+    if (takes) {
+      final owed =
+          megaprojectRemaining(s, c, f.id, m)[creditsKey] ??
+          const BigNum.zero();
+      if (a.credits) {
+        final share = owing.where((x) => identical(x.$1, m)).firstOrNull;
+        final perSec = share == null || weights == 0
+            ? 0.0
+            : income * share.$3 / weights;
+        starts =
+            owed <=
+            spare + BigNum.from(perSec * c.rules.nearReadyHorizonSeconds);
+      } else {
+        starts = owed <= f.credits;
+      }
+    }
+    final now = starts ? level : null;
+    if (now != a.feedingLevel) f.megaprojectAuto[m.id] = a.feeding(now);
   }
 }
 
@@ -314,13 +432,13 @@ List<BodyState> _overCap(
       b,
 ];
 
-/// The goods of every megaproject [f] feeds goods to on its own, in
-/// content order, each once.
-List<String> _fedGoods(Content c, FactionState f) {
+/// The goods of every megaproject [f] feeds goods to on its own now
+/// ([megaprojectGoodsFed]), in content order, each once.
+List<String> _fedGoods(GameState s, Content c, FactionState f) {
   if (f.megaprojectAuto.isEmpty) return const [];
   return {
     for (final m in c.megaprojects.values)
-      if (f.megaprojectAuto[m.id]?.goods ?? false)
+      if (megaprojectGoodsFed(s, f, m))
         for (final id in m.baseCost.keys)
           if (id != creditsKey) id,
   }.toList();
