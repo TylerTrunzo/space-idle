@@ -1102,6 +1102,162 @@ void main() {
     });
   });
 
+  group('a shortage a route cannot carry enough for', () {
+    // Round-4 casual hidden rule: a stop-level route keeps its store and
+    // the cargo on its way within the store's cap, so it carries at most
+    // a cap a trip. Here b stores 20 and is 120 s from a: 0.167 ore a
+    // second for presses that use 0.5 each.
+    final content = fx.pressContent(baseStorageCap: 20);
+    final e = GameEngine(content);
+
+    GameState fed({int presses = 1, double aHolds = 1e6, double? stop = 20}) {
+      final t = e.newGame(1);
+      t.body('a').stock['ore'] = n(aHolds);
+      final b = t.body('b')..ownerId = 'p';
+      // Plates sell, so b's small store never fills with them.
+      t
+          .faction('p')
+          .autoSell
+          .add(
+            AutoSellRule(
+              bodyId: 'b',
+              resourceId: 'plate',
+              keepAtLeast: const BigNum.zero(),
+            ),
+          );
+      for (var i = 0; i < presses; i++) {
+        b.buildings.add(BuildingState(id: 'press$i', defId: 'press', crew: 1));
+      }
+      t.routes.add(
+        RouteState(
+          id: 'r1',
+          ownerId: 'p',
+          fromBodyId: 'a',
+          toBodyId: 'b',
+          resourceId: 'ore',
+          ratePerSecond: n(5),
+          cargoShips: 5,
+          stopAtDestination: stop == null ? null : n(stop),
+        ),
+      );
+      e.advance(t, 1200);
+      return t;
+    }
+
+    test('names the route and the limit that binds', () {
+      final t = fed();
+      final neck = held(buildFlowReport(t, content, 'p')).single;
+      expect(neck.kind, BottleneckKind.routeLimited);
+      expect(
+        (neck.bodyId, neck.buildingId, neck.resourceId),
+        ('b', 'press0', 'ore'),
+      );
+      expect(neck.routeId, 'r1');
+      expect(neck.binding, RouteLimit.destinationRoom);
+      expect(neck.routePerSec, closeTo(20 / 120, 1e-9));
+      expect(neck.runFraction, closeTo(1 / 3, 0.02));
+      // The lost output is the input shortage's: 2/3 of 0.5 plate a second.
+      expect(
+        neck.lostCreditsPerHour!.toDouble(),
+        closeTo(
+          0.5 *
+              (1 - neck.runFraction) *
+              price(t, content, 'plate').toDouble() *
+              3600,
+          1e-6,
+        ),
+      );
+      // No English in the core: a display builds it from the fields.
+      expect(neck.message, isEmpty);
+      final back = Bottleneck.fromJson(
+        jsonDecode(jsonEncode(neck.toJson())) as Map<String, Object?>,
+      );
+      expect(back.toJson(), neck.toJson());
+      expect(
+        (back.routeId, back.binding, back.routePerSec),
+        ('r1', RouteLimit.destinationRoom, neck.routePerSec),
+      );
+    });
+
+    test('is the same input shortage over time: it keeps the time it was '
+        'first seen', () {
+      final t = fed();
+      final neck = held(buildFlowReport(t, content, 'p')).single;
+      expect(neck.firstSeenAt, lessThan(t.time));
+      expect(neck.key, bottleneckKey('input', 'b', 'press0', 'ore'));
+      expect(neck.groupKey, bottleneckKey('input', 'b', null, 'ore'));
+    });
+
+    test("a store's presses group as one, their losses summed", () {
+      final t = fed(presses: 3);
+      final r = buildFlowReport(t, content, 'p');
+      final members = held(r);
+      expect(members, hasLength(3));
+      expect(members.map((b) => b.kind).toSet(), {BottleneckKind.routeLimited});
+      final group = r.groupedBottlenecks
+          .where((b) => b.kind != BottleneckKind.noSales)
+          .single;
+      expect(group.count, 3);
+      expect(
+        (group.routeId, group.binding),
+        ('r1', RouteLimit.destinationRoom),
+      );
+      expect(
+        group.lostCreditsPerHour!.toDouble(),
+        closeTo(
+          members.fold(0.0, (t, b) => t + b.lostCreditsPerHour!.toDouble()),
+          1e-6,
+        ),
+      );
+    });
+
+    test('stays an input shortage when the source has nothing more', () {
+      final t = fed(aHolds: 0);
+      t.body('a').stock['ore'] = const BigNum.zero();
+      expect(routeThroughput(t, content, 'r1').binding, RouteLimit.sourceStock);
+      final neck = held(buildFlowReport(t, content, 'p')).single;
+      expect(neck.kind, BottleneckKind.input);
+      expect(neck.routeId, isNull);
+      expect(neck.binding, isNull);
+    });
+
+    test('stays an input shortage when its routes could carry what the '
+        'store uses', () {
+      // A route with no stop level is not held to the store's room: it
+      // carries 5 a second for 0.5 used, so a shortage is not its doing.
+      final t = fed(stop: null);
+      t.body('b').stock['ore'] = const BigNum.zero();
+      final r = buildFlowReport(t, content, 'p');
+      expect(
+        held(r).where((b) => b.kind == BottleneckKind.routeLimited),
+        isEmpty,
+      );
+    });
+
+    test('reads the same wherever a step ends: lot just landed or on its '
+        'way', () {
+      for (final extra in [0.0, 30.0, 55.0, 60.0, 90.0]) {
+        final t = fed();
+        if (extra > 0) e.advance(t, extra);
+        final neck = held(buildFlowReport(t, content, 'p')).single;
+        expect(neck.kind, BottleneckKind.routeLimited, reason: '+$extra');
+        expect(neck.runFraction, closeTo(1 / 3, 0.02), reason: '+$extra');
+      }
+    });
+
+    test('ranks the same after 1 s and 60 s steps', () {
+      final live = fed();
+      final away = fed();
+      e.advance(live, 120, maxStep: 1);
+      e.advance(away, 120);
+      Bottleneck neck(GameState t) =>
+          held(buildFlowReport(t, content, 'p')).single;
+      final (a, b) = (neck(live), neck(away));
+      expect((a.kind, a.routeId, a.binding), (b.kind, b.routeId, b.binding));
+      expect(a.routePerSec, closeTo(b.routePerSec!, 1e-9));
+    });
+  });
+
   group('megaproject bottlenecks', () {
     const station = 'orbital_station';
     MegaprojectDef get(String id) => c.megaprojects[id]!;

@@ -597,7 +597,7 @@ BalanceReport runBotSession(
     final necks = buildFlowReport(s, c, faction.id).bottlenecks;
     if (necks.isNotEmpty) {
       bottleneckLog.add(
-        '#$checkIn ${_hours(clock / 3600)}h: ${necks.first.message}',
+        '#$checkIn ${_hours(clock / 3600)}h: ${_logText(necks.first)}',
       );
     }
     final checkInStart = clock;
@@ -861,3 +861,16 @@ final class _Tracker {
       if (!_produced.contains(id) || !_used.contains(id)) id,
   ];
 }
+
+/// [n] for the session's bottleneck log: its message, or for a kind whose
+/// text a display builds ([BottleneckKind.routeLimited]) its typed fields.
+String _logText(Bottleneck n) => n.message.isNotEmpty
+    ? n.message
+    : [
+        n.kind.name,
+        ?n.bodyId,
+        ?n.buildingId,
+        ?n.resourceId,
+        if (n.routeId case final r?) 'route $r',
+        ?n.binding?.name,
+      ].join(' ');

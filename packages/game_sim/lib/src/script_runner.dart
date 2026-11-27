@@ -167,7 +167,7 @@ final class ScriptRunner {
   }
 
   /// A bottleneck as JSON, with a `message` built from its typed fields
-  /// ([_bottleneckText]). With [ongoing], its record in an away summary as
+  /// ([bottleneckText]). With [ongoing], its record in an away summary as
   /// one that was there before the absence, it adds `since` (the game time
   /// it began), `worseThanBefore`, and `ongoing`: how long it has gone on,
   /// such as "for 3h 10m", and ", and worse than before" when its credits
@@ -181,7 +181,7 @@ final class ScriptRunner {
     'buildingId': n.buildingId,
     'resourceId': n.resourceId,
     'runFraction': n.runFraction,
-    'message': _bottleneckText(n),
+    'message': bottleneckText(n),
     'firstSeenAt': n.firstSeenAt,
     'lostCreditsPerHour': switch (n.lostCreditsPerHour) {
       final v? => _num(v),
@@ -192,6 +192,9 @@ final class ScriptRunner {
     'megaprojectId': ?n.megaprojectId,
     'shareOfSales': ?n.shareOfSales,
     if (n.heldByKeep case final v?) 'heldByKeep': _num(v),
+    'routeId': ?n.routeId,
+    'binding': ?n.binding?.name,
+    if (n.routePerSec case final v?) 'routePerSec': _num(BigNum.from(v)),
     if (ongoing != null) ...{
       'since': ongoing.since,
       'worseThanBefore': ongoing.worseThanBefore,
@@ -204,8 +207,9 @@ final class ScriptRunner {
   /// What [n] says to the player: the engine's message for one building or
   /// store; for a group of buildings ([Bottleneck.count] above 1), "17
   /// Station Docks on Cinder are running at 40%: not enough Hull Plate";
-  /// for the megaproject kinds, what is taken or held back, in numbers.
-  String _bottleneckText(Bottleneck n) {
+  /// for the megaproject kinds, what is taken or held back, in numbers; for
+  /// a route-limited shortage, the route's limit and what raises it.
+  String bottleneckText(Bottleneck n) {
     final c = engine.content;
     String res(String id) => c.resources[id]!.name;
     switch (n.kind) {
@@ -230,6 +234,8 @@ final class ScriptRunner {
       case BottleneckKind.storageFull:
         return '${state.body(n.bodyId!).name} storage is full of '
             '${res(n.resourceId!)}: output is being wasted';
+      case BottleneckKind.routeLimited:
+        return '${_whoIsRunning(n)}: ${_routeLimitText(n)}';
       case _ when n.count > 1:
         return _groupText(n);
       case _:
@@ -237,9 +243,57 @@ final class ScriptRunner {
     }
   }
 
-  /// [_bottleneckText] of a group of [Bottleneck.count] buildings on one
-  /// body, named by type when they share one.
-  String _groupText(Bottleneck n) {
+  /// "17 Station Docks on Cinder are running as low as 39%", or "Station
+  /// Dock on Cinder is running at 39%" for one: who [n] holds back and how
+  /// far, never 100% while held back.
+  String _whoIsRunning(Bottleneck n) {
+    final pct = math.min(99, (n.runFraction * 100).round());
+    if (n.count > 1) return '${_groupWho(n)} are running as low as $pct%';
+    final body = state.body(n.bodyId!);
+    final b = body.buildings.where((x) => x.id == n.buildingId).firstOrNull;
+    final what = b == null
+        ? 'A building'
+        : engine.content.buildings[b.defId]!.name;
+    return '$what on ${body.name} is running at $pct%';
+  }
+
+  /// "Hull Plate into Cinder is limited by Cinder's storage (814/s); a Depot
+  /// raises it": what holds [n]'s route ([Bottleneck.routeId]) back, at the
+  /// most it carries a second, and what raises it.
+  String _routeLimitText(Bottleneck n) {
+    final c = engine.content;
+    final to = state.body(n.bodyId!).name;
+    final into = '${c.resources[n.resourceId!]!.name} into $to is limited by';
+    final rate = '${formatNumber(BigNum.from(n.routePerSec!))}/s';
+    final route = state.routes.where((r) => r.id == n.routeId).firstOrNull;
+    final id = n.routeId!;
+    switch (n.binding!) {
+      case RouteLimit.rate:
+        return "$into route $id's rate ($rate); raise its rate";
+      case RouteLimit.ships:
+        final ships = route == null ? 'cargo ships' : _ships(route.cargoShips);
+        return "$into route $id's $ships ($rate); assign more ships";
+      case RouteLimit.destinationRoom:
+        final depot = c.buildings.values
+            .where((d) => d.kind == BuildingKind.warehouse)
+            .firstOrNull;
+        final raise = depot == null
+            ? 'more storage there raises it'
+            : 'a ${depot.name} raises it';
+        return "$into $to's storage ($rate); $raise";
+      case RouteLimit.stopLevel:
+        return "$into route $id's stop level ($rate); raise its stop level";
+      case RouteLimit.sourceStock:
+        final from = route == null
+            ? 'its source'
+            : state.body(route.fromBodyId).name;
+        return '$into what $from has to send ($rate)';
+    }
+  }
+
+  /// "17 Station Docks on Cinder": the [Bottleneck.count] buildings of a
+  /// group on one body, named by type when they share one.
+  String _groupWho(Bottleneck n) {
     final c = engine.content;
     final body = state.body(n.bodyId!);
     final types = {
@@ -250,7 +304,14 @@ final class ScriptRunner {
     final what = types.length == 1
         ? plural(c.buildings[types.single]!.name)
         : 'buildings';
-    final who = '${n.count} $what on ${body.name}';
+    return '${n.count} $what on ${body.name}';
+  }
+
+  /// [bottleneckText] of a group of [Bottleneck.count] buildings on one
+  /// body, named by type when they share one.
+  String _groupText(Bottleneck n) {
+    final c = engine.content;
+    final who = _groupWho(n);
     return switch (n.kind) {
       // A group's run fraction is its lowest member's.
       BottleneckKind.input =>

@@ -20,14 +20,16 @@ extension _Bottlenecks on _View {
   /// Understaffed buildings are left out: assigning free crew sees to them
   /// first, and they would crowd out the bottlenecks worth fixing. So are
   /// buildings short of an input that still run at [below] or more
-  /// ([BalancedBot.inputWorthFixingBelow]).
+  /// ([BalancedBot.inputWorthFixingBelow]). A shortage the report puts down
+  /// to a route ([BottleneckKind.routeLimited]) is fixed as any input
+  /// shortage is.
   Command? fixBottleneck(Set<String> tried, {required double below}) {
     for (final neck
         in report!.bottlenecks
             .where(
               (n) =>
                   n.kind != BottleneckKind.understaffed &&
-                  (n.kind != BottleneckKind.input || n.runFraction < below),
+                  (!_isInput(n) || n.runFraction < below),
             )
             .take(BalancedBot.bottlenecksConsidered)) {
       if (neck.kind == BottleneckKind.storageFull) {
@@ -40,7 +42,7 @@ extension _Bottlenecks on _View {
         }
         continue;
       }
-      if (neck.kind != BottleneckKind.input) {
+      if (!_isInput(neck)) {
         // Free crew is assigned first and a crew shortage is shed
         // ([shedCrew]); an idle building waits for crew to free up.
         continue;
@@ -280,3 +282,7 @@ extension _Bottlenecks on _View {
     return null;
   }
 }
+
+/// Whether [n] is a building short of an input, route-limited or not.
+bool _isInput(Bottleneck n) =>
+    n.kind == BottleneckKind.input || n.kind == BottleneckKind.routeLimited;

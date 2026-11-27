@@ -137,6 +137,15 @@ enum BottleneckKind {
   /// some that auto-delivery leaves there only because of its auto-sell
   /// rule's `keepAtLeast` ([Bottleneck.heldByKeep]).
   keepBlocksDelivery,
+
+  /// A building is short of one of its inputs ([BottleneckKind.input]),
+  /// the store it draws from is fed by a route, and that route is held
+  /// back by something other than what its source has to send
+  /// ([Bottleneck.routeId], [Bottleneck.binding]): its rate, its ships, its
+  /// destination's room or its stop level. The same shortage as an input
+  /// one, with its cause named: it is tracked and grouped under the input
+  /// kind's keys ([Bottleneck.key], [Bottleneck.groupKey]).
+  routeLimited,
 }
 
 /// Something running below full rate, and why: a building, a body's full
@@ -158,6 +167,9 @@ final class Bottleneck {
     this.megaprojectId,
     this.shareOfSales,
     this.heldByKeep,
+    this.routeId,
+    this.binding,
+    this.routePerSec,
   });
 
   /// What holds it back.
@@ -203,6 +215,18 @@ final class Bottleneck {
   /// that auto-delivery would hand over, up to what is owed, but for the
   /// rule's `keepAtLeast`; otherwise null.
   final BigNum? heldByKeep;
+
+  /// For [BottleneckKind.routeLimited], the route into the store that
+  /// holds it back; otherwise null.
+  final String? routeId;
+
+  /// For [BottleneckKind.routeLimited], what holds [routeId] back
+  /// ([routeThroughput]); otherwise null.
+  final RouteLimit? binding;
+
+  /// For [BottleneckKind.routeLimited], the units a second [routeId] can
+  /// carry at most ([routeThroughput]); otherwise null.
+  final double? routePerSec;
 
   /// Share of full rate achieved, in `[0, 1)`: a building's run fraction,
   /// for [BottleneckKind.understaffed] its crew over its base slots (a
@@ -276,18 +300,32 @@ final class Bottleneck {
       final String v => BigNum.fromJson(v),
       _ => null,
     },
+    routeId: j['routeId'] as String?,
+    binding: switch (j['binding']) {
+      final String v => RouteLimit.values.byName(v),
+      _ => null,
+    },
+    routePerSec: (j['routePerSec'] as num?)?.toDouble(),
   );
 
   /// [kind], [bodyId], [buildingId] and [resourceId] as one key, as in
-  /// [SeenBottleneck.key].
-  String get key => bottleneckKey(kind.name, bodyId, buildingId, resourceId);
+  /// [SeenBottleneck.key]; a [BottleneckKind.routeLimited] keys as the
+  /// input shortage it is, so it keeps the time it was first seen however
+  /// its route reads.
+  String get key =>
+      bottleneckKey(_trackedKind.name, bodyId, buildingId, resourceId);
+
+  /// [kind] as it is tracked over time: [BottleneckKind.input] for a
+  /// [BottleneckKind.routeLimited].
+  BottleneckKind get _trackedKind =>
+      kind == BottleneckKind.routeLimited ? BottleneckKind.input : kind;
 
   /// Its cause as one key: [kind], [bodyId], [resourceId] and
   /// [megaprojectId], but not the building. [groupBottlenecks] puts those
   /// with the same one together, and an away summary matches a group
   /// before and after the absence by it ([OfflineSummary.ongoingFor]).
   String get groupKey =>
-      bottleneckKey(kind.name, bodyId, megaprojectId, resourceId);
+      bottleneckKey(_trackedKind.name, bodyId, megaprojectId, resourceId);
 
   /// This bottleneck as JSON, null fields left out.
   Map<String, Object?> toJson() => {
@@ -305,6 +343,9 @@ final class Bottleneck {
     'megaprojectId': ?megaprojectId,
     'shareOfSales': ?shareOfSales,
     'heldByKeep': ?heldByKeep?.toJson(),
+    'routeId': ?routeId,
+    'binding': ?binding?.name,
+    'routePerSec': ?routePerSec,
   };
 
   /// This bottleneck with [firstSeenAt] and [lostCreditsPerHour] replaced
@@ -325,7 +366,28 @@ final class Bottleneck {
         megaprojectId: megaprojectId,
         shareOfSales: shareOfSales,
         heldByKeep: heldByKeep,
+        routeId: routeId,
+        binding: binding,
+        routePerSec: routePerSec,
       );
+
+  /// This [BottleneckKind.input] as the [BottleneckKind.routeLimited] that
+  /// route [routeId], held back as [t] says, makes it.
+  Bottleneck _routeLimited(String routeId, RouteThroughput t) => Bottleneck(
+    kind: BottleneckKind.routeLimited,
+    bodyId: bodyId,
+    buildingId: buildingId,
+    resourceId: resourceId,
+    runFraction: runFraction,
+    firstSeenAt: firstSeenAt,
+    lostCreditsPerHour: lostCreditsPerHour,
+    fromAbsence: fromAbsence,
+    count: count,
+    buildingIds: buildingIds,
+    routeId: routeId,
+    binding: t.binding,
+    routePerSec: t.perSec,
+  );
 
   Bottleneck _with({double? firstSeenAt, BigNum? lostCreditsPerHour}) =>
       copyWith(
@@ -393,6 +455,9 @@ Bottleneck _merge(List<Bottleneck> members) {
     megaprojectId: first.megaprojectId,
     shareOfSales: share,
     heldByKeep: held,
+    routeId: first.routeId,
+    binding: first.binding,
+    routePerSec: first.routePerSec,
   );
 }
 
@@ -566,6 +631,32 @@ const double _sampleSeconds = 1;
 /// Game seconds of a full step, the engine's catch-up step: the window
 /// over which a building fed by cargo lots is given its share of them.
 const double _fullStepSeconds = 60;
+
+/// [sent], route id to what each route sent in the probe step from [s],
+/// with each route that has a stop level and nothing in flight held to
+/// what it can carry ([routeThroughput]) over that step. Such a route
+/// refills in the probe step what its store just used, which is more than
+/// it keeps sending when its store's room holds it back: so a store fed a
+/// cap's worth a trip reads the same with its lot just landed as with the
+/// lot on its way.
+Map<String, BigNum> _steadySends(
+  GameState s,
+  Content c,
+  Map<String, BigNum> sent,
+) {
+  Map<String, RouteThroughput>? throughput;
+  final out = Map.of(sent);
+  for (final r in s.routes) {
+    final v = sent[r.id];
+    if (v == null || r.stopAtDestination == null) continue;
+    if (s.shipments.any((sh) => sh.routeId == r.id)) continue;
+    final most = BigNum.from(
+      (throughput ??= routeThroughputs(s, c))[r.id]!.perSec * _sampleSeconds,
+    );
+    if (v > most) out[r.id] = most;
+  }
+  return out;
+}
 
 /// Body id to resource id to the units a second cargo brings [factionId]'s
 /// bodies on average, for each store its routes or shipments feed: the
@@ -783,7 +874,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   deliverShipments(probe);
   stepProduction(probe, c, _sampleSeconds);
   final playedEff = crewEfficiency(probe, c, factionId);
-  final routeFlow = sendCargo(probe, c, _sampleSeconds);
+  final routeFlow = _steadySends(s, c, sendCargo(probe, c, _sampleSeconds));
   // Cargo lands in lots, so a store a route feeds can be empty a second
   // before a lot lands and full a second after: the sample step runs such
   // buildings at the share a full step of their average supply gives them.
@@ -868,6 +959,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     if (neck != null) bottlenecks.add((bottlenecks.length, neck));
   }
 
+  final causes = _RouteCauses(s, c, factionId);
   for (final (i, body) in owned.indexed) {
     final produced = <String, BigNum>{};
     final consumed = <String, BigNum>{};
@@ -889,11 +981,13 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
       final neck = _bottleneck(c, body, b);
       addNeck(
         neck?.kind == BottleneckKind.input
-            ? neck!._with(
-                lostCreditsPerHour: _valuePerHour(
-                  s,
-                  c,
-                  _scaled(flow.outputs, 1 - b.lastRunFraction),
+            ? causes.explain(
+                neck!._with(
+                  lostCreditsPerHour: _valuePerHour(
+                    s,
+                    c,
+                    _scaled(flow.outputs, 1 - b.lastRunFraction),
+                  ),
                 ),
               )
             : neck,
@@ -1020,6 +1114,87 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         b._with(firstSeenAt: since[b.key] ?? s.time),
     ],
   );
+}
+
+/// Input shortages explained by the routes that feed their stores, for
+/// one faction's report: a [BottleneckKind.input] on a body, short of a
+/// resource its owner's routes bring there, becomes a
+/// [BottleneckKind.routeLimited] when those routes and the body's own
+/// makers together carry less a second than its buildings use at full
+/// supply, and one of the routes is held back by something other than
+/// what its source has to send ([RouteLimit.sourceStock]): of those, the
+/// one that carries most ([routeThroughput]), the first in route order on
+/// a tie. Otherwise it stays as it is: a route its source holds back is
+/// not the cause, and nor is one that could carry enough. Worked out once
+/// per store, from the state the report is built from.
+final class _RouteCauses {
+  _RouteCauses(this.s, this.c, this.factionId);
+
+  final GameState s;
+  final Content c;
+  final String factionId;
+  Map<String, RouteThroughput>? _throughput;
+  StepCache? _cache;
+
+  /// Store ([bottleneckKey] of body and resource) to the route that holds
+  /// it back and how, or null for none.
+  final _known = <String, (String, RouteThroughput)?>{};
+
+  /// [neck], an input shortage, as a route-limited one where a route is its
+  /// cause; else [neck].
+  Bottleneck explain(Bottleneck neck) {
+    final bodyId = neck.bodyId!;
+    final resourceId = neck.resourceId!;
+    final key = bottleneckKey('', bodyId, null, resourceId);
+    final cause = _known.containsKey(key)
+        ? _known[key]
+        : (_known[key] = _cause(bodyId, resourceId));
+    return cause == null ? neck : neck._routeLimited(cause.$1, cause.$2);
+  }
+
+  (String, RouteThroughput)? _cause(String bodyId, String resourceId) {
+    final body = s.body(bodyId);
+    if (body.ownerId != factionId) return null;
+    final feeding = [
+      for (final r in s.routes)
+        if (r.ownerId == factionId &&
+            r.toBodyId == bodyId &&
+            r.resourceId == resourceId &&
+            s.body(r.fromBodyId).ownerId == factionId)
+          r,
+    ];
+    if (feeding.isEmpty) return null;
+    final through = _throughput ??= routeThroughputs(s, c);
+    final cache = _cache ??= StepCache(s, c);
+    final wanted = (cache.use(body, 1)[resourceId] ?? const BigNum.zero())
+        .toDouble();
+    final eff = cache.crewEff(factionId);
+    final bonuses = bonusesFor(s, c, factionId);
+    var supply = 0.0;
+    for (final b in body.buildings) {
+      if (b.lastRunFraction == 0) continue;
+      final made = fullRateFlow(
+        c,
+        body,
+        b,
+        1,
+        eff,
+        bonuses: bonuses,
+      ).outputs[resourceId];
+      if (made != null) supply += made.toDouble() * b.lastRunFraction;
+    }
+    for (final r in feeding) {
+      supply += through[r.id]!.perSec;
+    }
+    if (supply >= wanted) return null;
+    (String, RouteThroughput)? best;
+    for (final r in feeding) {
+      final t = through[r.id]!;
+      if (t.binding == RouteLimit.sourceStock) continue;
+      if (best == null || t.perSec > best.$2.perSec) best = (r.id, t);
+    }
+    return best;
+  }
 }
 
 /// Share of what would sell of a good that auto-delivery must take for a

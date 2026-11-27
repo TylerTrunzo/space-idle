@@ -324,14 +324,23 @@ Station takes 40% of the Hull Plate that would sell: 1.2M credits an hour
 not earned"), or `keepBlocksDelivery` (a fed megaproject still owes
 `resourceId`, and `bodyId`'s auto-sell `keepAtLeast` holds back
 `heldByKeep` of it from auto-delivery: "Orbital Station still needs Reactor
-Core, but Cinder keeps 469 of it back for its auto-sell keepAtLeast 1K").
+Core, but Cinder keeps 469 of it back for its auto-sell keepAtLeast 1K"),
+or `routeLimited` (an `input` shortage whose store's routes carry less than
+its buildings use, where the route that carries most, `routeId`, is held
+back by something other than what its source has: `binding` is `rate`,
+`ships`, `destinationRoom` or `stopLevel`, and `routePerSec` the most it
+carries a second, as `state` shows it: "17 Station Docks on Cinder are
+running as low as 39%: Hull Plate into Cinder is limited by Cinder's storage
+(814/s); a Depot raises it"; it is tracked and grouped as the `input`
+shortage it is, and its `lostCreditsPerHour` is the input's).
 `report` and `away` list them by cause: buildings on one body held back the
 same way are one entry with `count`, `buildingIds` (and `buildingId` null
 when there are several) and their losses summed.
 Each also gives `firstSeenAt`, the game time since which it has held without
 a break, and `lostCreditsPerHour`, an estimate at current prices of what it
 costs (the wasted units for `storageFull`; for `input` the output the
-starved building does not make, gross of the inputs it would use; the net
+starved building does not make, gross of the inputs it would use, as for
+`routeLimited`; the net
 production left unsold for `noSales`; for `crewShortage` what full staffing
 would add to net production, more output less the extra inputs it draws,
 leaving out output a full store with nothing selling it would waste; for

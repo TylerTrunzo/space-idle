@@ -61,7 +61,12 @@ otherwise sell: "Orbital Station takes 40% of the Hull Plate that would sell:
 still owes a good, and a body's auto-sell `keepAtLeast` keeps it from
 auto-delivery: "Orbital Station still needs Reactor Core, but Cinder keeps 469
 of it back for its auto-sell keepAtLeast 1K"; lower the keep or deliver by
-hand). Buildings on one body held back the same way are one entry: "17 Station
+hand), or `routeLimited` (buildings short of a good a route brings, where the
+route cannot carry what they use: "17 Station Docks on Cinder are running as
+low as 39%: Hull Plate into Cinder is limited by Cinder's storage (814/s); a
+Depot raises it"; `binding` says what holds the route back, `rate`, `ships`,
+`destinationRoom` or `stopLevel`, and `state` shows every route's
+`throughput` and `limitedBy`). Buildings on one body held back the same way are one entry: "17 Station
 Docks on Cinder are running at 40%: not enough Hull Plate", with `count` and
 `buildingIds`. Each bottleneck also has
 `firstSeenAt` (game time since when it has held without a break) and

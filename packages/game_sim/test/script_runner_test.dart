@@ -419,9 +419,14 @@ void main() {
     expect((routes.single as Map)['paused'], isTrue);
     expect(((routes.single as Map)['inFlight']! as Map)['display'], '20');
     expect(((routes.single as Map)['stopTarget']! as Map)['display'], '20');
-    // 20 a trip of 2 minutes.
-    expect((routes.single as Map)['limitedBy'], 'destinationRoom');
-    expect(((routes.single as Map)['throughput']! as Map)['display'], '0.167');
+    // The stop level's 20 a trip of 2 minutes, below Hollow Reach's cap.
+    expect((routes.single as Map)['limitedBy'], 'stopLevel');
+    expect(
+      double.parse(
+        ((routes.single as Map)['throughput']! as Map)['value']! as String,
+      ),
+      closeTo(20 / 120, 0.01),
+    );
     expect((routes.single as Map)['stopSharedWith'], isEmpty);
     final reachCap = storageCap(
       r.state,
@@ -1262,6 +1267,118 @@ void main() {
         r'not enough Steel$',
       ),
     );
+  });
+
+  group('a shortage a route cannot carry enough for', () {
+    // Round-4 casual hidden rule: Cinder stores 1K and is 2 minutes from
+    // Kora, so a stop-level route carries at most 1K a trip, 8.33 a
+    // second, for two fast smelters there that use 8.67 each.
+    ScriptRunner fed({int smelters = 2}) {
+      final r = _runner();
+      r.state.faction('player').baseCrew = 40;
+      final kora = r.state.body('kora');
+      kora.stock['iron_ore'] = BigNum.from(1e7);
+      kora.stock['cargo_ship'] = BigNum.from(20);
+      final cinder = r.state.body('cinder')..ownerId = 'player';
+      for (var i = 0; i < smelters; i++) {
+        cinder.buildings.add(
+          BuildingState(id: r.state.newId('b'), defId: 'smelter', crew: 1)
+            ..levels[UpgradeTrack.speed] = 25,
+        );
+      }
+      r.handle({
+        'cmd': 'setAutoSell',
+        'bodyId': 'cinder',
+        'resourceId': 'steel',
+        'keepAtLeast': '0',
+      });
+      final route = r.handle({
+        'cmd': 'createRoute',
+        'fromBodyId': 'kora',
+        'toBodyId': 'cinder',
+        'resourceId': 'iron_ore',
+        'ratePerSecond': '100',
+        'cargoShips': 20,
+        'stopAtDestination': '1000',
+      });
+      expect(route['ok'], isTrue, reason: '$route');
+      r.handle({'cmd': 'advance', 'seconds': 1200});
+      return r;
+    }
+
+    test('names the route, its limit and what raises it', () {
+      final r = fed();
+      final neck = (r.handle({'cmd': 'report'})['bottlenecks']! as List)
+          .cast<Map<String, Object?>>()
+          .singleWhere((n) => n['resourceId'] == 'iron_ore');
+      expect(neck['kind'], 'routeLimited');
+      expect(neck['count'], 2);
+      expect(neck['binding'], 'destinationRoom');
+      expect(neck['routeId'], r.state.routes.single.id);
+      expect((neck['routePerSec']! as Map)['display'], '8.33');
+      expect(
+        neck['message'],
+        matches(
+          r'^2 Smelters on Cinder are running as low as \d+%: Iron Ore into '
+          r"Cinder is limited by Cinder's storage \(8\.33/s\); a Depot "
+          r'raises it$',
+        ),
+      );
+    });
+
+    test('says so for one building, and in the away summary', () {
+      final r = fed(smelters: 1);
+      final out = r.handle({'cmd': 'away', 'seconds': 3600});
+      final neck = (out['topBottlenecks']! as List)
+          .cast<Map<String, Object?>>()
+          .singleWhere((n) => n['resourceId'] == 'iron_ore');
+      expect(
+        neck['message'],
+        matches(
+          r'^Smelter on Cinder is running at \d+%: Iron Ore into Cinder is '
+          r"limited by Cinder's storage \(8\.33/s\); a Depot raises it$",
+        ),
+      );
+    });
+
+    test('says what each other limit is and what raises it', () {
+      final r = fed(smelters: 1);
+      final c = r.engine.content;
+      final route = r.state.routes.single;
+      String text(RouteLimit binding, double perSec) => r.bottleneckText(
+        Bottleneck(
+          kind: BottleneckKind.routeLimited,
+          bodyId: 'cinder',
+          buildingId: r.state.body('cinder').buildings.single.id,
+          resourceId: 'iron_ore',
+          runFraction: 0.5,
+          buildingIds: [r.state.body('cinder').buildings.single.id],
+          routeId: route.id,
+          binding: binding,
+          routePerSec: perSec,
+        ),
+      );
+      expect(c.buildings['smelter']!.name, 'Smelter');
+      final who = 'Smelter on Cinder is running at 50%: Iron Ore into Cinder';
+      expect(
+        text(RouteLimit.rate, 100),
+        "$who is limited by route ${route.id}'s rate (100/s); raise its rate",
+      );
+      expect(
+        text(RouteLimit.ships, 200),
+        "$who is limited by route ${route.id}'s 20 Cargo Ships (200/s); "
+        'assign more ships',
+      );
+      expect(
+        text(RouteLimit.stopLevel, 5),
+        "$who is limited by route ${route.id}'s stop level (5/s); raise its "
+        'stop level',
+      );
+      expect(
+        text(RouteLimit.sourceStock, 2),
+        '$who is limited by what Kora has to send (2/s)',
+      );
+    });
   });
 
   test('away says what the storage cap cut while away', () {
