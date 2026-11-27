@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/app.dart';
 import 'package:space_idle/game/clock.dart';
 import 'package:space_idle/game/save_store.dart';
+import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/map/star_map.dart';
 import 'package:space_idle/ui/shell.dart';
 import 'package:space_idle/ui/top_bar.dart';
@@ -187,6 +189,42 @@ void main() {
         matching: find.text('Cinder'),
       ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('switching bodies resets what the panel was asking', (
+    tester,
+  ) async {
+    await _boot(tester, size: const Size(1000, 1600));
+    final scope = tester.element(find.byType(TopBar));
+    final c = ControllerScope.of(scope);
+    c.state.faction('player').credits = BigNum.from(1e6);
+    for (final id in ['brine', 'hollow_reach']) {
+      c.state.body(id).ownerId = 'player';
+      c.state.body(id).stock['outpost_kit'] = BigNum.from(50);
+    }
+    c.tickSeconds(1);
+    ShellScope.of(scope).selectBody('cinder');
+    await tester.pump();
+    // Hollow Reach comes first; take Cinder's kits from Brine.
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Brine').last);
+    await tester.pumpAndSettle();
+    final picked = tester.widget<DropdownButton<String>>(
+      find.byType(DropdownButton<String>),
+    );
+    expect(picked.value, 'brine');
+
+    ShellScope.of(scope).selectBody('vastmere');
+    await tester.pump();
+    final fresh = tester.widget<DropdownButton<String>>(
+      find.byType(DropdownButton<String>),
+    );
+    expect(
+      fresh.value,
+      'hollow_reach',
+      reason: "Cinder's choice stays with Cinder",
     );
   });
 

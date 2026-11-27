@@ -65,7 +65,9 @@ class _PlanetPanelState extends State<PlanetPanel> {
             if (expandSlotsView(c, view.id) case final slots?)
               _ExpandSlots(view: slots, bodyId: view.id),
             const Divider(color: Palette.border),
-            for (final b in view.buildings) BuildingRow(view: b),
+            // Keyed by building, so a pending confirm stays with its own.
+            for (final b in view.buildings)
+              BuildingRow(key: ValueKey(b.id), view: b),
             const SizedBox(height: 8),
             const Align(
               alignment: AlignmentDirectional.centerStart,

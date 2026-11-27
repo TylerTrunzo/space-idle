@@ -259,6 +259,54 @@ void main() {
     );
   });
 
+  group('switching bodies', () {
+    testWidgets('a demolish confirm on Kora does not follow to Brine', (
+      tester,
+    ) async {
+      c.state.faction(_p).credits = BigNum.from(1e9);
+      c.state.body('brine').ownerId = _p;
+      for (var i = 0; i < 3; i++) {
+        expect(
+          c.run(const BuildCommand(_p, 'brine', 'smelter')),
+          isA<CommandOk>(),
+        );
+      }
+      final brine = c.state.body('brine').buildings.map((b) => b.id).toList();
+      var body = 'kora';
+      late StateSetter set;
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(),
+          home: ControllerScope(
+            controller: c,
+            child: Scaffold(
+              body: StatefulBuilder(
+                builder: (context, s) {
+                  set = s;
+                  return PlanetPanel(bodyId: body);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.longPress(find.textContaining('Smelter  Lv').first);
+      await tester.pump();
+      expect(_key('demolish-b3'), findsOneWidget);
+
+      set(() => body = 'brine');
+      await tester.pump();
+      expect(find.textContaining('Demolish '), findsNothing);
+      for (final id in brine) {
+        expect(_key('demolish-$id'), findsNothing);
+      }
+      expect(c.state.body('brine').buildings, hasLength(3));
+    });
+  });
+
   group('claims', () {
     testWidgets('an unowned body shows its deposits, cost and time', (
       tester,

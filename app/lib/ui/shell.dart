@@ -199,6 +199,9 @@ class _MapTab extends StatelessWidget {
               key: Shell.sidePanelKey,
               width: Shell.panelWidth,
               child: PlanetPanel(
+                // One per body: another body's panel starts with nothing
+                // pending or picked.
+                key: ValueKey(id),
                 bodyId: id,
                 onClose: ShellScope.of(context).clearSelection,
               ),
@@ -224,6 +227,7 @@ class _MapTab extends StatelessWidget {
               minChildSize: 0.2,
               maxChildSize: 1,
               builder: (context, scroll) => PlanetPanel(
+                key: ValueKey(id),
                 bodyId: id,
                 scroll: scroll,
                 onClose: ShellScope.of(context).clearSelection,
