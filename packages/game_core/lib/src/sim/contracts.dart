@@ -1,9 +1,9 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../report/flow_report.dart';
-import 'production.dart';
 import '../rng.dart';
 import '../state/game_state.dart';
+import 'production.dart';
 
 /// Posts contracts on every faction's board whose slots are due to refill
 /// by [now]: while it holds fewer than [RulesDef.contractSlots] contracts
@@ -53,7 +53,7 @@ void stepContracts(GameState s, Content c, double now) {
       report ??= buildFlowReport(s, c, f.id);
       final rate = report.netProducedPerSec(resourceId);
       final quantity = _quantity(s, c, f, template, rate);
-      final perUnit =
+      final byQuantity =
           quantity *
           c.resources[resourceId]!.basePrice.mulDouble(
             template.rewardMultiplier,
@@ -65,7 +65,7 @@ void stepContracts(GameState s, Content c, double now) {
           templateId: template.id,
           resourceId: resourceId,
           quantity: quantity,
-          rewardCredits: perUnit.max(
+          rewardCredits: byQuantity.max(
             report.creditsPerSec.mulDouble(template.rewardIncomeSeconds),
           ),
           postedAt: now,

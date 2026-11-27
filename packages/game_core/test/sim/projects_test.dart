@@ -431,9 +431,6 @@ void main() {
       final s = rich();
       ok(s, claimBrine);
       ok(s, expandKora);
-      s.projects.first.data['note'] = {
-        'list': [1, 2],
-      };
       e.advance(s, 600);
       final loaded =
           (SaveCodec.decode(SaveCodec.encode(s), content) as SaveOk).state;
@@ -442,11 +439,9 @@ void main() {
       expect(encode(copied), encode(s));
       expect(loaded.projects, hasLength(2));
 
-      // The copy is independent, data included.
-      ((copied.projects.first.data['note']! as Map)['list']! as List).add(3);
+      // The copy is independent.
       copied.projects.removeLast();
       expect(s.projects, hasLength(2));
-      expect((s.projects.first.data['note']! as Map)['list'], [1, 2]);
 
       for (final x in [s, loaded]) {
         e.advance(x, 3600);
@@ -503,7 +498,6 @@ void main() {
       'targetId': targetId,
       'startedAt': startedAt,
       'finishAt': finishAt,
-      'data': <String, Object?>{},
     };
 
     Map<String, Object?> save(List<Map<String, Object?>> projects) =>
@@ -525,12 +519,17 @@ void main() {
       expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
     });
 
-    test('one without data loads with empty data it can add to', () {
-      final r = decode(save([project()..remove('data')]));
-      final data = (r as SaveOk).state.projects.single.data;
-      expect(data, isEmpty);
-      data['level'] = 1;
-      expect(r.state.projects.single.data, {'level': 1});
+    test('one with the data field older saves wrote loads without it', () {
+      final r = decode(
+        save([
+          project()..['data'] = {'level': 1},
+        ]),
+      );
+      expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
+      expect(
+        (r as SaveOk).state.projects.single.toJson(),
+        isNot(contains('data')),
+      );
     });
 
     final invalid = <String, List<Map<String, Object?>>>{

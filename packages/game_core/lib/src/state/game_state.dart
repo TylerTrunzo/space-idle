@@ -810,7 +810,7 @@ enum ProjectKind {
 /// Timed work a faction has paid for, which takes effect at [finishAt]
 /// (see `stepProjects`).
 final class ProjectState {
-  /// Creates a project; [data] defaults to empty.
+  /// Creates a project.
   ProjectState({
     required this.id,
     required this.factionId,
@@ -818,10 +818,10 @@ final class ProjectState {
     required this.targetId,
     required this.startedAt,
     required this.finishAt,
-    Map<String, Object?>? data,
-  }) : data = data ?? {};
+  });
 
-  /// Restores a project written by [toJson]; an unknown [kind] throws.
+  /// Restores a project written by [toJson]; an unknown [kind] throws. The
+  /// `data` field older saves wrote, always empty, is ignored.
   factory ProjectState.fromJson(Map<String, Object?> j) => ProjectState(
     id: j['id']! as String,
     factionId: j['factionId']! as String,
@@ -829,8 +829,6 @@ final class ProjectState {
     targetId: j['targetId']! as String,
     startedAt: (j['startedAt']! as num).toDouble(),
     finishAt: (j['finishAt']! as num).toDouble(),
-    // A copy, so the project's data stays mutable; absent means empty.
-    data: j['data'] == null ? null : _asMap(_jsonCopy(j['data'])),
   );
 
   /// Unique id, such as `p7`.
@@ -852,9 +850,6 @@ final class ProjectState {
   /// Game time in seconds from which it is complete.
   final double finishAt;
 
-  /// Extra details its kind needs, as JSON values.
-  final Map<String, Object?> data;
-
   /// Serializes this project.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -863,10 +858,9 @@ final class ProjectState {
     'targetId': targetId,
     'startedAt': startedAt,
     'finishAt': finishAt,
-    'data': _jsonCopy(data),
   };
 
-  /// An independent deep copy of this project, [data] included.
+  /// An independent copy of this project.
   ProjectState copy() => ProjectState(
     id: id,
     factionId: factionId,
@@ -874,19 +868,8 @@ final class ProjectState {
     targetId: targetId,
     startedAt: startedAt,
     finishAt: finishAt,
-    data: _asMap(_jsonCopy(data)),
   );
 }
-
-/// A deep copy of JSON value [v]: maps and lists are copied, other values
-/// (numbers, strings, booleans, null) are immutable and shared.
-Object? _jsonCopy(Object? v) => switch (v) {
-  final Map<Object?, Object?> m => <String, Object?>{
-    for (final e in m.entries) e.key! as String: _jsonCopy(e.value),
-  },
-  final List<Object?> l => <Object?>[for (final e in l) _jsonCopy(e)],
-  _ => v,
-};
 
 /// The whole mutable game world.
 final class GameState {
