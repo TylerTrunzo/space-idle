@@ -351,7 +351,9 @@ contracts out), and a Timeline of every completed project and contract.
 - `greedy` buys the cheapest affordable upgrade, building, extra slot or
   claim each decision.
 - `balanced` fixes the worst bottlenecks (a building short of an input only
-  below 70%), claims bodies, auto-sells surplus,
+  below 70% of full rate: a bot heuristic, see
+  `BalancedBot.defaultInputWorthFixingBelow`), claims bodies, auto-sells
+  surplus,
   works toward the next milestone (and housing when crew runs out), and
   spends the rest on the best return.
 - `casual` plays like `balanced` but issues at most 15 commands per check-in
