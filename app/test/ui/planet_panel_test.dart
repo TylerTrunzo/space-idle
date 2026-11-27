@@ -143,7 +143,13 @@ void main() {
       await tester.pump();
       expect(_level(c, 'b3', UpgradeTrack.speed), 1);
       expect(find.byType(SnackBar), findsOneWidget);
-      await tester.pump();
+      // The messenger builds only the head of its queue: wait the shown
+      // one out, and no second one may follow it.
+      // (Its timer starts once it is in.)
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing, reason: 'one, not queued');
       expect(_enabled(tester, button), isFalse);
       expect(
         find.descendant(of: button, matching: find.byIcon(Icons.lock_outline)),
