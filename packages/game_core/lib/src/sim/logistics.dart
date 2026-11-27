@@ -109,8 +109,9 @@ Map<String, BigNum> _inFlightTo(GameState s) {
 /// in flight to it of the resource, on any route. Every route with a stop
 /// level bringing the resource to that body shares one target: the
 /// largest of their stop levels plus what the destination's buildings use
-/// at full supply while a lot of the nearest of them with stock at its
-/// source travels, but never more than the destination's storage cap. So the stop level is the stock the
+/// at full supply while a lot of the farthest of them needed to meet that
+/// use travels ([sendCargo] runs them nearest first), but never more than
+/// the destination's storage cap. So the stop level is the stock the
 /// destination keeps, not a cap on the destination plus the cargo on its
 /// way: a route whose rate times its travel time passes its stop level
 /// keeps enough in flight to cover the trip and the destination supplied,
@@ -132,37 +133,53 @@ BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) =>
 /// Destination and resource ([_toKey]) to the target every route with a
 /// stop level bringing the resource there shares ([routeRoomBeforeStop]):
 /// the largest of their stop levels plus what the destination uses while
-/// a lot of the nearest of them travels, at most the destination's cap.
-/// The nearest is the nearest whose source holds some of the resource,
-/// as that is the one that sends first ([sendCargo]); the nearest of all
-/// when none does.
+/// a lot of the farthest of them it needs travels, at most the
+/// destination's cap. Taking the routes whose source holds some of the
+/// resource nearest first, as [sendCargo] does, that is the one whose
+/// rate brings what they carry together up to what the destination uses
+/// a second; the farthest of them when they never get there, and the
+/// nearest of all when no source holds any. So a near route too slow for
+/// the demand leaves room for the farther ones' longer trips.
 Map<String, BigNum> _stopTargets(GameState s, Content c, StepCache cache) {
-  // Key to the largest stop level, and the route its trip is timed by.
   final stops = <String, BigNum>{};
-  final timedBy = <String, (RouteState, bool, double)>{};
+  final groups = <String, List<(RouteState, double)>>{};
   for (final r in s.routes) {
     final stop = r.stopAtDestination;
     if (stop == null) continue;
     final key = _toKey(r.toBodyId, r.resourceId);
     final most = stops[key];
     if (most == null || stop > most) stops[key] = stop;
-    final from = s.body(r.fromBodyId);
-    final stocked =
-        (from.stock[r.resourceId] ?? const BigNum.zero()) > const BigNum.zero();
-    final trip = travelSeconds(s, c, from, s.body(r.toBodyId));
-    final best = timedBy[key];
-    if (best == null ||
-        (stocked && !best.$2) ||
-        (stocked == best.$2 && trip < best.$3)) {
-      timedBy[key] = (r, stocked, trip);
-    }
+    final trip = travelSeconds(s, c, s.body(r.fromBodyId), s.body(r.toBodyId));
+    (groups[key] ??= []).add((r, trip));
   }
-  return {
-    for (final MapEntry(key: key, value: (r, _, _)) in timedBy.entries)
-      key: (stops[key]! + _useInTransit(s, c, r, cache)).min(
-        cache.cap(s.body(r.toBodyId)),
-      ),
-  };
+  final targets = <String, BigNum>{};
+  for (final MapEntry(key: key, value: group) in groups.entries) {
+    // A stable sort, nearest first.
+    final byTrip = [for (final (i, g) in group.indexed) (i, g)]
+      ..sort((x, y) {
+        final t = x.$2.$2.compareTo(y.$2.$2);
+        return t != 0 ? t : x.$1.compareTo(y.$1);
+      });
+    final first = byTrip.first.$2.$1;
+    final to = s.body(first.toBodyId);
+    final use = cache.use(to, 1)[first.resourceId] ?? const BigNum.zero();
+    RouteState timedBy = first;
+    var carried = const BigNum.zero();
+    for (final (_, (r, _)) in byTrip) {
+      final from = s.body(r.fromBodyId);
+      if ((from.stock[r.resourceId] ?? const BigNum.zero()) <=
+          const BigNum.zero()) {
+        continue;
+      }
+      timedBy = r;
+      carried = carried + r.ratePerSecond.min(routeCapacity(c, r));
+      if (carried >= use) break;
+    }
+    targets[key] = (stops[key]! + _useInTransit(s, c, timedBy, cache)).min(
+      cache.cap(to),
+    );
+  }
+  return targets;
 }
 
 /// [routeRoomBeforeStop] given the shared [targets] ([_stopTargets]) and

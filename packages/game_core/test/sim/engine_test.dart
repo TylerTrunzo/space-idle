@@ -1171,6 +1171,78 @@ void main() {
         expect(brine, lessThan(sent * 0.01));
       });
 
+      test('a nearer route too slow for the demand leaves the farther one '
+          'room for its trip: fully supplied, at 1 s and 60 s', () {
+        // Hollow Reach's smelters use 1.2 ore a second; Kora (120 s) sends
+        // at most [rate], Brine (180 s) 2 a second. A target timed by
+        // Kora's trip kept Brine's lots too small, and the smelters ran at
+        // 76-95%.
+        (double, double, double) supply(double stop, double rate, double step) {
+          final s = engine.newGame(1);
+          s.faction('player').baseCrew = 100;
+          final reach = s.body('hollow_reach')..ownerId = 'player';
+          s.body('brine').ownerId = 'player';
+          for (var i = 0; i < 3; i++) {
+            reach.buildings.add(
+              BuildingState(id: s.newId('b'), defId: 'smelter', crew: 1),
+            );
+          }
+          for (final b in s.body('kora').buildings) {
+            b.crew = 0;
+          }
+          for (final from in ['kora', 'brine']) {
+            s.body(from)
+              ..stock['iron_ore'] = n(1e6)
+              ..stock['cargo_ship'] = n(1);
+            engine.apply(
+              s,
+              CreateRouteCommand(
+                'player',
+                from,
+                'hollow_reach',
+                'iron_ore',
+                n(from == 'kora' ? rate : 2),
+                1,
+                stopAtDestination: n(stop),
+              ),
+            );
+          }
+          engine.advance(s, 3600, maxStep: step);
+          final steel = s.faction('player').lifetimeProduced['steel']!;
+          var wasted = 0.0;
+          var most = 0.0;
+          for (var i = 0; i < 6 * 3600 ~/ step; i++) {
+            engine.tick(s, step);
+            wasted += reach.wastedThisStep['iron_ore']?.toDouble() ?? 0;
+            most = math.max(most, reach.stock['iron_ore']!.toDouble());
+          }
+          final used =
+              (s.faction('player').lifetimeProduced['steel']! - steel)
+                  .toDouble() *
+              2;
+          return (used / (1.2 * 6 * 3600), wasted, most);
+        }
+
+        for (final (stop, rate) in [
+          (10.0, 0.2),
+          (10.0, 0.4),
+          (10.0, 0.8),
+          (50.0, 0.2),
+        ]) {
+          final (coarse, wasteCoarse, mostCoarse) = supply(stop, rate, 60);
+          final (live, wasteLive, mostLive) = supply(stop, rate, 1);
+          final why = 'stop $stop, Kora $rate';
+          expect(coarse, greaterThan(0.995), reason: why);
+          expect(live, greaterThan(0.995), reason: why);
+          expect(coarse, closeTo(live, 0.01), reason: why);
+          expect(wasteCoarse + wasteLive, lessThan(1), reason: why);
+          // No overfill: never more than the stop plus a farther trip's use.
+          for (final most in [mostCoarse, mostLive]) {
+            expect(most, lessThan(stop + 1.2 * 180 + 1.2 * 60), reason: why);
+          }
+        }
+      });
+
       test('with the nearer one out of stock, the other keeps the store '
           'supplied', () {
         final (sent, used, wasted, held) = play(500, koraOre: 0);

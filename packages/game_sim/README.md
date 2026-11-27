@@ -82,8 +82,9 @@ runs dry and settles near its level, and 60 s steps move what 1 s steps do.
 The store plus the cargo on its way never pass the storage cap, even when
 nothing there can use what arrives. Several routes with stop levels into
 one store share one target (the highest of their levels, plus the trip's
-use of the nearest of them whose source has stock) and its room, the
-nearest sending first and the others topping it up, so none is left paused
+use of the farthest of them needed to meet the destination's use, counting
+stocked routes nearest first) and its room, the nearest sending first and
+the others topping it up, so none is left paused
 by another's longer trip. A level
 above the destination's storage cap is cut to the cap; the reply ends "The
 stop level was cut to Brine's storage cap: stock above it is wasted". Moved
