@@ -59,14 +59,14 @@ extension _Megaprojects on _View {
       final payCredits = owedCredits != null && !_affordable(owedCredits);
       anyCredits = anyCredits || payCredits;
       if (now != null &&
-          now.goods == GoodsFeedMode.always &&
+          now.goods == GoodsFeedMode.nearReady &&
           now.credits == payCredits) {
         continue;
       }
       setting ??= SetMegaprojectAutoCommand(
         factionId,
         m.id,
-        goods: GoodsFeedMode.always,
+        goods: GoodsFeedMode.nearReady,
         credits: payCredits,
       );
     }

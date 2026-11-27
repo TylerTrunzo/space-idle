@@ -55,6 +55,11 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Mass Driver.** Opens at Orbital Station level 1 (`requiresMegaproject`). It takes credits and bulk
   goods that otherwise saturate (hull plate, copper wire, water, silicon wafers), costs ×2.3 a level,
   and each level runs extractors and tier-1 buildings ×1.15 faster (inputs and outputs), compounding.
+  Stage 1.7 measured other ranges (tiers 1–2, 2 only, 0–2, at ×1.15 to ×1.4) on the balanced bot's
+  day-7 and day-14 states: none adds 3% of steady income a level (at most 1.3% on day 7, nothing on
+  day 14), and any range with tier 2 makes the balanced bot's kits, modules and ships pass the
+  "tens per 6 h" target, so it stays at tiers 0–1. What a level used to cost was the goods its next
+  stage took from sales; feeding goods only near ready (`setMegaprojectAuto`) removes that.
   It asks for no food (habitats eat all a young economy makes) and no steel (plate presses take it for
   the station's hull plates), and it does not deepen markets: deeper tier 0–1 markets made those goods
   most of an optimizer's sales. Tuned in stage 1.6 so a casual player opens it on days 6–8 and gets a

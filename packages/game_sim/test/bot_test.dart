@@ -274,7 +274,7 @@ void main() {
             .whereType<SetMegaprojectAutoCommand>()
             .where((c) => c.megaprojectId == 'orbital_station')
             .toList();
-        expect(settings.first.goods, GoodsFeedMode.always);
+        expect(settings.first.goods, GoodsFeedMode.nearReady);
         expect(settings.map((c) => c.credits), everyElement(isFalse));
         expect(
           megaprojectStageOf(s, 'player', 'orbital_station'),
@@ -317,7 +317,7 @@ void main() {
         'player',
       ).creditsPerSec.toDouble();
       expect(income, greaterThan(0));
-      expect(cmd.goods, GoodsFeedMode.always);
+      expect(cmd.goods, GoodsFeedMode.nearReady);
       expect(cmd.credits, isTrue);
       // The shared reserve is set first, before any credits go in.
       final reserve = cmds.whereType<SetAutoPayReserveCommand>().single;
@@ -422,8 +422,10 @@ void main() {
 
     test('auto-sell holds what a stage fed on its own lacks, once', () {
       final e = _engine();
+      // Credits to pay for the stage: it is near ready, so fed at once.
       final s = e.newGame(1)
-        ..body('kora').stock['station_segment'] = BigNum.from(1);
+        ..body('kora').stock['station_segment'] = BigNum.from(1)
+        ..faction('player').credits = BigNum.from(1e9);
       expect(
         e.apply(
           s,
