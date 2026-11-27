@@ -233,6 +233,8 @@ final class FlowReport {
   ///
   /// Worked out the first time it is read, from the state the report was
   /// built from: it plays a copy of it forward, which costs several ticks.
+  /// Until then the report keeps two copies of that state; it drops them
+  /// once this is read.
   late final BigNum creditsPerSec = _creditsPerSec();
 
   final BigNum Function() _creditsPerSec;
@@ -417,11 +419,18 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
       ),
     );
   }
-  if (_noSales(c, copy.faction(factionId), owned, bodies) case final unsold?) {
+  final unsold = _unsoldNet(
+    c,
+    copy.faction(factionId),
+    owned,
+    crewEff,
+    bonuses,
+  );
+  if (unsold.isNotEmpty) {
     // Faction-wide: first in report order.
     bottlenecks.add((
       -1,
-      unsold.neck._with(lostCreditsPerHour: _valuePerHour(s, c, unsold.net)),
+      _noSales._with(lostCreditsPerHour: _valuePerHour(s, c, unsold)),
     ));
   }
   bottlenecks.sort((x, y) {
@@ -432,19 +441,27 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     for (final seen in s.faction(factionId).seenBottlenecks)
       seen.key: seen.firstSeenAt,
   };
+  // Credits per second is worked out only when asked for, on the two
+  // copies, which nothing else reads once the report is built; the report
+  // lets go of them once it has, so it holds no state but its own.
+  GameState? played = probe;
+  GameState? sold = copy;
   return FlowReport(
     bodies: bodies,
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
-    // Worked out only when asked for, on the two copies, which nothing
-    // else reads once the report is built.
-    creditsPerSec: () => saleRevenuePerSec(
-      probe,
-      c,
-      factionId,
-      crewEff: crewEff,
-      bonuses: bonuses,
-      market: copy,
-    ),
+    creditsPerSec: () {
+      final v = saleRevenuePerSec(
+        played!,
+        c,
+        factionId,
+        crewEff: crewEff,
+        bonuses: bonuses,
+        market: sold!,
+      );
+      played = null;
+      sold = null;
+      return v;
+    },
     bottlenecks: [
       for (final (_, b) in bottlenecks)
         b._with(firstSeenAt: since[b.key] ?? s.time),
@@ -494,7 +511,14 @@ void noteBottlenecks(GameState s, Content c, double at) {
       for (final b in s.bodies)
         if (b.ownerId == f.id) b,
     ];
-    if (!_sellsOn(f, owned) && _madeSellable(c, owned)) {
+    final unsold = _unsoldNet(
+      c,
+      f,
+      owned,
+      crewEfficiency(s, c, f.id),
+      bonusesFor(s, c, f.id),
+    );
+    if (unsold.isNotEmpty) {
       see(BottleneckKind.noSales.name, null, null, null);
     }
     for (final body in s.bodies) {
@@ -528,63 +552,55 @@ void noteBottlenecks(GameState s, Content c, double at) {
   }
 }
 
-/// Whether a building on the [owned] bodies ran its last step and makes
-/// a good with a price.
-bool _madeSellable(Content c, List<BodyState> owned) {
-  for (final body in owned) {
-    for (final b in body.buildings) {
-      if (b.lastRunFraction == 0) continue;
-      final def = c.buildings[b.defId]!;
-      final made = def.kind == BuildingKind.extractor
-          ? [?b.depositResourceId]
-          : def.outputs.keys;
-      if (made.any((id) => !c.resources[id]!.basePrice.isZero)) return true;
-    }
-  }
-  return false;
-}
+/// The no-sales bottleneck, before its lost credits are worked out.
+const _noSales = Bottleneck(
+  kind: BottleneckKind.noSales,
+  bodyId: null,
+  buildingId: null,
+  resourceId: null,
+  runFraction: 0,
+  message: 'Nothing is being sold: turn on auto-sell or sell goods',
+);
 
-/// Whether [f] has an auto-sell rule on one of the [owned] bodies.
-bool _sellsOn(FactionState f, Iterable<BodyState> owned) {
-  final ids = {for (final b in owned) b.id};
-  return f.autoSell.any((r) => ids.contains(r.bodyId));
-}
-
-/// The no-sales bottleneck of [f], with the net production per second
-/// it leaves unsold, or null: when it has no auto-sell rule on the
-/// [owned] bodies and its buildings make more of some good with a price
-/// than they use ([flows], the report's bodies).
-({Bottleneck neck, Map<String, BigNum> net})? _noSales(
+/// Resource id to what [f]'s buildings on the [owned] bodies make a
+/// second of each good with a price beyond what they use, at the run
+/// fractions they last settled on ([fullRateFlow] at [crewEff] with
+/// [bonuses]), the positive entries only, in content order; empty when
+/// [f] has an auto-sell rule on one of those bodies.
+///
+/// The one test for [BottleneckKind.noSales], in the report and in
+/// [noteBottlenecks] alike, so the time it was first seen matches what
+/// the report shows.
+Map<String, BigNum> _unsoldNet(
   Content c,
   FactionState f,
   List<BodyState> owned,
-  List<BodyFlow> flows,
+  double crewEff,
+  EmpireBonuses bonuses,
 ) {
-  if (_sellsOn(f, owned)) return null;
-  final net = <String, BigNum>{};
-  for (final r in c.resources.values) {
-    if (r.basePrice.isZero) continue;
-    var v = const BigNum.zero();
-    for (final b in flows) {
-      v =
-          v +
-          (b.producedPerSec[r.id] ?? const BigNum.zero()) -
-          (b.consumedPerSec[r.id] ?? const BigNum.zero());
+  final ids = {for (final b in owned) b.id};
+  if (f.autoSell.any((r) => ids.contains(r.bodyId))) return const {};
+  final made = <String, BigNum>{};
+  final used = <String, BigNum>{};
+  for (final body in owned) {
+    for (final b in body.buildings) {
+      if (b.lastRunFraction == 0) continue;
+      final flow = fullRateFlow(c, body, b, 1, crewEff, bonuses: bonuses);
+      _addAll(made, _scaled(flow.outputs, b.lastRunFraction));
+      _addAll(used, _scaled(flow.inputs, b.lastRunFraction));
     }
-    if (v > const BigNum.zero()) net[r.id] = v;
   }
-  if (net.isEmpty) return null;
-  return (
-    neck: const Bottleneck(
-      kind: BottleneckKind.noSales,
-      bodyId: null,
-      buildingId: null,
-      resourceId: null,
-      runFraction: 0,
-      message: 'Nothing is being sold: turn on auto-sell or sell goods',
-    ),
-    net: net,
-  );
+  // Float residue of made ≈ used snaps to zero (see [changeBetween]).
+  return {
+    for (final r in c.resources.values)
+      if (!r.basePrice.isZero)
+        if (changeBetween(
+              made[r.id] ?? const BigNum.zero(),
+              used[r.id] ?? const BigNum.zero(),
+            )
+            case final v when v > const BigNum.zero())
+          r.id: v,
+  };
 }
 
 /// The crew-shortage bottleneck of [factionId], or null when its crew

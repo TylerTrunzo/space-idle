@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:game_core/game_core.dart';
 import 'package:test/test.dart';
 
+import '../sim/economy_fixture.dart' as fx;
 import '../state/helpers.dart';
 
 BigNum n(num v) => BigNum.from(v);
@@ -103,6 +104,65 @@ void main() {
       s.faction('player').seenBottlenecks.map((b) => b.kind),
       contains(BottleneckKind.noSales.name),
     );
+  });
+
+  test('noSales is noted over time exactly when the report shows it', () {
+    // A press makes plates from a stock of ore and a stamper uses every
+    // plate for widgets, which have no price: buildings run and make a
+    // good with a price, but nothing is left over to sell.
+    final base = fx.pressContent();
+    final content = Content(
+      rules: base.rules,
+      resources: {
+        ...base.resources,
+        'widget': ResourceDef(
+          id: 'widget',
+          name: 'Widget',
+          tier: 2,
+          basePrice: const BigNum.zero(),
+        ),
+      },
+      buildings: {
+        ...base.buildings,
+        'stamper': BuildingDef(
+          id: 'stamper',
+          name: 'Stamper',
+          kind: BuildingKind.factory,
+          cycleSeconds: 2,
+          inputs: const {'plate': 1},
+          outputs: const {'widget': 1},
+          crewSlots: 1,
+          buildCost: const {},
+        ),
+      },
+      bodyTypes: base.bodyTypes,
+      galaxy: base.galaxy,
+      milestones: base.milestones,
+    );
+    final e = GameEngine(content);
+    final t = e.newGame(1);
+    t.body('a')
+      ..stock['ore'] = n(1e3)
+      ..buildings.addAll([
+        BuildingState(id: 'press', defId: 'press', crew: 1),
+        BuildingState(id: 'stamper', defId: 'stamper', crew: 1),
+      ]);
+    e.tick(t, 1);
+    expect(t.body('a').buildings.first.lastRunFraction, 1);
+    bool noted() => t
+        .faction('p')
+        .seenBottlenecks
+        .any((b) => b.kind == BottleneckKind.noSales.name);
+    bool shown() => buildFlowReport(
+      t,
+      content,
+      'p',
+    ).bottlenecks.any((b) => b.kind == BottleneckKind.noSales);
+    expect((noted(), shown()), (false, false));
+    // Without the stamper the plates pile up unsold: both see it.
+    t.body('a').buildings.removeLast();
+    e.tick(t, 1);
+    expect((noted(), shown()), (true, true));
   });
 
   test('building statuses report run, crew and slots', () {
@@ -393,7 +453,8 @@ void main() {
       ..advance(s, 125);
     final before = jsonEncode(s.toJson());
     final wasted = Map.of(kora.wastedThisStep);
-    buildFlowReport(s, c, 'player');
+    // Credits per second plays copies forward when read: still not [s].
+    expect(buildFlowReport(s, c, 'player').creditsPerSec.isNegative, isFalse);
     expect(jsonEncode(s.toJson()), before);
     expect(kora.wastedThisStep, wasted);
   });

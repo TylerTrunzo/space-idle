@@ -196,6 +196,9 @@ final class GameEngine {
   /// Throws [ArgumentError], changing nothing, if [dt] is not finite and
   /// above zero.
   void tick(GameState s, double dt) {
+    // `measuredSaleRevenue` (report/steady_revenue.dart) mirrors the
+    // economy steps below for the report's credits per second: a step
+    // added or moved here belongs there too.
     if (!dt.isFinite || dt <= 0) {
       throw ArgumentError.value(dt, 'dt', 'must be finite and > 0');
     }
