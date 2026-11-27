@@ -40,8 +40,8 @@ double marketDepthFor(
 }
 
 /// Current price per unit of [resourceId]: base price × saturation. The
-/// plain market price, what contracts value goods at; a faction's market
-/// sales earn [salePrice].
+/// plain market price, the same for every faction; what a faction's sales
+/// earn, and what its contracts value goods at, is [salePrice].
 BigNum price(GameState s, Content c, String resourceId) => c
     .resources[resourceId]!
     .basePrice
