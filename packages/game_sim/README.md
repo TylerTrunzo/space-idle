@@ -59,8 +59,11 @@ every minute, and `"nearReady"` only once the stage is near ready, until it
 is paid for. A stage is near ready when the credits it still owes are no more
 than the credits above the reserve plus 12 hours (`nearReadyHorizonSeconds`
 in the rules) of what credit auto-pay gives it, or, with `credits` off, no
-more than the credits you hold; until then its goods sell as usual (`state`
-shows `goodsFedNow`). `true` and `false`, from older scripts, mean
+more than the credits you hold (all of them, the reserve included: the reserve
+only limits auto-pay); until then its goods sell as usual (`state` shows
+`goodsFedNow`). The rate is your sales a second since the last game minute,
+so a one-minute spike (a new auto-sell rule emptying a full store) can start
+the feeding early; once started it goes on until the stage is paid. `true` and `false`, from older scripts, mean
 `"always"` and `"off"`. With `credits` (default false) it takes a share of the
 credits above the faction's one auto-pay reserve, set with
 `{"cmd":"setAutoPayReserve","credits":"5e6"}` (0 until set). The credits
@@ -68,7 +71,7 @@ above the reserve are split among the megaprojects taking credits that still
 owe some, in proportion to `creditWeight` (0 to 10, default 1; another value
 fails with `invalidAmount`), a share one cannot use going to the others. At
 weight 0 a megaproject takes credits only when none of the others owing has a
-weight. No goods and no credits clears it. It may be set while the
+weight; when all of those owing are at 0, they share evenly. No goods and no credits clears it. It may be set while the
 megaproject is locked. Between minutes auto-sell holds back what a fed stage
 still needs, up to the storage cap, and what a body holds of it above the cap
 goes in at once, so deliveries are the same for any step size.

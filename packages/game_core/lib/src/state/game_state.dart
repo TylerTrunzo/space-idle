@@ -63,8 +63,11 @@ enum GoodsFeedMode {
   /// decides, until that stage is paid for: its credits still owed are no
   /// more than the credits above the auto-pay reserve plus
   /// `RulesDef.nearReadyHorizonSeconds` of the credits auto-pay gives it a
-  /// second (with credit auto-pay off, no more than the credits held).
-  /// Until then its goods sell as if it were not fed.
+  /// second (with credit auto-pay off, no more than the credits held, all
+  /// of them: the reserve only limits auto-pay). Until then its goods sell
+  /// as if it were not fed. The rate is sales a second over the last game
+  /// minute, so a one-minute spike of sales can start the feeding early;
+  /// once started it goes on until the stage is paid.
   nearReady,
 
   /// Every game minute, whatever the stage still owes.
