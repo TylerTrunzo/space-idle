@@ -784,6 +784,7 @@ final class ContractTemplateDef {
     BigNum? minQuantity,
     this.maxQuantity,
     this.rewardIncomeSeconds = 0,
+    this.rewardCapIncomeSeconds,
   }) : minQuantity = minQuantity ?? BigNum.from(defaultMinQuantity);
 
   /// [quantitySeconds] when a template does not set it: 4 hours.
@@ -827,6 +828,12 @@ final class ContractTemplateDef {
   /// Seconds of the faction's income a contract pays at least, so a
   /// capped order still pays its way; zero for none.
   final double rewardIncomeSeconds;
+
+  /// Seconds of the faction's income a contract pays at most, above zero
+  /// and at least [rewardIncomeSeconds], so an order is never worth more
+  /// than that much play; null for no cap. The first contract a faction
+  /// is ever offered is exempt (see `stepContracts`).
+  final double? rewardCapIncomeSeconds;
 }
 
 /// All game content, validated.

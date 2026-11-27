@@ -131,6 +131,7 @@ final class _Loader {
               'minQuantity',
               'maxQuantity',
               'rewardIncomeSeconds',
+              'rewardCapIncomeSeconds',
             },
             _contractTemplate,
           )
@@ -884,6 +885,17 @@ final class _Loader {
       fallback: 0,
       ge: 0,
     );
+    final rewardCapIncomeSeconds = f.map.containsKey('rewardCapIncomeSeconds')
+        ? f.number('rewardCapIncomeSeconds', gt: 0)
+        : null;
+    if (rewardCapIncomeSeconds != null &&
+        rewardIncomeSeconds != null &&
+        rewardCapIncomeSeconds < rewardIncomeSeconds) {
+      f.err(
+        'rewardCapIncomeSeconds',
+        'must be >= rewardIncomeSeconds (${_fmt(rewardIncomeSeconds)})',
+      );
+    }
     if (_errors.length > before) return null;
     return ContractTemplateDef(
       id: id,
@@ -895,6 +907,7 @@ final class _Loader {
       minQuantity: minQuantity,
       maxQuantity: maxQuantity,
       rewardIncomeSeconds: rewardIncomeSeconds!,
+      rewardCapIncomeSeconds: rewardCapIncomeSeconds,
     );
   }
 

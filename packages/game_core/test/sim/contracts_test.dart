@@ -132,6 +132,19 @@ void main() {
       expect(t.minQuantity, n(ContractTemplateDef.defaultMinQuantity));
       expect(t.maxQuantity, isNull);
       expect(t.rewardIncomeSeconds, 0);
+      expect(t.rewardCapIncomeSeconds, isNull);
+    });
+
+    test('a reward cap of at least the floor loads', () {
+      final c = contentWith((b) {
+        final t = template(b)
+          ..['rewardIncomeSeconds'] = 600
+          ..['rewardCapIncomeSeconds'] = 600;
+        expect(t, isNotEmpty);
+      });
+      final t = c.contractTemplates.values.first;
+      expect(t.rewardIncomeSeconds, 600);
+      expect(t.rewardCapIncomeSeconds, 600);
     });
 
     test('content without contracts posts none', () {
@@ -190,6 +203,18 @@ void main() {
       'negative reward income seconds': (
         (t) => t['rewardIncomeSeconds'] = -1,
         'rewardIncomeSeconds: must be >= 0',
+      ),
+      'a reward cap below the floor': (
+        (t) => t
+          ..['rewardIncomeSeconds'] = 600
+          ..['rewardCapIncomeSeconds'] = 599,
+        'rewardCapIncomeSeconds: must be >= rewardIncomeSeconds (600)',
+      ),
+      'a zero reward cap': (
+        (t) => t
+          ..['rewardIncomeSeconds'] = 0
+          ..['rewardCapIncomeSeconds'] = 0,
+        'rewardCapIncomeSeconds: must be > 0',
       ),
       'an unknown field': (
         (t) => t['expires'] = 3600,
