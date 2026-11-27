@@ -14,10 +14,10 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   crew never pays back more than about 1.7× faster than a speed level (capacity's base is 6× speed's).
   Efficiency counts on its own (×1.2 a level) and stops at 25% of inputs, shown as maxed.
 - **Crew.** A habitat's capacity levels raise its housing and its food, water and oxygen use alike
-  (+25% each a level), so every crew costs the same upkeep. Each costs ×2.5 the last (stage 1.7; was
-  ×1.2, when 64 levels cost 200K and buy-max made crew irrelevant from day 2): and as buy-max fills
-  free crew first with capacity on buildings whose slots are full, a buy-max casual keeps only 8-12%
-  of its crew free on days 1 to 4 and 2% after.
+  (+25% each a level), so every crew costs the same upkeep. Each costs ×2 the last (stage 1.7; was
+  ×1.2, when 64 levels cost 200K and buy-max made crew irrelevant from day 2). With buy-max filling
+  free crew first (capacity on buildings whose slots are full), a buy-max casual keeps 9-15% of its
+  crew free on days 1 to 4 and 2-6% after: housing binds, as it does for the balanced bot.
 - **Equipment.** Outpost kits, habitat modules and cargo ships are for use, not trade: markets one unit deep,
   and their makers have no speed or capacity track. Each maker makes a steady 36–72 every 6 h; more
   needs another building. Claims after the first cost 5 + 5 × (bodies owned − 1) kits.

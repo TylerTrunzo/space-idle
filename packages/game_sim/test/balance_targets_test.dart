@@ -108,7 +108,7 @@ void main() {
       // are sold, each at its market's cap: hull plates and circuits earned
       // about 36% each (the Task 8 report). Stage 1.7 task 4's bots feed
       // megaprojects credits as they earn them, and the Mass Driver's sale
-      // bonus covers both: hull plates earn 44-51% on seeds 1-3 (38-41%
+      // bonus covers both: hull plates earn 44-52% on seeds 1-3 (38-41%
       // at the task's base). A known concentration, accepted for stage
       // 1.7 (the limit was 40%) until stage 3's market-wall content (tier
       // 4 recipes, faction buyers, regional demand) spreads sales out.
