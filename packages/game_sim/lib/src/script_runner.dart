@@ -12,6 +12,7 @@ const _metaCommands = {
   'save',
   'load',
   'costs',
+  'catalog',
 };
 
 /// Command names `Command.fromJson` understands.
@@ -53,6 +54,23 @@ Map<String, Object?> _num(BigNum v) => {
 
 Map<String, Object?> _nums(Map<String, BigNum> m) => {
   for (final e in m.entries) e.key: _num(e.value),
+};
+
+/// A rate a second for display: [formatNumber] from 1 up, else three
+/// significant figures, so a slow rate such as 0.00333 does not read as 0.
+String _rateText(BigNum v) {
+  final d = v.toDouble();
+  if (d == 0 || d.abs() >= 1) return formatNumber(v);
+  final fixed = d.toStringAsPrecision(3);
+  return fixed.contains('e')
+      ? fixed
+      : fixed.replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
+/// Rates a second as JSON: the raw value and [_rateText].
+Map<String, Object?> _rates(Map<String, BigNum> m) => {
+  for (final e in m.entries)
+    e.key: {'value': e.value.toJson(), 'display': _rateText(e.value)},
 };
 
 /// A bottleneck as JSON. With [awayFrom], the start of an absence that
@@ -147,12 +165,17 @@ final class ScriptRunner {
         };
         final spent = keyed(o.spent);
         final gained = keyed(o.gained);
+        final recipe = o is Built ? _builtRecipe(o) : null;
         return {
           'ok': true,
           'createdId': ?createdId,
           'message': ?_message(cmd, o),
           if (spent.isNotEmpty) 'spent': _nums(spent),
           if (gained.isNotEmpty) 'gained': _nums(gained),
+          if (recipe != null && recipe.inputs.isNotEmpty)
+            'inputsPerSec': _rates(recipe.inputs),
+          if (recipe != null && recipe.outputs.isNotEmpty)
+            'outputsPerSec': _rates(recipe.outputs),
         };
     }
   }
@@ -180,8 +203,7 @@ final class ScriptRunner {
     final c = engine.content;
     String body(String id) => state.body(id).name;
     return switch (o) {
-      Built(:final bodyId, :final buildingId, :final defId, :final crew) =>
-        _builtMessage(defId, bodyId, buildingId, crew),
+      Built() => _builtMessage(o),
       Demolished(:final bodyId, :final buildingId, :final defId) =>
         'Demolished ${_describe(defId, bodyId, buildingId)}'
             '${o.gained.isEmpty ? '' : '; got back ${_list(o.gained)}'}',
@@ -246,13 +268,133 @@ final class ScriptRunner {
     return capital ? '${text[0].toUpperCase()}${text.substring(1)}' : text;
   }
 
-  /// "Built Shipyard on Kora (b9) with 2 of 2 crew": a new [defId] and the
-  /// [crew] it took of its base slots, which a building without crew slots
-  /// leaves out.
-  String _builtMessage(String defId, String bodyId, String id, int crew) {
-    final slots = engine.content.buildings[defId]!.crewSlots;
-    final staff = slots == 0 ? '' : ' with $crew of $slots crew';
-    return 'Built ${_describe(defId, bodyId, id)}$staff';
+  /// "Built Shipyard on Kora (b9) with 2 of 2 crew. At full crew it uses
+  /// 0.0333 Steel and 0.0133 Circuit a second and makes 0.00333 Cargo Ship
+  /// a second": a new [defId], the [crew] it took of its base slots (which
+  /// a building without crew slots leaves out) and its whole recipe
+  /// ([_builtRecipe]), so no input shows up only once it runs short.
+  String _builtMessage(Built o) {
+    final def = engine.content.buildings[o.defId]!;
+    final slots = def.crewSlots;
+    final staff = slots == 0 ? '' : ' with ${o.crew} of $slots crew';
+    final recipe = _builtRecipe(o);
+    final runs = slots == 0 ? 'Running fully it' : 'At full crew it';
+    final parts = [
+      if (recipe.inputs.isNotEmpty) 'uses ${_rateList(recipe.inputs)}',
+      if (recipe.outputs.isNotEmpty) 'makes ${_rateList(recipe.outputs)}',
+      if (def.housing > 0) 'houses ${def.housing} crew',
+    ];
+    final what = parts.isEmpty ? '' : '. $runs ${parts.join(' and ')}';
+    return 'Built ${_describe(o.defId, o.bodyId, o.buildingId)}$staff$what';
+  }
+
+  /// Resource id to units a second as "0.0333 Steel and 0.0133 Circuit a
+  /// second", or "a, b and c a second" for more ([_rateText]).
+  String _rateList(Map<String, BigNum> m) {
+    final c = engine.content;
+    final items = [
+      for (final MapEntry(key: id, value: v) in m.entries)
+        '${_rateText(v)} ${c.resources[id]!.name}',
+    ];
+    final last = items.removeLast();
+    return '${items.isEmpty ? last : '${items.join(', ')} and $last'} '
+        'a second';
+  }
+
+  /// What the building [o] put up takes and makes a second at its base
+  /// level with its base crew slots full ([_recipe]): an extractor its
+  /// deposit's resource at that deposit's richness.
+  ({Map<String, BigNum> inputs, Map<String, BigNum> outputs}) _builtRecipe(
+    Built o,
+  ) {
+    final def = engine.content.buildings[o.defId]!;
+    final recipe = _recipe(def);
+    if (def.kind != BuildingKind.extractor) return recipe;
+    final body = state.body(o.bodyId);
+    final b = body.buildings.firstWhere((x) => x.id == o.buildingId);
+    final id = b.depositResourceId;
+    final deposit = body.deposits.where((d) => d.resourceId == id).firstOrNull;
+    final rate = recipe.outputs[id];
+    return (
+      inputs: recipe.inputs,
+      outputs: {
+        if (id != null && deposit != null && rate != null)
+          id: rate.mulDouble(deposit.richness),
+      },
+    );
+  }
+
+  /// What a [def] building takes and makes a second at its base level with
+  /// its base crew slots full: each recipe amount over its cycle seconds;
+  /// for an extractor, every resource it can mine at richness 1; nothing
+  /// for a building that runs no recipe.
+  ({Map<String, BigNum> inputs, Map<String, BigNum> outputs}) _recipe(
+    BuildingDef def,
+  ) {
+    if (!runsRecipe(def)) return (inputs: const {}, outputs: const {});
+    Map<String, BigNum> perSecond(Map<String, double> perCycle) => {
+      for (final MapEntry(key: id, value: v) in perCycle.entries)
+        id: BigNum.from(v / def.cycleSeconds),
+    };
+    return (inputs: perSecond(def.inputs), outputs: perSecond(def.outputs));
+  }
+
+  /// Every building type in content order: what it costs, its crew slots,
+  /// what it takes and makes a second ([_recipe]), housing or storage it
+  /// adds, and the player's bodies that can host one now (a free build
+  /// slot and, for an extractor, a deposit it can mine, with the rate
+  /// there).
+  Map<String, Object?> _catalog() {
+    final c = engine.content;
+    final owned = [
+      for (final b in state.bodies)
+        if (b.ownerId == _player.id) b,
+    ];
+    return {
+      'ok': true,
+      'buildings': [
+        for (final d in c.buildings.values) _catalogEntry(d, owned),
+      ],
+    };
+  }
+
+  Map<String, Object?> _catalogEntry(BuildingDef d, List<BodyState> owned) {
+    final c = engine.content;
+    final recipe = _recipe(d);
+    final hosts = <Map<String, Object?>>[];
+    for (final body in owned) {
+      if (body.buildings.length >= buildSlots(c, body)) continue;
+      if (d.kind != BuildingKind.extractor) {
+        hosts.add({'bodyId': body.id, 'name': body.name});
+        continue;
+      }
+      final deposits = [
+        for (final x in body.deposits)
+          if (d.extracts.contains(x.resourceId))
+            {
+              'resourceId': x.resourceId,
+              'name': c.resources[x.resourceId]!.name,
+              'richness': x.richness,
+              'outputPerSec': _rates({
+                'rate': recipe.outputs[x.resourceId]!.mulDouble(x.richness),
+              })['rate'],
+            },
+      ];
+      if (deposits.isEmpty) continue;
+      hosts.add({'bodyId': body.id, 'name': body.name, 'deposits': deposits});
+    }
+    return {
+      'id': d.id,
+      'name': d.name,
+      'kind': d.kind.name,
+      'cost': _nums(d.buildCost),
+      'crewSlots': d.crewSlots,
+      'inputsPerSec': _rates(recipe.inputs),
+      'outputsPerSec': _rates(recipe.outputs),
+      if (d.housing > 0) 'housing': d.housing,
+      if (d.storageBonus > 0) 'storageBonus': d.storageBonus,
+      'canBuildOn': hosts,
+    };
   }
 
   /// [n] cargo ships by their display name, such as "2 Cargo Ships".
@@ -330,6 +472,7 @@ final class ScriptRunner {
         'state' => _state(),
         'save' => _save(line),
         'load' => _load(line),
+        'catalog' => _catalog(),
         _ => _costs(),
       };
 

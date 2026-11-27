@@ -220,15 +220,25 @@ String? _howToMake(Content c, String resourceId) {
   return ways.isEmpty ? null : ways.join('. ');
 }
 
-/// The building types [body] can hold, as "Mine (mine), Smelter
-/// (smelter)", in content order: every one but an extractor that can mine
-/// none of the body's deposits.
+/// The building types [body] can hold, with what each costs, as "Mine
+/// (mine, 100 credits), Depot (depot, 800 credits and 50 Steel)", in
+/// content order: every one but an extractor that can mine none of the
+/// body's deposits.
 String _buildable(Content c, BodyState body) => [
   for (final d in c.buildings.values)
     if (d.kind != BuildingKind.extractor ||
         body.deposits.any((x) => d.extracts.contains(x.resourceId)))
-      '${d.name} (${d.id})',
+      '${d.name} (${d.id}, ${_costText(c, d.buildCost)})',
 ].join(', ');
+
+/// [cost] as "800 credits and 50 Steel", in its order; "nothing" when
+/// empty.
+String _costText(Content c, Map<String, BigNum> cost) => cost.isEmpty
+    ? 'nothing'
+    : _and([
+        for (final MapEntry(key: id, value: v) in cost.entries)
+          '${formatNumber(v)} ${_costName(c, id)}',
+      ]);
 
 /// Takes [cost] from [f]'s credits and [stockBody]'s stock, snapping float
 /// residue below zero to zero ([takeFrom]).

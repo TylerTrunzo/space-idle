@@ -374,8 +374,14 @@ void main() {
     });
     expect(
       yard['message'],
-      'Built Shipyard on Kora (${yard['createdId']}) with 2 of 2 crew',
+      'Built Shipyard on Kora (${yard['createdId']}) with 2 of 2 crew. At '
+      'full crew it uses 0.0333 Steel and 0.0133 Circuit a second and makes '
+      '0.00333 Cargo Ship a second',
     );
+    expect(yard['inputsPerSec'], {
+      'steel': {'value': '3.3333333333333335e-2', 'display': '0.0333'},
+      'circuit': {'value': '1.3333333333333335e-2', 'display': '0.0133'},
+    });
     final empty = r.handle({
       'cmd': 'build',
       'bodyId': 'kora',
@@ -384,7 +390,9 @@ void main() {
     });
     expect(
       empty['message'],
-      'Built Shipyard on Kora (${empty['createdId']}) with 0 of 2 crew',
+      startsWith(
+        'Built Shipyard on Kora (${empty['createdId']}) with 0 of 2 crew. ',
+      ),
     );
     r.state.body('kora').stock['steel'] = BigNum.from(50);
     final depot = r.handle({
@@ -393,6 +401,57 @@ void main() {
       'defId': 'depot',
     });
     expect(depot['message'], 'Built Depot on Kora (${depot['createdId']})');
+  });
+
+  test('catalog lists every building type and where it can go now', () {
+    final r = _runner();
+    final out = r.handle({'cmd': 'catalog'});
+    expect(out['ok'], isTrue);
+    final defs = (out['buildings']! as List).cast<Map<String, Object?>>();
+    final c = r.engine.content;
+    expect(defs.map((d) => d['id']), c.buildings.keys);
+    final yard = defs.singleWhere((d) => d['id'] == 'shipyard');
+    expect(yard['name'], 'Shipyard');
+    expect(yard['kind'], 'factory');
+    expect(yard['cost'], {
+      'credits': {'value': '1e3', 'display': '1K'},
+    });
+    expect(yard['crewSlots'], 2);
+    expect(
+      ((yard['inputsPerSec']! as Map)['steel']! as Map)['display'],
+      '0.0333',
+    );
+    expect(
+      ((yard['outputsPerSec']! as Map)['cargo_ship']! as Map)['display'],
+      '0.00333',
+    );
+    expect(yard['canBuildOn'], [
+      {'bodyId': 'kora', 'name': 'Kora'},
+    ]);
+    // An extractor lists the deposits it can mine on each body, with the
+    // rate there.
+    final mine = defs.singleWhere((d) => d['id'] == 'mine');
+    final kora = (mine['canBuildOn']! as List).single as Map;
+    expect(kora['bodyId'], 'kora');
+    final deposits = (kora['deposits']! as List).cast<Map<String, Object?>>();
+    expect(deposits.map((d) => d['resourceId']), contains('iron_ore'));
+    final iron = deposits.singleWhere((d) => d['resourceId'] == 'iron_ore');
+    expect((iron['outputPerSec']! as Map)['display'], '0.4');
+    // No ice on Kora, so no ice drill there.
+    final drill = defs.singleWhere((d) => d['id'] == 'ice_drill');
+    expect(drill['canBuildOn'], isEmpty);
+    // A full body hosts nothing.
+    final k = r.state.body('kora');
+    while (k.buildings.length < buildSlots(c, k)) {
+      k.buildings.add(
+        BuildingState(id: r.state.newId('b'), defId: 'depot', crew: 0),
+      );
+    }
+    final full = r.handle({'cmd': 'catalog'})['buildings']! as List;
+    expect(
+      full.every((d) => ((d as Map)['canBuildOn']! as List).isEmpty),
+      isTrue,
+    );
   });
 
   test('a claim after the first one says the kits it took', () {

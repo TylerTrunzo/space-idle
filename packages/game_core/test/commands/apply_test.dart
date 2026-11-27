@@ -1198,15 +1198,21 @@ void main() {
       // Kora has metal and silicon deposits but no ice or gas.
       final buildable = [
         for (final d in content.buildings.values)
-          if (d.id != 'ice_drill' && d.id != 'gas_skimmer')
-            '${d.name} (${d.id})',
+          if (d.id != 'ice_drill' && d.id != 'gas_skimmer') d.id,
       ];
       expect(
         msg,
-        'There is no building type smeltr. Kora can build: '
-        '${buildable.join(', ')}',
+        startsWith('There is no building type smeltr. Kora can build: '),
       );
-      expect(msg, contains('Mine (mine), Smelter (smelter), '));
+      for (final id in buildable) {
+        expect(msg, contains('($id, '));
+      }
+      // Each with what it costs.
+      expect(
+        msg,
+        contains('Mine (mine, 100 credits), Smelter (smelter, 150 credits), '),
+      );
+      expect(msg, contains('Depot (depot, 800 credits and 50 Steel)'));
       expect(msg, isNot(contains('Ice Drill')));
     });
 
