@@ -34,7 +34,7 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 
 | Line | What it does |
 |---|---|
-| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, stop level, whether they are paused, cargo in flight (`inFlight`) and travel time, every auto-sell rule with what it keeps back (`"keeps 7.8K (keepAtLeast 30 + 7.77K local use)"`), the contracts board and its future refills (a refill already due but waiting for something to ask for is counted in `contractsDue`, not shown as "0s"), and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
+| `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, stop level, whether they are paused, cargo in flight (`inFlight`) and travel time, every auto-sell rule with what it keeps back (`"keeps 7.8K (keepAtLeast 30 + 7.77K local use)"`, with `"+ 200 for open contracts"` on the body holding what open contracts still need), the contracts board and its future refills (a refill already due but waiting for something to ask for is counted in `contractsDue`, not shown as "0s"), and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
 | `{"cmd":"catalog"}` | Every building type: its cost, crew slots, what it takes and makes a second at its base level with full crew (an extractor at richness 1), housing or storage it adds, and which of your bodies can take one now (`canBuildOn`: a free slot and, for an extractor, a deposit it mines, with the rate there) |
 | `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what auto-sell earns a second in steady play: goods made from a stock nothing refills, and stock above an auto-sell keep, do not count, and a short run of play confirms it; it matches what a few hours away earn), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
 | `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), the survey cost and time, the next extra build slot on each body you own, and each megaproject's next level (`cost`, plus `stillNeeded` once part of it is delivered). Anything you cannot start right now says why instead of a cost, such as `"busy: an extra slot arrives in 25m"` or `"busy: level 3 is paid for and starts when level 2 is done, in 1h"` |
@@ -120,8 +120,14 @@ Things worth knowing:
 - Auto-sell never sells what the buildings on that body need for the next
   tick, or the next 10 seconds if the tick is shorter (route cargo lands in
   lots about 10 s apart), so it is safe on an input with `keepAtLeast` 0;
-  `state.autoSell` shows each rule's buffer. A route out of a body takes its
-  share before auto-sell sells the rest.
+  `state.autoSell` shows each rule's buffer. It also never sells what your
+  open contracts still need: that is held on the body with a rule on the good
+  that holds the most of it, up to its storage cap. A route out of a body
+  takes its share before auto-sell sells the rest.
+- Contracts ask only for goods you make now, about 1 h (bulk), 2 h
+  (components) or 3 h (advanced goods) of what your buildings make, and pay
+  3× the base price, between 10 minutes and 1 hour of your income. The very
+  first one has no cap. Food, water and oxygen are asked for less often.
 - The market pays less as you sell more of one good, but never pays less in
   total for selling more. Raw goods bottom out very low; refined goods and
   components hold their price better, so refining and diversifying pays.

@@ -17,10 +17,15 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Equipment.** Outpost kits, habitat modules and cargo ships are for use, not trade: markets one unit deep,
   and their makers have no speed or capacity track. Each maker makes a steady 36–72 every 6 h; more
   needs another building. Claims after the first cost 5 + 5 × (bodies owned − 1) kits.
-- **Contracts.** An order asks for about 4 h of what you make of a good, but never more than one of
-  your bodies can store, nor the template's `maxQuantity` (5,000 bulk goods, 1,000 components, 100
-  advanced goods). It pays 2.5× the base price per unit, and at least `rewardIncomeSeconds` of your
-  income when it is posted (30 min, 1 h and 2 h for those tiers), so a capped order still pays its way.
+- **Contracts.** An order asks only for a good your buildings make now, at least `minQuantity /
+  quantitySeconds` a second, so a trickle never gets one. It asks for `quantitySeconds` of what you make
+  of it, gross of what your own buildings use (1 h of bulk goods, 2 h of components, 3 h of advanced
+  goods), but never more than one of your bodies can store, nor the template's `maxQuantity` (5,000,
+  1,000 and 100) × (1 + your megaproject levels summed). It pays 3× the base price per unit, at least
+  `rewardIncomeSeconds` (10 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it is
+  posted. The first contract you are ever offered has no cap: it is the hook. Habitat goods (food,
+  water, oxygen) are drawn a quarter as often, so orders seldom compete with crew upkeep. Auto-sell
+  holds back what open contracts still need (on the body with the most of it).
 - **Orbital Station.** Each level's goods and credits are delivered bit by bit, from any body, so a
   level may cost far more than one body holds; its timer starts once the last of it is in.
 
