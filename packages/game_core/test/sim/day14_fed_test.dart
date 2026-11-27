@@ -11,7 +11,8 @@ import '../state/helpers.dart';
 /// open contract, both megaprojects fed, compounding bonuses). See the
 /// performance test in engine_test.dart for where the state comes from.
 void main() {
-  final c = shippedContent();
+  // The content the state was played with.
+  final c = fixtureContent();
   final e = GameEngine(c);
   GameState load() =>
       (SaveCodec.decode(

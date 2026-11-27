@@ -1206,7 +1206,9 @@ void main() {
           'is worth 10 minutes, so the orders are for the three goods worth '
           'most, between 1.5 times their sale value and the cap', () {
         // Its seed-1 save at 264 h: 106K of storage and 1.74M a second of
-        // income, with copper ore at 0.01.
+        // income, with copper ore at 0.01. Read with the content it was
+        // played with.
+        final content = fixtureContent();
         final s =
             (SaveCodec.decode(
                       File(

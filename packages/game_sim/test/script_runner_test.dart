@@ -1035,7 +1035,7 @@ void main() {
     expect(out['ok'], isTrue, reason: '$out');
     expect(
       out['message'],
-      'Started Orbital Station level 1 on Kora for 5M credits and '
+      'Started Orbital Station level 1 on Kora for 20M credits and '
       '200 Station Segment and 40 Survey Drone and 30 Reactor Core and '
       '1.5K Hull Plate; done in 2h',
     );
@@ -1166,7 +1166,7 @@ void main() {
                 as Map)['orbital_station']!
             as Map);
     expect(later['nextLevel'], 2);
-    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '3.75K');
+    expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '3K');
     expect(later.containsKey('stillNeeded'), isFalse);
   });
 
@@ -1699,7 +1699,7 @@ void main() {
       'level': 1,
       'etaSeconds': null,
       'message': startsWith(
-        'Next: Orbital Station level 1 still needs 5M credits and 200 '
+        'Next: Orbital Station level 1 still needs 20M credits and 200 '
         'Station Segment and ',
       ),
     });

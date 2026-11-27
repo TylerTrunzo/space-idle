@@ -678,6 +678,9 @@ void main() {
         // Balanced bot, seed 1, day 14, saved before the reserve was
         // shared: both megaprojects take credits (above the lower of their
         // two reserves, as the save is read) and lack nothing else.
+        // The content the state was played with.
+        final c = fixtureContent();
+        final e = GameEngine(c);
         final saved = File(
           'test/fixtures/review_balanced_day14.json',
         ).readAsStringSync();

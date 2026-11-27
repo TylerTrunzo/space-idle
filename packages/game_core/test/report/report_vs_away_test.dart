@@ -5,10 +5,10 @@ import 'package:test/test.dart';
 
 import '../state/helpers.dart';
 
-/// The shipped content with the Mass Driver's sale price at [factor] a
-/// level on tiers 1-2.
+/// The fixtures' content ([fixtureBundle]) with the Mass Driver's sale
+/// price at [factor] a level on tiers 1-2.
 Content withDriverFactor(double factor) {
-  final b = shippedBundle();
+  final b = fixtureBundle();
   final driver = (b['megaprojects']! as List)
       .cast<Map<String, Object?>>()
       .firstWhere((m) => m['id'] == 'mass_driver');

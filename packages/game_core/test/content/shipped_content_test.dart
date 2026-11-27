@@ -342,7 +342,7 @@ void main() {
     }
     expect(
       content.milestones.where((m) => m.condition is CreditsEarnedCondition),
-      hasLength(15),
+      hasLength(18),
     );
     expect(
       content.milestones.where((m) => m.condition is ProducedCondition),
@@ -351,8 +351,10 @@ void main() {
   });
 
   group('milestones', () {
-    test('there are over fifty, with unique names', () {
-      expect(content.milestones.length, inInclusiveRange(50, 60));
+    test('there are over sixty, with unique names', () {
+      // Stage 1.7 task 4 added credits to 30T and megaproject levels up
+      // to 20, so the late game keeps its milestones coming.
+      expect(content.milestones.length, inInclusiveRange(60, 70));
       expect(
         content.milestones.map((m) => m.name).toSet(),
         hasLength(content.milestones.length),
@@ -430,7 +432,7 @@ void main() {
       ('smelter', null),
     ]);
     expect(content.rules.claimBaseCredits, BigNum.from(5000));
-    expect(content.milestones, hasLength(56));
+    expect(content.milestones, hasLength(65));
   });
 
   group('hidden bodies', () {

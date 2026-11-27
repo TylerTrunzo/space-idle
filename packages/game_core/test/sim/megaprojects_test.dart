@@ -96,7 +96,11 @@ void main() {
       expect(content.megaprojects.keys, ['orbital_station', 'mass_driver']);
       expect(station.name, 'Orbital Station');
       expect(station.hostBodyType, isNull);
-      expect(station.costGrowth, 2.5);
+      // Stage 1.7 task 4: ×2 a level (was ×2.5), with 2e7 credits at
+      // level 0 (was 5e6), so a level costs about 1-2 days of the
+      // balanced bot's income through day 21.
+      expect(station.costGrowth, 2.0);
+      expect(station.baseCost['credits'], BigNum.from(2e7));
       expect(station.stageSeconds, 7200);
       expect(station.stageSecondsGrowth, 1.15);
       expect(
@@ -134,10 +138,11 @@ void main() {
       {'copper_wire': n(1)},
     );
 
-    test('costs credits and bulk tier 0-2 goods, ×2.3 a level', () {
+    test('costs credits and bulk tier 0-2 goods, ×2 a level', () {
       expect(driver.name, 'Mass Driver');
       expect(driver.hostBodyType, isNull);
-      expect(driver.costGrowth, 2.3);
+      expect(driver.costGrowth, 2.0);
+      expect(driver.baseCost['credits'], BigNum.from(8e6));
       // No food (habitats eat all a casual player makes) and no steel
       // (plate presses for the station take it): stage 1.6 task 5.
       expect(driver.baseCost.keys, [
@@ -204,7 +209,34 @@ void main() {
   });
 
   group('costs', () {
-    test('grow ×2.5 a level', () {
+    test('what is still owed ignores float residue of deliveries summed', () {
+      // 1.59e7 then 5e4 toward a 1.6e7-credit stage leave 5e4 and a hair
+      // in BigNum sums; the hair is not a credit owed.
+      final driver = content.megaprojects['mass_driver']!;
+      final s = e.newGame(1);
+      final cost = megaprojectCost(content, driver, 1)['credits']!;
+      expect(cost, BigNum.from(1.6e7));
+      s.faction('player')
+        ..megaprojectLevels['orbital_station'] = 1
+        ..megaprojectLevels['mass_driver'] = 1
+        ..megaprojectProgress['mass_driver'] = {
+          'credits': cost - BigNum.from(1e5) + BigNum.from(5e4),
+        };
+      expect(
+        megaprojectRemaining(s, content, 'player', driver)['credits'],
+        BigNum.from(5e4),
+      );
+      // A whole credit still owed is still owed.
+      s.faction('player').megaprojectProgress['mass_driver'] = {
+        'credits': cost - BigNum.from(1),
+      };
+      expect(
+        megaprojectRemaining(s, content, 'player', driver)['credits'],
+        BigNum.from(1),
+      );
+    });
+
+    test('grow by costGrowth a level', () {
       final base = megaprojectCost(content, station, 0);
       expect(base, station.baseCost);
       for (final level in [1, 2, 5]) {
@@ -212,8 +244,9 @@ void main() {
         expect(cost.keys, base.keys);
         for (final MapEntry(:key, :value) in cost.entries) {
           // Whole units, rounded up.
-          final want = (base[key]!.toDouble() * math.pow(2.5, level))
-              .ceilToDouble();
+          final want =
+              (base[key]!.toDouble() * math.pow(station.costGrowth, level))
+                  .ceilToDouble();
           expect(value.toDouble(), closeTo(want, want * 1e-12), reason: key);
         }
       }
