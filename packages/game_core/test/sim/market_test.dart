@@ -418,6 +418,24 @@ void main() {
       expect(s.body('c').stock['ore'], n(300));
     });
 
+    test('less what bodies with no rule for it already hold', () {
+      // Body c holds 200 ore and sells none: a holds back only the rest.
+      s.body('c')
+        ..ownerId = 'p'
+        ..stock['ore'] = n(200);
+      sellAllOn('a');
+      order(300);
+      final rule = s.faction('p').autoSell.single;
+      expect(autoSellKeep(s, c, rule, 60).contractHold, n(100));
+      stepMarket(s, c, 60);
+      expect(stock(), n(100));
+      // Once they hold all of it, a holds nothing back.
+      s.body('c').stock['ore'] = n(300);
+      expect(autoSellKeep(s, c, rule, 60).contractHold, n(0));
+      stepMarket(s, c, 60);
+      expect(stock(), n(0));
+    });
+
     test('only for its own faction, and nothing without a contract', () {
       sellAllOn('a');
       final keep = autoSellKeep(s, c, s.faction('p').autoSell.single, 60);
