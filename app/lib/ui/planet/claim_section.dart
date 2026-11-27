@@ -77,18 +77,26 @@ class _ClaimSectionState extends State<ClaimSection> {
         ),
       ),
       if (kits > 0 && sources.isNotEmpty)
-        Row(
-          children: [
-            const Text('Kits from  '),
-            DropdownButton<String>(
-              value: source,
-              items: [
-                for (final id in sources)
-                  DropdownMenuItem(value: id, child: Text(name(id))),
-              ],
-              onChanged: (id) => setState(() => _source = id),
-            ),
-          ],
+        // The menu takes the panel's width on a line of its own, and a
+        // long body name wraps inside it, at any text size.
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Kits from'),
+              DropdownButton<String>(
+                value: source,
+                isExpanded: true,
+                itemHeight: null,
+                items: [
+                  for (final id in sources)
+                    DropdownMenuItem(value: id, child: Text(name(id))),
+                ],
+                onChanged: (id) => setState(() => _source = id),
+              ),
+            ],
+          ),
         ),
       const SizedBox(height: 8),
       FilledButton.icon(

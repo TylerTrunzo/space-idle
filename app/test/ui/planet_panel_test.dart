@@ -399,5 +399,27 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets('a kit claim with two sources at 360x640 and 2x text', (
+      tester,
+    ) async {
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      for (final id in ['brine', 'hollow_reach']) {
+        c.state.body(id).ownerId = _p;
+        c.state.body(id).stock['outpost_kit'] = BigNum.from(50);
+      }
+      await _pump(
+        tester,
+        c,
+        'cinder',
+        size: const Size(360, 640),
+        textScale: 2,
+      );
+      expect(find.byType(DropdownButton<String>), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.drag(find.byType(PlanetPanel), const Offset(0, -2000));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
   });
 }
