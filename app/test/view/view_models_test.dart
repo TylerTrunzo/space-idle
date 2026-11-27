@@ -176,7 +176,7 @@ void main() {
           inputsPerSec: const {},
           outputsPerSec: const {},
         ),
-        RowContext.of(s, content, _p, const [
+        RowContext.of(s, content, _p, body, const [
           Bottleneck(
             kind: BottleneckKind.understaffed,
             bodyId: 'kora',
@@ -210,6 +210,31 @@ void main() {
         mine.problem,
         'Short of crew: ${t.supported} of ${t.assigned} crew housed',
       );
+    });
+
+    test('rows on another faction\'s body offer no actions', () {
+      final s = c.state;
+      s.faction(_p).credits = BigNum.parse('1e30');
+      final body = s.body('cinder')..ownerId = 'rival';
+      final b = BuildingState(
+        id: 'b_rival',
+        defId: 'smelter',
+        crew: 0,
+        levels: {for (final t in UpgradeTrack.values) t: 0},
+      );
+      body.buildings.add(b);
+
+      final row = buildingRowView(
+        s,
+        content,
+        _p,
+        b,
+        null,
+        RowContext.of(s, content, _p, body, const []),
+      );
+      expect(row.canAddCrew, isFalse);
+      expect(row.canRemoveCrew, isFalse);
+      expect(row.upgrades.values.map((u) => u.affordable), everyElement(false));
     });
 
     test('a building running freely is ok with no problem', () {

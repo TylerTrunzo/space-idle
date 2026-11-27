@@ -47,8 +47,8 @@ final class UpgradeButtonView {
   /// Credits it costs, formatted.
   final String cost;
 
-  /// Whether it can be bought now: the track is not maxed and the player
-  /// holds that many credits.
+  /// Whether it can be bought now: the building is on a body the player
+  /// owns, the track is not maxed, and the player holds that many credits.
   final bool affordable;
 
   /// Why the track can go no higher (the core's `upgradeMaxedReason`,
@@ -133,20 +133,23 @@ final class BuildingRowView {
 final class RowContext {
   /// Creates a context.
   const RowContext({
+    required this.owned,
     required this.credits,
     required this.freeCrew,
     required this.bottlenecks,
     this.crewShort,
   });
 
-  /// [playerId]'s context from [s] and its flow report's per-building
-  /// [bottlenecks].
+  /// [playerId]'s context for the rows of [body], from [s] and its flow
+  /// report's per-building [bottlenecks].
   factory RowContext.of(
     GameState s,
     Content c,
     String playerId,
+    BodyState body,
     List<Bottleneck> bottlenecks,
   ) => RowContext(
+    owned: body.ownerId == playerId,
     credits: s.faction(playerId).credits,
     freeCrew: availableCrew(s, c, playerId),
     bottlenecks: {for (final n in bottlenecks.reversed) ?n.buildingId: n},
@@ -154,6 +157,10 @@ final class RowContext {
         ? crewShortText(s, c, playerId)
         : null,
   );
+
+  /// Whether the player owns the body: on anyone else's, its rows offer
+  /// no crew or upgrade actions.
+  final bool owned;
 
   /// Credits the player holds.
   final BigNum credits;
@@ -223,10 +230,10 @@ BuildingRowView buildingRowView(
         : (fraction < 1 && b.crew > 0 ? ctx.crewShort : null),
     upgrades: {
       for (final t in UpgradeTrack.values)
-        if (def.upgrades.containsKey(t)) t: _upgrade(c, b, t, ctx.credits),
+        if (def.upgrades.containsKey(t)) t: _upgrade(c, b, t, ctx),
     },
-    canAddCrew: b.crew < most && ctx.freeCrew > 0,
-    canRemoveCrew: b.crew > 0,
+    canAddCrew: ctx.owned && b.crew < most && ctx.freeCrew > 0,
+    canRemoveCrew: ctx.owned && b.crew > 0,
   );
 }
 
@@ -244,7 +251,7 @@ UpgradeButtonView _upgrade(
   Content c,
   BuildingState b,
   UpgradeTrack t,
-  BigNum credits,
+  RowContext ctx,
 ) {
   final cost = upgradeCost(c, b, t)[creditsKey] ?? const BigNum.zero();
   final maxed = upgradeMaxedReason(c, b, t);
@@ -255,7 +262,7 @@ UpgradeButtonView _upgrade(
       UpgradeTrack.capacity => 'Capacity',
     },
     cost: formatNumber(cost),
-    affordable: maxed == null && credits >= cost,
+    affordable: ctx.owned && maxed == null && ctx.credits >= cost,
     maxedReason: maxed,
   );
 }
