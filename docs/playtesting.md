@@ -121,13 +121,17 @@ Things worth knowing:
   tick, or the next 10 seconds if the tick is shorter (route cargo lands in
   lots about 10 s apart), so it is safe on an input with `keepAtLeast` 0;
   `state.autoSell` shows each rule's buffer. It also never sells what your
-  open contracts still need: that is held on the body with a rule on the good
-  that holds the most of it, up to its storage cap. A route out of a body
+  open contracts still need, less what bodies with no rule for the good hold:
+  that is held on the body with a rule on the good that holds the most of it,
+  up to its storage cap. A route out of a body
   takes its share before auto-sell sells the rest.
 - Contracts ask only for goods you make now, about 1 h (bulk), 2 h
   (components) or 3 h (advanced goods) of what your buildings make, and pay
-  3× the base price, between 10 minutes and 1 hour of your income. The very
-  first one has no cap. Food, water and oxygen are asked for less often.
+  3× the base price, between 10 minutes and 1 hour of your income (the larger
+  of what auto-sell earns and what your production is worth, so selling by
+  hand counts too) and never less than 500 credits. The very first one has no
+  cap and pays at least 7,500, enough for your first claim. Food, water and
+  oxygen are asked for less often.
 - The market pays less as you sell more of one good, but never pays less in
   total for selling more. Raw goods bottom out very low; refined goods and
   components hold their price better, so refining and diversifying pays.

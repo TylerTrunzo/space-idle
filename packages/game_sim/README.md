@@ -97,8 +97,9 @@ surveyed one with `alreadySurveyed`.
 The Veyra Exchange posts up to 3 contracts on the player's board. They never
 expire. Each asks for 1–3 h of what the player's buildings make of a good
 now (a good made at a trickle gets none) and pays 3× its base price, between
-10 minutes and 1 hour of income; the first contract ever posted has no cap
-(see `content/README.md`). `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
+10 minutes and 1 hour of income (the larger of auto-sale income and the value
+of net production), at least 500 credits; the first contract ever posted has
+no cap and pays at least 7,500 (see `content/README.md`). `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
 "amount":"500"}` delivers up to `amount` of the contract's resource from the
 body's stock (clamped to what is held and to what the contract still wants;
 deliveries add up), and pays the reward once the last unit is in.
@@ -150,9 +151,9 @@ commands:
   the destination would hold that much once its cargo in flight, less what
   it uses during the trip, lands, `inFlight` and `travelTime`), its
   auto-sell rules (`autoSell`: `bodyId`, `resourceId`, `keepAtLeast`,
-  `localUse`, `contractHold` (what open contracts still need, held on the
-  body with a rule on the good that holds the most of it, up to its storage
-  cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
+  `localUse`, `contractHold` (what open contracts still need, less what
+  bodies with no rule for the good hold, held on the body with a rule on the
+  good that holds the most of it, up to its storage cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
   7.77K local use)"`, with `" + 200 for open contracts"` when it holds
   some), its running projects soonest first (`kind`, `targetId`
   but for a survey of a hidden body,

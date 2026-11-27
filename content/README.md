@@ -23,9 +23,14 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   goods), but never more than one of your bodies can store, nor the template's `maxQuantity` (5,000,
   1,000 and 100) × (1 + your megaproject levels summed). It pays 3× the base price per unit, at least
   `rewardIncomeSeconds` (10 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it is
-  posted. The first contract you are ever offered has no cap: it is the hook. Habitat goods (food,
-  water, oxygen) are drawn a quarter as often, so orders seldom compete with crew upkeep. Auto-sell
-  holds back what open contracts still need (on the body with the most of it).
+  posted, both at least `minRewardCredits` (500). Income here is the larger of what auto-sell earns
+  a second and the value of what your buildings make beyond what they use, at current prices, so
+  it does not matter which goods you auto-sell or whether you sell by hand. The first contract you
+  are ever offered has no cap and pays at least `firstContractMinReward` (7,500, which must cover the
+  first claim's 5,000 credits): it is the hook. Habitat goods (food, water, oxygen) weigh
+  `lifeSupportWeight` (0.25) in the draw, so orders seldom compete with crew upkeep. Auto-sell holds
+  back what open contracts still need, less what bodies with no rule for the good hold, on the
+  body with a rule that holds the most of it.
 - **Orbital Station.** Each level's goods and credits are delivered bit by bit, from any body, so a
   level may cost far more than one body holds; its timer starts once the last of it is in.
 
