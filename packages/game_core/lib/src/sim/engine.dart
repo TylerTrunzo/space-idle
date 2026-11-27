@@ -62,7 +62,8 @@ final class GameEngine {
   /// Moves [s] forward by one step of [dt] game seconds.
   ///
   /// In order: reset each body's [BodyState.wastedThisStep], land the
-  /// shipments due ([deliverShipments]), production, send cargo
+  /// shipments due ([deliverShipments]), production, crew for buildings
+  /// built to take it that got too little ([fillAwaitingCrew]), send cargo
   /// ([sendCargo]), goods auto-delivered to megaprojects once a game
   /// minute ([stepMegaprojectAuto]), market (recovery and auto-sell),
   /// credits auto-paid to megaprojects once a game minute
@@ -105,6 +106,7 @@ final class GameEngine {
     final kept = stockOverCap(s, content);
     deliverShipments(s);
     stepProduction(s, content, dt);
+    fillAwaitingCrew(s, content);
     // Crew, buildings and storage caps hold from here to the end of the
     // tick: the steps that move goods share what they read of them.
     final cache = StepCache(s, content);

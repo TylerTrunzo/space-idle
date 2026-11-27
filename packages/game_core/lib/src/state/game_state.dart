@@ -517,6 +517,7 @@ final class BuildingState {
     Map<UpgradeTrack, int>? levels,
     this.lastRunFraction = 0,
     this.lastLimitReason,
+    this.awaitingCrew = false,
   }) : levels = {for (final t in UpgradeTrack.values) t: levels?[t] ?? 0};
 
   /// Restores a building written by [toJson].
@@ -532,6 +533,8 @@ final class BuildingState {
       },
       lastRunFraction: (j['lastRunFraction']! as num).toDouble(),
       lastLimitReason: j['lastLimitReason'] as String?,
+      // Absent in saves from before it was kept, and when false.
+      awaitingCrew: (j['awaitingCrew'] as bool?) ?? false,
     );
   }
 
@@ -557,6 +560,13 @@ final class BuildingState {
   /// `input:<resourceId>` or `understaffed` (see `stepProduction`).
   String? lastLimitReason;
 
+  /// Whether it was built to take free crew and got fewer than its base
+  /// slots: the next tick, once that tick's habitats house their crew,
+  /// fills it from the crew then free (`fillAwaitingCrew`) and clears
+  /// this. So buildings put up alongside new habitats, which house no one
+  /// until they first run, get their crew as the batch of commands ends.
+  bool awaitingCrew;
+
   /// Serializes this building.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -566,6 +576,7 @@ final class BuildingState {
     'levels': {for (final e in levels.entries) e.key.name: e.value},
     'lastRunFraction': lastRunFraction,
     'lastLimitReason': lastLimitReason,
+    if (awaitingCrew) 'awaitingCrew': true,
   };
 
   /// An independent deep copy of this building.
@@ -577,6 +588,7 @@ final class BuildingState {
     levels: levels,
     lastRunFraction: lastRunFraction,
     lastLimitReason: lastLimitReason,
+    awaitingCrew: awaitingCrew,
   );
 }
 

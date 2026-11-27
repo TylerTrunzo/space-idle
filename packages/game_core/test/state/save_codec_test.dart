@@ -309,6 +309,8 @@ void main() {
           (building(m, 0)['levels']! as Map)['speed'] = 100000,
       'run fraction outside [0, 1]': (m) =>
           building(m, 0)['lastRunFraction'] = 1.5,
+      'awaiting crew with its base slots full': (m) =>
+          building(m, 0)['awaitingCrew'] = true,
       'negative stock': (m) =>
           (body(m, 'kora')['stock']! as Map)['iron_ore'] = '-5e3',
       'negative keepAtLeast': (m) => player(m)['autoSell'] = [

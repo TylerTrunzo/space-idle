@@ -236,6 +236,18 @@ void main() {
     expect(st[2].slots, 2);
   });
 
+  test('a building that runs no recipe has no run fraction', () {
+    // Round-4 casual bug 6: depots showed runFraction 0, as if idle.
+    kora.buildings.add(
+      BuildingState(id: s.newId('b'), defId: 'depot', crew: 0),
+    );
+    final st = koraFlow(buildFlowReport(s, c, 'player')).buildings.last;
+    expect(st.defId, 'depot');
+    expect(st.runFraction, isNull);
+    expect(st.effectiveFraction, isNull);
+    expect(st.limitReason, isNull);
+  });
+
   test('building statuses give actual rates and effective fraction', () {
     s.faction('player')
       ..baseCrew = 30
@@ -961,7 +973,7 @@ void main() {
         content,
         'p',
       ).bodies.singleWhere((b) => b.bodyId == 'b').buildings.single;
-      return (st.runFraction, st.limitReason);
+      return (st.runFraction!, st.limitReason);
     }
 
     test('a lot due in 5 s counts as a full step would see it', () {

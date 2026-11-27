@@ -136,3 +136,31 @@ const double housingTolerance = 1e-9;
 
 /// [housed] crew with [housingTolerance] added.
 double _settled(double housed) => housed + housingTolerance;
+
+/// Fills every building [BuildingState.awaitingCrew] from its faction's
+/// free crew, up to its base slots, factions in list order and their
+/// buildings in body and list order, and clears the flag on each, filled
+/// or not.
+///
+/// The engine runs it right after production, whose habitats have then
+/// run and house their crew: so a building put up alongside new habitats,
+/// which house no one until they first run, takes its crew as the batch
+/// of commands it came in ends. Crew that frees up later is the player's
+/// to assign.
+void fillAwaitingCrew(GameState s, Content c) {
+  for (final f in s.factions) {
+    int? free;
+    for (final body in s.bodies) {
+      if (body.ownerId != f.id) continue;
+      for (final b in body.buildings) {
+        if (!b.awaitingCrew) continue;
+        b.awaitingCrew = false;
+        free ??= availableCrew(s, c, f.id);
+        final take = math.min(free, c.buildings[b.defId]!.crewSlots - b.crew);
+        if (take <= 0) continue;
+        b.crew += take;
+        free -= take;
+      }
+    }
+  }
+}

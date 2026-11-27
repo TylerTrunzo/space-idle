@@ -146,6 +146,9 @@ CommandResult _build(GameState s, Content c, FactionState f, BuildCommand cmd) {
     defId: def.id,
     depositResourceId: deposit,
     crew: crew,
+    // Habitats built in the same batch house no one until they run: the
+    // next tick fills what is still empty (`fillAwaitingCrew`).
+    awaitingCrew: cmd.autoCrew && crew < def.crewSlots,
   );
   body.buildings.add(b);
   return CommandOk(
@@ -221,7 +224,9 @@ CommandResult _assignCrew(
   }
 
   final previous = b.crew;
-  b.crew = cmd.crew;
+  b
+    ..crew = cmd.crew
+    ..awaitingCrew = false;
   return CommandOk(
     outcome: CrewAssigned(
       buildingId: b.id,

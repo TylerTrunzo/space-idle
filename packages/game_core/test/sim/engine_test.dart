@@ -181,6 +181,79 @@ void main() {
     expect(run(), run());
   });
 
+  group('crew for buildings built with new habitats', () {
+    /// A new game whose 3 base crew all work the starting buildings, with
+    /// what two habitats cost and need to run on Kora.
+    GameState crewedOut() {
+      final s = engine.newGame(1);
+      s.faction('player')
+        ..baseCrew = 3
+        ..credits = n(1e6);
+      s.body('kora').stock.addAll({
+        'habitat_module': n(2),
+        for (final id in ['food', 'water', 'oxygen']) id: n(1000),
+      });
+      return s;
+    }
+
+    String? ok(GameState s, Command cmd) {
+      final r = engine.apply(s, cmd);
+      expect(r, isA<CommandOk>(), reason: r is CommandFailed ? r.message : '');
+      return (r as CommandOk).createdId;
+    }
+
+    BuildingState find(GameState s, String id) =>
+        s.body('kora').buildings.firstWhere((b) => b.id == id);
+
+    test('take free crew once the habitats house it, as the batch ends', () {
+      // Round-4 casual bug 7: buildings built in the same moment as new
+      // habitats showed "0 of N crew".
+      final s = crewedOut();
+      const yard = BuildCommand('player', 'kora', 'shipyard');
+      final before = ok(s, yard)!;
+      ok(s, const BuildCommand('player', 'kora', 'habitat'));
+      ok(s, const BuildCommand('player', 'kora', 'habitat'));
+      final after = ok(s, yard)!;
+      final empty = ok(
+        s,
+        const BuildCommand('player', 'kora', 'shipyard', autoCrew: false),
+      )!;
+      for (final id in [before, after, empty]) {
+        expect(find(s, id).crew, 0);
+      }
+      engine.tick(s, 60);
+      // Both habitats house 40: each shipyard built for crew gets its 2,
+      // in the order built; the one built empty stays so.
+      expect(find(s, before).crew, 2);
+      expect(find(s, after).crew, 2);
+      expect(find(s, empty).crew, 0);
+      expect(crewTotals(s, c, 'player').overAssigned, 0);
+    });
+
+    test('wait one batch only', () {
+      final s = crewedOut();
+      final yard = ok(s, const BuildCommand('player', 'kora', 'shipyard'))!;
+      engine.tick(s, 60);
+      expect(find(s, yard).crew, 0);
+      // Housing that comes later is the player's to assign.
+      ok(s, const BuildCommand('player', 'kora', 'habitat'));
+      engine.advance(s, 120);
+      expect(find(s, yard).crew, 0);
+      expect(availableCrew(s, c, 'player'), greaterThan(0));
+    });
+
+    test('survive a save and load in between', () {
+      final s = crewedOut();
+      ok(s, const BuildCommand('player', 'kora', 'habitat'));
+      final yard = ok(s, const BuildCommand('player', 'kora', 'shipyard'))!;
+      final loaded = (SaveCodec.decode(SaveCodec.encode(s), c) as SaveOk).state;
+      expect(encode(loaded), encode(s));
+      expect(encode(s.copy()), encode(s));
+      engine.tick(loaded, 60);
+      expect(find(loaded, yard).crew, 2);
+    });
+  });
+
   group('tick', () {
     test('runs production, logistics, market, then advances time', () {
       final s = engine.newGame(1);

@@ -35,9 +35,9 @@ final class BuildingStatus {
   /// Id of its [BuildingDef].
   final String defId;
 
-  /// Share of full input supply it ran at, in `[0, 1]`; warehouses run no
-  /// recipe and stay at 0.
-  final double runFraction;
+  /// Share of full input supply it ran at, in `[0, 1]`; null for a
+  /// building that runs no recipe (a warehouse such as a depot).
+  final double? runFraction;
 
   /// Its actual output as a share of what it makes with its base crew
   /// slots full, every input supplied and the faction fully housed:
@@ -45,10 +45,10 @@ final class BuildingStatus {
   ///
   /// Shows staffing and housing as well as supply: a fully supplied
   /// building with half its slots crewed is at 0.5. Above 1 when capacity
-  /// upgrades hold crew beyond the base slots; 0 for warehouses and
-  /// unstaffed buildings. Speed upgrades do not count; see [outputsPerSec]
-  /// for the rate.
-  final double effectiveFraction;
+  /// upgrades hold crew beyond the base slots; 0 for unstaffed buildings;
+  /// null, as [runFraction], for one that runs no recipe. Speed upgrades
+  /// do not count; see [outputsPerSec] for the rate.
+  final double? effectiveFraction;
 
   /// `noCrew`, `input:<resourceId>`, `understaffed` (fully supplied, crew
   /// below its base slots), or null when nothing held it back.
@@ -864,11 +864,11 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         BuildingStatus(
           buildingId: b.id,
           defId: b.defId,
-          runFraction: b.lastRunFraction,
-          effectiveFraction: runsWithoutCrew(def)
+          runFraction: runsRecipe(def) ? b.lastRunFraction : null,
+          effectiveFraction: !runsRecipe(def)
+              ? null
+              : runsWithoutCrew(def)
               ? b.lastRunFraction
-              : def.crewSlots == 0
-              ? 0
               : b.lastRunFraction * b.crew / def.crewSlots * settledEff,
           limitReason: b.lastLimitReason,
           crew: b.crew,

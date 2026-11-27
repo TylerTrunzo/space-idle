@@ -194,6 +194,7 @@ SteadyIncome measuredSaleRevenue(GameState s, Content c, String factionId) {
       final kept = stockOverCap(s, c);
       deliverShipments(s);
       stepProduction(s, c, _stepSeconds);
+      fillAwaitingCrew(s, c);
       final cache = StepCache(s, c);
       sendCargo(s, c, _stepSeconds, cache: cache);
       final goods = stepMegaprojectAuto(s, c, _stepSeconds, cache: cache);

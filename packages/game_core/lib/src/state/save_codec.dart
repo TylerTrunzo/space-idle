@@ -504,6 +504,9 @@ final class SaveCodec {
     if (!(b.lastRunFraction >= 0 && b.lastRunFraction <= 1)) {
       return 'run fraction ${b.lastRunFraction} outside [0, 1]';
     }
+    if (b.awaitingCrew && b.crew >= def.crewSlots) {
+      return 'awaiting crew with ${b.crew} of ${def.crewSlots} base slots';
+    }
     if (def.kind == BuildingKind.extractor) {
       final dep = b.depositResourceId;
       if (dep == null ||
