@@ -52,6 +52,16 @@ void main() {
       expect(pinned.first.value, '900');
     });
 
+    test('pinned stock reads in whole units, rounded down', () {
+      c.state.body('kora').stock
+        ..clear()
+        ..['copper_ore'] = BigNum.from(2.25)
+        ..['iron_ore'] = BigNum.from(1999.9);
+      final pinned = {for (final p in topBar(c).pinned) p.name: p.value};
+      expect(pinned['Copper Ore'], '2');
+      expect(pinned['Iron Ore'], '1.99K');
+    });
+
     test('stays readable at 1e40 credits', () {
       c.state.faction(_p).credits = BigNum.parse('1e40');
       expect(topBar(c).credits, '1e40');

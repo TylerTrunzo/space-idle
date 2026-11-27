@@ -69,7 +69,11 @@ TopBarView topBar(GameController c) {
     crewTotal: crew.supported,
     pinned: [
       for (final id in ids.take(3))
-        NamedValue(c.content.resources[id]!.name, formatNumber(held[id]!)),
+        NamedValue(
+          c.content.resources[id]!.name,
+          // Whole units held, never rounded up to more than there is.
+          formatNumber(held[id]!.floor(), rounding: NumberRounding.down),
+        ),
     ],
   );
 }
