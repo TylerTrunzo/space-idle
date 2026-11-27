@@ -33,6 +33,34 @@ abstract final class Palette {
   static const Color muted = Color(0xFF8EA3C9);
 }
 
+/// Star-map colors: one per body type, plus the star.
+///
+/// A body's ownership is never told by its color alone: the map adds a
+/// ring and an "Unclaimed" label (see the star map).
+abstract final class BodyPalette {
+  /// The system's star.
+  static const Color star = Color(0xFFFFD27A);
+
+  static const Color _rocky = Color(0xFFB08968);
+  static const Color _asteroid = Color(0xFF8A7A6A);
+  static const Color _iceMoon = Color(0xFF9FE8FF);
+  static const Color _gasGiant = Color(0xFFC56CFF);
+  static const Color _volcanic = Color(0xFFFF8A5B);
+  static const Color _kuiper = Color(0xFFA9B8D0);
+
+  /// The color of a body of type [typeId]; [Palette.muted] for a type the
+  /// map has no color for.
+  static Color forType(String typeId) => switch (typeId) {
+    'rocky' => _rocky,
+    'asteroid_belt' => _asteroid,
+    'ice_moon' => _iceMoon,
+    'gas_giant' => _gasGiant,
+    'volcanic' => _volcanic,
+    'kuiper' => _kuiper,
+    _ => Palette.muted,
+  };
+}
+
 /// The app's single dark theme, built from [Palette].
 ThemeData buildTheme() {
   const scheme = ColorScheme(
