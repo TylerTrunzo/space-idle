@@ -358,14 +358,13 @@ RouteThroughput routeThroughput(GameState s, Content c, String routeId) {
 /// - for a route with a stop level, the room its destination keeps for
 ///   the route's lots over the trip ([travelSeconds]): the target it
 ///   shares with the other stop-level routes into the store
-///   ([routeStopTarget]), less the other routes' cargo on its way there
-///   and less what the store holds beyond what its buildings use at full
-///   supply while a lot travels, since that much is used before a lot
-///   sent now lands. [RouteLimit.stopLevel] when that target is below the
-///   destination's storage cap, else [RouteLimit.destinationRoom]. So a
-///   starved store 2 minutes away that holds 97.7K reads 97.7K over 120 s,
-///   814 a second, however high the route's rate, while a full store
-///   nothing draws from reads 0. A route with no stop level is never held
+///   ([routeStopTarget]), less the other routes' cargo on its way there.
+///   [RouteLimit.stopLevel] when that target is below the destination's
+///   storage cap, else [RouteLimit.destinationRoom]. So a store 2 minutes
+///   away that holds 97.7K reads 97.7K over 120 s, 814 a second, however
+///   high the route's rate. What the store holds now does not count: it
+///   swings with where a step ends, as lots land, and a store that holds
+///   much is not short of what the route brings. A route with no stop level is never held
 ///   to its destination's room: it keeps sending, and what passes the cap
 ///   is wasted, and the report shows a full store;
 /// - what its source has to send ([RouteLimit.sourceStock]): what the
@@ -380,9 +379,10 @@ RouteThroughput routeThroughput(GameState s, Content c, String routeId) {
 /// owns its source carries nothing ([RouteLimit.sourceStock]); one whose
 /// destination it no longer owns likewise ([RouteLimit.destinationRoom]).
 ///
-/// None of it depends on where a step ends: rates, ships, caps and the
-/// use over a trip are fixed, a starved store holds less than it uses over
-/// a trip, and a route's own cargo in flight never counts against it.
+/// None of it depends on where a step ends: rates, ships, caps, stop
+/// targets and what a source makes are fixed over a step, the
+/// destination's stock does not count, a source's stock is spread over a
+/// full step, and a route's own cargo in flight never counts against it.
 Map<String, RouteThroughput> routeThroughputs(GameState s, Content c) {
   final cache = StepCache(s, c);
   final inFlight = _inFlightTo(s);
@@ -418,12 +418,7 @@ Map<String, RouteThroughput> routeThroughputs(GameState s, Content c) {
       final others =
           (inFlight[key] ?? const BigNum.zero()) -
           (own[r.id] ?? const BigNum.zero());
-      final held = to.stock[r.resourceId] ?? const BigNum.zero();
-      final usedFirst = _useInTransit(s, c, r, cache);
-      final blocking = held > usedFirst
-          ? held - usedFirst
-          : const BigNum.zero();
-      final room = (target - others - blocking).toDouble();
+      final room = (target - others).toDouble();
       consider(
         room > 0 ? room / trip : 0,
         target < cache.cap(to)

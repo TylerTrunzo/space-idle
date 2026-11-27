@@ -371,12 +371,13 @@ void main() {
     test('a full destination with a long trip holds a stop-level route to '
         'its room', () {
       final r = route(rate: 10, ships: 10)..stopAtDestination = n(1000);
+      // Full or empty, the store takes one cap's worth a trip: 1000 over
+      // 120 s.
       b.stock['ore'] = n(1000);
       expect(routeThroughput(s, c, r.id), (
-        perSec: 0.0,
+        perSec: 1000 / 120,
         binding: RouteLimit.destinationRoom,
       ));
-      // Empty, the store takes one cap's worth a trip: 1000 over 120 s.
       b.stock['ore'] = const BigNum.zero();
       final t = routeThroughput(s, c, r.id);
       expect(t.binding, RouteLimit.destinationRoom);
@@ -418,21 +419,20 @@ void main() {
       ));
     });
 
-    test('stock its destination uses before a lot lands takes no room', () {
-      // A press on b uses 0.5 a second, 60 over the trip.
+    test("what the destination holds now takes none of a route's room", () {
+      // It swings as lots land: a reading by it would hang on where a
+      // step ends.
       final withPress = pressContent();
       b.buildings.add(BuildingState(id: 'press', defId: 'press', crew: 1));
       final r = route(rate: 20, ships: 20)..stopAtDestination = n(1000);
-      b.stock['ore'] = n(50);
-      expect(
-        routeThroughput(s, withPress, r.id).perSec,
-        closeTo(1000 / 120, 1e-9),
-      );
-      b.stock['ore'] = n(160);
-      expect(
-        routeThroughput(s, withPress, r.id).perSec,
-        closeTo(900 / 120, 1e-9),
-      );
+      for (final held in [0, 50, 160, 900]) {
+        b.stock['ore'] = n(held);
+        expect(
+          routeThroughput(s, withPress, r.id).perSec,
+          closeTo(1000 / 120, 1e-9),
+          reason: '$held',
+        );
+      }
     });
 
     test('routes from one source share what it has, in send order', () {
@@ -510,6 +510,79 @@ void main() {
           expect(away.perSec, closeTo(live.perSec, live.perSec * 1e-6));
         });
       }
+
+      test('stop level', () {
+        // A stop of 100 below b's 1,000: the target is 100 plus the 60 the
+        // press uses over the trip, 160 a trip at most.
+        final withPress = pressContent();
+        final e = GameEngine(withPress);
+        GameState played(double step) {
+          final t = e.newGame(1);
+          t.body('a').stock['ore'] = n(1e6);
+          t.body('b')
+            ..ownerId = 'p'
+            ..buildings.add(
+              BuildingState(id: 'press', defId: 'press', crew: 1),
+            );
+          t.routes.add(
+            RouteState(
+              id: 'r1',
+              ownerId: 'p',
+              fromBodyId: 'a',
+              toBodyId: 'b',
+              resourceId: 'ore',
+              ratePerSecond: n(5),
+              cargoShips: 5,
+              stopAtDestination: n(100),
+            ),
+          );
+          e.advance(t, 1200, maxStep: step);
+          return t;
+        }
+
+        final live = routeThroughput(played(1), withPress, 'r1');
+        final away = routeThroughput(played(60), withPress, 'r1');
+        expect(live.binding, RouteLimit.stopLevel);
+        expect(away.binding, RouteLimit.stopLevel);
+        expect(live.perSec, lessThanOrEqualTo(160 / 120 + 1e-9));
+        expect(away.perSec, closeTo(live.perSec, live.perSec * 1e-6));
+      });
+
+      test('source stock', () {
+        // A press on a makes 0.5 plate a second, and the route takes all
+        // of it for b: what a makes is all it has to send.
+        final withPress = pressContent();
+        final e = GameEngine(withPress);
+        GameState played(double step) {
+          final t = e.newGame(1);
+          t.body('a')
+            ..stock['ore'] = n(1e6)
+            ..buildings.add(
+              BuildingState(id: 'press', defId: 'press', crew: 1),
+            );
+          t.body('b').ownerId = 'p';
+          t.routes.add(
+            RouteState(
+              id: 'r1',
+              ownerId: 'p',
+              fromBodyId: 'a',
+              toBodyId: 'b',
+              resourceId: 'plate',
+              ratePerSecond: n(5),
+              cargoShips: 5,
+            ),
+          );
+          e.advance(t, 1200, maxStep: step);
+          return t;
+        }
+
+        final live = routeThroughput(played(1), withPress, 'r1');
+        final away = routeThroughput(played(60), withPress, 'r1');
+        expect(live.binding, RouteLimit.sourceStock);
+        expect(away.binding, RouteLimit.sourceStock);
+        expect(live.perSec, closeTo(0.5, 0.01));
+        expect(away.perSec, closeTo(live.perSec, live.perSec * 1e-6));
+      });
     });
   });
 
