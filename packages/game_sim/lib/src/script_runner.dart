@@ -895,6 +895,7 @@ final class ScriptRunner {
           for (final MapEntry(key: id, value: v) in b.stock.entries)
             if (!v.isZero) id,
     };
+    final throughput = routeThroughputs(state, c);
     return {
       'ok': true,
       'time': state.time,
@@ -1025,6 +1026,9 @@ final class ScriptRunner {
                 ],
               },
               'paused': routePaused(state, c, r),
+              // The most it carries a second now, and what holds it there.
+              'throughput': _num(BigNum.from(throughput[r.id]!.perSec)),
+              'limitedBy': throughput[r.id]!.binding.name,
               'inFlight': _num(routeInFlight(state, r)),
               'travelTime': formatDuration(
                 travelSeconds(

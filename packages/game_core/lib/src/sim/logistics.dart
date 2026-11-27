@@ -1,6 +1,7 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
+import 'megaprojects.dart';
 import 'production.dart';
 import 'step_cache.dart';
 
@@ -303,6 +304,182 @@ Map<String, BigNum> sendCargo(
     );
   }
   return sent;
+}
+
+/// What holds a route's throughput back most ([routeThroughput]).
+enum RouteLimit {
+  /// Its set rate, [RouteState.ratePerSecond].
+  rate,
+
+  /// What its cargo ships carry: [RouteState.cargoShips] × the rules'
+  /// [RulesDef.shipCapacityPerSecond] ([routeCapacity]).
+  ships,
+
+  /// The room its destination's storage cap leaves: a route with a stop
+  /// level keeps its destination's stock and the cargo on its way to it
+  /// within the cap, so it delivers at most that room a trip. More storage
+  /// there (a warehouse, capacity levels) raises it; so does a shorter trip.
+  destinationRoom,
+
+  /// What its source has to send: what the source makes of the resource
+  /// beyond its own buildings' use, the cargo arriving there, and its stock
+  /// spread over a full step, less what routes sent earlier take.
+  sourceStock,
+
+  /// Its stop level: as [destinationRoom], but the target the stop level
+  /// sets ([routeStopTarget]) is below the destination's cap, so raising
+  /// the stop level raises it.
+  stopLevel,
+}
+
+/// What a route carries a second at most, and what holds it to that
+/// ([routeThroughput]).
+typedef RouteThroughput = ({double perSec, RouteLimit binding});
+
+/// Game seconds over which a source's stock counts as what it has to send
+/// ([RouteLimit.sourceStock]): a full step, the engine's catch-up step.
+const double _sourceStockSeconds = 60;
+
+/// Units a second route [routeId] can carry at most now, and the limit
+/// that binds ([RouteLimit]); see [routeThroughputs]. Throws an
+/// [ArgumentError] for a route [s] does not have.
+RouteThroughput routeThroughput(GameState s, Content c, String routeId) {
+  if (!s.routes.any((r) => r.id == routeId)) {
+    throw ArgumentError.value(routeId, 'routeId', 'no such route');
+  }
+  return routeThroughputs(s, c)[routeId]!;
+}
+
+/// Route id to the units a second each route of [s] can carry at most now
+/// and the limit that binds, in list order: the least of
+///
+/// - its rate ([RouteLimit.rate]);
+/// - its ships times what one carries ([RouteLimit.ships]);
+/// - for a route with a stop level, the room its destination keeps for
+///   the route's lots over the trip ([travelSeconds]): the target it
+///   shares with the other stop-level routes into the store
+///   ([routeStopTarget]), less the other routes' cargo on its way there
+///   and less what the store holds beyond what its buildings use at full
+///   supply while a lot travels, since that much is used before a lot
+///   sent now lands. [RouteLimit.stopLevel] when that target is below the
+///   destination's storage cap, else [RouteLimit.destinationRoom]. So a
+///   starved store 2 minutes away that holds 97.7K reads 97.7K over 120 s,
+///   814 a second, however high the route's rate, while a full store
+///   nothing draws from reads 0. A route with no stop level is never held
+///   to its destination's room: it keeps sending, and what passes the cap
+///   is wasted, and the report shows a full store;
+/// - what its source has to send ([RouteLimit.sourceStock]): what the
+///   source's buildings make of the resource beyond what they use, at the
+///   run fractions they last settled on, plus the cargo arriving there by
+///   route (each route's cargo in flight over its trip) and the source's
+///   stock over a full step (60 s), less what the routes from the same
+///   source of the resource ahead of it in send order take (as
+///   [sendCargo] runs them).
+///
+/// On a tie the limit listed first binds. A route whose owner no longer
+/// owns its source carries nothing ([RouteLimit.sourceStock]); one whose
+/// destination it no longer owns likewise ([RouteLimit.destinationRoom]).
+///
+/// None of it depends on where a step ends: rates, ships, caps and the
+/// use over a trip are fixed, a starved store holds less than it uses over
+/// a trip, and a route's own cargo in flight never counts against it.
+Map<String, RouteThroughput> routeThroughputs(GameState s, Content c) {
+  final cache = StepCache(s, c);
+  final inFlight = _inFlightTo(s);
+  final targets = _stopTargets(s, c, cache);
+  final own = <String, BigNum>{};
+  for (final sh in s.shipments) {
+    own[sh.routeId] = (own[sh.routeId] ?? const BigNum.zero()) + sh.amount;
+  }
+  // Source and resource ([_toKey]) to what it has left to send a second.
+  final left = <String, double>{};
+  final out = <String, RouteThroughput>{};
+  for (final r in _sendOrder(s, c)) {
+    final from = s.body(r.fromBodyId);
+    final to = s.body(r.toBodyId);
+    if (from.ownerId != r.ownerId) {
+      out[r.id] = (perSec: 0, binding: RouteLimit.sourceStock);
+      continue;
+    }
+    if (to.ownerId != r.ownerId) {
+      out[r.id] = (perSec: 0, binding: RouteLimit.destinationRoom);
+      continue;
+    }
+    final trip = travelSeconds(s, c, from, to);
+    var best = (perSec: r.ratePerSecond.toDouble(), binding: RouteLimit.rate);
+    void consider(double perSec, RouteLimit binding) {
+      if (perSec < best.perSec) best = (perSec: perSec, binding: binding);
+    }
+
+    consider(routeCapacity(c, r).toDouble(), RouteLimit.ships);
+    final key = _toKey(to.id, r.resourceId);
+    if (r.stopAtDestination != null) {
+      final target = targets[key]!;
+      final others =
+          (inFlight[key] ?? const BigNum.zero()) -
+          (own[r.id] ?? const BigNum.zero());
+      final held = to.stock[r.resourceId] ?? const BigNum.zero();
+      final usedFirst = _useInTransit(s, c, r, cache);
+      final blocking = held > usedFirst
+          ? held - usedFirst
+          : const BigNum.zero();
+      final room = (target - others - blocking).toDouble();
+      consider(
+        room > 0 ? room / trip : 0,
+        target < cache.cap(to)
+            ? RouteLimit.stopLevel
+            : RouteLimit.destinationRoom,
+      );
+    }
+    final source = _toKey(from.id, r.resourceId);
+    final has = left[source] ??= _toSend(s, c, from, r.resourceId, cache);
+    consider(has, RouteLimit.sourceStock);
+    left[source] = has - best.perSec > 0 ? has - best.perSec : 0;
+    out[r.id] = best;
+  }
+  return {for (final r in s.routes) r.id: out[r.id]!};
+}
+
+/// Units a second [body] has to send of [resourceId]
+/// ([RouteLimit.sourceStock]): what its buildings make beyond what they use at their
+/// last run fractions, the cargo its owner's routes bring it (each route's
+/// cargo in flight over its trip), and its stock over
+/// [_sourceStockSeconds].
+double _toSend(
+  GameState s,
+  Content c,
+  BodyState body,
+  String resourceId,
+  StepCache cache,
+) {
+  final owner = body.ownerId!;
+  final eff = cache.crewEff(owner);
+  final bonuses = bonusesFor(s, c, owner);
+  var net = 0.0;
+  for (final b in body.buildings) {
+    if (b.lastRunFraction == 0) continue;
+    final flow = fullRateFlow(c, body, b, 1, eff, bonuses: bonuses);
+    net +=
+        ((flow.outputs[resourceId] ?? const BigNum.zero()) -
+                (flow.inputs[resourceId] ?? const BigNum.zero()))
+            .toDouble() *
+        b.lastRunFraction;
+  }
+  var arriving = 0.0;
+  for (final r in s.routes) {
+    if (r.toBodyId != body.id ||
+        r.resourceId != resourceId ||
+        r.ownerId != owner ||
+        s.body(r.fromBodyId).ownerId != owner) {
+      continue;
+    }
+    arriving +=
+        routeInFlight(s, r).toDouble() /
+        travelSeconds(s, c, s.body(r.fromBodyId), body);
+  }
+  final held = (body.stock[resourceId] ?? const BigNum.zero()).toDouble();
+  final made = net > 0 ? net : 0.0;
+  return made + arriving + held / _sourceStockSeconds;
 }
 
 /// The shipment route [routeId] sent last, or null if none is in flight.

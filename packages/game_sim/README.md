@@ -205,7 +205,15 @@ commands:
   flight, shared by every stop-level route into it and timed by the
   farthest, and `stopSharedWith`, the ids of those other routes; `paused`,
   true while the destination and its cargo in flight hold that target;
-  `inFlight` and `travelTime`), its
+  `throughput`, the most it carries a second now, and `limitedBy`, what
+  holds it there: `rate`, `ships` (ships × 10 a second each),
+  `destinationRoom` (a stop-level route keeps its destination's stock and
+  cargo on the way within the storage cap, so it carries at most that room
+  a trip: a store 97.7K big and 2 minutes away takes 814 a second, whatever
+  the rate), `stopLevel` (the same, with a stop-level target below the
+  cap) or `sourceStock` (what the source makes beyond its own use, cargo
+  arriving there and its stock over a minute, less what routes ahead of it
+  take); `inFlight` and `travelTime`), its
   auto-sell rules (`autoSell`: `bodyId`, `resourceId`, `keepAtLeast`,
   `localUse`, `contractHold` (what open contracts still need, less what
   bodies with no rule for the good hold, held on the body with a rule on the

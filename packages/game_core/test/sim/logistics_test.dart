@@ -341,6 +341,178 @@ void main() {
     });
   });
 
+  group('route throughput', () {
+    // a to b is 120 s; a ship carries 2 a second; b stores 1000.
+    test('a route with enough ships is held to its rate', () {
+      final r = route(rate: 1, ships: 2);
+      expect(routeThroughput(s, c, r.id), (
+        perSec: 1.0,
+        binding: RouteLimit.rate,
+      ));
+    });
+
+    test('a route with too few ships is held to what they carry', () {
+      final r = route(rate: 10, ships: 1);
+      expect(routeThroughput(s, c, r.id), (
+        perSec: 2.0,
+        binding: RouteLimit.ships,
+      ));
+    });
+
+    test('a source with little stock and nothing made holds it to that '
+        'stock over a full step', () {
+      a.stock['ore'] = n(30);
+      final r = route(rate: 1, ships: 2);
+      final t = routeThroughput(s, c, r.id);
+      expect(t.binding, RouteLimit.sourceStock);
+      expect(t.perSec, closeTo(0.5, 1e-9));
+    });
+
+    test('a full destination with a long trip holds a stop-level route to '
+        'its room', () {
+      final r = route(rate: 10, ships: 10)..stopAtDestination = n(1000);
+      b.stock['ore'] = n(1000);
+      expect(routeThroughput(s, c, r.id), (
+        perSec: 0.0,
+        binding: RouteLimit.destinationRoom,
+      ));
+      // Empty, the store takes one cap's worth a trip: 1000 over 120 s.
+      b.stock['ore'] = const BigNum.zero();
+      final t = routeThroughput(s, c, r.id);
+      expect(t.binding, RouteLimit.destinationRoom);
+      expect(t.perSec, closeTo(1000 / 120, 1e-9));
+      // Its own cargo on the way does not take its room; others' does.
+      s.shipments.add(
+        Shipment(
+          routeId: 'other',
+          fromBodyId: 'c',
+          toBodyId: 'b',
+          ownerId: 'p',
+          resourceId: 'ore',
+          amount: n(400),
+          departAt: 0,
+          arriveAt: 60,
+        ),
+      );
+      run(30);
+      final u = routeThroughput(s, c, r.id);
+      expect(u.binding, RouteLimit.destinationRoom);
+      expect(u.perSec, closeTo(600 / 120, 1e-9));
+    });
+
+    test('a stop level below the cap binds as the stop level', () {
+      final r = route(rate: 10, ships: 10)..stopAtDestination = n(600);
+      final t = routeThroughput(s, c, r.id);
+      expect(t.binding, RouteLimit.stopLevel);
+      expect(t.perSec, closeTo(600 / 120, 1e-9));
+    });
+
+    test('a route without a stop level is not held to its room: what '
+        'passes the cap is wasted, and shows as a full store', () {
+      a.stock['ore'] = n(1e6);
+      final r = route(rate: 10, ships: 10);
+      b.stock['ore'] = n(1000);
+      expect(routeThroughput(s, c, r.id), (
+        perSec: 10.0,
+        binding: RouteLimit.rate,
+      ));
+    });
+
+    test('stock its destination uses before a lot lands takes no room', () {
+      // A press on b uses 0.5 a second, 60 over the trip.
+      final withPress = pressContent();
+      b.buildings.add(BuildingState(id: 'press', defId: 'press', crew: 1));
+      final r = route(rate: 20, ships: 20)..stopAtDestination = n(1000);
+      b.stock['ore'] = n(50);
+      expect(
+        routeThroughput(s, withPress, r.id).perSec,
+        closeTo(1000 / 120, 1e-9),
+      );
+      b.stock['ore'] = n(160);
+      expect(
+        routeThroughput(s, withPress, r.id).perSec,
+        closeTo(900 / 120, 1e-9),
+      );
+    });
+
+    test('routes from one source share what it has, in send order', () {
+      a.stock['ore'] = n(60); // 1 a second over a full step
+      final first = route(rate: 0.75, ships: 2);
+      final second = route(rate: 0.75, ships: 2);
+      expect(routeThroughput(s, c, first.id), (
+        perSec: 0.75,
+        binding: RouteLimit.rate,
+      ));
+      final t = routeThroughput(s, c, second.id);
+      expect(t.binding, RouteLimit.sourceStock);
+      expect(t.perSec, closeTo(0.25, 1e-9));
+      expect(routeThroughputs(s, c).keys, [first.id, second.id]);
+    });
+
+    test('a route whose end its owner lost carries nothing', () {
+      final r = route();
+      b.ownerId = null;
+      expect(routeThroughput(s, c, r.id), (
+        perSec: 0.0,
+        binding: RouteLimit.destinationRoom,
+      ));
+      b.ownerId = 'p';
+      a.ownerId = null;
+      expect(routeThroughput(s, c, r.id), (
+        perSec: 0.0,
+        binding: RouteLimit.sourceStock,
+      ));
+    });
+
+    test('an unknown route is an error', () {
+      expect(() => routeThroughput(s, c, 'nope'), throwsArgumentError);
+    });
+
+    group('is the same at 1 s and 60 s steps', () {
+      // A press on b uses 0.5 ore a second; a holds plenty.
+      for (final (name, rate, ships, cap, stop, binding) in [
+        ('rate', 0.25, 1, 1000.0, null, RouteLimit.rate),
+        ('ships', 5.0, 1, 1000.0, null, RouteLimit.ships),
+        // b stores 20: 20 a trip of 120 s for 0.5 a second wanted.
+        ('destination room', 5.0, 5, 20.0, 20.0, RouteLimit.destinationRoom),
+      ]) {
+        test(name, () {
+          final withPress = pressContent(baseStorageCap: cap);
+          final e = GameEngine(withPress);
+          GameState played(double step) {
+            final t = e.newGame(1);
+            t.body('a').stock['ore'] = n(1e6);
+            t.body('b')
+              ..ownerId = 'p'
+              ..buildings.add(
+                BuildingState(id: 'press', defId: 'press', crew: 1),
+              );
+            t.routes.add(
+              RouteState(
+                id: 'r1',
+                ownerId: 'p',
+                fromBodyId: 'a',
+                toBodyId: 'b',
+                resourceId: 'ore',
+                ratePerSecond: n(rate),
+                cargoShips: ships,
+                stopAtDestination: stop == null ? null : n(stop),
+              ),
+            );
+            e.advance(t, 1200, maxStep: step);
+            return t;
+          }
+
+          final live = routeThroughput(played(1), withPress, 'r1');
+          final away = routeThroughput(played(60), withPress, 'r1');
+          expect(live.binding, binding);
+          expect(away.binding, binding);
+          expect(away.perSec, closeTo(live.perSec, live.perSec * 1e-6));
+        });
+      }
+    });
+  });
+
   test('the merge window comes from the rules', () {
     expect(c.rules.shipmentMergeSeconds, RulesDef.defaultShipmentMergeSeconds);
     route();

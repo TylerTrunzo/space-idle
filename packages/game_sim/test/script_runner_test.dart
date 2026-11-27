@@ -25,6 +25,12 @@ Map<String, Object?> _kora(Map<String, Object?> state) =>
       (b) => b['id'] == 'kora',
     );
 
+/// [v] as a reply writes a number: its value and its display.
+Map<String, String> _numJson(double v) {
+  final b = BigNum.from(v);
+  return {'value': b.toJson(), 'display': formatNumber(b)};
+}
+
 void main() {
   test('a capacity upgrade says when free crew filled its new slot', () {
     final r = _runner();
@@ -191,6 +197,13 @@ void main() {
     });
     r.handle({'cmd': 'advance', 'seconds': 600});
     final st = r.handle({'cmd': 'state'});
+    final throughput = _numJson(
+      routeThroughput(
+        r.state,
+        r.engine.content,
+        route['createdId']! as String,
+      ).perSec,
+    );
     expect(st['routes'], [
       {
         'id': route['createdId'],
@@ -201,6 +214,10 @@ void main() {
         'cargoShips': 1,
         'stopAtDestination': null,
         'paused': false,
+        // The smelter uses all the ore Kora mines: what it holds is all it
+        // has to send.
+        'throughput': throughput,
+        'limitedBy': 'sourceStock',
         'inFlight': {'value': '0', 'display': '0'},
         'travelTime': '2m',
       },
@@ -402,6 +419,9 @@ void main() {
     expect((routes.single as Map)['paused'], isTrue);
     expect(((routes.single as Map)['inFlight']! as Map)['display'], '20');
     expect(((routes.single as Map)['stopTarget']! as Map)['display'], '20');
+    // 20 a trip of 2 minutes.
+    expect((routes.single as Map)['limitedBy'], 'destinationRoom');
+    expect(((routes.single as Map)['throughput']! as Map)['display'], '0.167');
     expect((routes.single as Map)['stopSharedWith'], isEmpty);
     final reachCap = storageCap(
       r.state,

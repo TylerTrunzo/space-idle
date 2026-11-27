@@ -4,9 +4,10 @@ BigNum n(num v) => BigNum.from(v);
 
 /// Inline content: system `sys` with bodies `a` (orbit 1), `b` (orbit 2),
 /// `c` (orbit 1); faction `p` owns `a`; `ore` sells at 10 with depth 100;
-/// base travel 60 s, one ship carries 2/s, storage cap 1000.
-Content economyContent() => Content(
-  rules: const RulesDef(
+/// base travel 60 s, one ship carries 2/s, storage cap [baseStorageCap]
+/// (1000 by default).
+Content economyContent({double baseStorageCap = 1000}) => Content(
+  rules: RulesDef(
     speedPerLevel: 1.1,
     speedMilestoneEvery: 25,
     speedMilestoneMult: 2,
@@ -14,13 +15,13 @@ Content economyContent() => Content(
     efficiencyFloor: 0.25,
     capacityCrewPerLevel: 1,
     capacityStoragePerLevel: 0.2,
-    baseStorageCap: 1000,
+    baseStorageCap: baseStorageCap,
     offlineCapSeconds: 43200,
     marketFloor: 0.2,
     marketRecoverySeconds: 1800,
-    claimBaseCredits: BigNum.zero(),
+    claimBaseCredits: const BigNum.zero(),
     claimGrowth: 1,
-    slotBaseCredits: BigNum.zero(),
+    slotBaseCredits: const BigNum.zero(),
     slotGrowth: 1,
     outpostKitResource: 'kit',
     shipCapacityPerSecond: 2,
@@ -78,9 +79,10 @@ Content economyContent() => Content(
 );
 
 /// [economyContent] plus a `press`: a factory that uses 0.5 `ore` a
-/// second for 0.5 `plate`, with one crew slot.
-Content pressContent() {
-  final base = economyContent();
+/// second for 0.5 `plate`, with one crew slot; storage cap
+/// [baseStorageCap].
+Content pressContent({double baseStorageCap = 1000}) {
+  final base = economyContent(baseStorageCap: baseStorageCap);
   return Content(
     rules: base.rules,
     resources: {
