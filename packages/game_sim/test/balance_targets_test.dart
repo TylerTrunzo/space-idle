@@ -107,5 +107,94 @@ void main() {
         greaterThan(5 * end.faction('player').baseCrew),
       );
     });
+
+    test('earns at least 20% more on day 14 than on day 7', () {
+      // Round-3 pacing target (findings §4); stage 1.5 flattened from day
+      // 9 for the optimizer.
+      final day7 = report.days[6];
+      expect(day7.day, 7);
+      expect(
+        day14.earned.toDouble(),
+        greaterThanOrEqualTo(day7.earned.toDouble() * 1.2),
+        reason: '${day7.earned} then ${day14.earned}',
+      );
+    });
+
+    test('earns no more than 15% from contracts on days 1, 7 and 14', () {
+      _contractsAtMost(report, 0.15);
+    });
   });
+
+  // Seed 1 only, to keep the suite quick; docs/balance/ has seeds 1 to 3.
+  group('a 21-day casual bot run', () {
+    late BalanceReport report;
+    setUpAll(() {
+      report = runBotSession(
+        GameEngine(content),
+        CasualBot(),
+        seed: 1,
+        hours: 504,
+      );
+    });
+
+    test('sees a milestone or project on 5 of every 7 days', () {
+      // Contracts left out: findings §4 asks this of milestones and
+      // completed projects alone.
+      expect(
+        report.worstWeekWithMilestoneOrProject(21),
+        greaterThanOrEqualTo(5),
+        reason: report.toMarkdown(),
+      );
+    });
+
+    test('opens the Mass Driver by day 8, and keeps both megaprojects '
+        'rising', () {
+      int levelOn(String id, int day) =>
+          report.dayEnds[day - 1].megaprojectLevels[id]!;
+      expect(levelOn('mass_driver', 8), greaterThanOrEqualTo(1));
+      for (final id in ['orbital_station', 'mass_driver']) {
+        // A new level every week from then on, for each.
+        expect(levelOn(id, 14), greaterThan(levelOn(id, 8)), reason: id);
+        expect(levelOn(id, 21), greaterThan(levelOn(id, 14)), reason: id);
+      }
+    });
+
+    test('earns twice as much on day 21 as on day 14', () {
+      expect(
+        report.days[20].earned.toDouble(),
+        greaterThanOrEqualTo(report.days[13].earned.toDouble() * 2),
+      );
+    });
+
+    test('earns no more than 15% from contracts on days 1, 7 and 14', () {
+      _contractsAtMost(report, 0.15);
+      expect(report.rejectedCommands, 0);
+    });
+  });
+
+  test('the greedy bot earns no more than 15% from contracts on days 1, 7 '
+      'and 14', () {
+    final report = runBotSession(
+      GameEngine(content),
+      GreedyBot(),
+      seed: 1,
+      hours: 336,
+    );
+    _contractsAtMost(report, 0.15);
+  });
+}
+
+/// Expects [report]'s contract rewards to be at most [share] of what was
+/// earned on days 1, 7 and 14.
+void _contractsAtMost(BalanceReport report, double share) {
+  for (final day in [1, 7, 14]) {
+    final d = report.days[day - 1];
+    expect(
+      d.contractCredits.toDouble(),
+      lessThanOrEqualTo(d.earned.toDouble() * share),
+      reason:
+          '${report.botName} day $day: ${d.contractCredits} of '
+          '${d.earned}',
+    );
+  }
 }
