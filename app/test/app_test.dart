@@ -51,6 +51,23 @@ final class _FlakyStore implements SaveStore {
   }
 }
 
+/// A slot whose first read throws, whose later reads wait on [readGate],
+/// and whose writes wait on [writeGate]: for races between buttons.
+final class _GatedStore implements SaveStore {
+  final readGate = Completer<String?>();
+  final writeGate = Completer<void>();
+  var _reads = 0;
+
+  @override
+  Future<String?> read() {
+    if (_reads++ == 0) return Future.error(StateError('storage busy'));
+    return readGate.future;
+  }
+
+  @override
+  Future<void> write(String text) => writeGate.future;
+}
+
 /// Steps the binding through [states] in order: the test binding, unlike
 /// the platform, does not fill in the states between two.
 void _go(WidgetTester tester, List<AppLifecycleState> states) {
@@ -261,6 +278,33 @@ void main() {
       expect(store.reads, 2);
       expect(find.byType(Shell), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Start new game then Retry: the late write opens nothing', (
+      tester,
+    ) async {
+      final store = _GatedStore();
+      await _pumpApp(tester, store, clock);
+      expect(tester.takeException(), isA<StateError>());
+
+      await tester.tap(find.text('Start new game')); // its write waits
+      await tester.pump();
+      await tester.tap(find.text('Retry')); // a fresh controller reads
+      await tester.pump();
+      expect(find.byKey(SpaceIdleApp.loadingKey), findsOneWidget);
+
+      // The old new game's write lands: it belongs to the old controller
+      // and must not open the shell before the fresh one has loaded.
+      store.writeGate.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(Shell), findsNothing);
+      expect(find.byKey(SpaceIdleApp.loadingKey), findsOneWidget);
+
+      store.readGate.complete(null);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(Shell), findsOneWidget);
     });
 
     testWidgets('says Start new game replaces whatever is stored', (

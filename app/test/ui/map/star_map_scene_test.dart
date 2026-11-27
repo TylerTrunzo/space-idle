@@ -220,12 +220,11 @@ void main() {
       expect(expected, greaterThan(0));
       expect(scene.signals.single.systemId, 'veyra');
       expect(scene.signals.single.count, expected);
-      // Outside every visible orbit, inside the fitted extent.
+      // Outside every visible orbit (the bounds test covers it being in view).
       final outer = scene.bodies
           .map((b) => b.position.distance)
           .reduce(math.max);
       expect(scene.signals.single.position.distance, greaterThan(outer));
-      expect(scene.signals.single.position.distance, lessThan(scene.extent));
     });
 
     test('no signal once every hidden body is surveyed', () {

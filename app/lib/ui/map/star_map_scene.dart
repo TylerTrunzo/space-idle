@@ -14,9 +14,6 @@ abstract final class MapLayout {
   /// Radius added per orbit index.
   static const double orbitGap = 1;
 
-  /// Room left past the outermost visible orbit, for labels and signals.
-  static const double margin = 1.8;
-
   /// How far past the outermost orbit a system's signal marker sits.
   static const double signalOffset = 1;
 
@@ -297,7 +294,6 @@ final class StarMapScene {
     required this.routes,
     required this.shipments,
     required this.signals,
-    required this.extent,
   });
 
   /// The star's radius, at the origin.
@@ -317,9 +313,6 @@ final class StarMapScene {
 
   /// Signal markers, one per system with unsurveyed signals.
   final List<MapSignal> signals;
-
-  /// Radius around the star the map fits to the screen.
-  final double extent;
 
   /// Radius around a signal marker the map keeps in view, in map units.
   static const double signalMargin = 0.6;
@@ -343,10 +336,9 @@ final class StarMapScene {
   }
 
   /// Whether [other] draws the same static layer: star, orbits, bodies,
-  /// routes, signal markers and extent, whatever its shipments.
+  /// routes and signal markers, whatever its shipments.
   bool sameStaticLayer(StarMapScene other) =>
       other.starRadius == starRadius &&
-      other.extent == extent &&
       listEquals(other.orbitRadii, orbitRadii) &&
       listEquals(other.bodies, bodies) &&
       listEquals(other.routes, routes) &&
@@ -356,7 +348,6 @@ final class StarMapScene {
   bool operator ==(Object other) =>
       other is StarMapScene &&
       other.starRadius == starRadius &&
-      other.extent == extent &&
       listEquals(other.orbitRadii, orbitRadii) &&
       listEquals(other.bodies, bodies) &&
       listEquals(other.routes, routes) &&
@@ -366,7 +357,6 @@ final class StarMapScene {
   @override
   int get hashCode => Object.hash(
     starRadius,
-    extent,
     Object.hashAll(orbitRadii),
     Object.hashAll(bodies),
     Object.hashAll(routes),
@@ -481,7 +471,6 @@ StarMapScene buildStarMapScene(
     routes: routes,
     shipments: shipments,
     signals: signals,
-    extent: outer + MapLayout.margin,
   );
 }
 

@@ -61,8 +61,10 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
   );
 
   Future<void> _start() async {
-    final result = await _controller.start();
-    if (!mounted) return;
+    final c = _controller;
+    final result = await c.start();
+    // Retry may have replaced the controller while this one was reading.
+    if (!mounted || c != _controller) return;
     setState(() => _started = result);
     if (result is! LoadFailed) _startTimerIfInFront();
   }
@@ -113,10 +115,18 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
   /// Starts over in a new game. A failed write is reported and said, and
   /// the new game plays on in memory: the next save tries again.
   Future<void> _newGame() async {
+    final c = _controller;
+    var saved = true;
     try {
-      await _controller.newGame();
+      await c.newGame();
     } catch (e, st) {
       _report(e, st, 'while saving a new game');
+      saved = false;
+    }
+    // Retry may have replaced the controller while the write was pending:
+    // this new game is no longer the one on screen.
+    if (!mounted || c != _controller) return;
+    if (!saved) {
       _messenger.currentState?.showSnackBar(
         const SnackBar(
           content: Text(
@@ -126,7 +136,6 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
         ),
       );
     }
-    if (!mounted) return;
     setState(() => _started = const StartedNew());
     _startTimerIfInFront();
   }

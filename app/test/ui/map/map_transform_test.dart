@@ -17,13 +17,12 @@ void main() {
     const size = Size(400, 300);
 
     test('toLogical is the inverse of toCanvas', () {
-      final t = MapTransform.fit(size, 10);
+      const t = MapTransform(15, Offset(200, 150));
       const p = Offset(3.25, -7.5);
       final back = t.toLogical(t.toCanvas(p));
       expect(back.dx, closeTo(p.dx, 1e-9));
       expect(back.dy, closeTo(p.dy, 1e-9));
       expect(t.toCanvas(Offset.zero), const Offset(200, 150));
-      expect(t.scale, 15); // 300 / (2 x 10)
     });
 
     test('fitRect fills the limiting side less padding, and centres', () {
@@ -46,7 +45,7 @@ void main() {
     });
 
     // Scale 15 px a unit: a 0.5 body is 7.5 px, a 3 body 45 px.
-    final t = MapTransform.fit(size, 10);
+    const t = MapTransform(15, Offset(200, 150));
     final small = _synthetic(radius: 0.5);
     final at = t.toCanvas(Offset.zero);
 
@@ -90,7 +89,7 @@ void main() {
         'player',
         buildFlowReport(state, content, 'player'),
       );
-      final ft = MapTransform.fit(size, scene.extent);
+      final ft = MapTransform.fitRect(size, scene.bounds);
       final marker = ft.toCanvas(scene.signals.single.position);
       expect(hitTestMap(scene, ft, marker), const SignalHit('veyra'));
     });
@@ -116,6 +115,5 @@ StarMapScene _synthetic({required double radius, Offset? second}) {
     routes: const [],
     shipments: const [],
     signals: const [],
-    extent: 10,
   );
 }

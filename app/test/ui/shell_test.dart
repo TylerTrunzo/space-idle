@@ -93,6 +93,30 @@ void main() {
     tester.element(find.byType(StarMap, skipOffstage: false)),
   ).enabled;
 
+  testWidgets('a full sheet, a turn to wide and back: the map ticks again', (
+    tester,
+  ) async {
+    await _boot(tester, size: const Size(412, 915));
+    await tester.tap(find.bySemanticsLabel('Kora, owned'), warnIfMissed: false);
+    await tester.pump();
+    final title = find.descendant(
+      of: find.byKey(Shell.sheetKey),
+      matching: find.text('Kora'),
+    );
+    await tester.drag(title, const Offset(0, -900));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(mapTicks(tester), isFalse, reason: 'fully covered');
+
+    tester.view.physicalSize = const Size(915, 412); // wide: a side panel
+    await tester.pump();
+    tester.view.physicalSize = const Size(412, 915); // the sheet again
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(Shell.sheetKey), findsOneWidget);
+    expect(mapTicks(tester), isTrue, reason: 'the new sheet is at 45%');
+  });
+
   testWidgets('the map stops animating while the sheet covers it', (
     tester,
   ) async {

@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/ui/map/star_map_scene.dart';
 
-/// The one mapping between map units and canvas pixels, read by both the
-/// painter and the hit test: the star at the canvas centre, the scene's
-/// extent fitted to the shorter side.
+/// The one mapping between map units and canvas pixels, read by the
+/// painters, the label and node overlays and the hit test; the map builds
+/// it with [MapTransform.fitRect] from the scene's bounds.
 @immutable
 final class MapTransform {
   /// Creates a transform.
@@ -29,13 +29,6 @@ final class MapTransform {
       size.center(Offset.zero) - bounds.center * scale,
     );
   }
-
-  /// Fits a circle of radius [extent] map units round the star into
-  /// [size].
-  factory MapTransform.fit(Size size, double extent) => MapTransform(
-    math.min(size.width, size.height) / (2 * extent),
-    size.center(Offset.zero),
-  );
 
   /// Pixels per map unit.
   final double scale;

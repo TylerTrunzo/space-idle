@@ -94,6 +94,11 @@ class _ShellState extends State<Shell> {
 
   @override
   Widget build(BuildContext context) {
+    // The flag belongs to the phone sheet: wide, there is none, and a
+    // sheet made again on narrowing starts below full.
+    if (MediaQuery.sizeOf(context).width >= Shell.wideWidth) {
+      _mapCovered = false;
+    }
     return ShellScope(
       selectedId: _selected,
       selectBody: _select,
