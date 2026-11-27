@@ -384,14 +384,14 @@ void main() {
         if (id != 'credits') s.body('kora').stock[id] = v;
       }
       e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
-      // A credit paid by hand: the player is funding it.
-      f.megaprojectProgress['orbital_station'] = {'credits': n(1)};
+      // Its auto-delivery never set: a new player's goal, though nothing
+      // pays it yet.
       final sum = e.catchUpOffline(s, 60);
       final goal = sum.nextGoal! as MegaprojectGoal;
       expect(goal.megaprojectId, 'orbital_station');
       expect(goal.level, 1);
       expect(goal.remaining, megaprojectRemaining(s, c, 'player', station));
-      final short = cost['credits']! - n(1) - f.credits;
+      final short = cost['credits']! - f.credits;
       expect(
         goal.etaSeconds,
         closeTo((short / sum.creditsPerSecAfter).toDouble(), 1e-6),
@@ -412,7 +412,13 @@ void main() {
         if (id != 'credits') s.body('kora').stock[id] = v;
       }
       e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
-      // Goods go in on their own; credits do not.
+      NextGoal? goal() =>
+          nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'));
+      // Never set, it is the player's goal.
+      f.reachedMilestones.addAll([for (final m in c.milestones) m.id]);
+      expect((goal()! as MegaprojectGoal).megaprojectId, station.id);
+      f.reachedMilestones.clear();
+      // Goods go in on their own; credits do not: a choice.
       e.apply(
         s,
         const SetMegaprojectAutoCommand(
@@ -424,8 +430,6 @@ void main() {
       );
       e.advance(s, 120);
       expect(megaprojectRemaining(s, c, 'player', station).keys, ['credits']);
-      NextGoal? goal() =>
-          nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'));
       // The milestone the rates reach soonest instead.
       expect(goal(), isA<MilestoneGoal>());
       // Nor once every milestone is reached.
@@ -690,9 +694,9 @@ void main() {
 
     test('has no ETA for a stage whose goods are not being made', () {
       final s = e.newGame(1);
-      s.faction('player')
-        ..reachedMilestones.addAll([for (final m in c.milestones) m.id])
-        ..megaprojectProgress['orbital_station'] = {'credits': n(1)};
+      s.faction('player').reachedMilestones.addAll([
+        for (final m in c.milestones) m.id,
+      ]);
       final sum = e.catchUpOffline(s, 60);
       final goal = sum.nextGoal! as MegaprojectGoal;
       expect(goal.etaSeconds, isNull);
@@ -724,9 +728,7 @@ void main() {
     e.apply(s, const AssignCrewCommand('player', 'b1', 0));
     e.advance(s, 60);
     kora.stock['iron_ore'] = n(0.2);
-    s.faction('player')
-      ..credits = n(1e7)
-      ..megaprojectProgress['orbital_station'] = {'credits': n(1)};
+    s.faction('player').credits = n(1e7);
     final claim = e.apply(
       s,
       const ClaimBodyCommand('player', 'hollow_reach', 'kora'),

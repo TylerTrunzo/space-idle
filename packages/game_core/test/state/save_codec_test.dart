@@ -84,6 +84,21 @@ void main() {
     );
   });
 
+  test('megaprojectAutoSet round-trips, and an unknown id in it is '
+      'refused', () {
+    final s = newGameState(content, 3);
+    s.faction('player').megaprojectAutoSet.add('mass_driver');
+    final back =
+        (SaveCodec.decode(SaveCodec.encode(s), content) as SaveOk).state;
+    expect(back.faction('player').megaprojectAutoSet, {'mass_driver'});
+    expect(s.copy().faction('player').megaprojectAutoSet, {'mass_driver'});
+    s.faction('player').megaprojectAutoSet.add('dyson');
+    expect(
+      err(SaveCodec.decode(SaveCodec.encode(s), content)).kind,
+      SaveErrorKind.unknownContentId,
+    );
+  });
+
   group('decode rejects unknown ids in', () {
     void expectUnknown(void Function(GameState s) corrupt) {
       final s = newGameState(content, 3);

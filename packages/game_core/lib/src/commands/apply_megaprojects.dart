@@ -239,6 +239,7 @@ CommandResult _setMegaprojectAuto(
       'There is no megaproject ${cmd.megaprojectId}',
     );
   }
+  f.megaprojectAutoSet.add(def.id);
   if (!cmd.goods && !cmd.credits) {
     f.megaprojectAuto.remove(def.id);
   } else {

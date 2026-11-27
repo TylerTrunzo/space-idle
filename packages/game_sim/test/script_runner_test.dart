@@ -1422,15 +1422,6 @@ void main() {
     f.reachedMilestones.addAll([
       for (final m in r.engine.content.milestones) m.id,
     ]);
-    // A megaproject nothing pays credits to is not the next goal: credit
-    // auto-pay makes it one.
-    expect(r.handle({'cmd': 'away', 'seconds': 60})['nextGoal'], isNull);
-    r.handle({
-      'cmd': 'setMegaprojectAuto',
-      'megaprojectId': 'orbital_station',
-      'goods': false,
-      'credits': true,
-    });
     final station = r.handle({'cmd': 'away', 'seconds': 60});
     expect(station['nextGoal'], {
       'kind': 'megaproject',
@@ -1447,6 +1438,15 @@ void main() {
       (station['nextGoal']! as Map)['message'],
       endsWith('; not in reach at the current rates'),
     );
+    // Once the player turns its auto-delivery on without credits, and
+    // pays none by hand, it is not the next goal.
+    r.handle({
+      'cmd': 'setMegaprojectAuto',
+      'megaprojectId': 'orbital_station',
+      'goods': true,
+      'credits': false,
+    });
+    expect(r.handle({'cmd': 'away', 'seconds': 60})['nextGoal'], isNull);
   });
 
   test('away needs a number of seconds', () {

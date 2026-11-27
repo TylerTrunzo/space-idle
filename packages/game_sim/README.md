@@ -164,8 +164,9 @@ commands:
   has held, `"ongoing": "for 3h 10m, and worse than before"`; one
   `nextGoal`: the milestone the current rates reach soonest, or a
   megaproject's next stage when that comes sooner (a stage still owed
-  credits counts only while credit auto-pay is on for it or you have paid
-  it some by hand since it opened; its ETA shares stock
+  credits is left out once you have set its auto-delivery with credit
+  auto-pay off and paid it none by hand since it opened; one whose
+  auto-delivery you never set still counts; its ETA shares stock
   and income out as auto-delivery does: credits above the auto-pay reserve
   split evenly among the megaprojects taking them, goods to those fed
   goods in content order, so a stage paid by hand waits for them) (`kind`,

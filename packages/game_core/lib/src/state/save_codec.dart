@@ -595,6 +595,12 @@ final class SaveCodec {
           return 'faction ${f.id}: auto-delivery to unknown megaproject $id';
         }
       }
+      for (final id in f.megaprojectAutoSet) {
+        if (!c.megaprojects.containsKey(id)) {
+          return 'faction ${f.id}: auto-delivery set for unknown '
+              'megaproject $id';
+        }
+      }
       for (final r in f.autoSell) {
         if (!bodyIds.contains(r.bodyId)) {
           return 'faction ${f.id}: auto-sell on unknown body ${r.bodyId}';

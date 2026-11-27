@@ -215,9 +215,11 @@ final class MegaprojectGoal extends NextGoal {
 /// longest any entry still owed takes (null when one of them is not being
 /// made), with what the faction holds and makes shared out among the
 /// megaprojects as auto-delivery shares it ([megaprojectEtas]). A stage
-/// still owed credits is left out when credit auto-pay is off for it and
-/// the faction has paid it none since it opened: the player chose not to
-/// fund it, so the soonest milestone or another megaproject comes first.
+/// still owed credits is left out when the faction set the megaproject's
+/// auto-delivery with credit auto-pay off and has paid it none since it
+/// opened: the player chose not to fund it, so the soonest milestone or
+/// another megaproject comes first. A megaproject whose auto-delivery was
+/// never set counts as funded.
 /// Ties go to the milestone, then content order.
 NextGoal? nextGoal(
   GameState s,
@@ -296,10 +298,11 @@ NextGoal? nextGoal(
   return _sooner(stage.etaSeconds, milestone.etaSeconds) ? stage : milestone;
 }
 
-/// Whether [m]'s stage [f] pays for still owes credits that nothing is
-/// paying: credit auto-pay is off for it and [f] has paid it no credits
-/// since the stage opened. [nextGoal] leaves such a megaproject out, as
-/// the player chose not to fund it yet.
+/// Whether [m]'s stage [f] pays for still owes credits that [f] chose not
+/// to pay: it set [m]'s auto-delivery ([FactionState.megaprojectAutoSet])
+/// with credit auto-pay off, and has paid it no credits since the stage
+/// opened. [nextGoal] leaves such a megaproject out. One whose auto-pay was
+/// never set is no choice: a new player still sees its first stage.
 bool _unfunded(
   FactionState f,
   Content c,
@@ -307,6 +310,7 @@ bool _unfunded(
   String factionId,
   MegaprojectDef m,
 ) {
+  if (!f.megaprojectAutoSet.contains(m.id)) return false;
   if (f.megaprojectAuto[m.id]?.credits ?? false) return false;
   if (!megaprojectRemaining(s, c, factionId, m).containsKey(creditsKey)) {
     return false;
