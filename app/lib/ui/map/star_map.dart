@@ -147,6 +147,14 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
             transformationController: _zoom,
             minScale: _minScale,
             maxScale: _maxScale,
+            // The viewer never zooms out past the point where the margin-
+            // inflated child fills the viewport, so 0.5x needs at least half
+            // a viewport each side. A whole one leaves slack, and being
+            // finite it keeps the map from being panned out of reach.
+            boundaryMargin: EdgeInsets.symmetric(
+              horizontal: size.width,
+              vertical: size.height,
+            ),
             child: SizedBox.fromSize(
               size: size,
               child: Stack(

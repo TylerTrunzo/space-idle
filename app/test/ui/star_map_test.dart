@@ -180,6 +180,40 @@ void main() {
     expect(viewer.maxScale, 3);
   });
 
+  testWidgets('a pinch zooms out to 0.5x, where a tap still selects', (
+    tester,
+  ) async {
+    final selected = <String>[];
+    await tester.pumpWidget(_app(_controller(), selected: selected));
+    final viewer = find.byType(InteractiveViewer);
+    final zoom = tester
+        .widget<InteractiveViewer>(viewer)
+        .transformationController!;
+
+    final center = tester.getCenter(viewer);
+    final a = await tester.startGesture(center + const Offset(-200, 0));
+    final b = await tester.startGesture(
+      center + const Offset(200, 0),
+      pointer: 2,
+    );
+    for (var i = 1; i <= 10; i++) {
+      await a.moveTo(center + Offset(-200 + 18.0 * i, 0));
+      await b.moveTo(center + Offset(200 - 18.0 * i, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await a.up();
+    await b.up();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(zoom.value.getMaxScaleOnAxis(), closeTo(0.5, 0.01));
+
+    // Kora's node moved with the zoom; a tap on it still selects Kora. The
+    // node takes no pointer events itself (the canvas gesture does), hence
+    // warnIfMissed: false.
+    await tester.tap(find.bySemanticsLabel('Kora, owned'), warnIfMissed: false);
+    expect(selected, ['kora']);
+  });
+
   test('the painter paints a route, a shipment, a badge, an arc and a '
       'signal straight onto a canvas', () {
     final state = GameEngine(content).newGame(1);
