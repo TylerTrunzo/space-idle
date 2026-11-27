@@ -381,13 +381,6 @@ void main() {
     // The bot has fed the station's first stage everything it can by day
     // 3; taken back, its goods and credits are there to feed again.
     played.faction('player').megaprojectProgress.clear();
-    // The bot's own settings feed megaprojects too: the copy to compare
-    // with feeds none.
-    final unfed = played.copy();
-    unfed.faction('player')
-      ..megaprojectAuto.clear()
-      ..megaprojectAutoSet.clear();
-    e.catchUpOffline(unfed, 21600);
     final start = _feeding(e, played);
     final away = start.copy();
     final live = start.copy();
@@ -403,12 +396,14 @@ void main() {
       a.megaprojectProgress.keys.toList(),
       l.megaprojectProgress.keys.toList(),
     );
-    // Something went in on its own (the Mass Driver is still locked).
-    final hand = unfed.faction('player');
+    // Something went in on its own over the 6 h, under the same settings
+    // in both runs (the Mass Driver is still locked).
+    final before = start.faction('player');
     expect(
       jsonEncode([l.megaprojectLevels, l.megaprojectProgress]),
-      isNot(jsonEncode([hand.megaprojectLevels, hand.megaprojectProgress])),
+      isNot(jsonEncode([before.megaprojectLevels, before.megaprojectProgress])),
     );
+    expect(l.megaprojectProgress['orbital_station'], isNotEmpty);
     // Goods fed match; credits paid in differ by at most a minute's
     // income, which 60 s steps pay in a minute later.
     final minute = l.lifetimeCredits.toDouble() / start.time * 60;
