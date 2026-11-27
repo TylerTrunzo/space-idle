@@ -638,21 +638,19 @@ const double _fullStepSeconds = 60;
 /// refills in the probe step what its store just used, which is more than
 /// it keeps sending when its store's room holds it back: so a store fed a
 /// cap's worth a trip reads the same with its lot just landed as with the
-/// lot on its way.
+/// lot on its way. [throughput] gives [routeThroughputs] of [s], worked
+/// out once per report and only when asked for.
 Map<String, BigNum> _steadySends(
   GameState s,
-  Content c,
   Map<String, BigNum> sent,
+  Map<String, RouteThroughput> Function() throughput,
 ) {
-  Map<String, RouteThroughput>? throughput;
   final out = Map.of(sent);
   for (final r in s.routes) {
     final v = sent[r.id];
     if (v == null || r.stopAtDestination == null) continue;
     if (s.shipments.any((sh) => sh.routeId == r.id)) continue;
-    final most = BigNum.from(
-      (throughput ??= routeThroughputs(s, c))[r.id]!.perSec * _sampleSeconds,
-    );
+    final most = BigNum.from(throughput()[r.id]!.perSec * _sampleSeconds);
     if (v > most) out[r.id] = most;
   }
   return out;
@@ -874,7 +872,15 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   deliverShipments(probe);
   stepProduction(probe, c, _sampleSeconds);
   final playedEff = crewEfficiency(probe, c, factionId);
-  final routeFlow = _steadySends(s, c, sendCargo(probe, c, _sampleSeconds));
+  // Every route's throughput, worked out once and only if needed.
+  Map<String, RouteThroughput>? throughput;
+  Map<String, RouteThroughput> throughputs() =>
+      throughput ??= routeThroughputs(s, c);
+  final routeFlow = _steadySends(
+    s,
+    sendCargo(probe, c, _sampleSeconds),
+    throughputs,
+  );
   // Cargo lands in lots, so a store a route feeds can be empty a second
   // before a lot lands and full a second after: the sample step runs such
   // buildings at the share a full step of their average supply gives them.
@@ -959,7 +965,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     if (neck != null) bottlenecks.add((bottlenecks.length, neck));
   }
 
-  final causes = _RouteCauses(s, c, factionId);
+  final causes = _RouteCauses(s, c, factionId, throughputs);
   for (final (i, body) in owned.indexed) {
     final produced = <String, BigNum>{};
     final consumed = <String, BigNum>{};
@@ -1128,12 +1134,14 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
 /// not the cause, and nor is one that could carry enough. Worked out once
 /// per store, from the state the report is built from.
 final class _RouteCauses {
-  _RouteCauses(this.s, this.c, this.factionId);
+  _RouteCauses(this.s, this.c, this.factionId, this._throughput);
 
   final GameState s;
   final Content c;
   final String factionId;
-  Map<String, RouteThroughput>? _throughput;
+
+  /// [routeThroughputs] of [s], shared with the rest of the report.
+  final Map<String, RouteThroughput> Function() _throughput;
   StepCache? _cache;
 
   /// Store ([bottleneckKey] of body and resource) to the route that holds
@@ -1164,7 +1172,7 @@ final class _RouteCauses {
           r,
     ];
     if (feeding.isEmpty) return null;
-    final through = _throughput ??= routeThroughputs(s, c);
+    final through = _throughput();
     final cache = _cache ??= StepCache(s, c);
     final wanted = (cache.use(body, 1)[resourceId] ?? const BigNum.zero())
         .toDouble();
