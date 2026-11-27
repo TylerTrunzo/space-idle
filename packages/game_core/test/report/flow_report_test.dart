@@ -700,10 +700,16 @@ void main() {
       t,
       const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
     );
-    expect(
-      lost().toDouble() - unfed.toDouble(),
-      closeTo(0.32 * price(t, fed, 'copper_ore').toDouble() / 3 * 3600, 1e-6),
-    );
+    final ore = 0.32 * price(t, fed, 'copper_ore').toDouble() / 3 * 3600;
+    expect(lost().toDouble() - unfed.toDouble(), closeTo(ore, 1e-6));
+    // Not while the Mass Driver is locked, nor once its stage has all the
+    // copper ore it asks for: nothing would take it then.
+    final f = t.faction('player')..megaprojectLevels['orbital_station'] = 0;
+    expect(lost().toDouble(), closeTo(unfed.toDouble(), 1e-6));
+    f
+      ..megaprojectLevels['orbital_station'] = 1
+      ..megaprojectProgress['mass_driver'] = {'copper_ore': n(1e6)};
+    expect(lost().toDouble(), closeTo(unfed.toDouble(), 1e-6));
   });
 
   test('crew shortage loses nothing when no crewed building runs', () {
