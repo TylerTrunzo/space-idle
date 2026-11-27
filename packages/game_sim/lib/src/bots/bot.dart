@@ -73,7 +73,22 @@ final class GreedyBot implements Bot {
 final class BalancedBot implements Bot {
   /// Creates a balanced bot that fixes buildings short of an input while
   /// they run below [inputWorthFixingBelow] of full rate.
-  BalancedBot({this.inputWorthFixingBelow = defaultInputWorthFixingBelow});
+  BalancedBot({
+    this.inputWorthFixingBelow = defaultInputWorthFixingBelow,
+    this.creditWeights = defaultCreditWeights,
+  });
+
+  /// [creditWeights] by default: the Orbital Station takes two shares of
+  /// the credits auto-pay hands out to the Mass Driver's one. An optimizer
+  /// funds the better buy first: on the balanced bot's own day 7 to 21
+  /// states a station level adds 8.5-18.6% to income and a Mass Driver
+  /// level 4.9%, for a similar price (the stage 1.7 task 4 report has the
+  /// table). The casual bot keeps the default, equal shares.
+  static const Map<String, int> defaultCreditWeights = {'orbital_station': 2};
+
+  /// Megaproject id to the weight its credits take of what auto-pay shares
+  /// out ([SetMegaprojectAutoCommand.creditWeight]); 1 for any not named.
+  final Map<String, int> creditWeights;
 
   /// [inputWorthFixingBelow] by default: a bot heuristic, not a pacing
   /// rule. The report shows a building cargo feeds at the share a full
@@ -109,16 +124,30 @@ final class BalancedBot implements Bot {
     GameState s,
     String factionId, {
     int? budget,
+  }) => _plan(e, s, factionId, budget: budget).cmds;
+
+  /// [plan], with the planning copy as the plan leaves it and the credits
+  /// it saves for its next goal ([_Goals.goalSaving]).
+  ({List<Command> cmds, GameState end, BigNum saving}) _plan(
+    GameEngine e,
+    GameState s,
+    String factionId, {
+    int? budget,
   }) {
     // Each bottleneck gets one fix per decision: the 1 s sample cannot see
     // a fix work until stock has had a real step to refill.
     final tried = <String>{};
     // Megaprojects whose goods got a step toward more supply this decision.
     final grown = <String>{};
-    // Income is read once per decision: working it out plays the economy
-    // forward, and a few commands hardly move it.
+    // Income and the goal saved for are read once per decision: working
+    // them out plays the economy forward, and a few commands hardly move
+    // them.
     double? income;
-    return planCommands(e, s, budget: budget, (w) {
+    BigNum? saving;
+    late GameState end;
+    final cmds = planCommands(e, s, budget: budget, onDone: (w) => end = w, (
+      w,
+    ) {
       late final _View v;
       v = _View(
         e.content,
@@ -126,8 +155,10 @@ final class BalancedBot implements Bot {
         factionId,
         withReport: true,
         grown: grown,
+        creditWeights: creditWeights,
         income: () =>
             income ??= math.max(0.0, v.report!.creditsPerSec.toDouble()),
+        saving: () => saving ??= v.goalSaving(),
       );
       final quick =
           v.assignFreeCrew() ??
@@ -146,18 +177,30 @@ final class BalancedBot implements Bot {
         _ => v.grow(reserve: const BigNum.zero()),
       };
     });
+    return (cmds: cmds, end: end, saving: saving ?? const BigNum.zero());
   }
 }
 
 /// Plays like [BalancedBot] on a budget: at most [commandsPerCheckIn]
 /// commands per check-in, the way a player with a few minutes to spare
-/// acts on the most pressing things and leaves the rest.
+/// acts on the most pressing things and leaves the rest; and once per
+/// check-in it taps "buy max" ([BuyUpgradesCommand]), as the app lets
+/// every player do, which counts as one of those commands.
+///
+/// Buy-max spends the spare credits the balanced plan leaves: those held,
+/// less what it saves for its next goal (a claim, say), and while
+/// megaprojects take credits on their own, no more than the shared
+/// auto-pay reserve (an hour of income plus that saving), the credits
+/// above it being theirs. So the reserve is the spending allowance, as
+/// round 4's buy-max casual found; before any megaproject takes credits,
+/// buy-max spends all that is spare.
 ///
 /// Auto-sell rules do not count: the balanced bot re-tunes how much each
 /// one keeps as demand changes, which a player sets once (and the app can
 /// do for them). A decision more than a minute of game time after the
 /// last one starts a new check-in. The commands kept are the first of the
-/// balanced plan, so they are still valid in order.
+/// balanced plan, so they are still valid in order; buy-max comes after
+/// them, in the check-in's first decision.
 final class CasualBot implements Bot {
   /// Creates a casual bot.
   CasualBot({this.commandsPerCheckIn = defaultCommandsPerCheckIn});
@@ -165,27 +208,64 @@ final class CasualBot implements Bot {
   /// Commands a casual check-in allows by default.
   static const int defaultCommandsPerCheckIn = 15;
 
-  /// Most commands it issues per check-in.
+  /// Most commands it issues per check-in, buy-max included.
   final int commandsPerCheckIn;
 
-  final _inner = BalancedBot();
+  final _inner = BalancedBot(creditWeights: const {});
   double? _lastDecision;
   int _used = 0;
+  bool _boughtMax = false;
 
   @override
   String get name => 'casual';
 
+  /// What buy-max may spend of [factionId]'s credits in [s]: what is held,
+  /// at most the shared auto-pay reserve while a megaproject set to take
+  /// credits on its own can take them now (it owes credits and takes
+  /// deliveries: the credits above the reserve are its at the next game
+  /// minute), less [saving], what the plan saves for its next goal; never
+  /// below zero.
+  static BigNum _spare(
+    GameState s,
+    Content c,
+    String factionId,
+    BigNum saving,
+  ) {
+    final f = s.faction(factionId);
+    final funding = c.megaprojects.values.any(
+      (m) =>
+          (f.megaprojectAuto[m.id]?.credits ?? false) &&
+          megaprojectTakesDeliveries(s, c, factionId, m) &&
+          megaprojectRemaining(s, c, factionId, m).containsKey('credits'),
+    );
+    final held = funding ? f.credits.min(f.autoPayReserve) : f.credits;
+    return (held - saving).max(const BigNum.zero());
+  }
+
   @override
   List<Command> decide(GameEngine e, GameState s, String factionId) {
     final last = _lastDecision;
-    if (last == null || s.time - last > 60) _used = 0;
+    if (last == null || s.time - last > 60) {
+      _used = 0;
+      _boughtMax = false;
+    }
     _lastDecision = s.time;
-    final cmds = _inner.plan(
+    final buy = !_boughtMax && _used < commandsPerCheckIn;
+    final p = _inner._plan(
       e,
       s,
       factionId,
-      budget: commandsPerCheckIn - _used,
+      budget: commandsPerCheckIn - _used - (buy ? 1 : 0),
     );
+    final cmds = [
+      ...p.cmds,
+      if (buy)
+        BuyUpgradesCommand(
+          factionId,
+          _spare(p.end, e.content, factionId, p.saving),
+        ),
+    ];
+    _boughtMax = _boughtMax || buy;
     _used += cmds.where((c) => c is! SetAutoSellCommand).length;
     return cmds;
   }
@@ -282,11 +362,14 @@ const int _maxChainDepth = 8;
 ///
 /// With a [budget], the plan ends before the command that would make more
 /// than [budget] commands other than auto-sell rules.
+///
+/// [onDone], if given, gets the copy as the plan leaves it.
 List<Command> planCommands(
   GameEngine e,
   GameState s,
   Command? Function(GameState w) next, {
   int? budget,
+  void Function(GameState w)? onDone,
 }) {
   final w = s.copy();
   final out = <Command>[];
@@ -301,6 +384,7 @@ List<Command> planCommands(
     out.add(cmd);
     if (e.apply(w, cmd) is! CommandOk) break;
   }
+  onDone?.call(w);
   return out;
 }
 
@@ -315,10 +399,12 @@ final class _Do extends _Step {
   final Command cmd;
 }
 
-/// Save up [credits] for the next step.
+/// Save up [credits] for the next step; [stage] when they are a
+/// megaproject stage's, which credit auto-pay can take instead.
 final class _Save extends _Step {
-  const _Save(this.credits);
+  const _Save(this.credits, {this.stage = false});
   final BigNum credits;
+  final bool stage;
 }
 
 /// Already met, or waiting on production: nothing to do for it now.
@@ -348,8 +434,11 @@ final class _View {
     this.factionId, {
     bool withReport = false,
     double Function()? income,
+    BigNum Function()? saving,
     Set<String>? grown,
+    this.creditWeights = const {},
   }) : _planIncome = income,
+       _planSaving = saving,
        _grown = grown ?? {},
        owned = [
          for (final b in s.bodies)
@@ -372,6 +461,13 @@ final class _View {
   final FlowReport? report;
 
   final double Function()? _planIncome;
+
+  /// Credits the plan saves for its next goal, read once per decision.
+  final BigNum Function()? _planSaving;
+
+  /// Megaproject id to the credit weight [autoDeliver] gives it; 1 for any
+  /// not named.
+  final Map<String, int> creditWeights;
 
   /// Ids of the megaprojects whose goods got a step toward more supply in
   /// this decision ([_Megaprojects._growFor]); one each per decision.

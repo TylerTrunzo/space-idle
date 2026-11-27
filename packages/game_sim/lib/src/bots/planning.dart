@@ -64,6 +64,14 @@ extension _Goals on _View {
     return const _Waiting();
   }
 
+  /// Credits the next goal [pursueGoals] saves for, which credit auto-pay
+  /// must leave: zero when it saves for none, or for a megaproject stage
+  /// (whose credits auto-pay brings).
+  BigNum goalSaving() => switch (pursueGoals()) {
+    _Save(:final credits, stage: false) => credits,
+    _ => const BigNum.zero(),
+  };
+
   /// Whether [m] holds in this (possibly planned-ahead) state, which the
   /// engine has not yet checked for milestones ([milestoneProgress]), or
   /// will once the faction's claims under way complete.

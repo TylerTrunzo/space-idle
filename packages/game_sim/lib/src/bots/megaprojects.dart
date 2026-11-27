@@ -30,20 +30,18 @@ extension _Megaprojects on _View {
   /// is needed; null when every setting is as wanted.
   ///
   /// Once a megaproject is open ([megaprojectLockedBy]) and its host is
-  /// owned, every body feeds it goods. Its credits go in on their own,
-  /// above the faction's auto-pay reserve of [creditReserveSeconds] of
-  /// income (one for every megaproject, so the credits above it are shared
-  /// out evenly), only while they are all the stage being paid for still
-  /// lacks and the faction cannot pay them now and keep the reserve
-  /// ([deliverMegaproject] pays them by hand when it can); at the next
-  /// decision after that stage is paid for, they stop again. Paid in
-  /// earlier, credits would sit in a stage still short of goods instead of
-  /// growing the economy that makes them: in 21-day runs that kept the
-  /// casual bot's first station level a day later and its income lower.
-  /// And credits left flowing once the stage is paid would pour what is
-  /// earned until the next decision into the next stage, still short of
-  /// its goods. The reserve is set before any credits go in, and kept
-  /// while within a factor of two of what is wanted.
+  /// owned, every body feeds it goods once its stage is near ready
+  /// ([GoodsFeedMode.nearReady]). Its credits go in on their own, at
+  /// weight 1, once every good the stage being paid for still lacks is
+  /// made or held ([_fundable]): from then the stage is only waiting on
+  /// what the economy makes, and the credits above the faction's shared
+  /// auto-pay reserve go in as they are earned, so none sit idle and its
+  /// goods start [RulesDef.nearReadyHorizonSeconds] before its credits
+  /// are in. Before that, credits paid in would sit in a stage the empire
+  /// cannot finish instead of growing the economy that makes its goods.
+  /// The reserve, [creditReserveSeconds] of income plus what the bot is
+  /// saving for a goal ([_savingFor]), is set before any credits go in,
+  /// and kept while within a factor of two of what is wanted.
   Command? autoDeliver() {
     Command? setting;
     var anyCredits = false;
@@ -53,14 +51,12 @@ extension _Megaprojects on _View {
         continue;
       }
       final now = faction.megaprojectAuto[m.id];
-      final owedCredits = _deliverable(m)
-          ? _onlyCredits(megaprojectRemaining(s, c, factionId, m))
-          : null;
-      final payCredits = owedCredits != null && !_affordable(owedCredits);
+      final payCredits = _deliverable(m) && _fundable(m);
       anyCredits = anyCredits || payCredits;
       if (now != null &&
           now.goods == GoodsFeedMode.nearReady &&
-          now.credits == payCredits) {
+          now.credits == payCredits &&
+          now.creditWeight == _weightOf(m)) {
         continue;
       }
       setting ??= SetMegaprojectAutoCommand(
@@ -68,6 +64,7 @@ extension _Megaprojects on _View {
         m.id,
         goods: GoodsFeedMode.nearReady,
         credits: payCredits,
+        creditWeight: _weightOf(m),
       );
     }
     if (anyCredits) {
@@ -79,10 +76,27 @@ extension _Megaprojects on _View {
     return setting;
   }
 
-  /// Whether the faction can pay [credits] now and still keep the reserve
-  /// [autoDeliver] would set ([_creditReserve]).
-  bool _affordable(BigNum credits) =>
-      faction.credits >= credits + _creditReserve();
+  /// The credit weight the bot gives [m] ([_View.creditWeights]; 1 when
+  /// it names none).
+  int _weightOf(MegaprojectDef m) => creditWeights[m.id] ?? 1;
+
+  /// Whether every good the stage of [m] being paid for still lacks
+  /// ([megaprojectRemaining]) is made by a staffed building ([made]) or
+  /// held, all of it, across the owned bodies; true when it lacks only
+  /// credits.
+  bool _fundable(MegaprojectDef m) {
+    for (final MapEntry(key: id, value: need) in megaprojectRemaining(
+      s,
+      c,
+      factionId,
+      m,
+    ).entries) {
+      if (id == 'credits' || made(id)) continue;
+      final held = owned.fold(const BigNum.zero(), (t, b) => t + stock(b, id));
+      if (held < need) return false;
+    }
+    return true;
+  }
 
   /// Whether credit reserve [now] can stay for one of [want]: within a
   /// factor of two, so the reserve is not reset for every small change of
@@ -91,7 +105,7 @@ extension _Megaprojects on _View {
       now.mulDouble(2) >= want && want.mulDouble(2) >= now;
 
   /// Credits [autoDeliver] keeps back: [creditReserveSeconds] of income, in
-  /// whole credits.
+  /// whole credits, plus what the bot is saving for a goal ([_savingFor]).
   BigNum _creditReserve() {
     final perSec = report != null || _planIncome != null
         ? income
@@ -99,8 +113,12 @@ extension _Megaprojects on _View {
             0.0,
             buildFlowReport(s, c, factionId).creditsPerSec.toDouble(),
           );
-    return BigNum.from(perSec * creditReserveSeconds).floor();
+    return BigNum.from(perSec * creditReserveSeconds).floor() + _savingFor();
   }
+
+  /// Credits the bot saves for its next goal ([pursueGoals]), which credit
+  /// auto-pay must leave it: what the plan passed in, else zero.
+  BigNum _savingFor() => _planSaving?.call() ?? const BigNum.zero();
 
   /// Whether goods go into [m] on their own ([autoDeliver]).
   bool _fedGoods(MegaprojectDef m) =>
@@ -112,46 +130,34 @@ extension _Megaprojects on _View {
       faction.megaprojectAuto[m.id]?.credits ?? false;
 
   /// One delivery by hand toward the stage being paid for of the first
-  /// megaproject, in content order, that still lacks something the engine
-  /// does not feed it on its own ([autoDeliver]) (while a stage is under
-  /// way, the one after it): the goods it still lacks from the first owned
-  /// body holding at least one whole unit more of them than it keeps for
-  /// its own use ([keepForUse]), body order; once every good is in, the
-  /// credits, when the faction holds them all and the credit reserve
-  /// besides ([autoDeliver]). Null if there is nothing to deliver.
+  /// megaproject, in content order, whose goods the engine does not feed
+  /// it on its own ([autoDeliver]) (while a stage is under way, the one
+  /// after it): the goods it still lacks from the first owned body holding
+  /// at least one whole unit more of them than it keeps for its own use
+  /// ([keepForUse]), body order. Null if there is nothing to deliver.
+  /// Credits go in on their own ([autoDeliver]).
   ///
   /// Deliveries add up, so goods go in as they are made, from every body,
   /// and the stage's timer starts as soon as the last of its cost is in,
   /// or as the stage under way completes.
   Command? deliverMegaproject() {
     for (final m in c.megaprojects.values) {
-      if (!_deliverable(m)) continue;
+      if (!_deliverable(m) || _fedGoods(m)) continue;
       if (m.hostBodyType case final t? when !owned.any((b) => b.typeId == t)) {
         continue;
       }
       final owed = megaprojectRemaining(s, c, factionId, m);
-      if (!_fedGoods(m)) {
-        for (final body in owned) {
-          final give = <String, BigNum>{};
-          for (final MapEntry(key: id, value: need) in owed.entries) {
-            if (id == 'credits') continue;
-            // Deliveries move whole units.
-            final spare = (stock(body, id) - keepForUse(body, id)).floor();
-            if (spare > const BigNum.zero()) give[id] = spare.min(need);
-          }
-          if (give.isNotEmpty) {
-            return DeliverToMegaprojectCommand(factionId, m.id, body.id, give);
-          }
+      for (final body in owned) {
+        final give = <String, BigNum>{};
+        for (final MapEntry(key: id, value: need) in owed.entries) {
+          if (id == 'credits') continue;
+          // Deliveries move whole units.
+          final spare = (stock(body, id) - keepForUse(body, id)).floor();
+          if (spare > const BigNum.zero()) give[id] = spare.min(need);
         }
-      }
-      if (_fedCredits(m)) continue;
-      // With the credits all a stage lacks, they are paid by hand only
-      // when the reserve stays; otherwise they go in on their own above it
-      // ([autoDeliver]).
-      if (_onlyCredits(owed) case final credits? when _affordable(credits)) {
-        return DeliverToMegaprojectCommand(factionId, m.id, owned.first.id, {
-          'credits': credits,
-        });
+        if (give.isNotEmpty) {
+          return DeliverToMegaprojectCommand(factionId, m.id, body.id, give);
+        }
       }
     }
     return null;
@@ -174,7 +180,10 @@ extension _Megaprojects on _View {
       if (_acts(step)) return step;
     }
     if (_growFor(m, owed) case final step?) return step;
-    if (_onlyCredits(owed) case final credits?) return _Save(credits);
+    // Credits fed on their own come as they are earned.
+    if (_onlyCredits(owed) case final credits? when !_fedCredits(m)) {
+      return _Save(credits, stage: true);
+    }
     return const _Waiting();
   }
 

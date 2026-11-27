@@ -5,7 +5,12 @@ part of 'bot.dart';
 extension _Contracts on _View {
   /// One step on the faction's contracts board, contracts in board order:
   /// discards a contract on a resource no staffed building makes and no
-  /// owned body holds, or delivers, in one command from every owned body
+  /// owned body holds, or, with a flow report (the balanced and casual
+  /// bots), one whose remaining units the spare stock and a day
+  /// ([_fillWithinSeconds]) of the owned bodies' net production
+  /// ([surplus]) would not cover, so a slot is not held for days by an
+  /// order the empire consumes as it makes; or delivers, in one command
+  /// from every owned body
   /// (`DeliverContractCommand` with no body), what the owned bodies hold of
   /// a contract's resource beyond what each keeps for its own use
   /// ([keepForUse], at most half of what it holds), once that finishes the
@@ -32,6 +37,16 @@ extension _Contracts on _View {
         spare = spare + free;
         if (held >= storageCap(s, c, body).mulDouble(_fullShare)) full = true;
       }
+      if (report != null) {
+        final rate = owned.fold(
+          0.0,
+          (t, b) => t + math.max(0.0, surplus(b, id)),
+        );
+        if (spare.toDouble() + rate * _fillWithinSeconds <
+            k.remaining.toDouble()) {
+          return DiscardContractCommand(factionId, k.id);
+        }
+      }
       if (spare <= const BigNum.zero()) continue;
       if (spare >= k.remaining || full) {
         return DeliverContractCommand(
@@ -45,3 +60,8 @@ extension _Contracts on _View {
     return null;
   }
 }
+
+/// Game seconds within which the balanced and casual bots expect to fill a
+/// contract at today's net production ([_Contracts.workContracts]); a
+/// longer one is discarded: about a day.
+const double _fillWithinSeconds = 86400;

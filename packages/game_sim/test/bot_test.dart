@@ -49,12 +49,17 @@ final class _Spy implements Bot {
   }
 }
 
-/// Counts [inner]'s commands per 6 h check-in, auto-sell rules aside.
+/// Counts [inner]'s commands per 6 h check-in, auto-sell rules aside, and
+/// keeps its buy-max commands.
 final class _Counter implements Bot {
   _Counter(this.inner);
 
   final Bot inner;
   final Map<int, int> perCheckIn = {};
+
+  /// Check-in index to the [BuyUpgradesCommand]s issued in it, with the
+  /// credits held when each was issued.
+  final Map<int, List<(BuyUpgradesCommand, BigNum)>> buyMax = {};
 
   @override
   String get name => inner.name;
@@ -66,6 +71,15 @@ final class _Counter implements Bot {
     perCheckIn[i] =
         (perCheckIn[i] ?? 0) +
         cmds.where((c) => c is! SetAutoSellCommand).length;
+    // The credits held when each buy-max command applies: after the
+    // commands before it.
+    final w = s.copy();
+    for (final c in cmds) {
+      if (c is BuyUpgradesCommand) {
+        (buyMax[i] ??= []).add((c, w.faction(factionId).credits));
+      }
+      e.apply(w, c);
+    }
     return cmds;
   }
 }
@@ -89,9 +103,20 @@ final class _Log implements Bot {
 }
 
 void main() {
+  // One 8-day balanced session, seed 1, played once for the tests that
+  // read it: a shorter session is the same up to its end.
+  _Log? weekLog;
+  BalanceReport? weekRun;
+  BalanceReport week() => weekRun ??= runBotSession(
+    _engine(),
+    weekLog = _Log(BalancedBot()),
+    seed: 1,
+    hours: 192,
+  );
+
   test('ships move as shipments, and every route stops at what it needs', () {
-    final bot = _Log(BalancedBot());
-    final r = runBotSession(_engine(), bot, seed: 1, hours: 168);
+    final r = week();
+    final bot = weekLog!;
     expect(r.rejectedCommands, 0);
     final routes = bot.issued.whereType<CreateRouteCommand>().toList();
     // Cargo ships go to a body as a move, not a route.
@@ -129,7 +154,7 @@ void main() {
   });
 
   test("balanced bot reaches 'own 2 bodies' within 72h", () {
-    final r = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 72);
+    final r = week();
     final hit = r.milestones.where((m) => m.id == 'own_2_bodies');
     expect(hit, hasLength(1), reason: r.toMarkdown());
     expect(hit.single.gameHours, lessThanOrEqualTo(72));
@@ -151,7 +176,7 @@ void main() {
           m.id,
     };
     expect(early.length, greaterThanOrEqualTo(19));
-    final r = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 192);
+    final r = week();
     expect(
       r.milestonesNotReached.map((m) => m.id).where(early.contains),
       isEmpty,
@@ -258,38 +283,24 @@ void main() {
         final e = _engine();
         final s = stocked(e);
         final issued = play(e, bot, s, 3);
-        // Goods on their own once the station is open; its credits, once
-        // they are all it lacks and a billion covers them and the reserve,
-        // by hand, so none go on into the next stage.
-        expect(
-          [
-            for (final d in issued.whereType<DeliverToMegaprojectCommand>())
-              d.amounts.keys.toList(),
-          ],
-          [
-            ['credits'],
-          ],
-        );
+        // Goods and credits on their own once the station is open and
+        // every good its stage lacks is held: nothing by hand.
+        expect(issued.whereType<DeliverToMegaprojectCommand>(), isEmpty);
         final settings = issued
             .whereType<SetMegaprojectAutoCommand>()
             .where((c) => c.megaprojectId == 'orbital_station')
             .toList();
         expect(settings.first.goods, GoodsFeedMode.nearReady);
-        expect(settings.map((c) => c.credits), everyElement(isFalse));
+        expect(settings.first.credits, isTrue);
         expect(
           megaprojectStageOf(s, 'player', 'orbital_station'),
           isNotNull,
           reason: '$issued',
         );
-        expect(
-          s.faction('player').megaprojectAuto['orbital_station']!.credits,
-          isFalse,
-        );
       });
     }
 
-    test('keeps an hour of income when the credits go in on their own, '
-        'as they do when it cannot pay them and keep it', () {
+    test('keeps an hour of income when the credits go in on their own', () {
       final e = _engine();
       final s = e.newGame(1);
       // Half an hour of play, so auto-sell earns an income.
@@ -356,8 +367,11 @@ void main() {
         expect(f.megaprojectAuto[m]!.credits, isTrue, reason: m);
       }
       expect(paid.first, isNotNull, reason: 'the station got none');
-      // Split evenly, an odd credit aside.
-      expect((paid.first! - paid.last!).toDouble().abs(), lessThanOrEqualTo(2));
+      // Split 2:1, the balanced bot's weights, odd credits aside.
+      expect(
+        (paid.first! - paid.last!.mulDouble(2)).toDouble().abs(),
+        lessThanOrEqualTo(3),
+      );
     });
 
     test('a megaproject still locked is not set up', () {
@@ -393,6 +407,38 @@ void main() {
         ..body('kora').stock['station_segment'] = BigNum.from(1);
       play(e, BalancedBot(), s, 3);
       expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNotNull);
+    });
+
+    test('takes its credits on their own before its goods are in, once '
+        'every good it lacks is made', () {
+      final e = _engine();
+      final s = stocked(e)..faction('player').credits = BigNum.from(1e4);
+      final station = e.content.megaprojects['orbital_station']!;
+      final f = s.faction('player');
+      // Nothing held of hull plates: the stage lacks some, which Kora's
+      // plate press makes.
+      for (final body in ['kora', 'hollow_reach']) {
+        s.body(body).stock.remove('hull_plate');
+      }
+      final cmds = BalancedBot().decide(e, s, 'player');
+      final settings = cmds.whereType<SetMegaprojectAutoCommand>().toList();
+      expect(settings.first.credits, isFalse, reason: 'nothing makes plates');
+      // Its plan builds a plate press toward the stage, and the credits
+      // then go in on their own, the plates still owed.
+      final press = cmds.indexWhere(
+        (c) => c is BuildCommand && c.defId == 'plate_press',
+      );
+      expect(press, greaterThanOrEqualTo(0));
+      expect(settings.last.credits, isTrue);
+      expect(cmds.indexOf(settings.last), greaterThan(press));
+      for (final cmd in cmds) {
+        expect(e.apply(s, cmd), isA<CommandOk>());
+      }
+      expect(
+        megaprojectRemaining(s, e.content, 'player', station).keys,
+        contains('hull_plate'),
+      );
+      expect(f.megaprojectAuto['orbital_station']!.credits, isTrue);
     });
 
     test('takes what is held when the goods are short, and waits', () {
@@ -576,14 +622,28 @@ void main() {
     expect(CasualBot().name, 'casual');
   });
 
-  test('casual bot plays like balanced on a command budget per check-in', () {
+  test('casual bot plays like balanced on a command budget per check-in, '
+      'buying max once in each', () {
     final counter = _Counter(CasualBot(commandsPerCheckIn: 5));
     final r = runBotSession(_engine(), counter, seed: 1, hours: 24);
     expect(r.rejectedCommands, 0);
     expect(counter.perCheckIn.keys, [0, 1, 2, 3]);
     for (final n in counter.perCheckIn.values) {
+      // The buy-max command is one of the five.
       expect(n, inInclusiveRange(1, 5));
     }
+    expect(counter.buyMax.keys, [0, 1, 2, 3]);
+    for (final buys in counter.buyMax.values) {
+      final (cmd, held) = buys.single;
+      expect(cmd.budget, lessThanOrEqualTo(held));
+      expect(cmd.budget, greaterThanOrEqualTo(const BigNum.zero()));
+    }
+    // Its budget is what is left: the levels it buys are most of what
+    // it spends.
+    final spent = counter.buyMax.values
+        .expand((b) => b)
+        .fold(const BigNum.zero(), (t, b) => t + b.$1.budget);
+    expect(spent > const BigNum.zero(), isTrue);
   });
 
   test('a command rejected while planning ends the plan and is returned', () {
@@ -657,6 +717,37 @@ void main() {
         }
       });
     }
+
+    for (final bot in [BalancedBot(), CasualBot()]) {
+      test('the ${bot.name} bot discards a contract it cannot fill within '
+          'a day, and keeps one it can', () {
+        final e = _engine();
+        // Kora makes 0.2 steel a second: about 17K a day.
+        final (far, k) = withContract(e, 'steel', 1e6, stock: 10);
+        expect(
+          bot
+              .decide(e, far, 'player')
+              .whereType<DiscardContractCommand>()
+              .map((c) => c.contractId),
+          [k.id],
+        );
+        final (near, _) = withContract(e, 'steel', 5000, stock: 10);
+        expect(
+          bot.decide(e, near, 'player').whereType<DiscardContractCommand>(),
+          isEmpty,
+        );
+      });
+    }
+
+    test('the greedy bot keeps a contract it can work toward, however '
+        'long it takes', () {
+      final e = _engine();
+      final (s, _) = withContract(e, 'steel', 1e6, stock: 10);
+      expect(
+        GreedyBot().decide(e, s, 'player').whereType<DiscardContractCommand>(),
+        isEmpty,
+      );
+    });
 
     test('a contract it can work toward is kept, its goods held back '
         'once', () {

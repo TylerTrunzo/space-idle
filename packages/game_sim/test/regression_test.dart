@@ -378,7 +378,15 @@ void main() {
       'megaprojects on their own', () {
     final e = _engine();
     final played = _played(e, hours: 72);
+    // The bot has fed the station's first stage everything it can by day
+    // 3; taken back, its goods and credits are there to feed again.
+    played.faction('player').megaprojectProgress.clear();
+    // The bot's own settings feed megaprojects too: the copy to compare
+    // with feeds none.
     final unfed = played.copy();
+    unfed.faction('player')
+      ..megaprojectAuto.clear()
+      ..megaprojectAutoSet.clear();
     e.catchUpOffline(unfed, 21600);
     final start = _feeding(e, played);
     final away = start.copy();
