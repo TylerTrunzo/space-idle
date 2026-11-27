@@ -23,6 +23,7 @@
     "id": "mass_driver",
     "name": "Mass Driver",
     "requiresMegaproject": {"orbital_station": 1},
+    "scalesContracts": false,
     "baseCost": {
       "credits": "2e6",
       "hull_plate": "5000",

@@ -23,7 +23,9 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   trickle nor a stockpile gets one. It asks for `quantitySeconds` of what you make of it that way,
   gross of what your own buildings use (1 h of bulk goods, 2 h of components, 3 h of advanced
   goods), but never more than one of your bodies can store, nor the template's `maxQuantity` (5,000,
-  1,000 and 100) × (1 + your megaproject levels summed). It pays 3× the base price per unit, at least
+  1,000 and 100) × (1 + your levels of the megaprojects with `scalesContracts`, the Orbital Station's
+  alone today: the Mass Driver sets it to `false`, as optimizers level it far faster and the storage
+  cap then set every order). It pays 3× the base price per unit, at least
   `rewardIncomeSeconds` (20 min) and at most `rewardCapIncomeSeconds` (1 h) of your income when it is
   posted, both at least `minRewardCredits` (500). Income here is the larger of what auto-sell earns
   a second and the value of what your buildings steadily make beyond what they use, at current
@@ -52,8 +54,10 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Auto-delivery.** A megaproject can be fed on its own (`setMegaprojectAuto`): every game minute
   each body hands over what the stage still needs above what it keeps (its buildings' use over the
   step, its auto-sell rule's `keepAtLeast`, and what open contracts still need), and credits go in
-  above a reserve you set (none without one). Between minutes auto-sell holds those goods back, up
-  to the storage cap; what a body holds of them above its cap goes in at once.
+  above a reserve you set (none without one), after the minute's sales. Between minutes auto-sell
+  holds those goods back, up to the storage cap; what a body holds of them above its cap goes in at
+  once. Stages due by the minute complete first, so the next one starts at the same time at any
+  step size.
 
 ## Building niches
 

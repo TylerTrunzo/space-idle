@@ -1523,6 +1523,14 @@ void main() {
         'megaprojects.orbital_station.requiresMegaproject.orbital_station: '
             'must be >= 1',
       ),
+      'a required level past the highest any megaproject reaches': (
+        {
+          ...stationJson(),
+          'requiresMegaproject': {'orbital_station': 1001},
+        },
+        'megaprojects.orbital_station.requiresMegaproject.orbital_station: '
+            'must be <= 1000',
+      ),
       'a megaproject that requires itself': (
         {
           ...stationJson(),

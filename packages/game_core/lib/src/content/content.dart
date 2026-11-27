@@ -754,6 +754,10 @@ final class BonusDef {
 /// and grants [bonusesPerLevel] again, for good; the next stage costs
 /// more and takes longer.
 final class MegaprojectDef {
+  /// Highest level any megaproject reaches: no stage starts from it, a save
+  /// holds no more and a requirement ([requiresMegaproject]) asks no more.
+  static const int maxLevel = 1000;
+
   /// Creates a megaproject; the collections are copied unmodifiable.
   MegaprojectDef({
     required this.id,
@@ -765,6 +769,7 @@ final class MegaprojectDef {
     required this.stageSecondsGrowth,
     required List<BonusDef> bonusesPerLevel,
     Map<String, int> requiresMegaproject = const {},
+    this.scalesContracts = true,
   }) : baseCost = Map.unmodifiable(baseCost),
        bonusesPerLevel = List.unmodifiable(bonusesPerLevel),
        requiresMegaproject = Map.unmodifiable(requiresMegaproject);
@@ -804,6 +809,13 @@ final class MegaprojectDef {
   /// before it can deliver to this one, in content order; empty for none.
   /// See `megaprojectLockedBy`.
   final Map<String, int> requiresMegaproject;
+
+  /// Whether a faction's levels of it raise the most a contract asks for,
+  /// `maxQuantity × (1 + the levels of every megaproject that does)`
+  /// (`stepContracts`); true unless content says otherwise. A megaproject
+  /// a faction levels much faster than the others turns it off, so orders
+  /// follow the empire's main progress.
+  final bool scalesContracts;
 }
 
 /// A kind of order a neutral exchange posts on a faction's contracts board:

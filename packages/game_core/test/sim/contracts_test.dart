@@ -674,12 +674,18 @@ void main() {
       expect(k.quantity, n(120));
     });
 
-    test('the maximum quantity grows with every megaproject level', () {
+    test('the maximum quantity grows with the levels of megaprojects that '
+        'scale contracts', () {
       final c = steelOnly((t) => t['maxQuantity'] = '120');
       final s = steelFlood(c);
-      player(s).megaprojectLevels['orbital_station'] = 2;
-      expect(storageCap(s, c, s.body('kora')) > n(360), isTrue);
-      // 1 + 2 levels.
+      player(s).megaprojectLevels
+        ..['orbital_station'] = 2
+        // The Mass Driver's levels do not scale orders.
+        ..['mass_driver'] = 5;
+      expect(c.megaprojects['orbital_station']!.scalesContracts, isTrue);
+      expect(c.megaprojects['mass_driver']!.scalesContracts, isFalse);
+      expect(storageCap(s, c, s.body('kora')) > n(360 * 3), isTrue);
+      // 1 + 2 station levels.
       expect(postSteel(s, c).quantity, n(360));
     });
 

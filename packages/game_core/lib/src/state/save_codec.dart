@@ -145,8 +145,8 @@ final class SaveCodec {
   static const int maxLevel = 1000;
 
   /// Highest level a save may hold of any megaproject; no stage starts
-  /// from it.
-  static const int maxMegaprojectLevel = 1000;
+  /// from it ([MegaprojectDef.maxLevel]).
+  static const int maxMegaprojectLevel = MegaprojectDef.maxLevel;
 
   /// Names a [SeenBottleneck.kind] may take.
   static final Set<String> bottleneckKinds = {

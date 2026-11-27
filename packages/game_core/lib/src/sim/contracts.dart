@@ -29,7 +29,8 @@ import 'production.dart';
 ///
 /// Its quantity is that steady gross rate × `quantitySeconds`, rounded to two
 /// significant figures, at most the template's `maxQuantity` × (1 + the
-/// faction's megaproject levels summed) and the largest storage cap among
+/// faction's levels of the megaprojects that
+/// [MegaprojectDef.scalesContracts], summed) and the largest storage cap among
 /// its bodies (each rounded down to two figures), at least `minQuantity`,
 /// in whole units ([twoSignificantFigures]). Its reward is `quantity ×
 /// basePrice × rewardMultiplier` credits, at least `rewardIncomeSeconds`
@@ -293,8 +294,9 @@ void freeContractSlot(FactionState f, Content c, double now) {
 /// Units a contract from [t] asks [f] for, given its gross production
 /// [rate] of the resource: `rate × quantitySeconds` rounded to two
 /// significant figures, at most the largest storage cap among the bodies
-/// [f] owns and [ContractTemplateDef.maxQuantity] × (1 + [f]'s megaproject
-/// levels summed) (each rounded down to two figures), and at least
+/// [f] owns and [ContractTemplateDef.maxQuantity] × (1 + [f]'s levels of
+/// the megaprojects that [MegaprojectDef.scalesContracts], summed) (each
+/// rounded down to two figures), and at least
 /// [ContractTemplateDef.minQuantity]; then rounded down to whole units, at
 /// least 1.
 BigNum _quantity(
@@ -310,7 +312,10 @@ BigNum _quantity(
     final cap = storageCap(s, c, b);
     if (largest == null || cap > largest) largest = cap;
   }
-  final levels = f.megaprojectLevels.values.fold(0, (t, v) => t + v);
+  var levels = 0;
+  for (final m in c.megaprojects.values) {
+    if (m.scalesContracts) levels += f.megaprojectLevels[m.id] ?? 0;
+  }
   final most = t.maxQuantity?.mulDouble(1.0 + levels);
   final ceiling = largest == null || most == null
       ? largest ?? most

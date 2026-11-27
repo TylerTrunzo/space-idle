@@ -112,6 +112,7 @@ final class _Loader {
               'stageSecondsGrowth',
               'bonusesPerLevel',
               'requiresMegaproject',
+              'scalesContracts',
             },
             _megaproject,
           )
@@ -872,14 +873,16 @@ final class _Loader {
         rawRequires.keys.toSet(),
       );
       for (final other in rawRequires.keys) {
-        final level = r.integer(other, min: 1);
+        final level = r.integer(other, min: 1, max: MegaprojectDef.maxLevel);
         if (level != null) requires[other] = level;
       }
     }
+    final scales = f.boolean('scalesContracts', fallback: true);
     if (_errors.length > before) return null;
     return MegaprojectDef(
       id: id,
       requiresMegaproject: requires,
+      scalesContracts: scales!,
       name: name!,
       hostBodyType: hostBodyType,
       baseCost: baseCost!,
