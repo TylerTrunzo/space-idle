@@ -191,6 +191,27 @@ void main() {
       expect(row.problem, isNotNull);
     });
 
+    test('a building held back only by a crew shortage says so', () {
+      // Housing for 1 crew with 3 assigned: every crewed building runs at
+      // a third, and only the faction-wide crewShortage names a cause.
+      c.state.faction(_p).baseCrew = 1;
+      c.tickSeconds(5);
+      expect(
+        c.flow.bottlenecks.map((n) => n.kind),
+        contains(BottleneckKind.crewShortage),
+      );
+      final mine = bodyView(
+        c,
+        'kora',
+      )!.buildings.firstWhere((b) => b.id == 'b1');
+      final t = crewTotals(c.state, content, _p);
+      expect(mine.severity, Severity.warning);
+      expect(
+        mine.problem,
+        'Short of crew: ${t.supported} of ${t.assigned} crew housed',
+      );
+    });
+
     test('a building running freely is ok with no problem', () {
       c.tickSeconds(5);
       final mine = bodyView(

@@ -21,6 +21,13 @@ String bottleneckText(GameState s, Content c, String factionId, Bottleneck n) =>
 String outcomeMessage(GameState s, Content c, Command cmd, CommandOutcome o) =>
     _Words(s, c, cmd.factionId).outcome(cmd, o);
 
+/// A crewed building's line when the faction's housing supports fewer
+/// crew than it has assigned: "Short of crew: 18 of 20 crew housed".
+String crewShortText(GameState s, Content c, String factionId) {
+  final t = crewTotals(s, c, factionId);
+  return 'Short of crew: ${t.supported} of ${t.assigned} crew housed';
+}
+
 /// What [m]'s bonuses add up to at [level]: "storage +30%, housing +15%,
 /// offline cap +3h" with " (tiers 0-1)" on a bonus limited to some tiers;
 /// "no bonus" at level 0.

@@ -136,6 +136,7 @@ final class RowContext {
     required this.credits,
     required this.freeCrew,
     required this.bottlenecks,
+    this.crewShort,
   });
 
   /// [playerId]'s context from [s] and its flow report's per-building
@@ -149,6 +150,9 @@ final class RowContext {
     credits: s.faction(playerId).credits,
     freeCrew: availableCrew(s, c, playerId),
     bottlenecks: {for (final n in bottlenecks.reversed) ?n.buildingId: n},
+    crewShort: bottlenecks.any((n) => n.kind == BottleneckKind.crewShortage)
+        ? crewShortText(s, c, playerId)
+        : null,
   );
 
   /// Credits the player holds.
@@ -159,6 +163,11 @@ final class RowContext {
 
   /// Building id to the first bottleneck the report names it in.
   final Map<String, Bottleneck> bottlenecks;
+
+  /// While the faction's housing falls short of its assigned crew, the
+  /// line a crewed building held back by nothing else shows; else null.
+  /// The shortage names no building, so the per-building lookup misses it.
+  final String? crewShort;
 }
 
 /// The row of building [b], from [status] (its line in the flow report;
@@ -209,7 +218,9 @@ BuildingRowView buildingRowView(
       // A building a bottleneck names is held back, whatever its share.
       _ => neck == null ? Severity.ok : Severity.warning,
     },
-    problem: neck == null ? null : bottleneckText(s, c, playerId, neck),
+    problem: neck != null
+        ? bottleneckText(s, c, playerId, neck)
+        : (fraction < 1 && b.crew > 0 ? ctx.crewShort : null),
     upgrades: {
       for (final t in UpgradeTrack.values)
         if (def.upgrades.containsKey(t)) t: _upgrade(c, b, t, ctx.credits),
