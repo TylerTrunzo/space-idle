@@ -83,8 +83,9 @@ final class OngoingBottleneck {
   final double since;
 
   /// Its [Bottleneck.lostCreditsPerHour] as the absence began, from a
-  /// report of the state then; null where that was not estimated or the
-  /// report then did not show it.
+  /// report of the state then: like every report figure, one sample step
+  /// of that moment, not an average over time before it. Null where that
+  /// was not estimated or the report then did not show it.
   final BigNum? lostBefore;
 
   /// Whether the credits it loses an hour grew by more than
@@ -105,7 +106,8 @@ final class OngoingBottleneck {
 sealed class NextGoal {
   const NextGoal({this.etaSeconds});
 
-  /// Restores a goal written by [toJson].
+  /// Restores a goal written by [toJson]; throws [FormatException] for a
+  /// `kind` it does not know.
   factory NextGoal.fromJson(Map<String, Object?> j) {
     final eta = (j['etaSeconds'] as num?)?.toDouble();
     return switch (j['kind']) {
@@ -115,7 +117,7 @@ sealed class NextGoal {
         target: BigNum.fromJson(j['target']! as String),
         etaSeconds: eta!,
       ),
-      _ => MegaprojectGoal(
+      'megaproject' => MegaprojectGoal(
         megaprojectId: j['megaprojectId']! as String,
         level: j['level']! as int,
         remaining: {
@@ -125,6 +127,7 @@ sealed class NextGoal {
         },
         etaSeconds: eta,
       ),
+      final kind => throw FormatException('Unknown next goal kind', kind),
     };
   }
 
@@ -220,6 +223,8 @@ NextGoal? nextGoal(
   final f = s.faction(factionId);
   final income = report.creditsPerSec;
   final wasting = report.bodies.any((b) => b.wastedPerSec.isNotEmpty);
+  // Gross output, as `lifetimeProduced` counts it: a milestone on an
+  // intermediate is reached by what is made, even when all of it is used.
   BigNum made(String id) {
     var total = const BigNum.zero();
     for (final b in report.bodies) {

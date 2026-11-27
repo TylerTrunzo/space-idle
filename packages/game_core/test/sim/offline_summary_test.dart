@@ -286,6 +286,23 @@ void main() {
     });
   });
 
+  test('a next goal of an unknown kind is refused with a FormatException', () {
+    expect(
+      () => NextGoal.fromJson({'kind': 'station', 'etaSeconds': 5}),
+      throwsFormatException,
+    );
+    final stage = MegaprojectGoal(
+      megaprojectId: 'orbital_station',
+      level: 2,
+      remaining: {'credits': n(5)},
+    );
+    final back = NextGoal.fromJson(stage.toJson()) as MegaprojectGoal;
+    expect(
+      (back.megaprojectId, back.level, back.etaSeconds),
+      ('orbital_station', 2, null),
+    );
+  });
+
   test('the summary round-trips through JSON', () {
     final s = e.newGame(1);
     s.faction('player').baseCrew = 2;
