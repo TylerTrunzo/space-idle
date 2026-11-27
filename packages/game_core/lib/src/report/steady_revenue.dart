@@ -24,16 +24,28 @@ const double _measureSeconds = 600;
 /// Step of [measuredSaleRevenue]'s ticks: the engine's default.
 const double _stepSeconds = 60;
 
-/// Credits a second [factionId] earns from auto-sales in steady play:
-/// the lower of [steadySaleRevenue] and [measuredSaleRevenue], never
-/// below zero. What `FlowReport.creditsPerSec` reports.
+/// What a faction's steady play earns and hands over a second: its
+/// auto-sale credits ([creditsPerSec]) and, per megaproject it feeds on
+/// its own, what goes in a second by cost key ([deliveredPerSec]: `credits`
+/// or a resource id, in the order delivered).
+typedef SteadyIncome = ({
+  BigNum creditsPerSec,
+  Map<String, Map<String, BigNum>> deliveredPerSec,
+});
+
+/// Credits a second [factionId] earns from auto-sales in steady play, the
+/// lower of [steadySaleRevenue] and [measuredSaleRevenue] and never below
+/// zero (what `FlowReport.creditsPerSec` reports), with what auto-delivery
+/// hands its megaprojects a second in the measured run (none when it
+/// feeds none).
 ///
-/// Each is an upper estimate in its own way. Steady flows leave out what
-/// only playing shows: routes whose stop levels make them run in bursts
-/// and leave their destination dry between lots, and lots too big for a
-/// store. A short run shows those, but cannot tell goods made from a
-/// stock nothing refills from goods made from steady supply. The lower
-/// of the two is what the empire keeps earning.
+/// Each credits figure is an upper estimate in its own way. Steady flows
+/// leave out what only playing shows: routes whose stop levels make them
+/// run in bursts and leave their destination dry between lots, lots too
+/// big for a store, and goods auto-delivery takes. A short run shows
+/// those, but cannot tell goods made from a stock nothing refills from
+/// goods made from steady supply. The lower of the two is what the empire
+/// keeps earning.
 ///
 /// Neither counts the faction's open contracts: what auto-sell holds back
 /// for them fills once and then sells as before, so holding it is not
@@ -46,7 +58,7 @@ const double _stepSeconds = 60;
 /// [steadyFlows] in it. [market] is another copy whose market is the
 /// state's, give or take a second of sales, on which the steady sales are
 /// made; it is changed too.
-BigNum saleRevenuePerSec(
+SteadyIncome saleRevenuePerSec(
   GameState s,
   Content c,
   String factionId, {
@@ -61,10 +73,17 @@ BigNum saleRevenuePerSec(
     steady: steady,
     market: market,
   );
-  if (steadyRevenue <= const BigNum.zero()) return const BigNum.zero();
-  return steadyRevenue
-      .min(measuredSaleRevenue(s, c, factionId))
-      .max(const BigNum.zero());
+  final feeds = s.faction(factionId).megaprojectAuto.isNotEmpty;
+  if (steadyRevenue <= const BigNum.zero() && !feeds) {
+    return (creditsPerSec: const BigNum.zero(), deliveredPerSec: const {});
+  }
+  final measured = measuredSaleRevenue(s, c, factionId);
+  return (
+    creditsPerSec: steadyRevenue <= const BigNum.zero()
+        ? const BigNum.zero()
+        : steadyRevenue.min(measured.creditsPerSec).max(const BigNum.zero()),
+    deliveredPerSec: measured.deliveredPerSec,
+  );
 }
 
 /// Credits a second [factionId]'s auto-sales earn over [_measureSeconds]
@@ -72,10 +91,13 @@ BigNum saleRevenuePerSec(
 /// economy: what `GameEngine.tick` runs, without projects, contracts,
 /// milestones or bottleneck notes, so nothing but the economy moves.
 /// Auto-delivery to megaprojects runs as in the tick, so goods it takes
-/// do not count as sold.
+/// do not count as sold; what it hands over in the measured time, a
+/// second, comes with it. The warm-up takes the credits already held
+/// above a reserve, so those count as handed over only as they are
+/// earned.
 ///
 /// [s] is played forward; pass a copy.
-BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
+SteadyIncome measuredSaleRevenue(GameState s, Content c, String factionId) {
   BigNum sales() {
     var total = const BigNum.zero();
     for (final v in s.faction(factionId).salesRevenue.values) {
@@ -84,7 +106,8 @@ BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
     return total;
   }
 
-  void play(double seconds) {
+  final delivered = <String, Map<String, BigNum>>{};
+  void play(double seconds, {required bool measure}) {
     for (var t = 0.0; t < seconds; t += _stepSeconds) {
       for (final b in s.bodies) {
         b.wastedThisStep.clear();
@@ -93,7 +116,15 @@ BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
       deliverShipments(s);
       stepProduction(s, c, _stepSeconds);
       sendCargo(s, c, _stepSeconds);
-      stepMegaprojectAuto(s, c, _stepSeconds);
+      final fed = stepMegaprojectAuto(s, c, _stepSeconds)[factionId];
+      if (measure && fed != null) {
+        for (final MapEntry(key: m, value: got) in fed.entries) {
+          final into = delivered[m] ??= {};
+          for (final MapEntry(key: id, value: v) in got.entries) {
+            into[id] = (into[id] ?? const BigNum.zero()) + v;
+          }
+        }
+      }
       stepMarket(s, c, _stepSeconds);
       clampStorage(s, c, kept);
       s.time += _stepSeconds;
@@ -101,10 +132,19 @@ BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
     }
   }
 
-  play(_warmUpSeconds);
+  play(_warmUpSeconds, measure: false);
   final before = sales();
-  play(_measureSeconds);
-  return (sales() - before).mulDouble(1 / _measureSeconds);
+  play(_measureSeconds, measure: true);
+  return (
+    creditsPerSec: (sales() - before).mulDouble(1 / _measureSeconds),
+    deliveredPerSec: {
+      for (final MapEntry(key: m, value: got) in delivered.entries)
+        m: {
+          for (final MapEntry(key: id, value: v) in got.entries)
+            id: v.mulDouble(1 / _measureSeconds),
+        },
+    },
+  );
 }
 
 /// A faction's flows a second once its stocks stop moving, with every

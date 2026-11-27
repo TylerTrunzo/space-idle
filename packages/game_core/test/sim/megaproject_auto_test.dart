@@ -403,6 +403,78 @@ void main() {
       expect(all.toDouble(), greaterThan(cps.toDouble() * 1.5));
     });
 
+    test('the report shows what goes to each megaproject a second, and '
+        'its value', () {
+      final s = economy();
+      e.advance(s, 600);
+      // Above the reserve, so what is earned goes in as it comes.
+      s.faction('player').credits = n(5000);
+      final r = buildFlowReport(s, content, 'player');
+      final per = r.autoDeliveredPerSec['mass_driver']!;
+      // A smelter makes 0.2 steel a second, all of it fed.
+      expect(per['steel']!.toDouble(), closeTo(0.2, 0.01));
+      // The credits above the reserve: about the income a second.
+      expect(
+        per['credits']!.toDouble(),
+        closeTo(r.creditsPerSec.toDouble(), r.creditsPerSec.toDouble() * 0.1),
+      );
+      expect(
+        r.autoDeliveredValuePerSec.toDouble(),
+        closeTo(
+          per['credits']!.toDouble() +
+              per['steel']!.toDouble() * price(s, content, 'steel').toDouble(),
+          1e-9,
+        ),
+      );
+      // Nothing fed, nothing shown.
+      final plain = e.newGame(1);
+      final none = buildFlowReport(plain, content, 'player');
+      expect(none.autoDeliveredPerSec, isEmpty);
+      expect(none.autoDeliveredValuePerSec.isZero, isTrue);
+    });
+
+    test('feeding a megaproject does not shrink contract rewards', () {
+      final fed = economy();
+      final sold = economy();
+      ok(
+        sold,
+        const SetMegaprojectAutoCommand('player', 'mass_driver', false, null),
+      );
+      e.advance(fed, 1200);
+      e.advance(sold, 1200);
+      final withFeed = incomeBasis(
+        fed,
+        content,
+        buildFlowReport(fed, content, 'player'),
+      );
+      final without = incomeBasis(
+        sold,
+        content,
+        buildFlowReport(sold, content, 'player'),
+      );
+      expect(withFeed.toDouble(), greaterThan(0));
+      expect(withFeed >= without.mulDouble(0.999), isTrue);
+    });
+
+    test('the away summary lists what went to each megaproject', () {
+      final s = economy();
+      final ticks = economy();
+      final sum = e.catchUpOffline(s, 3600);
+      e.advance(ticks, 3600);
+      expect(
+        sum.autoDelivered['mass_driver'],
+        ticks.faction('player').megaprojectProgress['mass_driver'],
+      );
+      final back = OfflineSummary.fromJson(
+        jsonDecode(jsonEncode(sum.toJson())) as Map<String, Object?>,
+      );
+      expect(jsonEncode(back.toJson()), jsonEncode(sum.toJson()));
+      expect(back.autoDelivered['mass_driver']!['steel'], isNotNull);
+      // A summary from before auto-delivery reads as none.
+      final old = sum.toJson()..remove('autoDelivered');
+      expect(OfflineSummary.fromJson(old).autoDelivered, isEmpty);
+    });
+
     test('a catch-up is the same as 60 s steps, to the unit', () {
       final ticks = economy();
       final away = economy();

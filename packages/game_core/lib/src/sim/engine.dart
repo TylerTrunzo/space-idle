@@ -83,7 +83,10 @@ final class GameEngine {
   ///
   /// Throws [ArgumentError], changing nothing, if [dt] is not finite and
   /// above zero.
-  void tick(GameState s, double dt) {
+  void tick(GameState s, double dt) => _tick(s, dt);
+
+  /// [tick], returning what auto-delivery handed over in it.
+  AutoDeliveries _tick(GameState s, double dt) {
     // `measuredSaleRevenue` (report/steady_revenue.dart) mirrors the
     // economy steps below for the report's credits per second: a step
     // added or moved here belongs there too.
@@ -97,7 +100,7 @@ final class GameEngine {
     deliverShipments(s);
     stepProduction(s, content, dt);
     sendCargo(s, content, dt);
-    stepMegaprojectAuto(s, content, dt);
+    final fed = stepMegaprojectAuto(s, content, dt);
     stepMarket(s, content, dt);
     stepProjects(s, content);
     clampStorage(s, content, kept);
@@ -107,6 +110,7 @@ final class GameEngine {
     _checkMilestones(s, dt);
     s.time += dt;
     landArrivals(s, content);
+    return fed;
   }
 
   /// Moves [s] forward by [seconds] in ticks of [maxStep] seconds, the last
@@ -120,12 +124,13 @@ final class GameEngine {
     double maxStep = _offlineStepSeconds,
   }) => _advance(s, seconds, maxStep);
 
-  /// [advance], calling [afterTick] after every tick.
+  /// [advance], calling [afterTick] after every tick with what
+  /// auto-delivery handed over in it.
   void _advance(
     GameState s,
     double seconds,
     double maxStep, [
-    void Function()? afterTick,
+    void Function(AutoDeliveries fed)? afterTick,
   ]) {
     if (!seconds.isFinite || seconds < 0) {
       throw ArgumentError.value(seconds, 'seconds', 'must be finite and >= 0');
@@ -137,13 +142,13 @@ final class GameEngine {
     // total) keeps float error from adding a sliver of a step at the end.
     final whole = (seconds / maxStep).floor();
     for (var i = 0; i < whole; i++) {
-      tick(s, maxStep);
-      afterTick?.call();
+      final fed = _tick(s, maxStep);
+      afterTick?.call(fed);
     }
     final rest = seconds - whole * maxStep;
     if (rest > maxStep * 1e-9) {
-      tick(s, rest);
-      afterTick?.call();
+      final fed = _tick(s, rest);
+      afterTick?.call(fed);
     }
   }
 
@@ -181,7 +186,15 @@ final class GameEngine {
     final stageLevels = <ProjectState, int>{};
 
     final wasted = <String, BigNum>{};
-    _advance(s, simulated, _offlineStepSeconds, () {
+    final autoDelivered = <String, Map<String, BigNum>>{};
+    _advance(s, simulated, _offlineStepSeconds, (fed) {
+      for (final MapEntry(key: m, value: got)
+          in (fed[player.id] ?? const {}).entries) {
+        final into = autoDelivered[m] ??= {};
+        for (final MapEntry(key: id, value: v) in got.entries) {
+          into[id] = (into[id] ?? const BigNum.zero()) + v;
+        }
+      }
       for (final b in s.bodies) {
         if (b.ownerId != player.id) continue;
         for (final MapEntry(key: id, value: v) in b.wastedThisStep.entries) {
@@ -261,6 +274,10 @@ final class GameEngine {
       creditsPerSecBefore: reportBefore.creditsPerSec,
       creditsPerSecAfter: report.creditsPerSec,
       nextGoal: nextGoal(s, content, player.id, report),
+      autoDelivered: {
+        for (final m in content.megaprojects.keys)
+          m: ?autoDelivered[m],
+      },
     );
   }
 

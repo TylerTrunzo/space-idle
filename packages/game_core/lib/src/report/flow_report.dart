@@ -234,18 +234,22 @@ final class Bottleneck {
 final class FlowReport {
   /// Creates a report; the collections are copied unmodifiable.
   ///
-  /// [creditsPerSec] is called the first time [FlowReport.creditsPerSec]
-  /// is read, and only then; [steady] the first time a steady rate is
-  /// read: resource id to what the faction's buildings make, and resource
-  /// id to what is left over, with every flow steady.
+  /// [income] is called the first time [FlowReport.creditsPerSec] or
+  /// what goes to megaprojects is read, and only then; [steady] the first
+  /// time a steady rate is read: resource id to what the faction's
+  /// buildings make, and resource id to what is left over, with every
+  /// flow steady. [prices], resource id to price, values the goods
+  /// auto-delivered; it need list only those.
   FlowReport({
     required List<BodyFlow> bodies,
     required Map<String, BigNum> empireNet,
-    required BigNum Function() creditsPerSec,
+    required SteadyIncome Function() income,
     required (Map<String, BigNum>, Map<String, BigNum>) Function() steady,
     required List<Bottleneck> bottlenecks,
-  }) : _creditsPerSec = creditsPerSec,
+    Map<String, BigNum> prices = const {},
+  }) : _income = income,
        _steady = steady,
+       _prices = Map.unmodifiable(prices),
        bodies = List.unmodifiable(bodies),
        empireNet = Map.unmodifiable(empireNet),
        bottlenecks = List.unmodifiable(bottlenecks);
@@ -268,9 +272,39 @@ final class FlowReport {
   /// built from: it plays a copy of it forward, which costs several ticks.
   /// Until then the report keeps two copies of that state; it drops them
   /// once this is read.
-  late final BigNum creditsPerSec = _creditsPerSec();
+  ///
+  /// What auto-delivery hands to megaprojects is not in it, goods or
+  /// credits: see [autoDeliveredPerSec].
+  BigNum get creditsPerSec => _measured.creditsPerSec;
 
-  final BigNum Function() _creditsPerSec;
+  /// Megaproject id to what the faction's auto-delivery hands it a second
+  /// in the same short run of play as [creditsPerSec], by cost key
+  /// (`credits` or a resource id); empty when it feeds none. Credits paid
+  /// in come out of what [creditsPerSec] earns, so the two are not to be
+  /// added for income; the app can show "income, plus this to projects".
+  Map<String, Map<String, BigNum>> get autoDeliveredPerSec =>
+      _measured.deliveredPerSec;
+
+  /// What [autoDeliveredPerSec] is worth a second, every megaproject
+  /// together: the credits, plus each good at its market price as the
+  /// report was built.
+  late final BigNum autoDeliveredValuePerSec = () {
+    var total = const BigNum.zero();
+    for (final got in autoDeliveredPerSec.values) {
+      for (final MapEntry(key: id, value: v) in got.entries) {
+        total =
+            total +
+            (id == 'credits' ? v : v * (_prices[id] ?? const BigNum.zero()));
+      }
+    }
+    return total;
+  }();
+
+  late final SteadyIncome _measured = _income();
+
+  final SteadyIncome Function() _income;
+
+  final Map<String, BigNum> _prices;
 
   late final (Map<String, BigNum>, Map<String, BigNum>) _steadyRates =
       _steady();
@@ -537,7 +571,14 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   return FlowReport(
     bodies: bodies,
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
-    creditsPerSec: () {
+    // Prices as the report is built, for goods fed to megaprojects.
+    prices: {
+      for (final m in c.megaprojects.values)
+        if (s.faction(factionId).megaprojectAuto[m.id]?.goods ?? false)
+          for (final id in m.baseCost.keys)
+            if (id != 'credits') id: price(s, c, id),
+    },
+    income: () {
       final v = saleRevenuePerSec(
         played!,
         c,

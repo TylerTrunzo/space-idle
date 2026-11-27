@@ -336,7 +336,12 @@ final class OfflineSummary {
     List<OngoingBottleneck> ongoing = const [],
     this.nextGoal,
     List<String> contractsPosted = const [],
+    Map<String, Map<String, BigNum>> autoDelivered = const {},
   }) : contractsPosted = List.unmodifiable(contractsPosted),
+       autoDelivered = Map.unmodifiable({
+         for (final MapEntry(key: m, value: got) in autoDelivered.entries)
+           m: Map<String, BigNum>.unmodifiable(got),
+       }),
        stockGained = Map.unmodifiable(stockGained),
        milestonesReached = List.unmodifiable(milestonesReached),
        topBottlenecks = List.unmodifiable(topBottlenecks),
@@ -382,6 +387,17 @@ final class OfflineSummary {
         _ => null,
       },
       contractsPosted: (j['contractsPosted']! as List).cast<String>(),
+      // Absent in summaries from before auto-delivery.
+      autoDelivered: {
+        for (final MapEntry(key: m, value: got)
+            in ((j['autoDelivered'] as Map<String, Object?>?) ?? const {})
+                .entries)
+          m: {
+            for (final MapEntry(key: id, value: v)
+                in (got! as Map<String, Object?>).entries)
+              id: BigNum.fromJson(v! as String),
+          },
+      },
     );
   }
 
@@ -486,6 +502,11 @@ final class OfflineSummary {
   /// when there is nothing they reach.
   final NextGoal? nextGoal;
 
+  /// Megaproject id to what auto-delivery handed it while away
+  /// (`stepMegaprojectAuto`), by cost key (`credits` or a resource id),
+  /// megaprojects in content order; those given nothing are left out.
+  final Map<String, Map<String, BigNum>> autoDelivered;
+
   /// The [ongoing] record of [b], one of [topBottlenecks]; null when [b]
   /// began while away.
   OngoingBottleneck? ongoingFor(Bottleneck b) {
@@ -518,5 +539,11 @@ final class OfflineSummary {
     'creditsPerSecBefore': creditsPerSecBefore.toJson(),
     'creditsPerSecAfter': creditsPerSecAfter.toJson(),
     'nextGoal': ?nextGoal?.toJson(),
+    'autoDelivered': {
+      for (final MapEntry(key: m, value: got) in autoDelivered.entries)
+        m: {
+          for (final MapEntry(key: id, value: v) in got.entries) id: v.toJson(),
+        },
+    },
   };
 }
