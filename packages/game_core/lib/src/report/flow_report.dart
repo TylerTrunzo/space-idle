@@ -556,7 +556,8 @@ void noteBottlenecks(GameState s, Content c, double at) {
       );
     }
 
-    if (crewEfficiency(s, c, f.id) < 1) {
+    if (crewEfficiency(s, c, f.id) < 1 &&
+        crewTotals(s, c, f.id).overAssigned > 0) {
       see(BottleneckKind.crewShortage.name, null, null, null);
     }
     final owned = [
@@ -666,8 +667,10 @@ Bottleneck? _crewShortage(
   String factionId,
   double crewEff,
 ) {
-  if (crewEff >= 1) return null;
   final t = crewTotals(s, c, factionId);
+  // A shortage only when housing truly falls short of the crew assigned:
+  // the same test, within the same tolerance, as the crew counts.
+  if (crewEff >= 1 || t.overAssigned == 0) return null;
   return Bottleneck(
     kind: BottleneckKind.crewShortage,
     bodyId: null,

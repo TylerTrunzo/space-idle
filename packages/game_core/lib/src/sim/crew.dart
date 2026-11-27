@@ -65,10 +65,9 @@ double habitatHousing(RulesDef r, BuildingDef def, BuildingState b) =>
 /// it owns; see [CrewTotals]. Throws if the faction does not exist.
 CrewTotals crewTotals(GameState s, Content c, String factionId) {
   final (:base, :housing, :assigned) = _crew(s, c, factionId);
-  // The small epsilon keeps products such as 0.29 × 100 from flooring to 28.
   return CrewTotals(
     base: base,
-    supported: base + (housing + 1e-9).floor(),
+    supported: base + _settled(housing).floor(),
     assigned: assigned,
   );
 }
@@ -122,6 +121,18 @@ double crewEfficiency(GameState s, Content c, String factionId) {
 }
 
 /// Share of [assigned] crew that [housed] crew of housing supports:
-/// `min(1, housed / assigned)`, or 1 when no crew is assigned.
+/// `housed / assigned`, or 1 when [housed] covers [assigned] within
+/// [housingTolerance] or no crew is assigned. So crew efficiency is below
+/// 1 exactly when [CrewTotals.overAssigned] is above 0.
 double crewShare(double housed, int assigned) =>
-    assigned == 0 ? 1 : math.min(1, housed / assigned);
+    _settled(housed) >= assigned ? 1 : housed / assigned;
+
+/// Crew a housing total may fall short of a whole number by and still
+/// count as housing it: float products such as 0.29 × 100 or 5 × 20 × 2 ×
+/// 1.15 land a hair below the integer they mean. [crewTotals] and
+/// [crewShare] both allow for it, so supported crew and crew efficiency
+/// agree on whether housing falls short.
+const double housingTolerance = 1e-9;
+
+/// [housed] crew with [housingTolerance] added.
+double _settled(double housed) => housed + housingTolerance;

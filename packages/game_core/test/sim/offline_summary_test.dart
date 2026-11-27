@@ -86,6 +86,47 @@ void main() {
     });
   });
 
+  test('a fully housed faction shows no crew shortage, whatever float '
+      'residue its housing bonus leaves', () {
+    // Station level 3 houses 15% more: 20 + 5 × 20 × 2 × 1.15 comes to
+    // 249.99999999999997, with 250 crew assigned.
+    final s = e.newGame(1);
+    s.faction('player').megaprojectLevels['orbital_station'] = 3;
+    final kora = s.body('kora');
+    for (var i = 0; i < 5; i++) {
+      kora.buildings.add(
+        BuildingState(id: 'h$i', defId: 'habitat', crew: 0, lastRunFraction: 1)
+          ..levels[UpgradeTrack.capacity] = 4,
+      );
+    }
+    kora.stock
+      ..['food'] = n(1e6)
+      ..['water'] = n(1e6)
+      ..['oxygen'] = n(1e6);
+    final smelter = kora.buildings.firstWhere((b) => b.defId == 'smelter');
+    smelter
+      ..levels[UpgradeTrack.capacity] = 200
+      ..crew += crewTotals(s, c, 'player').free;
+    final t = crewTotals(s, c, 'player');
+    expect((t.supported, t.assigned, t.overAssigned), (250, 250, 0));
+    expect(crewEfficiency(s, c, 'player'), 1);
+    expect(
+      buildFlowReport(
+        s,
+        c,
+        'player',
+      ).bottlenecks.where((b) => b.kind == BottleneckKind.crewShortage),
+      isEmpty,
+    );
+    final sum = e.catchUpOffline(s, 3600);
+    expect(
+      sum.topBottlenecks.where((b) => b.kind == BottleneckKind.crewShortage),
+      isEmpty,
+    );
+    expect(sum.topBottlenecks.first.kind, BottleneckKind.input);
+    expect(sum.headline, isNot(contains('Crew short')));
+  });
+
   test('housing before and after the absence', () {
     // Food for 10 minutes: the habitat houses 20 crew beyond the base 20
     // until it runs out.

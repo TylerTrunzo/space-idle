@@ -266,9 +266,12 @@ final class GameEngine {
   /// credits they lose an hour, most first, then the rest, each in report
   /// order on a tie.
   static List<(int, Bottleneck)> _ranked(List<Bottleneck> necks) {
+    // The report shows a crew shortage only when housing truly falls short
+    // (`overAssigned > 0`), and its loss is snapped to zero within float
+    // residue, so this holds only for a real, costly shortage.
     bool crewFirst(Bottleneck b) =>
         b.kind == BottleneckKind.crewShortage &&
-        (b.lostCreditsPerHour?.isZero == false);
+        (b.lostCreditsPerHour ?? const BigNum.zero()) > const BigNum.zero();
     return necks.indexed.toList()..sort((x, y) {
       final (a, b) = (x.$2, y.$2);
       if (crewFirst(a) != crewFirst(b)) return crewFirst(a) ? -1 : 1;
