@@ -234,9 +234,10 @@ typedef AutoSellKeep = ({
 /// what the owner's open contracts still need of it when this body holds
 /// it back for them ([contractHold]: the need less what bodies with no
 /// rule on it hold, on the bodies with a rule on it, the fullest first:
-/// their stock, then their room, each at most its storage cap), plus what the megaprojects its owner feeds goods
-/// to on their own still need of it ([megaprojectHold]; see
-/// `stepMegaprojectAuto`, which takes it once a game minute), the sum
+/// their stock, then their room, each at most its storage cap), plus what
+/// the megaprojects its owner feeds goods to on their own still need of it
+/// ([megaprojectHold]; see `stepMegaprojectAuto`, which takes it once a
+/// game minute), the sum
 /// ([keeps]) no higher than the body's storage cap unless `keepAtLeast`
 /// alone is ([cappedAtStorage] when the cap cut it).
 ///

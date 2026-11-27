@@ -850,7 +850,7 @@ void main() {
       // Review probe: Kora holds 900 and Brine 800 of 1,000 each, both
       // auto-sell steel, and one order owes 1,500. The hold took Kora's
       // empty room for 100 of it, so Brine sold 300 the order needed.
-      GameState probe() {
+      GameState probe({num owed = 1500}) {
         final s = e.newGame(1);
         s.body('brine').ownerId = 'player';
         for (final b in ['kora', 'brine']) {
@@ -859,7 +859,7 @@ void main() {
         final f = player(s);
         f.contracts.clear();
         f.contractRefillAt.clear();
-        postOn(s, 'steel', 1500);
+        postOn(s, 'steel', owed);
         s.body('kora').stock['steel'] = n(900);
         s.body('brine').stock['steel'] = n(800);
         return s;
@@ -882,12 +882,24 @@ void main() {
 
       test('what is owed beyond the stock held is held as room, the fullest '
           'first', () {
-        final s = probe();
-        s.body('brine').stock['steel'] = n(300);
-        // 1,200 held, 300 more owed: Kora's 100 of room, then Brine's 200.
+        // Kora 900 and Brine 700 for 1,650 owed: both stocks are held, and
+        // the 50 still owed as room on Kora. The old rule held Kora's whole
+        // 1,000 cap and only 650 on Brine, which sold 50 that was owed.
+        final s = probe(owed: 1650);
+        s.body('brine').stock['steel'] = n(700);
+        BigNum hold(String bodyId) => autoSellKeep(
+          s,
+          content,
+          player(s).autoSell.singleWhere(
+            (r) => r.bodyId == bodyId && r.resourceId == 'steel',
+          ),
+          60,
+        ).contractHold;
+        expect(hold('kora'), n(950));
+        expect(hold('brine'), n(700));
         stepMarket(s, content, 60);
         expect(s.body('kora').stock['steel'], n(900));
-        expect(s.body('brine').stock['steel'], n(300));
+        expect(s.body('brine').stock['steel'], n(700));
       });
 
       for (final step in [1.0, 60.0]) {

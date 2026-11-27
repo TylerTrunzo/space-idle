@@ -200,9 +200,9 @@ final class Bottleneck {
   /// kinds about no building.
   final List<String> buildingIds;
 
-  /// The megaproject that takes the good ([BottleneckKind.megaprojectDiversion])
-  /// or is kept from it ([BottleneckKind.keepBlocksDelivery]); otherwise
-  /// null.
+  /// The megaproject that takes the good
+  /// ([BottleneckKind.megaprojectDiversion]) or is kept from it
+  /// ([BottleneckKind.keepBlocksDelivery]); otherwise null.
   final String? megaprojectId;
 
   /// For [BottleneckKind.megaprojectDiversion], the share of what would

@@ -215,20 +215,25 @@ commands:
   flight, shared by every stop-level route into it and timed by the
   farthest, and `stopSharedWith`, the ids of those other routes; `paused`,
   true while the destination and its cargo in flight hold that target;
-  `throughput`, the most it carries a second now, and `limitedBy`, what
-  holds it there: `rate`, `ships` (ships × 10 a second each),
-  `destinationRoom` (a stop-level route keeps its destination's stock and
-  cargo on the way within the storage cap, so it carries at most that room
-  a trip: a store 97.7K big and 2 minutes away takes 814 a second, whatever
-  the rate), `stopLevel` (the same, with a stop-level target below the
-  cap) or `sourceStock` (what the source makes beyond its own use, cargo
+  `throughput`, the most it could carry a second, sustained (a capacity
+  ceiling, not what it carries now: a paused route into a full store that
+  nothing draws from can show a nonzero ceiling while carrying nothing),
+  and `limitedBy`, what holds it there: `rate`, `ships` (ships × 10 a
+  second each), `destinationRoom` (a stop-level route keeps its
+  destination's stock and cargo on the way within the stop target, here
+  the storage cap, so it carries at most (that target − the other routes'
+  cargo in flight there) ÷ the trip; the destination's own stock does not
+  count: a route 2 minutes from a store whose target is 97.7K carries at
+  most 814 a second, whatever the rate), `stopLevel` (the same, with a
+  stop-level target below the cap) or `sourceStock` (what the source makes beyond its own use, cargo
   arriving there and its stock over a minute, less what routes ahead of it
   take); `inFlight` and `travelTime`), its
   auto-sell rules (`autoSell`: `bodyId`, `resourceId`, `keepAtLeast`,
   `localUse`, `contractHold` (what open contracts still need, less what
   bodies with no rule for the good hold, held on the bodies with a rule on
   the good: first what they hold, so none of it sells, then room for the
-  rest, the one that holds the most first, each up to its storage cap), `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
+  rest, the one that holds the most first, each up to its storage cap),
+  `keeps`, and a `text` such as `"keeps 7.8K (keepAtLeast 30 +
   7.77K local use)"`, with `" + 200 for open contracts"` when it holds
   some and `" + 20K for megaprojects"` (`megaprojectHold`) for what a fed
   megaproject still needs), its running projects soonest first (`kind`, `targetId`

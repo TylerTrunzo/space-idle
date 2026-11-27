@@ -315,10 +315,13 @@ enum RouteLimit {
   /// [RulesDef.shipCapacityPerSecond] ([routeCapacity]).
   ships,
 
-  /// The room its destination's storage cap leaves: a route with a stop
-  /// level keeps its destination's stock and the cargo on its way to it
-  /// within the cap, so it delivers at most that room a trip. More storage
-  /// there (a warehouse, capacity levels) raises it; so does a shorter trip.
+  /// Its destination's storage cap: a route with a stop level keeps its
+  /// destination's stock and the cargo on its way to it within the stop
+  /// target the routes into the store share ([routeStopTarget]), here the
+  /// cap, so it carries at most that target, less the other routes' cargo
+  /// in flight there, a trip. The destination's own stock does not count.
+  /// More storage there (a warehouse, capacity levels) raises it; so does
+  /// a shorter trip.
   destinationRoom,
 
   /// What its source has to send: what the source makes of the resource
@@ -332,17 +335,19 @@ enum RouteLimit {
   stopLevel,
 }
 
-/// What a route carries a second at most, and what holds it to that
-/// ([routeThroughput]).
+/// What a route could carry a second at most, sustained, and what holds it
+/// to that ([routeThroughput]): a capacity ceiling, not what it carries
+/// now.
 typedef RouteThroughput = ({double perSec, RouteLimit binding});
 
 /// Game seconds over which a source's stock counts as what it has to send
 /// ([RouteLimit.sourceStock]): a full step, the engine's catch-up step.
 const double _sourceStockSeconds = 60;
 
-/// Units a second route [routeId] can carry at most now, and the limit
-/// that binds ([RouteLimit]); see [routeThroughputs]. Throws an
-/// [ArgumentError] for a route [s] does not have.
+/// Units a second route [routeId] could carry at most, sustained, and the
+/// limit that binds ([RouteLimit]): a capacity ceiling, not its current
+/// flow; see [routeThroughputs]. Throws an [ArgumentError] for a route [s]
+/// does not have.
 RouteThroughput routeThroughput(GameState s, Content c, String routeId) {
   if (!s.routes.any((r) => r.id == routeId)) {
     throw ArgumentError.value(routeId, 'routeId', 'no such route');
@@ -350,8 +355,12 @@ RouteThroughput routeThroughput(GameState s, Content c, String routeId) {
   return routeThroughputs(s, c)[routeId]!;
 }
 
-/// Route id to the units a second each route of [s] can carry at most now
-/// and the limit that binds, in list order: the least of
+/// Route id to the units a second each route of [s] could carry at most,
+/// sustained, and the limit that binds, in list order. It is a capacity
+/// ceiling, not what the route carries now: a paused route into a full
+/// store that nothing draws from can read a nonzero
+/// [RouteLimit.destinationRoom] ceiling while it carries nothing. It is the
+/// least of
 ///
 /// - its rate ([RouteLimit.rate]);
 /// - its ships times what one carries ([RouteLimit.ships]);
@@ -360,13 +369,14 @@ RouteThroughput routeThroughput(GameState s, Content c, String routeId) {
 ///   shares with the other stop-level routes into the store
 ///   ([routeStopTarget]), less the other routes' cargo on its way there.
 ///   [RouteLimit.stopLevel] when that target is below the destination's
-///   storage cap, else [RouteLimit.destinationRoom]. So a store 2 minutes
-///   away that holds 97.7K reads 97.7K over 120 s, 814 a second, however
-///   high the route's rate. What the store holds now does not count: it
-///   swings with where a step ends, as lots land, and a store that holds
-///   much is not short of what the route brings. A route with no stop level is never held
-///   to its destination's room: it keeps sending, and what passes the cap
-///   is wasted, and the report shows a full store;
+///   storage cap, else [RouteLimit.destinationRoom]. So a route 2 minutes
+///   from a store whose stop target is 97.7K (its cap) reads 97.7K over
+///   120 s, 814 a second, however high its rate. What the store holds now
+///   does not count: it swings with where a step ends, as lots land, and a
+///   store that holds much is not short of what the route brings. A route
+///   with no stop level is never held to its destination's room: it keeps
+///   sending, and what passes the cap is wasted, and the report shows a
+///   full store;
 /// - what its source has to send ([RouteLimit.sourceStock]): what the
 ///   source's buildings make of the resource beyond what they use, at the
 ///   run fractions they last settled on, plus the cargo arriving there by
@@ -379,10 +389,13 @@ RouteThroughput routeThroughput(GameState s, Content c, String routeId) {
 /// owns its source carries nothing ([RouteLimit.sourceStock]); one whose
 /// destination it no longer owns likewise ([RouteLimit.destinationRoom]).
 ///
-/// None of it depends on where a step ends: rates, ships, caps, stop
-/// targets and what a source makes are fixed over a step, the
-/// destination's stock does not count, a source's stock is spread over a
-/// full step, and a route's own cargo in flight never counts against it.
+/// For a single stop-level route into a store, it does not depend on where
+/// a step ends: rates, ships, caps, stop targets and what a source makes
+/// are fixed over a step, the destination's stock does not count, a
+/// source's stock is spread over a full step, and a route's own cargo in
+/// flight never counts against it. With several routes into one store,
+/// the others' cargo in flight still varies as their lots land, and so
+/// does the room it leaves.
 Map<String, RouteThroughput> routeThroughputs(GameState s, Content c) {
   final cache = StepCache(s, c);
   final inFlight = _inFlightTo(s);
@@ -436,9 +449,9 @@ Map<String, RouteThroughput> routeThroughputs(GameState s, Content c) {
 }
 
 /// Units a second [body] has to send of [resourceId]
-/// ([RouteLimit.sourceStock]): what its buildings make beyond what they use at their
-/// last run fractions, the cargo its owner's routes bring it (each route's
-/// cargo in flight over its trip), and its stock over
+/// ([RouteLimit.sourceStock]): what its buildings make beyond what they
+/// use at their last run fractions, the cargo its owner's routes bring it
+/// (each route's cargo in flight over its trip), and its stock over
 /// [_sourceStockSeconds].
 double _toSend(
   GameState s,
