@@ -476,6 +476,26 @@ void main() {
       expect(c.pendingAwaySummary?.secondsSimulated, 300);
       c.dispose();
     });
+
+    testWidgets('a timer gap past the offline cap simulates only the cap, '
+        'then autosaves', (tester) async {
+      final c = _controller(store, clock);
+      await tester.runAsync(c.start);
+      final before = c.state.time;
+      final writes = store.writes;
+
+      c.startTimer();
+      clock.advance(const Duration(hours: 13));
+      await tester.pump(const Duration(seconds: 1));
+      expect(c.pendingAwaySummary?.secondsSimulated, 43200);
+      expect(c.state.time, closeTo(before + 43200, 1e-6));
+
+      expect(store.writes, writes + 1);
+      expect(_storedSave(store), SaveCodec.encode(c.state));
+      final envelope = jsonDecode(store.text!) as Map<String, Object?>;
+      expect(envelope['savedAt'], clock.now().millisecondsSinceEpoch);
+      c.dispose();
+    });
   });
 
   group('export and import', () {
@@ -508,6 +528,21 @@ void main() {
       );
       expect(SaveCodec.encode(c.state), before);
     });
+
+    test(
+      'import takes an envelope with no savedAt (import needs no time)',
+      () async {
+        final c = _controller(store, clock);
+        await c.start();
+        final text = _envelope(savedAt: null);
+        final inside =
+            (jsonDecode(text) as Map<String, Object?>)['save']! as String;
+
+        expect(await c.importSave(text), isA<Imported>());
+        expect(SaveCodec.encode(c.state), inside);
+        expect(c.pendingAwaySummaries, isEmpty);
+      },
+    );
 
     test('import also takes a whole stored envelope', () async {
       final c = _controller(store, clock);
