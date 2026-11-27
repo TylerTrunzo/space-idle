@@ -170,52 +170,6 @@ void main() {
     expect(five.gameHours, lessThanOrEqualTo(72));
   });
 
-  group('the Orbital Station is paced', () {
-    // Station goods come from bodies all over the system and add up in
-    // deliveries: a casual player reaches level 1 in days 4 to 6 and level
-    // 3 in two to three weeks; the optimizer gets there sooner and keeps
-    // building.
-    late BalanceReport casual;
-    late BalanceReport balanced;
-    setUpAll(() {
-      casual = runBotSession(_engine(), CasualBot(), seed: 1, hours: 504);
-      balanced = runBotSession(_engine(), BalancedBot(), seed: 1, hours: 336);
-    });
-
-    double hoursTo(BalanceReport r, String id) => r.milestones
-        .singleWhere(
-          (m) => m.id == id,
-          orElse: () {
-            fail('${r.botName}: $id not reached\n${r.toMarkdown()}');
-          },
-        )
-        .gameHours;
-
-    test('a casual player reaches level 1 in days 4 to 6', () {
-      expect(hoursTo(casual, 'station_1'), inInclusiveRange(72, 144));
-    });
-
-    test('and level 3 within three weeks, not before the second', () {
-      expect(hoursTo(casual, 'station_3'), inInclusiveRange(240, 504));
-    });
-
-    test('the optimizer reaches level 3 sooner, and more by day 14', () {
-      expect(
-        hoursTo(balanced, 'station_3'),
-        lessThan(hoursTo(casual, 'station_3')),
-      );
-      expect(
-        balanced.dayEnds.last.megaprojectLevels['orbital_station'],
-        greaterThan(3),
-      );
-    });
-
-    test('a casual player sees something new on 5 of every 7 days', () {
-      expect(casual.worstWeekWithNewThings(21), greaterThanOrEqualTo(5));
-      expect(casual.rejectedCommands, 0);
-    });
-  });
-
   test('bot commands are valid and sessions are deterministic', () {
     final e = _engine();
     final a = runBotSession(e, BalancedBot(), seed: 1, hours: 48);

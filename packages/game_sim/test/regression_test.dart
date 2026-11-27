@@ -12,18 +12,23 @@ GameEngine _engine() => GameEngine(
 
 String _encode(GameState s) => jsonEncode(s.toJson());
 
-/// The state a [BalancedBot] session of [hours] ends in.
-GameState _played(GameEngine e, {required double hours}) {
-  late GameState end;
-  runBotSession(
-    e,
-    BalancedBot(),
-    seed: 1,
-    hours: hours,
-    onFinished: (s) => end = s,
-  );
-  return end;
-}
+/// The state a [BalancedBot] session of [hours] ends in, a copy of each
+/// one played once per run of this file: several tests start from the
+/// same session.
+GameState _played(GameEngine e, {required double hours}) =>
+    (_sessions[hours] ??= () {
+      late GameState end;
+      runBotSession(
+        e,
+        BalancedBot(),
+        seed: 1,
+        hours: hours,
+        onFinished: (s) => end = s,
+      );
+      return end;
+    }()).copy();
+
+final _sessions = <double, GameState>{};
 
 /// Plays [days] of check-ins every 6 h with [bot] from a new game: one
 /// decision, 180 s of play, then the offline catch-up to the next
@@ -270,16 +275,21 @@ void main() {
     // 2.5 h away earned 395K a second, presses draining stock.
     final e = _engine();
     final s = _played(e, hours: 168);
-    // Auto-delivery takes credits and changes what sells as stages are
-    // paid for; the report's sales measure is checked without it.
-    s.faction('player').megaprojectAuto.clear();
+    // Auto-delivery stays on as the bot left it: the report's credits are
+    // what sales earn, before what auto-delivery pays in, so they are set
+    // against what was earned, the credits paid in included.
+    expect(s.faction('player').megaprojectAuto, isNotEmpty);
     final shown = buildFlowReport(
       s,
       e.content,
       'player',
     ).creditsPerSec.toDouble();
     final away = e.catchUpOffline(s, 9000);
-    final earned = away.creditsGained.toDouble() / 9000;
+    expect(
+      away.creditsEarned.toDouble(),
+      closeTo((away.creditsGained + away.creditsPaidIn).toDouble(), 1),
+    );
+    final earned = away.creditsEarned.toDouble() / 9000;
     expect(earned, greaterThan(0));
     expect(shown, closeTo(earned, earned * 0.1));
   }, timeout: const Timeout(Duration(minutes: 1)));
@@ -407,11 +417,18 @@ void main() {
         if (housed < least[k]!) least[k] = housed;
       }
     }
-    // What habitats use went in.
+    // What habitats use went in, and a good share of what the stage
+    // asks: feeding put the habitats' supply under real pressure.
     final fed = runs['fed 1 s']!.$1.faction('player');
     final got = fed.megaprojectProgress['mass_driver'] ?? const {};
+    final need = megaprojectCost(c, driver, 2);
     for (final id in shared) {
       expect(got[id], isNotNull, reason: '$id: $got');
+      expect(
+        got[id]!.toDouble(),
+        greaterThanOrEqualTo(need[id]!.toDouble() * 0.5),
+        reason: '$id: ${got[id]} of ${need[id]}',
+      );
     }
     for (final step in ['1 s', '60 s']) {
       expect(

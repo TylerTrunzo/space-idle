@@ -50,20 +50,40 @@ void main() {
       (Content.fromBundle(loadContentDir('../../content')) as ContentOk)
           .content;
 
+  // The suite's 14-day balanced and 21-day casual sessions, seed 1, each
+  // played once for every test that reads them.
+  late _Tally tally;
+  late GameState end;
+  BalanceReport? balancedRun;
+  BalanceReport balanced() => balancedRun ??= runBotSession(
+    GameEngine(content),
+    tally = _Tally(BalancedBot()),
+    seed: 1,
+    hours: 336,
+    onFinished: (s) => end = s,
+  );
+  BalanceReport? casualRun;
+  BalanceReport casual() => casualRun ??= runBotSession(
+    GameEngine(content),
+    CasualBot(),
+    seed: 1,
+    hours: 504,
+  );
+
+  double hoursTo(BalanceReport r, String id) => r.milestones
+      .singleWhere(
+        (m) => m.id == id,
+        orElse: () {
+          fail('${r.botName}: $id not reached\n${r.toMarkdown()}');
+        },
+      )
+      .gameHours;
+
   group('a 14-day balanced bot run', () {
-    late _Tally tally;
-    late GameState end;
     late BalanceReport report;
     late DayIncome day14;
     setUpAll(() {
-      tally = _Tally(BalancedBot());
-      report = runBotSession(
-        GameEngine(content),
-        tally,
-        seed: 1,
-        hours: 336,
-        onFinished: (s) => end = s,
-      );
+      report = balanced();
       day14 = report.days.last;
     });
 
@@ -129,11 +149,33 @@ void main() {
   group('a 21-day casual bot run', () {
     late BalanceReport report;
     setUpAll(() {
-      report = runBotSession(
-        GameEngine(content),
-        CasualBot(),
-        seed: 1,
-        hours: 504,
+      report = casual();
+    });
+
+    // Station goods come from bodies all over the system and add up in
+    // deliveries: a casual player reaches level 1 in days 4 to 6 and level
+    // 3 in two to three weeks.
+    test('reaches Orbital Station level 1 in days 4 to 6', () {
+      expect(hoursTo(report, 'station_1'), inInclusiveRange(72, 144));
+    });
+
+    test('and level 3 within three weeks, not before the second', () {
+      expect(hoursTo(report, 'station_3'), inInclusiveRange(240, 504));
+    });
+
+    test('sees something new on 5 of every 7 days', () {
+      expect(report.worstWeekWithNewThings(21), greaterThanOrEqualTo(5));
+    });
+
+    test('reaches Orbital Station level 3 later than the optimizer, which '
+        'is past it by day 14', () {
+      expect(
+        hoursTo(balanced(), 'station_3'),
+        lessThan(hoursTo(report, 'station_3')),
+      );
+      expect(
+        balanced().dayEnds.last.megaprojectLevels['orbital_station'],
+        greaterThan(3),
       );
     });
 
