@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/theme.dart';
+import 'package:space_idle/ui/map/map_transform.dart';
 import 'package:space_idle/ui/map/star_map_scene.dart';
 
 /// Per-frame motion between game ticks, the painter's `repaint` signal.

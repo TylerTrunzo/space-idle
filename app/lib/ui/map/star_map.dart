@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/map/star_map_painter.dart';
+import 'package:space_idle/ui/map/map_transform.dart';
 import 'package:space_idle/ui/map/star_map_scene.dart';
 
 /// The home screen: the player's home system, drawn from the game state.
