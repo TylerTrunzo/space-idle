@@ -627,37 +627,30 @@ final class _View {
       _wanted.putIfAbsent(id, () => !stageNeed(id).isZero);
   final Map<String, bool> _wanted = {};
 
-  /// Units of [resourceId] the megaprojects still want for their next
-  /// stages, summed: what the stage being paid for still lacks
-  /// ([megaprojectRemaining]), or, while a stage is under way, the whole
-  /// cost of the one after it; zero when none uses it.
-  BigNum stageNeed(String resourceId) {
-    var total = const BigNum.zero();
-    for (final m in c.megaprojects.values) {
-      if (!m.baseCost.containsKey(resourceId)) continue;
-      final level = faction.megaprojectLevels[m.id] ?? 0;
-      if (level >= SaveCodec.maxMegaprojectLevel) continue;
-      final next = megaprojectStageOf(s, factionId, m.id) == null
-          ? megaprojectRemaining(s, c, factionId, m)[resourceId]
-          : megaprojectCost(c, m, level + 1)[resourceId];
-      if (next != null) total = total + next;
-    }
-    return total;
-  }
+  /// Units of [resourceId] the megaprojects still want for the stages
+  /// being paid for, summed: what each still lacks ([megaprojectRemaining];
+  /// while a stage is under way, of the one after it); zero when none
+  /// uses it.
+  BigNum stageNeed(String resourceId) => _owedToStages(resourceId);
 
-  /// One delivery toward the next stage of the first megaproject, in
-  /// content order, that has none under way: the goods it still lacks from
+  /// Whether deliveries to [m] can go on: the stage they pay for is below
+  /// the highest level ([megaprojectDeliveryLevel]).
+  bool _deliverable(MegaprojectDef m) =>
+      megaprojectDeliveryLevel(s, factionId, m) < SaveCodec.maxMegaprojectLevel;
+
+  /// One delivery toward the stage being paid for of the first
+  /// megaproject, in content order, that still lacks something (while a
+  /// stage is under way, the one after it): the goods it still lacks from
   /// the first owned body holding more of them than it keeps for its own
   /// use ([keepForUse]), body order; once every good is in, the credits,
   /// when the faction holds them all. Null if there is nothing to deliver.
   ///
   /// Deliveries add up, so goods go in as they are made, from every body,
-  /// and the stage's timer starts as soon as the last of its cost is in.
+  /// and the stage's timer starts as soon as the last of its cost is in,
+  /// or as the stage under way completes.
   Command? deliverMegaproject() {
     for (final m in c.megaprojects.values) {
-      if (megaprojectStageOf(s, factionId, m.id) != null) continue;
-      final level = faction.megaprojectLevels[m.id] ?? 0;
-      if (level >= SaveCodec.maxMegaprojectLevel) continue;
+      if (!_deliverable(m)) continue;
       if (m.hostBodyType case final t? when !owned.any((b) => b.typeId == t)) {
         continue;
       }
@@ -683,18 +676,13 @@ final class _View {
     return null;
   }
 
-  /// The next step toward the next stage of [m]: making each good it still
-  /// lacks ([ensureMade], which also feeds makers that stand idle), then
-  /// saving its credits once every good is in. [_Waiting] while a stage is
-  /// under way or goods are on their way.
+  /// The next step toward the stage of [m] being paid for (while one is
+  /// under way, the one after it): making each good it still lacks
+  /// ([ensureMade], which also feeds makers that stand idle), then saving
+  /// its credits once every good is in. [_Waiting] once it is paid for or
+  /// while goods are on their way.
   _Step _ensureStage(MegaprojectDef m) {
-    if (megaprojectStageOf(s, factionId, m.id) != null) {
-      return const _Waiting();
-    }
-    if ((faction.megaprojectLevels[m.id] ?? 0) >=
-        SaveCodec.maxMegaprojectLevel) {
-      return const _Waiting();
-    }
+    if (!_deliverable(m)) return const _Waiting();
     final owed = megaprojectRemaining(s, c, factionId, m);
     final goods = [
       for (final id in owed.keys)
@@ -1075,16 +1063,12 @@ final class _View {
     return SurveyCommand(factionId, target.id, source.id);
   }
 
-  /// Units of [resourceId] the megaproject stages being paid for (none
-  /// under way) still lack, summed.
+  /// Units of [resourceId] the megaproject stages being paid for still
+  /// lack, summed (while a stage is under way, the one after it).
   BigNum _owedToStages(String resourceId) {
     var total = const BigNum.zero();
     for (final m in c.megaprojects.values) {
-      if (megaprojectStageOf(s, factionId, m.id) != null) continue;
-      if ((faction.megaprojectLevels[m.id] ?? 0) >=
-          SaveCodec.maxMegaprojectLevel) {
-        continue;
-      }
+      if (!m.baseCost.containsKey(resourceId) || !_deliverable(m)) continue;
       final owed = megaprojectRemaining(s, c, factionId, m)[resourceId];
       if (owed != null) total = total + owed;
     }

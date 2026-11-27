@@ -295,6 +295,34 @@ void main() {
       });
     }
 
+    test('goes on being delivered to while a stage runs', () {
+      final e = _engine();
+      final s = stocked(e);
+      final station = e.content.megaprojects['orbital_station']!;
+      for (final MapEntry(:key, :value) in megaprojectCost(
+        e.content,
+        station,
+        1,
+      ).entries) {
+        if (key == 'credits') continue;
+        s.body('hollow_reach').stock[key] = value;
+      }
+      // Drones for the survey the bot starts first.
+      s.body('kora').stock['survey_drone'] =
+          s.body('kora').stock['survey_drone']! + BigNum.from(3);
+      final cmds = BalancedBot().decide(e, s, 'player');
+      for (final cmd in cmds) {
+        expect(e.apply(s, cmd), isA<CommandOk>());
+      }
+      expect(megaprojectStageOf(s, 'player', 'orbital_station'), isNotNull);
+      // Level 2 is paid for in full, and waits for level 1.
+      expect(
+        megaprojectStageQueued(s, e.content, 'player', station),
+        isTrue,
+        reason: '$cmds',
+      );
+    });
+
     test('is delivered from every body that holds its goods', () {
       final e = _engine();
       final s = stocked(e, share: 0.5);
