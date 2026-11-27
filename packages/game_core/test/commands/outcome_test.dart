@@ -76,6 +76,43 @@ void main() {
     );
   });
 
+  test('a stop level above the destination storage cap is cut to the cap, '
+      'and the outcome says so', () {
+    final s = rich();
+    final cap = storageCap(s, content, s.body('hollow_reach'));
+    final made = outcome<RouteCreated>(
+      s,
+      CreateRouteCommand(
+        'player',
+        'kora',
+        'hollow_reach',
+        'steel',
+        n(1),
+        1,
+        stopAtDestination: cap * n(4),
+      ),
+    );
+    expect(made.stopClampedTo, cap);
+    expect(s.routes.single.stopAtDestination, cap);
+    final fits = outcome<RouteUpdated>(
+      s,
+      UpdateRouteCommand('player', made.routeId, stopAtDestination: n(50)),
+    );
+    expect(fits.stopClampedTo, isNull);
+    expect(s.routes.single.stopAtDestination, n(50));
+    final over = outcome<RouteUpdated>(
+      s,
+      UpdateRouteCommand('player', made.routeId, stopAtDestination: cap + n(1)),
+    );
+    expect(over.stopClampedTo, cap);
+    expect(s.routes.single.stopAtDestination, cap);
+    final plain = outcome<RouteCreated>(
+      s,
+      CreateRouteCommand('player', 'kora', 'hollow_reach', 'iron_ore', n(1), 1),
+    );
+    expect(plain.stopClampedTo, isNull);
+  });
+
   test('routes and ship moves say which ships moved', () {
     final s = rich();
     final made = outcome<RouteCreated>(

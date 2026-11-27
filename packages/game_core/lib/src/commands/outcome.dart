@@ -125,13 +125,22 @@ final class Upgraded extends CommandOutcome {
 /// [bodyId], the route's source.
 final class RouteCreated extends CommandOutcome {
   /// Creates the outcome.
-  RouteCreated({required this.bodyId, required this.routeId, super.spent});
+  RouteCreated({
+    required this.bodyId,
+    required this.routeId,
+    this.stopClampedTo,
+    super.spent,
+  });
 
   @override
   final String bodyId;
 
   /// The new route.
   final String routeId;
+
+  /// When the stop level asked for was above the destination's storage
+  /// cap, the cap it was cut to (the route's stop level now); else null.
+  final BigNum? stopClampedTo;
 }
 
 /// An `UpdateRouteCommand` changed [routeId]; cargo ships added came from,
@@ -141,6 +150,7 @@ final class RouteUpdated extends CommandOutcome {
   RouteUpdated({
     required this.bodyId,
     required this.routeId,
+    this.stopClampedTo,
     super.spent,
     super.gained,
   });
@@ -150,6 +160,10 @@ final class RouteUpdated extends CommandOutcome {
 
   /// The route changed.
   final String routeId;
+
+  /// When the stop level asked for was above the destination's storage
+  /// cap, the cap it was cut to (the route's stop level now); else null.
+  final BigNum? stopClampedTo;
 }
 
 /// A `RemoveRouteCommand` closed [routeId]; its cargo ships went back to

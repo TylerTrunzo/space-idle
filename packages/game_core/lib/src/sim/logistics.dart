@@ -1,6 +1,7 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
+import 'production.dart';
 
 /// Seconds a shipment takes between [a] and [b]:
 /// `baseTravelSeconds × (1 + |orbit difference|)`.
@@ -34,6 +35,37 @@ void deliverShipments(GameState s) {
   }
 }
 
+/// Lands, as a tick ends at `s.time`, what is due by then and fits: each
+/// shipment with `arriveAt <= time` whose shipper still owns its
+/// destination, in creation order, up to the room left below the
+/// destination's [storageCap]. A shipment that fits lands whole and
+/// leaves [GameState.shipments]; one that does not keeps the rest, which
+/// lands at the start of the next tick ([deliverShipments]), before its
+/// buildings run.
+///
+/// So goods are usable at the arrival time a command reported, even
+/// when a tick ends exactly then, while cargo that would pass the cap
+/// still reaches the next tick's buildings before the cap cuts it, as it
+/// always did: what lands here is below the cap and is never wasted or
+/// kept above it ([stockOverCap]).
+void landArrivals(GameState s, Content c) {
+  final caps = <String, BigNum>{};
+  for (final sh in s.shipments) {
+    if (sh.arriveAt > s.time) continue;
+    final dest = s.body(sh.toBodyId);
+    if (dest.ownerId != sh.ownerId) continue;
+    final held = dest.stock[sh.resourceId] ?? const BigNum.zero();
+    final room = (caps[dest.id] ??= storageCap(s, c, dest)) - held;
+    if (room <= const BigNum.zero()) continue;
+    final amount = sh.amount.min(room);
+    dest.stock[sh.resourceId] = held + amount;
+    sh.amount = sh.amount - amount;
+  }
+  s.shipments.removeWhere(
+    (sh) => sh.arriveAt <= s.time && sh.amount <= const BigNum.zero(),
+  );
+}
+
 /// Units of route [r]'s resource still in flight on its shipments.
 BigNum routeInFlight(GameState s, RouteState r) {
   var total = const BigNum.zero();
@@ -45,17 +77,22 @@ BigNum routeInFlight(GameState s, RouteState r) {
 
 /// Units route [r] may still send before its destination holds its
 /// [RouteState.stopAtDestination]: that level less what the destination
-/// holds and what is in flight on the route ([routeInFlight]); null for a
-/// route with no stop level.
+/// holds; null for a route with no stop level.
+///
+/// Only the destination's stock counts, not cargo in flight
+/// ([routeInFlight]): a route whose rate times its travel time passes its
+/// stop level would otherwise send one stop level's worth per trip and
+/// leave the destination dry between lots. So the destination may end up
+/// above the level by what was in flight when it reached it.
 BigNum? routeRoomBeforeStop(GameState s, RouteState r) {
   final stop = r.stopAtDestination;
   if (stop == null) return null;
   final held = s.body(r.toBodyId).stock[r.resourceId] ?? const BigNum.zero();
-  return stop - held - routeInFlight(s, r);
+  return stop - held;
 }
 
-/// Whether route [r] is paused: its destination holds, counting what is
-/// in flight on the route, at least its [RouteState.stopAtDestination].
+/// Whether route [r] is paused: its destination holds at least its
+/// [RouteState.stopAtDestination] ([routeRoomBeforeStop]).
 bool routePaused(GameState s, RouteState r) {
   final room = routeRoomBeforeStop(s, r);
   return room != null && room <= const BigNum.zero();
@@ -65,10 +102,9 @@ bool routePaused(GameState s, RouteState r) {
 ///
 /// Each route whose source and destination are both still owned by the
 /// route owner moves `min(rate, capacity) × dt`, limited by source stock
-/// and, for a route with a stop level, by [routeRoomBeforeStop], so the
-/// destination plus the route's cargo in flight never pass the level; a
-/// paused route ([routePaused]) sends nothing until the destination uses
-/// some up. The cargo joins the route's newest shipment if that one
+/// and, for a route with a stop level, by [routeRoomBeforeStop], the room
+/// left below that level in the destination's stock; a paused route
+/// ([routePaused]) sends nothing until the destination uses some up. The cargo joins the route's newest shipment if that one
 /// departed less than [mergeSeconds] (default the rules'
 /// [RulesDef.shipmentMergeSeconds]) ago and is still in flight; otherwise
 /// it leaves in a new [Shipment] arriving at `time + travelSeconds`. Other

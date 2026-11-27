@@ -171,17 +171,20 @@ final class GameEngine {
   /// ([sendCargo]), market (recovery and auto-sell), complete the projects
   /// due ([stepProjects]), [clampStorage], [noteBottlenecks], post the
   /// contracts due by `time + dt` ([stepContracts]), waste tracking,
-  /// milestone check,
-  /// then `time += dt`. Stock may pass the storage cap
+  /// milestone check, `time += dt`, then land the shipments due by the new
+  /// time that fit below the cap ([landArrivals]). Stock may pass the
+  /// storage cap
   /// during the tick; production uses landed cargo, and cargo and
   /// auto-sell take from what is made, before the clamp, so long steps
   /// lose no more to the cap than short ones. Routes take their share
   /// before auto-sell does: a rule selling a body's whole surplus never
-  /// starves a route out of it. Because time moves last, a
-  /// shipment or project due at exactly `time + dt` lands or completes at
-  /// the start of the next tick; a contract refill due then is posted in
-  /// this one, from the state the tick leaves, which is the state at
-  /// `time + dt`.
+  /// starves a route out of it. A shipment due by `time + dt` is usable
+  /// once the tick ends, so ships are there at the arrival time a command
+  /// reported; only cargo that would pass the cap waits for the start of
+  /// the next tick, whose buildings use it before the clamp. A project due
+  /// at exactly `time + dt` completes at the start of the next tick; a
+  /// contract refill due then is posted in this one, from the state the
+  /// tick leaves, which is the state at `time + dt`.
   ///
   /// Throws [ArgumentError], changing nothing, if [dt] is not finite and
   /// above zero.
@@ -204,6 +207,7 @@ final class GameEngine {
     _noteWaste(s, s.time + dt);
     _checkMilestones(s, dt);
     s.time += dt;
+    landArrivals(s, content);
   }
 
   /// Moves [s] forward by [seconds] in ticks of [maxStep] seconds, the last

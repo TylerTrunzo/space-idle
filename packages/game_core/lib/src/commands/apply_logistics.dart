@@ -34,6 +34,21 @@ CommandFailed? _checkStop(BigNum? stop) =>
     ? _fail(CommandError.invalidAmount, 'The stock to stop at must be above 0')
     : null;
 
+/// [stop], a route's stop level, kept to the storage cap of [to], its
+/// destination, with the cap when that cut it (else null): stock above
+/// the cap is wasted at the end of every tick, so a higher level would
+/// only waste the cargo that fills it.
+(BigNum?, BigNum?) _fitStop(
+  GameState s,
+  Content c,
+  BodyState to,
+  BigNum? stop,
+) {
+  if (stop == null) return (null, null);
+  final cap = storageCap(s, c, to);
+  return stop > cap ? (cap, cap) : (stop, null);
+}
+
 /// "the route from Kora to Brine": route [r] by its endpoints' names.
 String _routeName(GameState s, RouteState r) =>
     'the route from ${s.body(r.fromBodyId).name} '
@@ -69,6 +84,7 @@ CommandResult _createRoute(
   final short = _checkCost(c, f, from, ships);
   if (short != null) return short;
 
+  final (stop, clamped) = _fitStop(s, c, to, cmd.stopAtDestination);
   _pay(f, from, ships);
   final r = RouteState(
     id: s.newId('r'),
@@ -78,12 +94,17 @@ CommandResult _createRoute(
     resourceId: cmd.resourceId,
     ratePerSecond: cmd.ratePerSecond,
     cargoShips: cmd.cargoShips,
-    stopAtDestination: cmd.stopAtDestination,
+    stopAtDestination: stop,
   );
   s.routes.add(r);
   return CommandOk(
     createdId: r.id,
-    outcome: RouteCreated(bodyId: from.id, routeId: r.id, spent: ships),
+    outcome: RouteCreated(
+      bodyId: from.id,
+      routeId: r.id,
+      stopClampedTo: clamped,
+      spent: ships,
+    ),
   );
 }
 
@@ -152,6 +173,7 @@ CommandResult _updateRoute(
     }
   }
 
+  final (fitted, clamped) = _fitStop(s, c, s.body(r.toBodyId), stop);
   final shipId = c.rules.cargoShipResource;
   if (extra > 0) {
     from.take(shipId, BigNum.from(extra));
@@ -161,12 +183,13 @@ CommandResult _updateRoute(
   }
   r.cargoShips += extra;
   if (rate != null) r.ratePerSecond = rate;
-  if (stop != null) r.stopAtDestination = stop;
+  if (fitted != null) r.stopAtDestination = fitted;
   if (cmd.removeStopAtDestination) r.stopAtDestination = null;
   return CommandOk(
     outcome: RouteUpdated(
       bodyId: from.id,
       routeId: r.id,
+      stopClampedTo: clamped,
       spent: {if (extra > 0) shipId: BigNum.from(extra)},
       gained: {if (extra < 0) shipId: BigNum.from(-extra)},
     ),

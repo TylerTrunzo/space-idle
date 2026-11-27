@@ -304,9 +304,10 @@ final class CreateRouteCommand extends Command {
   /// Cargo ships to assign; at least one.
   final int cargoShips;
 
-  /// Destination stock, cargo in flight on the route included, at which
-  /// the route pauses; above zero, or null to never pause. See
-  /// `RouteState.stopAtDestination`.
+  /// Destination stock at which the route pauses; above zero, or null to
+  /// never pause. Cargo in flight does not count. A level above the
+  /// destination's storage cap is cut to the cap
+  /// (`RouteCreated.stopClampedTo`). See `RouteState.stopAtDestination`.
   final BigNum? stopAtDestination;
 
   @override
@@ -349,6 +350,8 @@ final class UpdateRouteCommand extends Command {
   final int? cargoShips;
 
   /// New stop level, above zero; null keeps the current one (or none).
+  /// One above the destination's storage cap is cut to the cap
+  /// (`RouteUpdated.stopClampedTo`).
   final BigNum? stopAtDestination;
 
   /// Whether to take the stop level off so the route never pauses; not

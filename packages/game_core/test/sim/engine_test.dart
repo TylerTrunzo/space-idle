@@ -350,7 +350,8 @@ void main() {
       expect(encode(s), before);
     });
 
-    test('a shipment due at time + dt lands on the next tick', () {
+    test('a shipment due at time + dt lands as the tick ends, usable at '
+        'its arrival time', () {
       final s = engine.newGame(1);
       s.body('hollow_reach').ownerId = 'player';
       s.shipments.add(
@@ -365,11 +366,65 @@ void main() {
           ownerId: 'player',
         ),
       );
-      engine.tick(s, 10);
+      engine.tick(s, 5);
       expect(s.shipments, hasLength(1));
-      engine.tick(s, 10);
+      engine.tick(s, 5);
+      expect(s.time, 10);
       expect(s.shipments, isEmpty);
       expect(s.body('hollow_reach').stock['steel'], n(5));
+    });
+
+    test('ships moved are usable at the arrival time the reply gave', () {
+      final s = engine.newGame(1);
+      s.body('hollow_reach').ownerId = 'player';
+      s.body('kora').stock['cargo_ship'] = n(2);
+      final sent = engine.apply(
+        s,
+        const MoveShipsCommand('player', 'kora', 'hollow_reach', 2),
+      );
+      final arrive = ((sent as CommandOk).outcome! as ShipsSent).arriveAt;
+      engine.advance(s, arrive - s.time);
+      final r = engine.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'hollow_reach',
+          'kora',
+          'iron_ore',
+          n(1),
+          2,
+        ),
+      );
+      expect(r, isA<CommandOk>(), reason: r is CommandFailed ? r.message : '');
+    });
+
+    test('cargo that would pass the cap as a tick ends waits for the next '
+        'tick, whose buildings can use it first', () {
+      final s = engine.newGame(1);
+      final reach = s.body('hollow_reach')..ownerId = 'player';
+      final cap = storageCap(s, c, reach);
+      reach.stock['iron_ore'] = cap - n(3);
+      s.shipments.add(
+        Shipment(
+          routeId: 'gone',
+          toBodyId: 'hollow_reach',
+          resourceId: 'iron_ore',
+          amount: n(10),
+          departAt: 0,
+          arriveAt: 10,
+          fromBodyId: 'kora',
+          ownerId: 'player',
+        ),
+      );
+      engine.tick(s, 10);
+      // What fits lands now; the rest lands at the start of the next tick.
+      expect(reach.stock['iron_ore'], cap);
+      expect(s.shipments.single.amount, n(7));
+      expect(reach.wastedThisStep, isEmpty);
+      engine.tick(s, 10);
+      expect(s.shipments, isEmpty);
+      expect(reach.stock['iron_ore'], cap);
+      expect(reach.wastedThisStep['iron_ore'], n(7));
     });
 
     test('adds newly reached milestones for every condition kind', () {

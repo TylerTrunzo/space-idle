@@ -196,10 +196,12 @@ final class ScriptRunner {
         o,
         start: cmd is StartMegaprojectStageCommand,
       ),
-      RouteCreated(:final routeId) =>
-        'Created route $routeId: ${_routeText(routeId)}',
-      RouteUpdated(:final routeId) =>
-        'Updated route $routeId: ${_routeText(routeId)}',
+      RouteCreated(:final routeId, :final stopClampedTo) =>
+        'Created route $routeId: ${_routeText(routeId)}'
+            '${_clampedText(routeId, stopClampedTo)}',
+      RouteUpdated(:final routeId, :final stopClampedTo) =>
+        'Updated route $routeId: ${_routeText(routeId)}'
+            '${_clampedText(routeId, stopClampedTo)}',
       ShipsSent(:final bodyId, :final toBodyId, :final count) =>
         'Sent ${_ships(count)} from ${body(bodyId)} to ${body(toBodyId)}; '
             '${count == 1 ? 'it lands' : 'they land'} in '
@@ -269,6 +271,15 @@ final class ScriptRunner {
     return '${c.resources[r.resourceId]!.name} from '
         '${state.body(r.fromBodyId).name} to $to at '
         '${formatNumber(r.ratePerSecond)}/s with ${_ships(r.cargoShips)}$stop';
+  }
+
+  /// ". The stop level was cut to Brine's storage cap: stock above it is
+  /// wasted" when route [id]'s stop level was [clamped]; else empty.
+  String _clampedText(String id, BigNum? clamped) {
+    if (clamped == null) return '';
+    final r = state.routes.firstWhere((x) => x.id == id);
+    return ". The stop level was cut to ${state.body(r.toBodyId).name}'s "
+        'storage cap: stock above it is wasted';
   }
 
   /// What a delivery to a megaproject did: "Delivered 30 Hull Plate to
@@ -537,6 +548,15 @@ final class ScriptRunner {
                 null => null,
               },
               'paused': routePaused(state, r),
+              'inFlight': _num(routeInFlight(state, r)),
+              'travelTime': formatDuration(
+                travelSeconds(
+                  state,
+                  c,
+                  state.body(r.fromBodyId),
+                  state.body(r.toBodyId),
+                ),
+              ),
             },
       ],
       'projects': [

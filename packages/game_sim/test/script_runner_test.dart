@@ -159,6 +159,8 @@ void main() {
         'cargoShips': 1,
         'stopAtDestination': null,
         'paused': false,
+        'inFlight': {'value': '0', 'display': '0'},
+        'travelTime': '2m',
       },
     ]);
     expect(st['milestones'], [
@@ -262,8 +264,27 @@ void main() {
       'value': '2e1',
       'display': '20',
     });
-    // 20 iron ore are in flight: the route waits for them to land.
-    expect((routes.single as Map)['paused'], isTrue);
+    // Cargo in flight does not count toward the stop level: Hollow Reach
+    // holds none yet, so the route keeps sending.
+    expect((routes.single as Map)['paused'], isFalse);
+    expect(((routes.single as Map)['inFlight']! as Map)['display'], isNot('0'));
+    final reachCap = storageCap(
+      r.state,
+      r.engine.content,
+      r.state.body('hollow_reach'),
+    );
+    final tooHigh = r.handle({
+      'cmd': 'updateRoute',
+      'routeId': id,
+      'stopAtDestination': (reachCap * BigNum.from(10)).toJson(),
+    });
+    expect(
+      tooHigh['message'],
+      'Updated route $id: Iron Ore from Kora to Hollow Reach at 2/s with '
+      '2 Cargo Ships, pausing while Hollow Reach holds '
+      '${formatNumber(reachCap)}. The stop level was cut to Hollow Reach\'s '
+      'storage cap: stock above it is wasted',
+    );
     final off = r.handle({
       'cmd': 'updateRoute',
       'routeId': id,
@@ -285,8 +306,18 @@ void main() {
       'Sent 2 Cargo Ships from Kora to Hollow Reach; they land in 2m',
     );
     expect(move['createdId'], isA<String>());
-    // Landed at the start of the first tick from 2 minutes on.
-    r.handle({'cmd': 'advance', 'seconds': 180});
+    // Usable at the time the reply gave: 2 minutes on.
+    r.handle({'cmd': 'advance', 'seconds': 120});
+    final reuse = r.handle({
+      'cmd': 'createRoute',
+      'fromBodyId': 'hollow_reach',
+      'toBodyId': 'kora',
+      'resourceId': 'iron_ore',
+      'ratePerSecond': '0.1',
+      'cargoShips': 2,
+    });
+    expect(reuse['ok'], isTrue, reason: '${reuse['message']}');
+    r.handle({'cmd': 'removeRoute', 'routeId': reuse['createdId']});
     final st = r.handle({'cmd': 'state'});
     final reach = (st['bodies']! as List)
         .cast<Map<String, Object?>>()
