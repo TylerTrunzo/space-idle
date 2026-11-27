@@ -167,6 +167,27 @@ void main() {
     expect(_shipmentProgress(tester), greaterThanOrEqualTo(before));
   });
 
+  testWidgets('each body and signal node is its own semantics container', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(_controller()));
+    final nodes = tester.widgetList<Semantics>(
+      find.byWidgetPredicate(
+        (w) => w is Semantics && (w.properties.button ?? false),
+      ),
+    );
+    // Five bodies and one signal marker.
+    expect(nodes, hasLength(6));
+    for (final n in nodes) {
+      expect(n.container, isTrue, reason: n.properties.label);
+    }
+    final ids = {
+      for (final label in ['Kora, owned', 'Cinder, unclaimed'])
+        tester.getSemantics(find.bySemanticsLabel(label)).id,
+    };
+    expect(ids, hasLength(2));
+  });
+
   testWidgets('an idle map schedules no frames', (tester) async {
     // No shipments, every body surveyed (no signal), no project running.
     final c = _controller();

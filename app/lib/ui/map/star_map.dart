@@ -283,6 +283,7 @@ class _BodyNode extends StatelessWidget {
       width: 2 * r,
       height: 2 * r,
       child: Semantics(
+        container: true,
         button: true,
         selected: selected,
         label: '${body.name}, ${body.owned ? 'owned' : 'unclaimed'}',
@@ -380,6 +381,7 @@ class _SignalNode extends StatelessWidget {
       width: 2 * r,
       height: 2 * r,
       child: Semantics(
+        container: true,
         button: true,
         label: 'Unsurveyed signal in $systemName',
         value: '$n ${n == 1 ? 'signal' : 'signals'}',
