@@ -29,6 +29,15 @@ void main() {
     expect(theme.colorScheme.outline, Palette.border);
   });
 
+  test('monoText sets the monospace face with fallbacks, no fetching', () {
+    final style = monoText(const TextStyle(fontSize: 13, color: Palette.text));
+    expect(style.fontFamily, 'monospace');
+    expect(style.fontFamilyFallback, ['RobotoMono', 'Courier New']);
+    expect(style.fontSize, 13);
+    expect(style.color, Palette.text);
+    expect(monoText(null).fontFamily, monoFontFamily);
+  });
+
   test('body text uses the text color', () {
     expect(buildTheme().textTheme.bodyMedium?.color, Palette.text);
   });

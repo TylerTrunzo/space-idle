@@ -33,6 +33,19 @@ abstract final class Palette {
   static const Color muted = Color(0xFF8EA3C9);
 }
 
+/// Font family for data and number text, so digits line up: a generic
+/// family the platform resolves, so nothing is fetched at runtime.
+const String monoFontFamily = 'monospace';
+
+/// Faces tried where [monoFontFamily] does not resolve.
+const List<String> monoFontFallback = ['RobotoMono', 'Courier New'];
+
+/// [base] in the monospace face, for numbers and data.
+TextStyle monoText(TextStyle? base) => (base ?? const TextStyle()).copyWith(
+  fontFamily: monoFontFamily,
+  fontFamilyFallback: monoFontFallback,
+);
+
 /// Star-map colors: one per body type, plus the star.
 ///
 /// A body's ownership is never told by its color alone: the map adds a
