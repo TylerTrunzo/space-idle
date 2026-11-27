@@ -58,11 +58,14 @@ contracts and megaprojects move whole units: amounts are rounded down, below
 Routes move one resource between two of the player's bodies in one system,
 using cargo ships from the source body's stock. `createRoute` takes an optional
 `"stopAtDestination":"500"`, the stock the destination keeps: the route
-pauses while the destination would hold 500 once its cargo in flight, less
-what the destination's buildings use at full supply during the trip
-(`routeUseInTransit`), has landed, and resumes once the destination uses some
-up. So a long trip keeps enough in flight that the destination never runs dry
-and settles near its level, and 60 s steps move what 1 s steps do. A level
+pauses while the destination would hold 500 once all the cargo in flight to
+it of that resource (on any route), less what its buildings use at full
+supply during the trip, has landed, and resumes once the destination uses
+some up. So a long trip keeps enough in flight that the destination never
+runs dry and settles near its level, and 60 s steps move what 1 s steps do.
+The store plus the cargo on its way never pass the storage cap, even when
+nothing there can use what arrives, and several routes into one store share
+its room in route order. A level
 above the destination's storage cap is cut to the cap; the reply ends "The
 stop level was cut to Brine's storage cap: stock above it is wasted". Moved
 ships and landed cargo can be used at the arrival time a reply gave. `{"cmd":"updateRoute","routeId":"r4",

@@ -258,7 +258,6 @@ void main() {
       final r = route(rate: 1)..stopAtDestination = n(15);
       b.buildings.add(BuildingState(id: 'press', defId: 'press', crew: 1));
       final withPress = pressContent();
-      expect(routeUseInTransit(s, withPress, r), n(60));
       expect(routeRoomBeforeStop(s, withPress, r), n(75));
       for (var i = 0; i < 20; i++) {
         sendCargo(s, withPress, 1);

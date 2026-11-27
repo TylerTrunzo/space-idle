@@ -1015,6 +1015,123 @@ void main() {
       expect(reach.stock['iron_ore']!.toDouble(), lessThan(50 + 2 * 60));
     });
 
+    test('a stop level at the storage cap never fills the store past it when '
+        'the destination cannot use what arrives', () {
+      // Review r1, Important 1: hydrogen furnaces on Hollow Reach want iron
+      // ore and hydrogen, and there is no hydrogen there, so they use
+      // nothing. The stop asked for is cut to the cap; the route must stop
+      // once the store and what is on its way reach the cap, not keep a
+      // trip's full-rate use in flight to be wasted.
+      final s = engine.newGame(1);
+      s.faction('player').baseCrew = 100;
+      final reach = s.body('hollow_reach')..ownerId = 'player';
+      for (var i = 0; i < 3; i++) {
+        reach.buildings.add(
+          BuildingState(id: s.newId('b'), defId: 'hydrogen_furnace', crew: 1),
+        );
+      }
+      final kora = s.body('kora')
+        ..stock['iron_ore'] = n(1e6)
+        ..stock['cargo_ship'] = n(1);
+      engine.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(2),
+          1,
+          stopAtDestination: n(1e9),
+        ),
+      );
+      engine.advance(s, 3600);
+      final before = kora.stock['iron_ore']!;
+      var wasted = 0.0;
+      for (var i = 0; i < 6 * 60; i++) {
+        engine.tick(s, 60);
+        wasted += reach.wastedThisStep['iron_ore']?.toDouble() ?? 0;
+      }
+      expect((before - kora.stock['iron_ore']!).toDouble(), lessThan(1));
+      expect(wasted, lessThan(1));
+      expect(reach.stock['iron_ore'], storageCap(s, c, reach));
+    });
+
+    group('two stop-level routes into one store', () {
+      /// Three smelters on Hollow Reach, 1.2 iron ore a second, fed by
+      /// routes from Kora (120 s away) and Brine (180 s away), both with
+      /// [stop]; returns ore sent, ore used and ore wasted over 6 h after
+      /// an hour, and Hollow Reach's stock at the end.
+      (double, double, double, double) play(double stop) {
+        final s = engine.newGame(1);
+        s.faction('player').baseCrew = 100;
+        final reach = s.body('hollow_reach')..ownerId = 'player';
+        s.body('brine').ownerId = 'player';
+        for (var i = 0; i < 3; i++) {
+          reach.buildings.add(
+            BuildingState(id: s.newId('b'), defId: 'smelter', crew: 1),
+          );
+        }
+        for (final b in s.body('kora').buildings) {
+          b.crew = 0;
+        }
+        for (final from in ['kora', 'brine']) {
+          s.body(from)
+            ..stock['iron_ore'] = n(1e6)
+            ..stock['cargo_ship'] = n(1);
+          engine.apply(
+            s,
+            CreateRouteCommand(
+              'player',
+              from,
+              'hollow_reach',
+              'iron_ore',
+              n(2),
+              1,
+              stopAtDestination: n(stop),
+            ),
+          );
+        }
+        engine.advance(s, 3600);
+        double ore() =>
+            s.body('kora').stock['iron_ore']!.toDouble() +
+            s.body('brine').stock['iron_ore']!.toDouble();
+        final before = ore();
+        final steel = s.faction('player').lifetimeProduced['steel']!;
+        var wasted = 0.0;
+        for (var i = 0; i < 6 * 60; i++) {
+          engine.tick(s, 60);
+          wasted += reach.wastedThisStep['iron_ore']?.toDouble() ?? 0;
+        }
+        final used =
+            (s.faction('player').lifetimeProduced['steel']! - steel)
+                .toDouble() *
+            2;
+        return (
+          before - ore(),
+          used,
+          wasted,
+          reach.stock['iron_ore']!.toDouble(),
+        );
+      }
+
+      test('at the cap, they send what is used and waste nothing', () {
+        final (sent, used, wasted, _) = play(1e9);
+        expect(used, closeTo(1.2 * 6 * 3600, 1.2 * 6 * 3600 * 0.01));
+        expect(wasted, lessThan(1));
+        expect(sent, closeTo(used, used * 0.01));
+      });
+
+      test('at a stop of 500, the store settles near 500', () {
+        final (_, used, wasted, held) = play(500);
+        expect(used, closeTo(1.2 * 6 * 3600, 1.2 * 6 * 3600 * 0.01));
+        expect(wasted, lessThan(1));
+        // A minute's use of a lot either way of the stop, not a second
+        // trip's worth above it.
+        expect(held, closeTo(500, 1.2 * 60 + 1));
+      });
+    });
+
     test('a route with a stop level earns the same at 60 s steps', () {
       // The route from Kora pauses while Hollow Reach holds 200 iron ore,
       // far less than its smelters use in a minute: a 60 s step must not
