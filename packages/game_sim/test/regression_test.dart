@@ -235,6 +235,23 @@ void main() {
     expect(applied, greaterThan(50));
   }, timeout: const Timeout(Duration(minutes: 1)));
 
+  test('report credits per second match what 2.5 h away earns, from a '
+      'day-7 state', () {
+    // Round-3 optimizer bug 3: the report showed 680-744K a second while
+    // 2.5 h away earned 395K a second, presses draining stock.
+    final e = _engine();
+    final s = _played(e, hours: 168);
+    final shown = buildFlowReport(
+      s,
+      e.content,
+      'player',
+    ).creditsPerSec.toDouble();
+    final away = e.catchUpOffline(s, 9000);
+    final earned = away.creditsGained.toDouble() / 9000;
+    expect(earned, greaterThan(0));
+    expect(shown, closeTo(earned, earned * 0.1));
+  }, timeout: const Timeout(Duration(minutes: 1)));
+
   test('a 6 h catch-up matches 1 s steps from a day-3 state', () {
     final e = _engine();
     final start = _played(e, hours: 72);

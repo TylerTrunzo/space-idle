@@ -21,6 +21,13 @@ Matcher rates(Map<String, double> expected) => allOf(
   ),
 );
 
+/// [r]'s bottlenecks but [BottleneckKind.noSales]: most tests here start
+/// from a new game, which has no auto-sell rule yet.
+List<Bottleneck> held(FlowReport r) => [
+  for (final b in r.bottlenecks)
+    if (b.kind != BottleneckKind.noSales) b,
+];
+
 void main() {
   late Content c;
   late GameEngine engine;
@@ -50,7 +57,52 @@ void main() {
     expect(plain(f.netPerSec), rates({'copper_ore': 0.32, 'steel': 0.2}));
     expect(f.wastedPerSec, isEmpty);
     expect(plain(r.empireNet), rates({'copper_ore': 0.32, 'steel': 0.2}));
-    expect(r.bottlenecks, isEmpty);
+    // Nothing is held back but the sales: no auto-sell rule yet.
+    expect(r.bottlenecks.map((b) => b.kind), [BottleneckKind.noSales]);
+  });
+
+  test('a noSales bottleneck says when goods are made and nothing sells '
+      'them', () {
+    // Round-3 new player, t=0: 0 credits a second and no bottleneck.
+    final neck = buildFlowReport(s, c, 'player').bottlenecks.single;
+    expect(neck.kind, BottleneckKind.noSales);
+    expect(
+      (neck.bodyId, neck.buildingId, neck.resourceId, neck.runFraction),
+      (null, null, null, 0.0),
+    );
+    expect(
+      neck.message,
+      'Nothing is being sold: turn on auto-sell or sell goods',
+    );
+    // What selling the steady net production would earn, at today's prices.
+    final perHour =
+        (0.32 * price(s, c, 'copper_ore').toDouble() +
+            0.2 * price(s, c, 'steel').toDouble()) *
+        3600;
+    expect(neck.lostCreditsPerHour!.toDouble(), closeTo(perHour, 1e-6));
+    engine.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+    expect(buildFlowReport(s, c, 'player').bottlenecks, isEmpty);
+    // Nothing made, nothing to sell: no bottleneck either.
+    final idle = engine.newGame(1);
+    for (final b in idle.body('kora').buildings) {
+      b.crew = 0;
+    }
+    expect(
+      buildFlowReport(
+        idle,
+        c,
+        'player',
+      ).bottlenecks.where((b) => b.kind == BottleneckKind.noSales),
+      isEmpty,
+    );
+  });
+
+  test('a noSales bottleneck is noted with the others', () {
+    engine.tick(s, 60);
+    expect(
+      s.faction('player').seenBottlenecks.map((b) => b.kind),
+      contains(BottleneckKind.noSales.name),
+    );
   });
 
   test('building statuses report run, crew and slots', () {
@@ -149,6 +201,71 @@ void main() {
     });
   });
 
+  group('credits per second is steady sale revenue from net production', () {
+    test('goods made from a stock nothing refills do not count', () {
+      // Round-3 optimizer bug 3: presses draining a stock earn in the
+      // sample but stop once it runs out. Kora's iron mine is idle; the
+      // smelter runs on a stock of ore and its steel is auto-sold.
+      engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+      kora.stock['iron_ore'] = n(5000);
+      engine.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+      final r = buildFlowReport(s, c, 'player');
+      expect(koraFlow(r).buildings[2].runFraction, 1, reason: 'runs today');
+      expect(r.creditsPerSec.isZero, isTrue);
+    });
+
+    test('a stock refilled at part of the use counts that part', () {
+      // Hollow Reach ships 0.2 iron ore a second to Kora's smelter, which
+      // wants 0.4 and has a stock to draw down: steady, it makes 0.1 steel
+      // a second, not 0.2.
+      s.body('hollow_reach')
+        ..ownerId = 'player'
+        ..stock['iron_ore'] = n(1e5)
+        ..stock['cargo_ship'] = n(1);
+      kora.stock['iron_ore'] = n(5000);
+      engine
+        ..apply(s, const AssignCrewCommand('player', 'b1', 0))
+        ..apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)))
+        ..apply(
+          s,
+          CreateRouteCommand(
+            'player',
+            'hollow_reach',
+            'kora',
+            'iron_ore',
+            n(0.2),
+            1,
+          ),
+        );
+      final r = buildFlowReport(s, c, 'player');
+      final steel = c.resources['steel']!.basePrice.toDouble();
+      // Hollow Reach's ore stock is not refilled either: only what is
+      // made counts, and nothing there makes iron ore.
+      expect(r.creditsPerSec.isZero, isTrue);
+      s
+          .body('hollow_reach')
+          .buildings
+          .add(
+            BuildingState(
+              id: s.newId('b'),
+              defId: 'mine',
+              depositResourceId: 'iron_ore',
+              crew: 1,
+            ),
+          );
+      final fed = buildFlowReport(s, c, 'player');
+      expect(fed.creditsPerSec.toDouble(), closeTo(0.1 * steel, 1e-2));
+    });
+
+    test('stock above an auto-sell rule\'s keep does not count', () {
+      kora.stock['steel'] = n(5000);
+      engine.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+      final r = buildFlowReport(s, c, 'player');
+      final full = 0.2 * c.resources['steel']!.basePrice.toDouble();
+      expect(r.creditsPerSec.toDouble(), closeTo(full, 1e-2));
+    });
+  });
+
   test('net includes route outflow; empire net counts cargo in flight', () {
     s.body('hollow_reach').ownerId = 'player';
     kora.stock['cargo_ship'] = n(1);
@@ -218,7 +335,7 @@ void main() {
     expect(plain(f.wastedPerSec), rates({'copper_ore': 0.32}));
     expect(f.netPerSec.containsKey('copper_ore'), isFalse);
 
-    final b = r.bottlenecks.single;
+    final b = held(r).single;
     expect(b.kind, BottleneckKind.storageFull);
     expect(
       b.message,
@@ -233,7 +350,7 @@ void main() {
   test('storage full reports the share of output kept', () {
     // 1000 - 0.16 leaves room for half of a second's 0.32 copper ore.
     kora.stock['copper_ore'] = n(1000 - 0.16);
-    final b = buildFlowReport(s, c, 'player').bottlenecks.single;
+    final b = held(buildFlowReport(s, c, 'player')).single;
     expect(b.kind, BottleneckKind.storageFull);
     expect(b.runFraction, closeTo(0.5, 1e-9));
   });
@@ -242,7 +359,7 @@ void main() {
     // Eight hours of the starting setup fill copper ore and steel; the
     // waste then matches production up to float residue.
     engine.advance(s, 8 * 3600);
-    final necks = buildFlowReport(s, c, 'player').bottlenecks;
+    final necks = held(buildFlowReport(s, c, 'player'));
     expect(necks.map((b) => (b.kind, b.resourceId, b.runFraction)), [
       (BottleneckKind.storageFull, 'copper_ore', 0),
       (BottleneckKind.storageFull, 'steel', 0),
@@ -252,7 +369,7 @@ void main() {
   test('a full store that wastes nothing is not a bottleneck', () {
     kora.stock['steel'] = n(1000); // full, but nothing makes more... yet
     engine.apply(s, const AssignCrewCommand('player', 'b3', 0));
-    expect(buildFlowReport(s, c, 'player').bottlenecks.map((b) => b.kind), [
+    expect(held(buildFlowReport(s, c, 'player')).map((b) => b.kind), [
       BottleneckKind.noCrew,
     ]);
   });
@@ -284,11 +401,9 @@ void main() {
   test('bottleneck message names the building, body, and resource', () {
     engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
     kora.stock['iron_ore'] = n(0.2);
-    final b = buildFlowReport(
-      s,
-      c,
-      'player',
-    ).bottlenecks.singleWhere((b) => b.kind == BottleneckKind.input);
+    final b = held(
+      buildFlowReport(s, c, 'player'),
+    ).singleWhere((b) => b.kind == BottleneckKind.input);
     expect(b.message, 'Smelter on Kora is running at 50%: not enough Iron Ore');
     expect(b.kind, BottleneckKind.input);
     expect(b.bodyId, 'kora');
@@ -316,7 +431,7 @@ void main() {
     ).buildings.singleWhere((b) => b.buildingId == fab);
     expect(status.runFraction, 1);
     expect(status.limitReason, 'understaffed');
-    final neck = r.bottlenecks.singleWhere((b) => b.buildingId == fab);
+    final neck = held(r).singleWhere((b) => b.buildingId == fab);
     expect(neck.kind, BottleneckKind.understaffed);
     expect(neck.message, 'Circuit Fab on Kora is understaffed: 1 of 2 crew');
     expect(neck.resourceId, isNull);
@@ -328,7 +443,7 @@ void main() {
     engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
     final hollow = s.body('hollow_reach')..ownerId = 'player';
     hollow.buildings.add(BuildingState(id: 'x1', defId: 'smelter', crew: 0));
-    final list = buildFlowReport(s, c, 'player').bottlenecks;
+    final list = held(buildFlowReport(s, c, 'player'));
     expect(list.map((b) => b.message), [
       'Mine on Kora has no crew',
       'Smelter on Hollow Reach has no crew',
@@ -341,7 +456,7 @@ void main() {
   test('crew shortage is reported as a bottleneck', () {
     // Three crew assigned at start; base crew of 2 supports only two.
     s.faction('player').baseCrew = 2;
-    final b = buildFlowReport(s, c, 'player').bottlenecks.single;
+    final b = held(buildFlowReport(s, c, 'player')).single;
     expect(b.kind, BottleneckKind.crewShortage);
     expect(
       b.message,
@@ -363,7 +478,7 @@ void main() {
     kora.stock['iron_ore'] = n(0.15);
     final hollow = s.body('hollow_reach')..ownerId = 'player';
     hollow.buildings.add(BuildingState(id: 'x1', defId: 'smelter', crew: 0));
-    final list = buildFlowReport(s, c, 'player').bottlenecks;
+    final list = held(buildFlowReport(s, c, 'player'));
     expect(list.map((b) => b.kind), [
       BottleneckKind.noCrew,
       BottleneckKind.noCrew,
@@ -380,7 +495,7 @@ void main() {
 
   test('no crew bottleneck when habitats and base crew cover everyone', () {
     s.faction('player').baseCrew = 3;
-    expect(buildFlowReport(s, c, 'player').bottlenecks, isEmpty);
+    expect(held(buildFlowReport(s, c, 'player')), isEmpty);
   });
 
   test('crew shortage counts crew as the sample tick started', () {
@@ -391,11 +506,9 @@ void main() {
     for (final id in ['food', 'water', 'oxygen']) {
       kora.stock[id] = n(10);
     }
-    final b = buildFlowReport(
-      s,
-      c,
-      'player',
-    ).bottlenecks.singleWhere((b) => b.kind == BottleneckKind.crewShortage);
+    final b = held(
+      buildFlowReport(s, c, 'player'),
+    ).singleWhere((b) => b.kind == BottleneckKind.crewShortage);
     expect(
       b.message,
       'Your empire is short on crew: '
@@ -416,7 +529,7 @@ void main() {
     expect(h.effectiveFraction, closeTo(0.5, 1e-12));
     expect(h.slots, 0);
     expect(
-      r.bottlenecks.single.message,
+      held(r).single.message,
       'Habitat on Kora is running at 50%: not enough Oxygen',
     );
   });

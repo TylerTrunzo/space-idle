@@ -807,12 +807,20 @@ void main() {
   test('away marks bottlenecks that were there before it as ongoing', () {
     final r = _runner();
     r.handle({'cmd': 'assignCrew', 'buildingId': 'b1', 'crew': 0});
+    // A rule that sells nothing keeps noSales out of the top three.
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'steel',
+      'keepAtLeast': '1e9',
+    });
     r.handle({'cmd': 'advance', 'seconds': 7200});
-    final out = r.handle({'cmd': 'away', 'seconds': 3600});
+    final out = r.handle({'cmd': 'away', 'seconds': 3600 + 600});
     final necks = (out['topBottlenecks']! as List).cast<Map<String, Object?>>();
     final idle = necks.singleWhere((n) => n['buildingId'] == 'b1');
     expect(idle['firstSeenAt'], 0.0);
-    expect(idle['ongoing'], 'ongoing since 0.0h');
+    // How long it has gone on, not a game-time stamp that reads like one.
+    expect(idle['ongoing'], 'for 3h 10m');
     expect(necks.every((n) => n.containsKey('lostCreditsPerHour')), isTrue);
   });
 

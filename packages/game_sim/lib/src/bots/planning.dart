@@ -11,7 +11,7 @@ extension _Goals on _View {
   /// [_saveWithinSeconds]; a goal further off than that lets the next one
   /// act, so the bot keeps growing in the meantime.
   _Step pursueGoals() {
-    final income = math.max(0.0, report!.creditsPerSec.toDouble());
+    final income = this.income;
     _Step? worth(_Step step) => switch (step) {
       _Do() => step,
       _Save(:final credits)

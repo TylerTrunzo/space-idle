@@ -879,8 +879,11 @@ void main() {
     test('top bottlenecks rank by the credits they lose an hour', () {
       final s = engine.newGame(1);
       // An idle iron mine starves the smelter of ore, and Kora's copper ore
-      // store fills and wastes all the mine makes.
-      engine.apply(s, const AssignCrewCommand('player', 'b1', 0));
+      // store fills and wastes all the mine makes. A rule that sells
+      // nothing keeps the noSales bottleneck out of it.
+      engine
+        ..apply(s, const AssignCrewCommand('player', 'b1', 0))
+        ..apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(1e9)));
       final sum = engine.catchUpOffline(s, 3 * 3600);
       expect(sum.awayFrom, 0);
       expect(sum.topBottlenecks.map((b) => b.kind), [

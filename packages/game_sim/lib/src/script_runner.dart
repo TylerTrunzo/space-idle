@@ -55,9 +55,14 @@ Map<String, Object?> _nums(Map<String, BigNum> m) => {
   for (final e in m.entries) e.key: _num(e.value),
 };
 
-/// A bottleneck as JSON. With [awayFrom], the start of an absence, one
-/// first seen before it also says since when it has been going on.
-Map<String, Object?> _bottleneck(Bottleneck n, {double? awayFrom}) => {
+/// A bottleneck as JSON. With [awayFrom], the start of an absence that
+/// ended at [now], one first seen before it also says how long it has been
+/// going on, such as "for 3h 10m".
+Map<String, Object?> _bottleneck(
+  Bottleneck n, {
+  double? awayFrom,
+  double? now,
+}) => {
   'kind': n.kind.name,
   'bodyId': n.bodyId,
   'buildingId': n.buildingId,
@@ -69,8 +74,8 @@ Map<String, Object?> _bottleneck(Bottleneck n, {double? awayFrom}) => {
     final v? => _num(v),
     null => null,
   },
-  if (awayFrom != null && n.firstSeenAt < awayFrom)
-    'ongoing': 'ongoing since ${(n.firstSeenAt / 3600).toStringAsFixed(1)}h',
+  if (awayFrom != null && now != null && n.firstSeenAt < awayFrom)
+    'ongoing': 'for ${formatDuration(now - n.firstSeenAt)}',
 };
 
 Map<String, Object?> _fail(String error, String message) => {
@@ -374,7 +379,7 @@ final class ScriptRunner {
       ],
       'topBottlenecks': [
         for (final n in sum.topBottlenecks)
-          _bottleneck(n, awayFrom: sum.awayFrom),
+          _bottleneck(n, awayFrom: sum.awayFrom, now: state.time),
       ],
       'projectsCompleted': [
         for (final p in sum.projectsCompleted)

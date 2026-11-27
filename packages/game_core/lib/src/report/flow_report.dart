@@ -10,6 +10,7 @@ import '../sim/market.dart';
 import '../sim/megaprojects.dart';
 import '../sim/production.dart';
 import '../state/game_state.dart';
+import 'steady_revenue.dart';
 
 /// How one building ran in the report's sample step.
 final class BuildingStatus {
@@ -121,6 +122,10 @@ enum BottleneckKind {
   /// A body's stock of one resource is at its storage cap and what more
   /// arrives is wasted.
   storageFull,
+
+  /// The faction's buildings make goods that sell, but it has no auto-sell
+  /// rule on any body it owns, so nothing sells unless it sells by hand.
+  noSales,
 }
 
 /// Something running below full rate, and why: a building, a body's full
@@ -142,11 +147,12 @@ final class Bottleneck {
   final BottleneckKind kind;
 
   /// Body the building or store is on; null for
-  /// [BottleneckKind.crewShortage], which is faction-wide.
+  /// [BottleneckKind.crewShortage] and [BottleneckKind.noSales], which are
+  /// faction-wide.
   final String? bodyId;
 
-  /// The held-back building; null for [BottleneckKind.crewShortage] and
-  /// [BottleneckKind.storageFull].
+  /// The held-back building; null for [BottleneckKind.crewShortage],
+  /// [BottleneckKind.storageFull] and [BottleneckKind.noSales].
   final String? buildingId;
 
   /// The input a building is short of ([BottleneckKind.input]) or the
@@ -157,7 +163,8 @@ final class Bottleneck {
   /// for [BottleneckKind.understaffed] its crew over its base slots;
   /// for [BottleneckKind.crewShortage] the faction's crew efficiency; for
   /// [BottleneckKind.storageFull] the share of the body's own output of the
-  /// resource that it kept (0 when only arriving cargo was wasted).
+  /// resource that it kept (0 when only arriving cargo was wasted); 0 for
+  /// [BottleneckKind.noSales].
   final double runFraction;
 
   /// Plain-English description using display names, such as
@@ -172,7 +179,9 @@ final class Bottleneck {
   /// Estimated credits it costs an hour, at current market prices, where
   /// that can be worked out: for [BottleneckKind.storageFull] the wasted
   /// units' value; for [BottleneckKind.input] the value of the output the
-  /// building does not make. Null for the other kinds.
+  /// building does not make; for [BottleneckKind.noSales] the value of
+  /// the faction's net production of goods that sell. Null for the other
+  /// kinds.
   final BigNum? lostCreditsPerHour;
 
   /// [kind], [bodyId], [buildingId] and [resourceId] as one key, as in
@@ -195,12 +204,16 @@ final class Bottleneck {
 /// A faction's resource flows and bottlenecks, per second.
 final class FlowReport {
   /// Creates a report; the collections are copied unmodifiable.
+  ///
+  /// [creditsPerSec] is called the first time [FlowReport.creditsPerSec]
+  /// is read, and only then.
   FlowReport({
     required List<BodyFlow> bodies,
     required Map<String, BigNum> empireNet,
-    required this.creditsPerSec,
+    required BigNum Function() creditsPerSec,
     required List<Bottleneck> bottlenecks,
-  }) : bodies = List.unmodifiable(bodies),
+  }) : _creditsPerSec = creditsPerSec,
+       bodies = List.unmodifiable(bodies),
        empireNet = Map.unmodifiable(empireNet),
        bottlenecks = List.unmodifiable(bottlenecks);
 
@@ -212,12 +225,21 @@ final class FlowReport {
   final Map<String, BigNum> empireNet;
 
   /// Credits the faction earns per second in steady state: the auto-sale
-  /// revenue of what the sample step made and landed, not of stock built
-  /// up before it (see [buildFlowReport]); commands are not part of it.
-  final BigNum creditsPerSec;
+  /// revenue of its net production once stocks stop moving, with every
+  /// building held to the inputs it can get without drawing stock down,
+  /// and no more than a short run of play earns (`saleRevenuePerSec`).
+  /// Stock drawn down by consumers, or sold from above an auto-sell keep,
+  /// does not count; commands (sales, contracts) are not part of it.
+  ///
+  /// Worked out the first time it is read, from the state the report was
+  /// built from: it plays a copy of it forward, which costs several ticks.
+  late final BigNum creditsPerSec = _creditsPerSec();
+
+  final BigNum Function() _creditsPerSec;
 
   /// Everything held back, lowest run fraction first, then in report order:
-  /// a crew shortage first, then each body's buildings in order followed by
+  /// goods made with nothing selling them ([BottleneckKind.noSales]) and a
+  /// crew shortage first, then each body's buildings in order followed by
   /// its full stores in content resource order.
   final List<Bottleneck> bottlenecks;
 
@@ -256,13 +278,17 @@ const double _sampleSeconds = 1;
 ///   stock built up before it, such as the step's demand kept back by a
 ///   long tick that a 1 s step no longer needs.
 ///
-/// So [FlowReport.creditsPerSec] is the auto-sale revenue of the step's
-/// net production, and over a stable stretch of play matches the credits
-/// actually earned per second. Net rates are stock differences across the
-/// step; produced and consumed rates are each building's [fullRateFlow]
-/// scaled by the run fraction the step settled on. All maps list
-/// resources in content order and leave out zero rates. Throws if the
-/// faction does not exist.
+/// [FlowReport.creditsPerSec] is worked out apart from the sample step,
+/// when first read (`saleRevenuePerSec`): a sample second can run a
+/// factory on stock it will not have once the stock runs out, or on a lot
+/// that just landed from a route that will leave it dry for a minute. So
+/// over a stable stretch of play it matches the credits actually earned
+/// per second.
+///
+/// Net rates are stock differences across the step; produced and consumed
+/// rates are each building's [fullRateFlow] scaled by the run fraction the
+/// step settled on. All maps list resources in content order and leave out
+/// zero rates. Throws if the faction does not exist.
 FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   // First pass: what each route sends in a step from this state.
   final probe = s.copy();
@@ -278,8 +304,6 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   final stockBefore = [for (final b in owned) Map.of(b.stock)];
   final atStart = {for (final b in copy.bodies) b.id: Map.of(b.stock)};
   final holdingsBefore = _holdings(copy, factionId);
-  final faction = copy.faction(factionId);
-  final creditsBefore = faction.credits;
   // The tick computes crew efficiency from the state it starts in, so the
   // crew shortage is read from that state too.
   final crewEff = crewEfficiency(copy, c, factionId);
@@ -393,6 +417,13 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
       ),
     );
   }
+  if (_noSales(c, copy.faction(factionId), owned, bodies) case final unsold?) {
+    // Faction-wide: first in report order.
+    bottlenecks.add((
+      -1,
+      unsold.neck._with(lostCreditsPerHour: _valuePerHour(s, c, unsold.net)),
+    ));
+  }
   bottlenecks.sort((x, y) {
     final byRun = x.$2.runFraction.compareTo(y.$2.runFraction);
     return byRun != 0 ? byRun : x.$1.compareTo(y.$1);
@@ -404,7 +435,16 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
   return FlowReport(
     bodies: bodies,
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
-    creditsPerSec: faction.credits - creditsBefore,
+    // Worked out only when asked for, on the two copies, which nothing
+    // else reads once the report is built.
+    creditsPerSec: () => saleRevenuePerSec(
+      probe,
+      c,
+      factionId,
+      crewEff: crewEff,
+      bonuses: bonuses,
+      market: copy,
+    ),
     bottlenecks: [
       for (final (_, b) in bottlenecks)
         b._with(firstSeenAt: since[b.key] ?? s.time),
@@ -450,6 +490,13 @@ void noteBottlenecks(GameState s, Content c, double at) {
     if (crewEfficiency(s, c, f.id) < 1) {
       see(BottleneckKind.crewShortage.name, null, null, null);
     }
+    final owned = [
+      for (final b in s.bodies)
+        if (b.ownerId == f.id) b,
+    ];
+    if (!_sellsOn(f, owned) && _madeSellable(c, owned)) {
+      see(BottleneckKind.noSales.name, null, null, null);
+    }
     for (final body in s.bodies) {
       if (body.ownerId != f.id) continue;
       for (final b in body.buildings) {
@@ -479,6 +526,65 @@ void noteBottlenecks(GameState s, Content c, double at) {
       ..clear()
       ..addAll(now);
   }
+}
+
+/// Whether a building on the [owned] bodies ran its last step and makes
+/// a good with a price.
+bool _madeSellable(Content c, List<BodyState> owned) {
+  for (final body in owned) {
+    for (final b in body.buildings) {
+      if (b.lastRunFraction == 0) continue;
+      final def = c.buildings[b.defId]!;
+      final made = def.kind == BuildingKind.extractor
+          ? [?b.depositResourceId]
+          : def.outputs.keys;
+      if (made.any((id) => !c.resources[id]!.basePrice.isZero)) return true;
+    }
+  }
+  return false;
+}
+
+/// Whether [f] has an auto-sell rule on one of the [owned] bodies.
+bool _sellsOn(FactionState f, Iterable<BodyState> owned) {
+  final ids = {for (final b in owned) b.id};
+  return f.autoSell.any((r) => ids.contains(r.bodyId));
+}
+
+/// The no-sales bottleneck of [f], with the net production per second
+/// it leaves unsold, or null: when it has no auto-sell rule on the
+/// [owned] bodies and its buildings make more of some good with a price
+/// than they use ([flows], the report's bodies).
+({Bottleneck neck, Map<String, BigNum> net})? _noSales(
+  Content c,
+  FactionState f,
+  List<BodyState> owned,
+  List<BodyFlow> flows,
+) {
+  if (_sellsOn(f, owned)) return null;
+  final net = <String, BigNum>{};
+  for (final r in c.resources.values) {
+    if (r.basePrice.isZero) continue;
+    var v = const BigNum.zero();
+    for (final b in flows) {
+      v =
+          v +
+          (b.producedPerSec[r.id] ?? const BigNum.zero()) -
+          (b.consumedPerSec[r.id] ?? const BigNum.zero());
+    }
+    if (v > const BigNum.zero()) net[r.id] = v;
+  }
+  if (net.isEmpty) return null;
+  return (
+    neck: const Bottleneck(
+      kind: BottleneckKind.noSales,
+      bodyId: null,
+      buildingId: null,
+      resourceId: null,
+      runFraction: 0,
+      message: 'Nothing is being sold: turn on auto-sell or sell goods',
+    ),
+    net: net,
+  );
 }
 
 /// The crew-shortage bottleneck of [factionId], or null when its crew

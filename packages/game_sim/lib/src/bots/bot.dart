@@ -87,8 +87,19 @@ final class BalancedBot implements Bot {
     // Each bottleneck gets one fix per decision: the 1 s sample cannot see
     // a fix work until stock has had a real step to refill.
     final tried = <String>{};
+    // Income is read once per decision: working it out plays the economy
+    // forward, and a few commands hardly move it.
+    double? income;
     return planCommands(e, s, budget: budget, (w) {
-      final v = _View(e.content, w, factionId, withReport: true);
+      late final _View v;
+      v = _View(
+        e.content,
+        w,
+        factionId,
+        withReport: true,
+        income: () =>
+            income ??= math.max(0.0, v.report!.creditsPerSec.toDouble()),
+      );
       final quick =
           v.assignFreeCrew() ??
           v.shedCrew() ??
@@ -279,12 +290,18 @@ bool _runsFreely(BuildingState b) =>
 /// One planning step's view of a faction: the state, its buildings and the
 /// decisions built from them.
 final class _View {
-  _View(this.c, this.s, this.factionId, {bool withReport = false})
-    : owned = [
-        for (final b in s.bodies)
-          if (b.ownerId == factionId) b,
-      ],
-      report = withReport ? buildFlowReport(s, c, factionId) : null {
+  _View(
+    this.c,
+    this.s,
+    this.factionId, {
+    bool withReport = false,
+    double Function()? income,
+  }) : _planIncome = income,
+       owned = [
+         for (final b in s.bodies)
+           if (b.ownerId == factionId) b,
+       ],
+       report = withReport ? buildFlowReport(s, c, factionId) : null {
     final crew = crewTotals(s, c, factionId);
     freeCrew = crew.free - crew.overAssigned;
     crewEff = crewEfficiency(s, c, factionId);
@@ -299,6 +316,13 @@ final class _View {
 
   /// Flows and bottlenecks; only the balanced bot needs them.
   final FlowReport? report;
+
+  final double Function()? _planIncome;
+
+  /// Credits a second the faction earns, never below zero: what the plan
+  /// passed in, else the report's [FlowReport.creditsPerSec].
+  double get income =>
+      _planIncome?.call() ?? math.max(0.0, report!.creditsPerSec.toDouble());
 
   /// Crew free to assign, or minus the crew assigned beyond what housing
   /// supports.
