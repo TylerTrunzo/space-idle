@@ -14,8 +14,8 @@ Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`
 `setAutoSell`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`,
 `deliverToMegaproject`, `deliverContract`, `discardContract`);
 `factionId` defaults to the player. A successful game command
-replies with `spent` and `gained` (credits and `body/resource` amounts that
-changed), `createdId` for a new building, route, ship move or project, and for
+replies with `spent` and `gained` (credits and `body/resource` amounts it took
+and gave), `createdId` for a new building, route, ship move or project, and for
 `build`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`,
 `deliverToMegaproject`, `demolish`,
 `createRoute`, `updateRoute`, `moveShips`, `deliverContract` and
@@ -23,9 +23,11 @@ changed), `createdId` for a new building, route, ship move or project, and for
 `"Started claiming Brine for 5K credits (no kits needed); done in 30m"` (only
 the first claim needs no outpost kits). Claims, extra build
 slots and megaproject stages are projects: they are paid for at once and take
-effect when their timer runs out (a claim of a body, a second slot on one, or
-a second stage of a megaproject, already under way fails with
-`projectInProgress`). A megaproject stage is paid for in deliveries that add
+effect when their timer runs out (a claim of a body or a second slot on one
+already under way fails with `projectInProgress`). A command on a body whose
+claim is still under way fails with `stillClaiming`: "Brine is still being
+claimed (25m left)". The reply is built from the engine's typed command
+outcome (`CommandOk.outcome`), not by comparing states. A megaproject stage is paid for in deliveries that add
 up: `{"cmd":"deliverToMegaproject","megaprojectId":"orbital_station",
 "bodyId":"kora","amounts":{"hull_plate":"120","credits":"5e5"}}` hands over up
 to those amounts from the body's stock (credits from the faction), each clamped
@@ -33,11 +35,17 @@ to what the next level still needs and to what is held, from any owned body at
 any time, so a level may cost more than one body can store. The delivery that
 completes the last entry starts the stage's timer (the reply has its
 `createdId` and says "level 2 started, done in 2h"; otherwise it says what is
-still needed). `state.megaprojects` shows `delivered` and `stillNeeded` while
+still needed). While a stage runs, deliveries pay for the level after it; once
+that is paid in full it waits and starts the moment the running stage
+completes, its timer running from then ("level 3 starts when level 2 is done,
+in 25m"), offline too, and more deliveries fail with `projectInProgress` until
+it starts. `state.megaprojects` shows `delivered` and `stillNeeded` while
 a level is part-paid. `{"cmd":"startMegaprojectStage","megaprojectId":
 "orbital_station","bodyId":"kora"}` delivers everything still needed from one
-body at once, or fails with `cannotAfford`. Each completed stage raises the
-megaproject's level, a permanent bonus.
+body at once ("Started Orbital Station level 1 on Kora for …", or "Paid for …
+level 3 … it starts when level 2 is done" while a stage runs), or fails with
+`cannotAfford`. Each completed stage raises the megaproject's level, a
+permanent bonus.
 
 A new building takes free crew up to its base crew slots (fewer if fewer are
 free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew"`);
@@ -79,7 +87,8 @@ deliveries add up), and pays the reward once the last unit is in.
 `{"cmd":"discardContract","contractId":"c12"}` takes a contract off the board
 with no penalty. Either way the freed slot refills 4 h later, banked after any
 refills already waiting, so a board emptied before a long absence is full
-again on return. An unknown contract fails with `unknownContract`. Meta
+again on return; the reply says when the next contract arrives, the soonest
+refill. An unknown contract fails with `unknownContract`. Meta
 commands:
 
 - `{"cmd":"advance","seconds":N}` run the simulation for N seconds, no cap
@@ -91,8 +100,12 @@ commands:
   passed it (`capped`), credits and stock gained, units wasted to
   storage caps, milestones reached and the top bottlenecks, those losing the
   most credits an hour first; one that was there before the absence says
-  `"ongoing": "ongoing since 12.0h"` (game hours); and the projects that
-  completed (`projectsCompleted`: `kind`, `targetId`, `name`)
+  `"ongoing": "ongoing since 12.0h"` (game hours); the projects that
+  completed (`projectsCompleted`: `kind`, `targetId`, `name`, `level` for a
+  megaproject stage, and a `message` such as `"Orbital Station reached level
+  3"`, which the headline also ends with), stages that started while away
+  included; and the contracts posted while away (`contractsPosted`: `id`,
+  `resourceId`, `resource`, `quantity`, `reward`)
 - `{"cmd":"report"}` per-second flows and bottlenecks
 - `{"cmd":"state"}` time, credits, crew, reached milestones, the level of
   every megaproject (`megaprojects`: `id`, `name`, `level`), the contracts
@@ -112,8 +125,14 @@ commands:
   says that speed and capacity on a building share one price counter), the
   next claim
   cost (or `"no bodies left to claim"` once every body is owned), each
-  owned body's next extra build slot, and each megaproject's next stage
-  (`megaprojects`: `nextLevel`, `cost`, `timeTaken`)
+  owned body's next extra build slot, the survey cost and time, and each
+  megaproject's next stage (`megaprojects`: `nextLevel`, `cost`,
+  `stillNeeded` once part-paid, `timeTaken`, and a `note` while a stage
+  runs). What cannot be started now says why instead of a cost: `"busy: an
+  extra slot arrives in 25m"`, `"busy: every unsurveyed signal is being
+  surveyed"`, `"busy: every body left is being claimed"`, `"busy: level 3 is
+  paid for and starts when level 2 is done, in 1h"`, or `"nothing left to
+  survey"`
 - `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}`
 
 `advance` and `away` tick the engine the same way, in 60 s steps; within a
@@ -171,9 +190,11 @@ bottleneck at each check-in. `--format md` gives Markdown; JSON is the default.
 The report also gives the market income of each day with each resource's
 share, a Days table (new things seen each day: milestones, completed claims,
 surveys, extra slots and megaproject stages, and completed contracts; bodies
-owned, megaproject levels and contracts completed at the day's end; and each
-tier's share of the day's income), the "days with something new" pacing line,
-and a Timeline of every completed project and contract.
+owned, megaproject levels and contracts completed at the day's end; contract
+rewards paid that day; Earned, market sales plus contract rewards; and each
+tier's share of the day's market sales), two pacing lines ("days with
+something new", and "days with a milestone or project", which leaves
+contracts out), and a Timeline of every completed project and contract.
 
 - `greedy` buys the cheapest affordable upgrade, building, extra slot or
   claim each decision.
@@ -190,8 +211,9 @@ their timers run while the player is away.
 
 - **Megaprojects.** Each bot delivers a stage's goods from every body that
   holds more than it keeps for its own use, then the credits once every good
-  is in, which starts the timer. Auto-sell holds back what the stage being
-  paid for still lacks (the whole next level while a stage runs).
+  is in, which starts the timer. They go on delivering while a stage runs,
+  paying for the level after it, which then starts as the running one ends.
+  Auto-sell holds back what the stage being paid for still lacks.
 - **Surveys** take only drones beyond what that stage still lacks.
 - **Contracts** come before the station: the bots hold a contract's goods back
   from auto-sell, deliver once a body holds enough to finish it (or its store

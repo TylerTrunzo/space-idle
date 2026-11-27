@@ -36,9 +36,9 @@ Numbers come back as `{"value":"2.41e6","display":"2.41M"}`.
 |---|---|
 | `{"cmd":"state"}` | Game time, credits, crew (base, supported, assigned, free, and overAssigned: crew assigned beyond what housing supports), milestones reached, every body in the system (type, deposits and their richness, owner, build slots used/total, storage cap, and stock for the bodies you own), your routes with their ids, stop level and whether they are paused, and the market price and saturation of every good you hold. Stock of components and above (tier 2+: circuits, cargo ships, outpost kits, ...) shows whole units; the part-made unit is kept |
 | `{"cmd":"report"}` | Steady per-second production, use, net flow and waste per body, credits per second (what selling one second's net output earns, not a stockpile being sold down), each building's run fraction, effective fraction (run fraction × crew / base slots × crew efficiency), crew and actual inputs and outputs, and the bottlenecks, worst first |
-| `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), and the next extra build slot on each body you own |
+| `{"cmd":"costs"}` | Next upgrade cost of every track of every building, the next claim cost (or "no bodies left to claim"), the survey cost and time, the next extra build slot on each body you own, and each megaproject's next level (`cost`, plus `stillNeeded` once part of it is delivered). Anything you cannot start right now says why instead of a cost, such as `"busy: an extra slot arrives in 25m"` or `"busy: level 3 is paid for and starts when level 2 is done, in 1h"` |
 | `{"cmd":"advance","seconds":600}` | Let time pass (no offline cap here) |
-| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h, more with Orbital Station levels) and shows the away summary: a one-line `headline` ("Away 4d 2h; 12h counted (cap); +1.2M credits"), the cap and whether you passed it (`capSeconds`, `capped`), credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks, those costing the most credits an hour first, each marked "ongoing since Xh" if it was already there when you left |
+| `{"cmd":"away","seconds":28800}` | Pretend you closed the game for 8 hours: runs offline catch-up (capped at 12 h, more with Orbital Station levels) and shows the away summary: a one-line `headline` ("Away 4d 2h; 12h counted (cap); +1.2M credits"), the cap and whether you passed it (`capSeconds`, `capped`), credits and stock gained, units wasted to storage caps, milestones reached and the top bottlenecks, those costing the most credits an hour first, each marked "ongoing since Xh" if it was already there when you left, the projects that completed with a line for each (`message`, such as "Brine claimed" or "Orbital Station reached level 3", and `level` for a megaproject stage; the headline names the level too), and the contracts posted while you were away (`contractsPosted`) |
 | `{"cmd":"save","path":"save.json"}` / `{"cmd":"load","path":"save.json"}` | Save or restore the game |
 
 `advance` and `away` step the engine the same way (60 s ticks; every chain on a
@@ -77,12 +77,17 @@ counts are plain integers.
 | `{"cmd":"demolish","buildingId":"b4"}` | Remove a building for half its credit cost back |
 | `{"cmd":"survey","sourceBodyId":"kora"}` | Survey the next unsurveyed signal in Kora's system (`state` shows `unsurveyedSignals`), paying credits and survey drones from Kora; the body shows up when the survey ends, a few hours later. Add `"bodyId"` to pick one by id |
 | `{"cmd":"expandSlots","bodyId":"kora"}` | Buy one more build slot on a body you own; each one costs more (see `costs`) |
+| `{"cmd":"deliverToMegaproject","megaprojectId":"orbital_station","bodyId":"kora","amounts":{"hull_plate":"120","credits":"5e5"}}` | Hand goods (from that body) and credits to the Orbital Station's next level; deliveries add up from any of your bodies, and the one that completes the level starts its timer. While a level is being built, deliveries pay for the level after it, which then starts by itself the moment the running one is done |
+| `{"cmd":"startMegaprojectStage","megaprojectId":"orbital_station","bodyId":"kora"}` | Deliver everything the next level still needs from one body at once |
+| `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora","amount":"500"}` / `{"cmd":"discardContract","contractId":"c12"}` | Work the contracts board (`state.contracts`): deliveries add up and the reward is paid with the last unit; a discard costs nothing. The reply says when the next contract arrives (the soonest refill) |
 
 A successful command reply lists what it `spent` and `gained` (credits, and
-`body/resource` amounts). `claimBody`, `demolish`, `createRoute`,
-`updateRoute` and `moveShips` also say in a `message` what was claimed,
-refunded, created, changed or sent, with ids (a first claim's says it
-needed no kits). A `depositMissing` error lists the deposits the body has, an
+`body/resource` amounts). `build`, `claimBody`, `survey`, `expandSlots`,
+`demolish`, `createRoute`, `updateRoute`, `moveShips`, the megaproject and
+the contract commands also say in a `message` what they did, with ids (a
+first claim's says it needed no kits). A command on a body whose claim is
+still under way fails with `stillClaiming` and the time left ("Brine is
+still being claimed (25m left)"). A `depositMissing` error lists the deposits the body has, an
 unknown building type lists the buildings the body can take, and a claim
 short of outpost kits says which building makes them and from what.
 
@@ -144,8 +149,10 @@ dart run game_sim:game_sim bot --bot greedy --hours 24 --format json
 
 The report shows when each milestone was first seen (check-in index and hours),
 the market income of each day with each resource's share, a Days table (new things
-seen per day, bodies, megaproject levels, contracts completed and income share by
-tier), a timeline of completed projects and contracts, dead zones (check-ins
+seen per day, bodies, megaproject levels, contracts completed, contract rewards paid,
+earnings from sales and contracts, and the share of sales by tier) with two pacing
+lines (days with anything new, and days with a milestone or project, contracts left
+out), a timeline of completed projects and contracts, dead zones (check-ins
 where the bot found nothing to do), resources never produced or never used, the
 final stock and credits, and the worst bottleneck at each check-in.
 `docs/balance/` holds the 30-day baselines (`stage1_5-30day-*.md`); use them to
