@@ -224,6 +224,12 @@ final class ScriptRunner {
             '${res(n.resourceId!)}, but ${state.body(n.bodyId!).name} '
             'keeps ${formatNumber(n.heldByKeep!)} of it back for its '
             'auto-sell keepAtLeast$keep';
+      case BottleneckKind.storageFull when n.fromAbsence:
+        return '${state.body(n.bodyId!).name} storage filled up with '
+            '${res(n.resourceId!)} while you were away: output was wasted';
+      case BottleneckKind.storageFull:
+        return '${state.body(n.bodyId!).name} storage is full of '
+            '${res(n.resourceId!)}: output is being wasted';
       case _ when n.count > 1:
         return _groupText(n);
       case _:
@@ -242,12 +248,14 @@ final class ScriptRunner {
           b.defId,
     };
     final what = types.length == 1
-        ? _plural(c.buildings[types.single]!.name)
+        ? plural(c.buildings[types.single]!.name)
         : 'buildings';
     final who = '${n.count} $what on ${body.name}';
     return switch (n.kind) {
+      // A group's run fraction is its lowest member's.
       BottleneckKind.input =>
-        '$who are running at ${math.min(99, (n.runFraction * 100).round())}%: '
+        '$who are running as low as '
+            '${math.min(99, (n.runFraction * 100).round())}%: '
             'not enough ${c.resources[n.resourceId!]!.name}',
       BottleneckKind.understaffed => '$who are understaffed',
       BottleneckKind.noCrew => '$who have no crew',
@@ -255,9 +263,17 @@ final class ScriptRunner {
     };
   }
 
-  /// [name] in the plural: "Station Docks", "Plate Presses".
-  static String _plural(String name) =>
-      RegExp(r'(s|sh|ch|x)$').hasMatch(name) ? '${name}es' : '${name}s';
+  /// [name] in the plural: "Station Docks", "Plate Presses", "Fuel
+  /// Refineries"; a name ending in "Works" stays as it is ("Reactor
+  /// Works").
+  static String plural(String name) {
+    if (name.endsWith('Works')) return name;
+    if (RegExp(r'[^aeiou]y$').hasMatch(name)) {
+      return '${name.substring(0, name.length - 1)}ies';
+    }
+    if (RegExp(r'(s|x|ch|sh)$').hasMatch(name)) return '${name}es';
+    return '${name}s';
+  }
 
   /// "29.9K of 30K, 1 still owed": [done] of [whole], in whole units, the
   /// part done rounded down and what is owed rounded up, so it never reads

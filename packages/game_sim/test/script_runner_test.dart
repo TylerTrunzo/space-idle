@@ -1209,7 +1209,7 @@ void main() {
     expect(
       presses['message'],
       matches(
-        r'^17 Plate Presses on Kora are running at \d+%: '
+        r'^17 Plate Presses on Kora are running as low as \d+%: '
         r'not enough Steel$',
       ),
     );
@@ -1218,6 +1218,87 @@ void main() {
         .cast<Map<String, Object?>>()
         .where((n) => n['resourceId'] == 'steel');
     expect(grouped.single['count'], 17);
+  });
+
+  test('a group of several building types reads as buildings', () {
+    final r = _runner();
+    r.state.faction('player').baseCrew = 40;
+    final kora = r.state.body('kora');
+    for (final def in ['plate_press', 'plate_press', 'shipyard']) {
+      kora.buildings.add(
+        BuildingState(id: r.state.newId('b'), defId: def, crew: 1),
+      );
+    }
+    kora.stock['circuit'] = BigNum.from(1000);
+    final out = r.handle({'cmd': 'report'});
+    final steel = (out['bottlenecks']! as List)
+        .cast<Map<String, Object?>>()
+        .singleWhere((n) => n['resourceId'] == 'steel');
+    expect(steel['count'], 3);
+    expect(
+      steel['message'],
+      matches(
+        r'^3 buildings on Kora are running as low as \d+%: '
+        r'not enough Steel$',
+      ),
+    );
+  });
+
+  test('away says what the storage cap cut while away', () {
+    final r = _runner();
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'copper_ore',
+      'keepAtLeast': '0',
+    });
+    r.state.shipments.add(
+      Shipment(
+        routeId: 'move',
+        fromBodyId: 'brine',
+        toBodyId: 'kora',
+        ownerId: 'player',
+        resourceId: 'hull_plate',
+        amount: BigNum.from(1e5),
+        departAt: 0,
+        arriveAt: 600,
+      ),
+    );
+    final out = r.handle({'cmd': 'away', 'seconds': 3600});
+    final cut = (out['topBottlenecks']! as List)
+        .cast<Map<String, Object?>>()
+        .firstWhere((n) => n['kind'] == 'storageFull');
+    expect(
+      cut['message'],
+      'Kora storage filled up with Hull Plate while you were away: output '
+      'was wasted',
+    );
+  });
+
+  test('building names take their plurals', () {
+    expect(
+      [
+        for (final name in [
+          'Reactor Works',
+          'Magnet Works',
+          'Fuel Refinery',
+          'Station Dock',
+          'Plate Press',
+          'Ice Drill',
+          'Gas Skimmer',
+        ])
+          ScriptRunner.plural(name),
+      ],
+      [
+        'Reactor Works',
+        'Magnet Works',
+        'Fuel Refineries',
+        'Station Docks',
+        'Plate Presses',
+        'Ice Drills',
+        'Gas Skimmers',
+      ],
+    );
   });
 
   test('away names what a keepAtLeast holds back from a megaproject', () {
