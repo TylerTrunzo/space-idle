@@ -661,11 +661,11 @@ final class RouteState {
   /// Cargo ships assigned.
   int cargoShips;
 
-  /// Destination stock at which the route pauses, above zero, or null to
-  /// send without stopping. Only the destination's stock counts, not cargo
-  /// in flight, so the destination may end up above it by what was in
-  /// flight when it got there (see `routePaused`). The route
-  /// commands keep it to the destination's storage cap.
+  /// Destination stock the route keeps, above zero, or null to send
+  /// without stopping: it pauses while the destination holds that much
+  /// once its cargo in flight, less what the destination uses while it
+  /// travels, has landed (see `routeRoomBeforeStop`). The route commands
+  /// keep it to the destination's storage cap.
   BigNum? stopAtDestination;
 
   /// Serializes this route.

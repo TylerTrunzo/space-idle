@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
@@ -78,42 +76,65 @@ BigNum routeInFlight(GameState s, RouteState r) {
   return total;
 }
 
-/// Whether route [r] is paused: its destination holds at least its
-/// [RouteState.stopAtDestination]; never for a route with no stop level.
+/// Units of its resource route [r]'s destination uses while a lot is on
+/// its way: what the destination's buildings use of it a second at full
+/// supply ([fullRateFlow], its owner's crew efficiency) times the route's
+/// [travelSeconds].
+BigNum routeUseInTransit(GameState s, Content c, RouteState r) {
+  final to = s.body(r.toBodyId);
+  final owner = to.ownerId;
+  if (owner == null) return const BigNum.zero();
+  final use = _fullRateUse(c, to, 1, crewEfficiency(s, c, owner));
+  final perSecond = use[r.resourceId] ?? const BigNum.zero();
+  return perSecond.mulDouble(travelSeconds(s, c, s.body(r.fromBodyId), to));
+}
+
+/// Units route [r] may still send before its destination would hold its
+/// [RouteState.stopAtDestination] once what is on its way lands: that
+/// level less what the destination holds, less the route's cargo in
+/// flight ([routeInFlight]) beyond what the destination uses while it
+/// travels ([routeUseInTransit]); null for a route with no stop level.
 ///
-/// Only the destination's stock counts, not cargo in flight
-/// ([routeInFlight]): a route whose rate times its travel time passes its
-/// stop level would otherwise send one stop level's worth per trip and
-/// leave the destination dry between lots. So the destination may end up
-/// above the level by what was in flight when it reached it.
-bool routePaused(GameState s, RouteState r) {
+/// So the stop level is the stock the destination keeps, not a cap on the
+/// destination plus the cargo on its way: a route whose rate times its
+/// travel time passes its stop level keeps enough in flight to cover the
+/// trip and the destination supplied, instead of sending one stop
+/// level's worth per trip and leaving it dry between lots. Cargo in
+/// flight still counts once it is more than the trip uses, so the
+/// destination does not end up holding a trip's worth above its level.
+BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) {
   final stop = r.stopAtDestination;
-  if (stop == null) return false;
+  if (stop == null) return null;
   final held = s.body(r.toBodyId).stock[r.resourceId] ?? const BigNum.zero();
-  return held >= stop;
+  return stop + routeUseInTransit(s, c, r) - held - routeInFlight(s, r);
+}
+
+/// Whether route [r] is paused: its destination, with what is on its way
+/// less what it uses before that lands, holds its stop level
+/// ([routeRoomBeforeStop]); never for a route with no stop level.
+bool routePaused(GameState s, Content c, RouteState r) {
+  final room = routeRoomBeforeStop(s, c, r);
+  return room != null && room <= const BigNum.zero();
 }
 
 /// Sends cargo along every route for [dt] game seconds.
 ///
 /// Each route whose source and destination are both still owned by the
-/// route owner moves `min(rate, capacity) × dt`, limited by source stock,
-/// unless it is paused: its destination holds its stop level
-/// ([routePaused]), so it sends nothing until the destination uses some
-/// up. The send is not cut to the room left below the stop: a route sends
-/// at its rate while the destination is below the level, as it would over
-/// many short steps, so a long step moves what they would.
+/// route owner moves `min(rate, capacity) × dt`, limited by source stock
+/// and, for a route with a stop level, by [routeRoomBeforeStop]; a paused
+/// route ([routePaused]) sends nothing until the destination uses some
+/// up. So the route restocks its destination as a shop reorders: what is
+/// on its way counts, less what will be used before it lands. That runs
+/// the same in long steps as in short ones, where a rule on the
+/// destination's stock alone pauses and resumes a trip late, by up to a
+/// step, and leaves the destination dry between lots.
 ///
 /// The cargo joins the route's newest shipment if that one departed less
 /// than [mergeSeconds] (default the rules'
 /// [RulesDef.shipmentMergeSeconds]) ago and is still in flight; otherwise
-/// it leaves in a new [Shipment] arriving at `time + travelSeconds`. So
-/// sends land in lots up to [mergeSeconds] apart, and in a step shorter
-/// than that the destination's own use of the resource until the next
-/// lot could land (at full supply, over `mergeSeconds − dt`) does not
-/// count toward the stop: a lot that just landed and is being used up
-/// pauses the route no more in 1 s steps than in 60 s ones, whose stock
-/// is read after a whole step's use. Other routes are skipped this step.
-/// Nothing lands here; see [deliverShipments].
+/// it leaves in a new [Shipment] arriving at `time + travelSeconds`.
+/// Other routes are skipped this step. Nothing lands here; see
+/// [deliverShipments].
 ///
 /// The engine runs this before the market, so what a route sends is off
 /// its source's stock before auto-sell works out what it may sell there.
@@ -126,30 +147,17 @@ Map<String, BigNum> sendCargo(
   double? mergeSeconds,
 }) {
   final merge = mergeSeconds ?? c.rules.shipmentMergeSeconds;
-  final ahead = math.max(0.0, merge - dt);
   final sent = <String, BigNum>{};
-  // Body id to what its buildings use over `ahead`, worked out once.
-  final use = <String, Map<String, BigNum>>{};
   for (final r in s.routes) {
     final from = s.body(r.fromBodyId);
     final to = s.body(r.toBodyId);
     if (from.ownerId != r.ownerId || to.ownerId != r.ownerId) continue;
-    if (r.stopAtDestination case final stop?) {
-      final soon = ahead == 0
-          ? const BigNum.zero()
-          : (use[to.id] ??= _fullRateUse(
-                  c,
-                  to,
-                  ahead,
-                  crewEfficiency(s, c, r.ownerId),
-                ))[r.resourceId] ??
-                const BigNum.zero();
-      final there = to.stock[r.resourceId] ?? const BigNum.zero();
-      if (there >= stop + soon) continue;
-    }
     final held = from.stock[r.resourceId] ?? const BigNum.zero();
     final rate = r.ratePerSecond.min(routeCapacity(c, r));
-    final amount = rate.mulDouble(dt).min(held);
+    var amount = rate.mulDouble(dt).min(held);
+    if (routeRoomBeforeStop(s, c, r) case final room?) {
+      amount = amount.min(room);
+    }
     if (amount <= const BigNum.zero()) continue;
     from.take(r.resourceId, amount);
     sent[r.id] = amount;

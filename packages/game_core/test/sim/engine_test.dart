@@ -965,6 +965,50 @@ void main() {
       expect(coarse, closeTo(live, live * 0.02));
     });
 
+    test('a route whose rate times travel passes its stop level keeps its '
+        'destination supplied', () {
+      // Round-3 casual bug 3: Kora ships iron ore to three smelters on
+      // Hollow Reach, 1.2 a second, over 120 s of travel, with a stop of
+      // 50. Counting all cargo in flight toward the stop held the route to
+      // 50 per trip, under half of what the smelters use.
+      final s = engine.newGame(1);
+      s.faction('player').baseCrew = 100;
+      final reach = s.body('hollow_reach')..ownerId = 'player';
+      for (var i = 0; i < 3; i++) {
+        reach.buildings.add(
+          BuildingState(id: s.newId('b'), defId: 'smelter', crew: 1),
+        );
+      }
+      s.body('kora')
+        ..stock['iron_ore'] = n(1e6)
+        ..stock['cargo_ship'] = n(1);
+      for (final b in s.body('kora').buildings) {
+        b.crew = 0;
+      }
+      final created = engine.apply(
+        s,
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'hollow_reach',
+          'iron_ore',
+          n(2),
+          1,
+          stopAtDestination: n(50),
+        ),
+      );
+      expect(created, isA<CommandOk>());
+      engine.advance(s, 1800);
+      final produced = s.faction('player').lifetimeProduced;
+      final before = produced['steel']!;
+      engine.advance(s, 3600);
+      final made = (produced['steel']! - before).toDouble();
+      // Three smelters make 0.6 steel a second at full supply.
+      expect(made, closeTo(0.6 * 3600, 0.6 * 3600 * 0.01));
+      // And the stock stays near the stop, not a trip's cargo above it.
+      expect(reach.stock['iron_ore']!.toDouble(), lessThan(50 + 2 * 60));
+    });
+
     test('a route with a stop level earns the same at 60 s steps', () {
       // The route from Kora pauses while Hollow Reach holds 200 iron ore,
       // far less than its smelters use in a minute: a 60 s step must not

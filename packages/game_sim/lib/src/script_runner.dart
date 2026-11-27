@@ -547,7 +547,7 @@ final class ScriptRunner {
                 final v? => _num(v),
                 null => null,
               },
-              'paused': routePaused(state, r),
+              'paused': routePaused(state, c, r),
               'inFlight': _num(routeInFlight(state, r)),
               'travelTime': formatDuration(
                 travelSeconds(

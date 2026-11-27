@@ -76,3 +76,36 @@ Content economyContent() => Content(
   ),
   milestones: const [],
 );
+
+/// [economyContent] plus a `press`: a factory that uses 0.5 `ore` a
+/// second for 0.5 `plate`, with one crew slot.
+Content pressContent() {
+  final base = economyContent();
+  return Content(
+    rules: base.rules,
+    resources: {
+      ...base.resources,
+      'plate': ResourceDef(
+        id: 'plate',
+        name: 'Plate',
+        tier: 1,
+        basePrice: n(1),
+      ),
+    },
+    buildings: {
+      'press': BuildingDef(
+        id: 'press',
+        name: 'Press',
+        kind: BuildingKind.factory,
+        cycleSeconds: 2,
+        inputs: const {'ore': 1},
+        outputs: const {'plate': 1},
+        crewSlots: 1,
+        buildCost: const {},
+      ),
+    },
+    bodyTypes: base.bodyTypes,
+    galaxy: base.galaxy,
+    milestones: base.milestones,
+  );
+}

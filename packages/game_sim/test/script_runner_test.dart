@@ -303,10 +303,10 @@ void main() {
       'value': '2e1',
       'display': '20',
     });
-    // Cargo in flight does not count toward the stop level: Hollow Reach
-    // holds none yet, so the route keeps sending.
-    expect((routes.single as Map)['paused'], isFalse);
-    expect(((routes.single as Map)['inFlight']! as Map)['display'], isNot('0'));
+    // Nothing on Hollow Reach uses iron ore, so all 20 in flight count
+    // toward the stop: the route waits for them to land.
+    expect((routes.single as Map)['paused'], isTrue);
+    expect(((routes.single as Map)['inFlight']! as Map)['display'], '20');
     final reachCap = storageCap(
       r.state,
       r.engine.content,

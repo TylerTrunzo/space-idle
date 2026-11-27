@@ -221,45 +221,21 @@ void main() {
   });
 
   group('stop at destination', () {
-    test('only the destination stock counts, not cargo in flight', () {
+    test('with nothing using it at the destination, cargo in flight counts '
+        'in full, so the route never overshoots', () {
       final r = route(rate: 1)..stopAtDestination = n(15);
-      expect(routePaused(s, r), isFalse);
+      expect(routeRoomBeforeStop(s, c, r), n(15));
       run(20);
-      // Nothing has landed yet (120 s of travel), so it keeps sending.
+      // Nothing has landed yet (120 s of travel), and 15 left.
       expect(at(b).isZero, isTrue);
-      expect(inTransit().toDouble(), closeTo(20, 1e-9));
-      expect(routeInFlight(s, r).toDouble(), closeTo(20, 1e-9));
-      expect(routePaused(s, r), isFalse);
-      run(120);
-      // Once 15 have landed it pauses; what was in flight lands on top.
-      expect(routePaused(s, r), isTrue);
+      expect(inTransit().toDouble(), closeTo(15, 1e-9));
+      expect(routeInFlight(s, r).toDouble(), closeTo(15, 1e-9));
+      expect(routePaused(s, c, r), isTrue);
       run(200);
-      expect(at(b).toDouble(), greaterThanOrEqualTo(15));
+      expect(at(b).toDouble(), closeTo(15, 1e-9));
       expect(inTransit().isZero, isTrue);
-      expect(routePaused(s, r), isTrue);
-    });
-
-    test('a route whose rate times travel passes its stop level keeps a '
-        'consumer supplied', () {
-      // Round-3 casual bug 3: 1 a second over 120 s of travel is 120 in
-      // flight, above the stop of 80. The destination uses 0.5 a second,
-      // 60 over one trip, which the stop covers: once the first lot lands
-      // it never runs dry, and the route never shows paused while the
-      // destination holds less than its stop level.
-      final r = route(rate: 1)..stopAtDestination = n(80);
-      var short = 0.0;
-      var pausedBelowStop = 0;
-      for (var i = 0; i < 1800; i++) {
-        stepLogistics(s, c, 1);
-        final have = at(b).toDouble();
-        if (routePaused(s, r) && have < 79.999) pausedBelowStop++;
-        final use = have < 0.5 ? have : 0.5;
-        b.stock['ore'] = n(have - use);
-        if (s.time > 130) short += 0.5 - use;
-        s.time += 1;
-      }
-      expect(short, closeTo(0, 1e-9));
-      expect(pausedBelowStop, 0);
+      expect(at(a).toDouble(), closeTo(985, 1e-9));
+      expect(routePaused(s, c, r), isTrue);
     });
 
     test('a paused route resumes when the destination uses some up', () {
@@ -268,20 +244,39 @@ void main() {
       run(5);
       expect(s.shipments, isEmpty);
       b.stock['ore'] = n(12);
-      expect(routePaused(s, r), isFalse);
+      expect(routePaused(s, c, r), isFalse);
       run(10);
-      // It sends its 1 a second while the destination holds less than 15;
-      // cargo in flight does not count.
-      expect(inTransit().toDouble(), closeTo(10, 1e-9));
-      expect(routePaused(s, r), isFalse);
-      b.stock['ore'] = n(15);
-      expect(routePaused(s, r), isTrue);
+      // It sent the 3 short, at its 1 a second, then paused again.
+      expect(inTransit().toDouble(), closeTo(3, 1e-9));
+      expect(routePaused(s, c, r), isTrue);
+    });
+
+    test('cargo in flight counts only beyond what the destination uses '
+        'while it travels', () {
+      // A press on b using 0.5 ore a second: a 120 s trip uses 60 of what
+      // is in flight, so the route keeps 60 more on its way than the stop.
+      final r = route(rate: 1)..stopAtDestination = n(15);
+      b.buildings.add(BuildingState(id: 'press', defId: 'press', crew: 1));
+      final withPress = pressContent();
+      expect(routeUseInTransit(s, withPress, r), n(60));
+      expect(routeRoomBeforeStop(s, withPress, r), n(75));
+      for (var i = 0; i < 20; i++) {
+        sendCargo(s, withPress, 1);
+        s.time += 1;
+      }
+      expect(inTransit().toDouble(), closeTo(20, 1e-9));
+      expect(routePaused(s, withPress, r), isFalse);
+      expect(
+        routeRoomBeforeStop(s, withPress, r)!.toDouble(),
+        closeTo(55, 1e-9),
+      );
     });
 
     test('a route without a stop level never pauses', () {
       final r = route(rate: 1);
       b.stock['ore'] = n(900);
-      expect(routePaused(s, r), isFalse);
+      expect(routeRoomBeforeStop(s, c, r), isNull);
+      expect(routePaused(s, c, r), isFalse);
       run(5);
       expect(inTransit().toDouble(), closeTo(5, 1e-9));
     });
