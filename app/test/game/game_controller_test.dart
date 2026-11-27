@@ -347,6 +347,26 @@ void main() {
       );
       expect(store.writes, 0);
     });
+
+    test('a savedAt at the 64-bit minimum fails to load', () async {
+      // `abs()` of the minimum int overflows back to itself, so a check on
+      // abs() lets it through. Spliced in as JSON text: the literal cannot
+      // be written as a Dart int on the web.
+      store.text = _envelope(savedAt: 0)
+          .replaceFirst('"savedAt":0', '"savedAt":-9223372036854775808');
+      expect(store.text, contains('-9223372036854775808'));
+
+      final result = await _controller(store, clock).start();
+      expect(
+        result,
+        isA<LoadFailed>().having(
+          (r) => r.reason,
+          'reason',
+          contains('savedAt'),
+        ),
+      );
+      expect(store.writes, 0);
+    });
   });
 
   group('commands', () {

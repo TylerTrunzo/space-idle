@@ -406,8 +406,9 @@ class GameController extends ChangeNotifier {
       final ms = json['savedAt'];
       if (ms is int) {
         // DateTime throws outside ±8.64e15 ms; a foreign or hand-edited
-        // envelope must fail to load, not crash.
-        if (ms.abs() > _maxEpochMs) {
+        // envelope must fail to load, not crash. Two comparisons, not abs():
+        // the 64-bit minimum has no positive counterpart.
+        if (ms < -_maxEpochMs || ms > _maxEpochMs) {
           return const _Bad('the save\'s savedAt time is out of range');
         }
         savedAt = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
