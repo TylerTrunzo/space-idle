@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:game_core/game_core.dart';
 
+import 'away_headline.dart';
+
 /// Command names that are not game commands.
 const _metaCommands = {
   'advance',
@@ -624,12 +626,14 @@ final class ScriptRunner {
     return {
       'ok': true,
       'time': state.time,
-      'headline': sum.headline,
+      'headline': awayHeadline(sum, engine.content),
       'secondsAway': sum.secondsAway,
       'secondsSimulated': sum.secondsSimulated,
       'capSeconds': sum.capSeconds,
       'capped': sum.capped,
       'creditsGained': _num(sum.creditsGained),
+      'creditsEarned': _num(sum.creditsEarned),
+      'creditsPaidIn': _num(sum.creditsPaidIn),
       'stockGained': _nums(sum.stockGained),
       'totalWasted': _num(sum.totalWasted),
       'wastedValue': _num(sum.wastedValue),

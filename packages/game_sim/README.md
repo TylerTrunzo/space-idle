@@ -128,9 +128,14 @@ commands:
 - `{"cmd":"away","seconds":N}` simulate the player being away for N seconds
   (offline catch-up, capped at the offline limit: 12 h plus the player's
   megaproject bonuses, at most 48 h) and print the away summary: a one-line
-  `headline` such as `"Away 4d 2h; 12h counted (cap); +1.2M credits"`,
+  `headline` such as `"Away 4d 2h; 12h counted (cap); +1.2M credits"`
+  (built here from the summary's typed fields; when credits went into
+  megaprojects on their own it says what was earned and where it went:
+  `"Away 1h; earned 2.67B credits, 2.11B to Mass Driver, net +560M"`),
   seconds away and simulated, the cap (`capSeconds`) and whether the absence
-  passed it (`capped`), credits and stock gained, units wasted to
+  passed it (`capped`), credits gained, earned (`creditsEarned`: sales and
+  contract rewards) and paid in on their own (`creditsPaidIn`), stock
+  gained, units wasted to
   storage caps (`totalWasted`) and their worth in credits (`wastedValue`),
   crew before and after (`housingBefore`, `housingAfter`: `base`,
   `supported`, `assigned`; when fewer are housed than assigned the headline
@@ -142,7 +147,10 @@ commands:
   `worseThanBefore` (its loss grew by more than a quarter) and how long it
   has held, `"ongoing": "for 3h 10m, and worse than before"`; one
   `nextGoal`: the milestone the current rates reach soonest, or a
-  megaproject's next stage when that comes sooner (`kind`, `id`, `name`,
+  megaproject's next stage when that comes sooner (its ETA shares stock
+  and income out as auto-delivery does: the megaprojects fed on their own
+  take theirs in content order first, never touching a credit reserve, so a
+  stage paid by hand waits for them) (`kind`, `id`, `name`,
   `level` for a stage, `etaSeconds`, null when not in reach, and a
   `message` such as `"Next: First Foundry (Make 30 Steel), 12 of 30, in 1m
   30s"`); the projects that

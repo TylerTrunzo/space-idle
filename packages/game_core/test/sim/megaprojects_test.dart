@@ -794,7 +794,6 @@ void main() {
           (ProjectKind.megaprojectStage, 'orbital_station', 2),
         ],
       );
-      expect(sum.headline, endsWith('; Orbital Station reached level 2'));
     });
 
     test('a tick longer than both stages completes the chain', () {

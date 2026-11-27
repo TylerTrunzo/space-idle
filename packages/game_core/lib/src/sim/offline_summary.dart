@@ -1,6 +1,7 @@
+import 'dart:math' as math;
+
 import '../content/content.dart';
 import '../num/big_num.dart';
-import '../num/format.dart';
 import '../report/flow_report.dart';
 import '../state/game_state.dart';
 import 'crew.dart';
@@ -210,9 +211,11 @@ final class MegaprojectGoal extends NextGoal {
 /// (the gross rate), stock held (the empire's net rate) and time without
 /// waste (while nothing is wasted). A stage counts while the faction can
 /// pay toward it ([megaprojectTakesDeliveries]: open, the host body type
-/// owned, below its highest level, not already paid for); its ETA is the longest any entry still owed takes,
-/// after what the faction holds now, at those rates (null when one of
-/// them is not being made). Ties go to the milestone, then content order.
+/// owned, below its highest level, not already paid for); its ETA is the
+/// longest any entry still owed takes (null when one of them is not being
+/// made), with what the faction holds and makes shared out among the
+/// megaprojects as auto-delivery shares it ([megaprojectEtas]). Ties go to
+/// the milestone, then content order.
 NextGoal? nextGoal(
   GameState s,
   Content c,
@@ -246,13 +249,6 @@ NextGoal? nextGoal(
     MegaprojectLevelCondition() ||
     BodiesSurveyedCondition() => null,
   };
-  // Seconds [left] takes at [rate]; null when never.
-  double? eta(BigNum left, BigNum? rate) {
-    if (left <= const BigNum.zero()) return 0;
-    if (rate == null || rate <= const BigNum.zero()) return null;
-    final t = (left / rate).toDouble();
-    return t.isFinite ? t : null;
-  }
 
   MilestoneGoal? milestone;
   for (final m in c.milestones) {
@@ -261,7 +257,7 @@ NextGoal? nextGoal(
     if (rate == null) continue;
     final p = milestoneProgress(s, c, factionId, m);
     if (p.met) continue;
-    final t = eta(p.target - p.current, rate);
+    final t = _eta(p.target - p.current, rate);
     if (t == null) continue;
     if (milestone == null || t < milestone.etaSeconds!) {
       milestone = MilestoneGoal(
@@ -274,33 +270,18 @@ NextGoal? nextGoal(
   }
 
   MegaprojectGoal? stage;
-  Map<String, BigNum>? held;
-  for (final m in c.megaprojects.values) {
-    if (!megaprojectTakesDeliveries(s, c, factionId, m)) continue;
-    final level = megaprojectDeliveryLevel(s, factionId, m);
-    final owed = megaprojectRemaining(s, c, factionId, m);
-    if (owed.isEmpty) continue;
-    held ??= factionStock(s, factionId);
-    double? longest = 0;
-    for (final MapEntry(key: id, value: need) in owed.entries) {
-      final have = id == 'credits'
-          ? f.credits
-          : held[id] ?? const BigNum.zero();
-      final t = eta(
-        need - have,
-        id == 'credits' ? income : report.empireNet[id],
-      );
-      if (t == null) {
-        longest = null;
-        break;
-      }
-      if (t > longest!) longest = t;
-    }
+  for (final MapEntry(key: id, value: eta) in megaprojectEtas(
+    s,
+    c,
+    factionId,
+    report,
+  ).entries) {
+    final m = c.megaprojects[id]!;
     final goal = MegaprojectGoal(
-      megaprojectId: m.id,
-      level: level + 1,
-      remaining: owed,
-      etaSeconds: longest,
+      megaprojectId: id,
+      level: megaprojectDeliveryLevel(s, factionId, m) + 1,
+      remaining: megaprojectRemaining(s, c, factionId, m),
+      etaSeconds: eta,
     );
     if (stage == null || _sooner(goal.etaSeconds, stage.etaSeconds)) {
       stage = goal;
@@ -309,6 +290,113 @@ NextGoal? nextGoal(
   if (milestone == null) return stage;
   if (stage == null) return milestone;
   return _sooner(stage.etaSeconds, milestone.etaSeconds) ? stage : milestone;
+}
+
+/// Megaproject id to the game seconds until [factionId] has paid, or can
+/// pay, all that the stage it is paying for still needs, at the rates of
+/// [report] (its flow report of [s]); null for never. Only megaprojects
+/// that take deliveries now and are owed something, in content order.
+///
+/// What the faction holds and makes of each cost key is shared out one
+/// megaproject at a time, as auto-delivery hands it over: those it feeds
+/// on their own (credits: those with a credit reserve; a good: those fed
+/// goods), in content order, each take what is left of the stock, then
+/// the rate, until they have all they are owed, and the next one's share
+/// starts then. The rest, paid by hand, are each timed on what is left
+/// once those have their share: the player chooses which of them comes
+/// first. So stock and income are never counted for two megaprojects fed
+/// on their own, and a stage paid by hand waits for the credits and goods
+/// auto-delivery gives another.
+///
+/// - Credits: what is held, at [FlowReport.creditsPerSec]. A megaproject
+///   paid on its own never takes its reserve: it waits for income to
+///   pass it, and leaves it held.
+/// - Goods: the faction's stock of the good ([factionStock]), at the
+///   larger of the empire's net rate ([FlowReport.empireNet]) and what
+///   auto-delivery hands all megaprojects of it a second
+///   ([FlowReport.autoDeliveredPerSec]): the first leaves out goods
+///   auto-delivery takes before they are counted held, the second the
+///   goods auto-sell would sell.
+///
+/// It looks one stage ahead for each: stages paid for and started later
+/// would take a share too, which it leaves out.
+Map<String, double?> megaprojectEtas(
+  GameState s,
+  Content c,
+  String factionId,
+  FlowReport report,
+) {
+  final f = s.faction(factionId);
+  final owed = <String, Map<String, BigNum>>{
+    for (final m in c.megaprojects.values)
+      if (megaprojectTakesDeliveries(s, c, factionId, m))
+        if (megaprojectRemaining(s, c, factionId, m) case final left
+            when left.isNotEmpty)
+          m.id: left,
+  };
+  if (owed.isEmpty) return const {};
+  final held = factionStock(s, factionId);
+  BigNum rateOf(String key) {
+    if (key == creditsKey) return report.creditsPerSec;
+    var fed = const BigNum.zero();
+    for (final got in report.autoDeliveredPerSec.values) {
+      fed = fed + (got[key] ?? const BigNum.zero());
+    }
+    return (report.empireNet[key] ?? const BigNum.zero()).max(fed);
+  }
+
+  bool auto(String m, String key) {
+    final a = f.megaprojectAuto[m];
+    if (a == null) return false;
+    return key == creditsKey ? a.creditReserve != null : a.goods;
+  }
+
+  final eta = <String, double?>{for (final m in owed.keys) m: 0};
+  final keys = <String>{for (final left in owed.values) ...left.keys};
+  for (final key in keys) {
+    final rate = rateOf(key);
+    var pool = key == creditsKey ? f.credits : held[key] ?? const BigNum.zero();
+    // When the megaprojects before have their share: null for never.
+    double? from = 0;
+    for (final first in [true, false]) {
+      for (final MapEntry(key: m, value: left) in owed.entries) {
+        final need = left[key];
+        if (need == null || auto(m, key) != first) continue;
+        final reserve = key == creditsKey
+            ? f.megaprojectAuto[m]?.creditReserve
+            : null;
+        final usable = reserve == null ? pool : pool - reserve;
+        double? done;
+        var after = pool;
+        if (from == null) {
+          done = null;
+        } else if (usable >= need) {
+          done = from;
+          after = pool - need;
+        } else {
+          final wait = _eta(need - usable, rate);
+          done = wait == null ? null : from + wait;
+          after = reserve ?? const BigNum.zero();
+        }
+        // Auto-delivery takes its share in turn; what is paid by hand is
+        // the player's to share out, so each such stage is timed on what
+        // auto-delivery leaves, as if it came first.
+        if (first) (from, pool) = (done, after);
+        final was = eta[m];
+        eta[m] = was == null || done == null ? null : math.max(was, done);
+      }
+    }
+  }
+  return eta;
+}
+
+/// Seconds [left] takes at [rate]; 0 when nothing is left, null when
+/// never.
+double? _eta(BigNum left, BigNum? rate) {
+  if (left <= const BigNum.zero()) return 0;
+  if (rate == null || rate <= const BigNum.zero()) return null;
+  final t = (left / rate).toDouble();
+  return t.isFinite ? t : null;
 }
 
 /// Whether ETA [a] comes strictly before [b], null being never.
@@ -337,7 +425,9 @@ final class OfflineSummary {
     this.nextGoal,
     List<String> contractsPosted = const [],
     Map<String, Map<String, BigNum>> autoDelivered = const {},
+    BigNum? creditsEarned,
   }) : contractsPosted = List.unmodifiable(contractsPosted),
+       creditsEarned = creditsEarned ?? creditsGained + _paidIn(autoDelivered),
        autoDelivered = Map.unmodifiable({
          for (final MapEntry(key: m, value: got) in autoDelivered.entries)
            m: Map<String, BigNum>.unmodifiable(got),
@@ -387,6 +477,12 @@ final class OfflineSummary {
         _ => null,
       },
       contractsPosted: (j['contractsPosted']! as List).cast<String>(),
+      // Absent in summaries from before it was kept: what was gained plus
+      // what was paid in.
+      creditsEarned: switch (j['creditsEarned']) {
+        final String v => BigNum.fromJson(v),
+        _ => null,
+      },
       // Absent in summaries from before auto-delivery.
       autoDelivered: {
         for (final MapEntry(key: m, value: got)
@@ -419,38 +515,33 @@ final class OfflineSummary {
   /// counted.
   bool get capped => secondsAway > capSeconds;
 
-  /// The return in one line for the player, such as "Away 4d 2h; 12h
-  /// counted (cap); +1.2M credits", or "Away 3h; +36K credits" when the
-  /// whole absence counted; then, when housing supports fewer crew than
-  /// are assigned, "; Crew short: 41 housed for 67 assigned"; then the
-  /// highest level each megaproject reached while away, such as
-  /// "; Orbital Station reached level 3".
-  String get headline {
-    final counted = capped
-        ? '; ${formatDuration(secondsSimulated)} counted (cap)'
-        : '';
-    final sign = creditsGained.isNegative ? '' : '+';
-    final crew = housingAfter.overAssigned > 0
-        ? '; Crew short: ${housingAfter.supported} housed for '
-              '${housingAfter.assigned} assigned'
-        : '';
-    final levels = <String, (String, int)>{};
-    for (final p in projectsCompleted) {
-      if (p.level case final level?) levels[p.targetId] = (p.name, level);
-    }
-    return 'Away ${formatDuration(secondsAway)}$counted; '
-        '$sign${formatNumber(creditsGained)} credits$crew'
-        '${[for (final (name, level) in levels.values) '; $name reached level $level'].join()}';
-  }
-
   /// Resource id to the change in the player's stock summed over the bodies
   /// it owns, in content order; negative for resources used up. Resources
   /// whose total did not change, or changed only by float residue (within
   /// a relative 1e-12), are left out.
   final Map<String, BigNum> stockGained;
 
-  /// Change in the player's credits; negative if it fell.
+  /// Change in the player's credits; negative if it fell: what it
+  /// [creditsEarned] less what auto-delivery paid its megaprojects
+  /// ([creditsPaidIn]).
   final BigNum creditsGained;
+
+  /// Credits the player earned while away, from sales and contract
+  /// rewards (its lifetime credits gained), before any went to
+  /// megaprojects.
+  final BigNum creditsEarned;
+
+  /// Credits auto-delivery paid the player's megaprojects while away, all
+  /// of them together; [autoDelivered] has them by megaproject.
+  BigNum get creditsPaidIn => _paidIn(autoDelivered);
+
+  static BigNum _paidIn(Map<String, Map<String, BigNum>> delivered) {
+    var total = const BigNum.zero();
+    for (final got in delivered.values) {
+      total = total + (got[creditsKey] ?? const BigNum.zero());
+    }
+    return total;
+  }
 
   /// Units cut by storage caps on the player's bodies while away, every
   /// resource summed. Zero means nothing was wasted.
@@ -527,6 +618,7 @@ final class OfflineSummary {
         id: v.toJson(),
     },
     'creditsGained': creditsGained.toJson(),
+    'creditsEarned': creditsEarned.toJson(),
     'totalWasted': totalWasted.toJson(),
     'wastedValue': wastedValue.toJson(),
     'milestonesReached': milestonesReached,

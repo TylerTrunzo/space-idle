@@ -782,24 +782,17 @@ void main() {
       expect(sum.capSeconds, 43200);
       expect(sum.secondsSimulated, 43200);
       expect(sum.creditsGained > const BigNum.zero(), isTrue);
-      expect(
-        sum.headline,
-        'Away 4d 2h; 12h counted (cap); '
-        '+${formatNumber(sum.creditsGained)} credits',
-      );
+      // Nothing is paid in: all that is earned is gained.
+      expect(sum.creditsEarned, sum.creditsGained);
+      expect(sum.creditsPaidIn.isZero, isTrue);
     });
 
-    test('an uncapped return has a shorter headline', () {
+    test('an uncapped return is not capped', () {
       final s = engine.newGame(1);
       final sum = engine.catchUpOffline(s, 3 * 3600);
       expect(sum.capped, isFalse);
       expect(sum.capSeconds, 43200);
-      expect(
-        sum.headline,
-        'Away 3h; +${formatNumber(sum.creditsGained)} credits',
-      );
-      // Exactly the cap loses nothing, so it is not capped; a fall in
-      // credits shows with a minus sign.
+      // Exactly the cap loses nothing, so it is not capped.
       final t = engine.newGame(1);
       t.faction('player').credits = n(1000);
       t.body('kora').stock['iron_ore'] = n(0);
@@ -807,25 +800,7 @@ void main() {
       t.routes.clear();
       final flat = engine.catchUpOffline(t, 43200);
       expect(flat.capped, isFalse);
-      expect(flat.headline, 'Away 12h; +0 credits');
-      final down = OfflineSummary(
-        awayFrom: 0,
-        secondsSimulated: 60,
-        secondsAway: 60,
-        capSeconds: 43200,
-        stockGained: const {},
-        creditsGained: n(-1500),
-        totalWasted: const BigNum.zero(),
-        wastedValue: const BigNum.zero(),
-        milestonesReached: const [],
-        topBottlenecks: const [],
-        projectsCompleted: const [],
-        housingBefore: const CrewTotals(base: 3, supported: 3, assigned: 3),
-        housingAfter: const CrewTotals(base: 3, supported: 3, assigned: 3),
-        creditsPerSecBefore: const BigNum.zero(),
-        creditsPerSecAfter: const BigNum.zero(),
-      );
-      expect(down.headline, 'Away 1m; -1.5K credits');
+      expect(flat.creditsGained.isZero, isTrue);
     });
 
     test('a short absence is simulated in full; capSeconds overrides', () {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:game_core/game_core.dart';
+import 'package:game_core/src/sim/milestones.dart' show factionStock;
 import 'package:test/test.dart';
 
 import '../state/helpers.dart';
@@ -53,14 +54,10 @@ void main() {
       );
     });
 
-    test('is named in the headline', () {
+    test('shows in the crew counts on return', () {
       final sum = e.catchUpOffline(bug2(), 3600);
-      expect(
-        sum.headline,
-        'Away 1h; +${formatNumber(sum.creditsGained)} credits; '
-        'Crew short: 4 housed for 6 assigned',
-      );
       expect((sum.housingAfter.supported, sum.housingAfter.assigned), (4, 6));
+      expect(sum.housingAfter.overAssigned, 2);
     });
 
     test('ranks by its loss like the others when it costs nothing', () {
@@ -124,7 +121,7 @@ void main() {
       isEmpty,
     );
     expect(sum.topBottlenecks.first.kind, BottleneckKind.input);
-    expect(sum.headline, isNot(contains('Crew short')));
+    expect(sum.housingAfter.overAssigned, 0);
   });
 
   test('an ongoing crew shortage is compared on its full-staffing loss', () {
@@ -173,7 +170,7 @@ void main() {
     expect(sum.housingBefore.supported, 40);
     expect(sum.housingBefore.assigned, 3);
     expect(sum.housingAfter.supported, 20);
-    expect(sum.headline, isNot(contains('Crew short')));
+    expect(sum.housingAfter.overAssigned, 0);
   });
 
   test('credits per second before and after are the reports\' own', () {
@@ -302,6 +299,148 @@ void main() {
       );
     });
 
+    group('shares what auto-delivery hands over', () {
+      final station = c.megaprojects['orbital_station']!;
+      final driver = c.megaprojects['mass_driver']!;
+
+      /// A new game with every milestone reached, no contracts, the Mass
+      /// Driver open with a stage of it under way (so the next one waits
+      /// once paid for), Kora's copper ore and steel auto-sold, and
+      /// [credits] held. Each megaproject's next stage is paid for but for
+      /// what [owed] lists of it.
+      GameState shape(
+        Map<String, Map<String, num>> owed, {
+        required num credits,
+      }) {
+        final s = e.newGame(1);
+        final f = s.faction('player');
+        f.reachedMilestones.addAll([for (final m in c.milestones) m.id]);
+        f.contracts.clear();
+        f.contractRefillAt
+          ..clear()
+          ..addAll(List.filled(RulesDef.contractSlots, 1e12));
+        f.megaprojectLevels['orbital_station'] = 1;
+        s.projects.add(
+          ProjectState(
+            id: s.newId('p'),
+            factionId: 'player',
+            kind: ProjectKind.megaprojectStage,
+            targetId: 'mass_driver',
+            startedAt: 0,
+            finishAt: 1e9,
+          ),
+        );
+        for (final m in [station, driver]) {
+          final cost = megaprojectCost(
+            c,
+            m,
+            megaprojectDeliveryLevel(s, 'player', m),
+          );
+          f.megaprojectProgress[m.id] = {
+            for (final MapEntry(key: id, value: v) in cost.entries)
+              id: v - n(owed[m.id]?[id] ?? 0),
+          };
+        }
+        f.credits = n(credits);
+        for (final id in ['copper_ore', 'steel']) {
+          e.apply(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        return s;
+      }
+
+      /// Seconds of 60 s steps until [m]'s next stage has been paid for in
+      /// full, or, unless [fed], can be from what [s] holds.
+      double reached(GameState s, MegaprojectDef m, {bool fed = false}) {
+        final start = s.time;
+        final f = s.faction('player');
+        bool can() {
+          if (megaprojectStageQueued(s, c, 'player', m)) return true;
+          if (fed) return false;
+          final held = factionStock(s, 'player');
+          return megaprojectRemaining(s, c, 'player', m).entries.every(
+            (x) =>
+                (x.key == 'credits' ? f.credits : held[x.key] ?? n(0)) >=
+                x.value,
+          );
+        }
+
+        while (!can()) {
+          e.advance(s, 60);
+          expect(s.time - start, lessThan(4e5));
+        }
+        return s.time - start;
+      }
+
+      test('a stage paid by hand waits for credits paid to another on '
+          'their own, after it in content order', () {
+        // The optimizer's day 14: the Mass Driver takes every credit above
+        // its reserve, so the station's credits wait for it.
+        final s = shape({
+          'orbital_station': {'credits': 9000},
+          // A good nothing makes: the Mass Driver never completes, but its
+          // credits are paid in.
+          'mass_driver': {'credits': 12000, 'silicon_wafer': 1},
+        }, credits: 3000);
+        e.apply(
+          s,
+          SetMegaprojectAutoCommand('player', 'mass_driver', true, n(1000)),
+        );
+        e.advance(s, 120);
+        final goal =
+            nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
+                as MegaprojectGoal;
+        expect(goal.megaprojectId, 'orbital_station');
+        final actual = reached(s, station);
+        expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
+      });
+
+      test('and before it in content order', () {
+        // The casual day 7: the station takes the credits, the Mass
+        // Driver's wait.
+        final s = shape({
+          'orbital_station': {'credits': 12000, 'reactor_core': 1},
+          'mass_driver': {'credits': 9000},
+        }, credits: 3000);
+        e.apply(
+          s,
+          SetMegaprojectAutoCommand('player', 'orbital_station', true, n(1000)),
+        );
+        e.advance(s, 120);
+        final goal =
+            nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
+                as MegaprojectGoal;
+        expect(goal.megaprojectId, 'mass_driver');
+        final actual = reached(s, driver);
+        expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
+      });
+
+      test('a good held for both goes to the first fed it, then what is '
+          'made', () {
+        // Hull plates for both, as many held as the station lacks: the
+        // Mass Driver's come only as Kora's press makes them.
+        final s = shape({
+          'orbital_station': {'hull_plate': 30, 'reactor_core': 1},
+          'mass_driver': {'hull_plate': 30},
+        }, credits: 0);
+        s.faction('player').baseCrew += 1;
+        s.body('kora')
+          ..buildings.add(
+            BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+          )
+          ..stock['hull_plate'] = n(30);
+        for (final m in [station, driver]) {
+          e.apply(s, SetMegaprojectAutoCommand('player', m.id, true, null));
+        }
+        final goal =
+            nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
+                as MegaprojectGoal;
+        expect(goal.megaprojectId, 'mass_driver');
+        final actual = reached(s, driver, fed: true);
+        expect(actual, greaterThan(120));
+        expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
+      });
+    });
+
     test('has no ETA for a stage whose goods are not being made', () {
       final s = e.newGame(1);
       s.faction('player').reachedMilestones.addAll([
@@ -353,7 +492,7 @@ void main() {
       jsonDecode(json) as Map<String, Object?>,
     );
     expect(jsonEncode(back.toJson()), json);
-    expect(back.headline, sum.headline);
+    expect(back.creditsEarned, sum.creditsEarned);
     expect(back.housingAfter.supported, sum.housingAfter.supported);
     expect(back.creditsPerSecAfter, sum.creditsPerSecAfter);
     expect(back.wastedValue, sum.wastedValue);

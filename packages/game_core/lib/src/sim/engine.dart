@@ -178,6 +178,7 @@ final class GameEngine {
     final simulated = math.max(0.0, math.min(secondsAway, cap));
     final stockBefore = factionStock(s, player.id);
     final creditsBefore = player.credits;
+    final earnedBefore = player.lifetimeCredits;
     final reachedBefore = Set.of(player.reachedMilestones);
     final contractsBefore = {for (final k in player.contracts) k.id};
     final awayFrom = s.time;
@@ -243,6 +244,7 @@ final class GameEngine {
       capSeconds: cap,
       stockGained: gained,
       creditsGained: player.credits - creditsBefore,
+      creditsEarned: player.lifetimeCredits - earnedBefore,
       totalWasted: totalWasted,
       wastedValue: wastedValue,
       milestonesReached: [

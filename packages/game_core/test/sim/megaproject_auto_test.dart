@@ -656,7 +656,19 @@ void main() {
     test('the away summary lists what went to each megaproject', () {
       final s = economy();
       final ticks = economy();
+      final earnedBefore = s.faction('player').lifetimeCredits;
       final sum = e.catchUpOffline(s, 3600);
+      // What was earned, what of it went in, and the change in credits.
+      expect(
+        sum.creditsEarned,
+        s.faction('player').lifetimeCredits - earnedBefore,
+      );
+      expect(sum.creditsPaidIn, sum.autoDelivered['mass_driver']!['credits']);
+      expect(sum.creditsPaidIn > const BigNum.zero(), isTrue);
+      expect(
+        sum.creditsGained.toDouble(),
+        closeTo((sum.creditsEarned - sum.creditsPaidIn).toDouble(), 1e-6),
+      );
       e.advance(ticks, 3600);
       expect(
         sum.autoDelivered['mass_driver'],
