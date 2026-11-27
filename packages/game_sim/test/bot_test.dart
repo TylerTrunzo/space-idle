@@ -275,15 +275,15 @@ void main() {
             .where((c) => c.megaprojectId == 'orbital_station')
             .toList();
         expect(settings.first.goods, isTrue);
-        expect(settings.map((c) => c.creditReserve), everyElement(isNull));
+        expect(settings.map((c) => c.credits), everyElement(isFalse));
         expect(
           megaprojectStageOf(s, 'player', 'orbital_station'),
           isNotNull,
           reason: '$issued',
         );
         expect(
-          s.faction('player').megaprojectAuto['orbital_station']!.creditReserve,
-          isNull,
+          s.faction('player').megaprojectAuto['orbital_station']!.credits,
+          isFalse,
         );
       });
     }
@@ -309,10 +309,8 @@ void main() {
         ).entries)
           if (key != 'credits') key: value,
       };
-      final cmd = BalancedBot()
-          .decide(e, s, 'player')
-          .whereType<SetMegaprojectAutoCommand>()
-          .single;
+      final cmds = BalancedBot().decide(e, s, 'player');
+      final cmd = cmds.whereType<SetMegaprojectAutoCommand>().single;
       final income = buildFlowReport(
         s,
         e.content,
@@ -320,7 +318,46 @@ void main() {
       ).creditsPerSec.toDouble();
       expect(income, greaterThan(0));
       expect(cmd.goods, isTrue);
-      expect(cmd.creditReserve!.toDouble(), closeTo(income * 3600, 1));
+      expect(cmd.credits, isTrue);
+      // The shared reserve is set first, before any credits go in.
+      final reserve = cmds.whereType<SetAutoPayReserveCommand>().single;
+      expect(cmds.indexOf(reserve), lessThan(cmds.indexOf(cmd)));
+      expect(reserve.credits.toDouble(), closeTo(income * 3600, 1));
+    });
+
+    test('two megaprojects lacking only credits both get them, above one '
+        'shared reserve', () {
+      // With a reserve each, the lower one took every credit for good: a
+      // stage short of only credits behind it never filled.
+      final e = _engine();
+      final s = e.newGame(1);
+      play(e, BalancedBot(), s, 15);
+      final f = s.faction('player');
+      f.megaprojectLevels['orbital_station'] = 1;
+      for (final m in e.content.megaprojects.values) {
+        f.megaprojectProgress[m.id] = {
+          for (final MapEntry(:key, :value) in megaprojectCost(
+            e.content,
+            m,
+            megaprojectDeliveryLevel(s, 'player', m),
+          ).entries)
+            if (key != 'credits') key: value,
+        };
+      }
+      // More than an hour of income, less than either stage's credits.
+      f.credits = BigNum.from(2e5);
+      play(e, BalancedBot(), s, 1);
+      expect(f.autoPayReserve > const BigNum.zero(), isTrue);
+      final paid = [
+        for (final m in ['orbital_station', 'mass_driver'])
+          f.megaprojectProgress[m]!['credits'],
+      ];
+      for (final m in ['orbital_station', 'mass_driver']) {
+        expect(f.megaprojectAuto[m]!.credits, isTrue, reason: m);
+      }
+      expect(paid.first, isNotNull, reason: 'the station got none');
+      // Split evenly, an odd credit aside.
+      expect((paid.first! - paid.last!).toDouble().abs(), lessThanOrEqualTo(2));
     });
 
     test('a megaproject still locked is not set up', () {
@@ -378,8 +415,8 @@ void main() {
       expect(owed.keys, ['credits', 'reactor_core']);
       // The credits wait in the bank for the goods.
       expect(
-        s.faction('player').megaprojectAuto['orbital_station']!.creditReserve,
-        isNull,
+        s.faction('player').megaprojectAuto['orbital_station']!.credits,
+        isFalse,
       );
     });
 

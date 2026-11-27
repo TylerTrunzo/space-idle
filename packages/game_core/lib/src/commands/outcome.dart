@@ -349,14 +349,14 @@ final class MegaprojectDelivered extends CommandOutcome {
 }
 
 /// A `SetMegaprojectAutoCommand` set how the faction feeds
-/// [megaprojectId] on its own: [goods], and the [creditReserve] above
-/// which credits go in (null for none); both off clears it.
+/// [megaprojectId] on its own: [goods], and whether it takes [credits]
+/// above the shared reserve; both off clears it.
 final class MegaprojectAutoSet extends CommandOutcome {
   /// Creates the outcome.
   MegaprojectAutoSet({
     required this.megaprojectId,
     required this.goods,
-    required this.creditReserve,
+    required this.credits,
   });
 
   @override
@@ -368,8 +368,21 @@ final class MegaprojectAutoSet extends CommandOutcome {
   /// Whether goods go in on their own.
   final bool goods;
 
-  /// Credits always kept; null when no credits go in.
-  final BigNum? creditReserve;
+  /// Whether credits go in on their own.
+  final bool credits;
+}
+
+/// A `SetAutoPayReserveCommand` set the credits the faction keeps from
+/// auto-pay to [reserve].
+final class AutoPayReserveSet extends CommandOutcome {
+  /// Creates the outcome.
+  AutoPayReserveSet({required this.reserve});
+
+  @override
+  String? get bodyId => null;
+
+  /// Credits always kept.
+  final BigNum reserve;
 }
 
 /// A `DeliverContractCommand` delivered [delivered] units of [resourceId]

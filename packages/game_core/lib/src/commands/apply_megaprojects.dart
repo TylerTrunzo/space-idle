@@ -239,23 +239,32 @@ CommandResult _setMegaprojectAuto(
       'There is no megaproject ${cmd.megaprojectId}',
     );
   }
-  final reserve = cmd.creditReserve;
-  if (reserve != null && reserve < const BigNum.zero()) {
-    return _fail(CommandError.invalidAmount, 'A reserve must be 0 or more');
-  }
-  if (!cmd.goods && reserve == null) {
+  if (!cmd.goods && !cmd.credits) {
     f.megaprojectAuto.remove(def.id);
   } else {
     f.megaprojectAuto[def.id] = MegaprojectAuto(
       goods: cmd.goods,
-      creditReserve: reserve,
+      credits: cmd.credits,
     );
   }
   return CommandOk(
     outcome: MegaprojectAutoSet(
       megaprojectId: def.id,
       goods: cmd.goods,
-      creditReserve: reserve,
+      credits: cmd.credits,
     ),
   );
+}
+
+CommandResult _setAutoPayReserve(
+  GameState s,
+  Content c,
+  FactionState f,
+  SetAutoPayReserveCommand cmd,
+) {
+  if (cmd.credits < const BigNum.zero()) {
+    return _fail(CommandError.invalidAmount, 'A reserve must be 0 or more');
+  }
+  f.autoPayReserve = cmd.credits;
+  return CommandOk(outcome: AutoPayReserveSet(reserve: cmd.credits));
 }

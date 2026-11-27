@@ -53,8 +53,9 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   multiplier never passes ×1,000,000, so every level stays finite.
 - **Auto-delivery.** A megaproject can be fed on its own (`setMegaprojectAuto`): every game minute
   each body hands over what the stage still needs above what it keeps (its buildings' use over the
-  step, its auto-sell rule's `keepAtLeast`, and what open contracts still need), and credits go in
-  above a reserve you set (none without one), after the minute's sales. Between minutes auto-sell
+  step, its auto-sell rule's `keepAtLeast`, and what open contracts still need); with `credits` on,
+  the credits above your one auto-pay reserve go in after the minute's sales, split evenly among
+  the megaprojects taking them. Between minutes auto-sell
   holds those goods back, up to the storage cap; what a body holds of them above its cap goes in at
   once. Stages due by the minute complete first, so the next one starts at the same time at any
   step size.

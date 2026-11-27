@@ -213,10 +213,8 @@ final class SaveCodec {
         final why = _invalidProgress(s, c, f, c.megaprojects[id]!);
         if (why != null) return 'faction ${f.id}: $id progress $why';
       }
-      for (final MapEntry(key: id, value: a) in f.megaprojectAuto.entries) {
-        if (a.creditReserve case final r? when r < zero) {
-          return 'faction ${f.id}: negative credit reserve for $id';
-        }
+      if (f.autoPayReserve < zero) {
+        return 'faction ${f.id}: negative auto-pay reserve';
       }
       if (!f.wasteFreeSince.isFinite ||
           f.wasteFreeSince < 0 ||

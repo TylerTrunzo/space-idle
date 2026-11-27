@@ -89,12 +89,29 @@ void main() {
     );
   });
 
+  test('a megaproject the content does not have is named by its id', () {
+    final sum = summary(
+      gained: 1,
+      earned: 3,
+      autoDelivered: {
+        'dyson': {'credits': n(2)},
+      },
+    );
+    expect(
+      awayHeadline(sum, c),
+      'Away 1m; earned 3 credits, 2 to dyson, net +1',
+    );
+  });
+
   test('a catch-up paying credits in reads as earned and paid', () {
     final s = e.newGame(1);
     final f = s.faction('player');
     f.megaprojectLevels['orbital_station'] = 1;
     e.apply(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
-    e.apply(s, SetMegaprojectAutoCommand('player', 'mass_driver', false, n(0)));
+    e.apply(
+      s,
+      const SetMegaprojectAutoCommand('player', 'mass_driver', false, true),
+    );
     f.credits = n(5000);
     final sum = e.catchUpOffline(s, 3600);
     expect(sum.creditsPaidIn > n(5000), isTrue);

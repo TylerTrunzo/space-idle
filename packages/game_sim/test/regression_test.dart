@@ -57,13 +57,9 @@ GameState _checkIns(
 /// goods and credits above 1M, the Mass Driver goods only.
 GameState _feeding(GameEngine e, GameState s) {
   for (final cmd in [
-    SetMegaprojectAutoCommand(
-      'player',
-      'orbital_station',
-      true,
-      BigNum.from(1e6),
-    ),
-    const SetMegaprojectAutoCommand('player', 'mass_driver', true, null),
+    const SetMegaprojectAutoCommand('player', 'orbital_station', true, true),
+    const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
+    SetAutoPayReserveCommand('player', BigNum.from(1e6)),
   ]) {
     expect(e.apply(s, cmd), isA<CommandOk>());
   }
@@ -166,7 +162,7 @@ void main() {
 
     Command next() {
       final f = pick(factions);
-      return switch (rng.nextInt(18)) {
+      return switch (rng.nextInt(19)) {
         0 => BuildCommand(
           f,
           pick(bodies),
@@ -221,8 +217,9 @@ void main() {
           f,
           pick(megaprojects),
           rng.nextInt(2) == 0,
-          pick([null, ...amounts]),
+          rng.nextInt(2) == 0,
         ),
+        17 => SetAutoPayReserveCommand(f, pick(amounts)),
         _ => DiscardContractCommand(f, pick(contracts())),
       };
     }
@@ -396,7 +393,7 @@ void main() {
     expect(
       e.apply(
         played,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, null),
+        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
       ),
       isA<CommandOk>(),
     );

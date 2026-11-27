@@ -297,26 +297,26 @@ NextGoal? nextGoal(
 /// [report] (its flow report of [s]); null for never. Only megaprojects
 /// that take deliveries now and are owed something, in content order.
 ///
-/// What the faction holds and makes of each cost key is shared out one
-/// megaproject at a time, as auto-delivery hands it over: those it feeds
-/// on their own (credits: those with a credit reserve; a good: those fed
-/// goods), in content order, each take what is left of the stock, then
-/// the rate, until they have all they are owed, and the next one's share
-/// starts then. The rest, paid by hand, are each timed on what is left
-/// once those have their share: the player chooses which of them comes
-/// first. So stock and income are never counted for two megaprojects fed
-/// on their own, and a stage paid by hand waits for the credits and goods
-/// auto-delivery gives another.
+/// What the faction holds and makes of each cost key is shared out as
+/// auto-delivery shares it, so stock and income are never counted for two
+/// megaprojects fed on their own, and a stage paid by hand waits for what
+/// auto-delivery gives the others. Those paid by hand are each timed on
+/// what is left once the fed ones have their share: the player chooses
+/// which of them comes first.
 ///
-/// - Credits: what is held, at [FlowReport.creditsPerSec]. A megaproject
-///   paid on its own never takes its reserve: it waits for income to
-///   pass it, and leaves it held.
+/// - Credits: what is held above the faction's auto-pay reserve, then
+///   [FlowReport.creditsPerSec], split evenly among the megaprojects fed
+///   credits on their own, a share one cannot use going to the others (as
+///   `stepMegaprojectCredits` pays them): the one owing least is done
+///   first, the others go on sharing. The reserve stays held.
 /// - Goods: the faction's stock of the good ([factionStock]), at the
 ///   larger of the empire's net rate ([FlowReport.empireNet]) and what
 ///   auto-delivery hands all megaprojects of it a second
 ///   ([FlowReport.autoDeliveredPerSec]): the first leaves out goods
 ///   auto-delivery takes before they are counted held, the second the
-///   goods auto-sell would sell.
+///   goods auto-sell would sell. The megaprojects fed goods take it in
+///   content order, each what is left of the stock, then the rate, until
+///   it has all it is owed.
 ///
 /// It looks one stage ahead for each: stages paid for and started later
 /// would take a share too, which it leaves out.
@@ -348,46 +348,112 @@ Map<String, double?> megaprojectEtas(
   bool auto(String m, String key) {
     final a = f.megaprojectAuto[m];
     if (a == null) return false;
-    return key == creditsKey ? a.creditReserve != null : a.goods;
+    return key == creditsKey ? a.credits : a.goods;
   }
 
   final eta = <String, double?>{for (final m in owed.keys) m: 0};
+  void note(String m, double? done) {
+    final was = eta[m];
+    eta[m] = was == null || done == null ? null : math.max(was, done);
+  }
+
   final keys = <String>{for (final left in owed.values) ...left.keys};
   for (final key in keys) {
     final rate = rateOf(key);
-    var pool = key == creditsKey ? f.credits : held[key] ?? const BigNum.zero();
+    if (key == creditsKey) {
+      _creditEtas(f, owed, rate, auto, note);
+      continue;
+    }
+    var pool = held[key] ?? const BigNum.zero();
     // When the megaprojects before have their share: null for never.
     double? from = 0;
     for (final first in [true, false]) {
       for (final MapEntry(key: m, value: left) in owed.entries) {
         final need = left[key];
         if (need == null || auto(m, key) != first) continue;
-        final reserve = key == creditsKey
-            ? f.megaprojectAuto[m]?.creditReserve
-            : null;
-        final usable = reserve == null ? pool : pool - reserve;
         double? done;
         var after = pool;
         if (from == null) {
           done = null;
-        } else if (usable >= need) {
+        } else if (pool >= need) {
           done = from;
           after = pool - need;
         } else {
-          final wait = _eta(need - usable, rate);
+          final wait = _eta(need - pool, rate);
           done = wait == null ? null : from + wait;
-          after = reserve ?? const BigNum.zero();
+          after = const BigNum.zero();
         }
         // Auto-delivery takes its share in turn; what is paid by hand is
         // the player's to share out, so each such stage is timed on what
         // auto-delivery leaves, as if it came first.
         if (first) (from, pool) = (done, after);
-        final was = eta[m];
-        eta[m] = was == null || done == null ? null : math.max(was, done);
+        note(m, done);
       }
     }
   }
   return eta;
+}
+
+/// [megaprojectEtas] for credits: [note]s, for each megaproject of [owed]
+/// that owes credits, when its credits are in at [income], those fed
+/// credits on their own ([auto]) sharing what is above [f]'s auto-pay
+/// reserve evenly, the rest each timed on what that leaves.
+void _creditEtas(
+  FactionState f,
+  Map<String, Map<String, BigNum>> owed,
+  BigNum income,
+  bool Function(String m, String key) auto,
+  void Function(String m, double? done) note,
+) {
+  final rate = income.toDouble();
+  final held = f.credits.toDouble();
+  final spare = held - f.autoPayReserve.toDouble();
+  // Seconds until [x] credits have been paid in above the reserve.
+  double? until(double x) {
+    if (x <= spare) return 0;
+    if (rate <= 0) return null;
+    final t = (x - spare) / rate;
+    return t.isFinite ? t : null;
+  }
+
+  final fed = [
+    for (final MapEntry(key: m, value: left) in owed.entries)
+      if (left[creditsKey] case final need? when auto(m, creditsKey))
+        (m, need.toDouble()),
+  ];
+  // An even split, a share one cannot use going to the others, fills
+  // every need up to a common level: the one owing [d] is done once
+  // `Σ min(need, d)` has gone in.
+  double? end = 0;
+  var paid = 0.0;
+  for (final (m, d) in fed) {
+    var given = 0.0;
+    for (final (_, other) in fed) {
+      given += math.min(other, d);
+    }
+    final done = until(given);
+    note(m, done);
+    end = end == null || done == null ? null : math.max(end, done);
+    paid += d;
+  }
+  for (final MapEntry(key: m, value: left) in owed.entries) {
+    final need = left[creditsKey];
+    if (need == null || auto(m, creditsKey)) continue;
+    if (end == null) {
+      note(m, null);
+      continue;
+    }
+    // What is held once the fed ones have their share.
+    final pool = held + rate * end - paid;
+    final short = need.toDouble() - pool;
+    if (short <= 0) {
+      note(m, end);
+    } else if (rate <= 0) {
+      note(m, null);
+    } else {
+      note(m, end + short / rate);
+    }
+  }
 }
 
 /// Seconds [left] takes at [rate]; 0 when nothing is left, null when

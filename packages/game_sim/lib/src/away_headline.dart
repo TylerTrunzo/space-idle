@@ -22,7 +22,7 @@ String awayHeadline(OfflineSummary sum, Content c) {
   final paid = [
     for (final MapEntry(key: id, value: got) in sum.autoDelivered.entries)
       if (got[creditsKey] case final v? when !v.isZero)
-        '${formatNumber(v)} to ${c.megaprojects[id]!.name}',
+        '${formatNumber(v)} to ${c.megaprojects[id]?.name ?? id}',
   ];
   parts.add(
     paid.isEmpty

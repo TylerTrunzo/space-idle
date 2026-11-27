@@ -51,12 +51,15 @@ with `megaprojectLocked` until it opens ("Mass Driver opens at Orbital Station
 level 1 (you have level 0)").
 
 `{"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station","goods":true,
-"creditReserve":"5e6"}` feeds a megaproject on its own every game minute:
-with `goods`, each owned body hands over what the stage still needs above
-what it keeps (local use, its auto-sell rule's `keepAtLeast`, open contract
-needs); with `creditReserve`, the credits above it (leave it out for no
-credits). `"goods":false` without a reserve clears it. It may be set while
-the megaproject is locked. Between minutes auto-sell holds back what a fed
+"credits":true}` feeds a megaproject on its own every game minute: with
+`goods`, each owned body hands over what the stage still needs above what it
+keeps (local use, its auto-sell rule's `keepAtLeast`, open contract needs);
+with `credits` (default false), a share of the credits above the faction's
+one auto-pay reserve, set with `{"cmd":"setAutoPayReserve","credits":"5e6"}`
+(0 until set). The credits above the reserve are split evenly among the
+megaprojects taking credits that still owe some, a share one cannot use
+going to the others, so each progresses. Neither `goods` nor `credits`
+clears it. It may be set while the megaproject is locked. Between minutes auto-sell holds back what a fed
 megaproject still needs, up to the storage cap, and what a body holds of it
 above the cap goes in at once, so deliveries are the same for any step size.
 
@@ -151,9 +154,10 @@ commands:
   has held, `"ongoing": "for 3h 10m, and worse than before"`; one
   `nextGoal`: the milestone the current rates reach soonest, or a
   megaproject's next stage when that comes sooner (its ETA shares stock
-  and income out as auto-delivery does: the megaprojects fed on their own
-  take theirs in content order first, never touching a credit reserve, so a
-  stage paid by hand waits for them) (`kind`, `id`, `name`,
+  and income out as auto-delivery does: credits above the auto-pay reserve
+  split evenly among the megaprojects taking them, goods to those fed
+  goods in content order, so a stage paid by hand waits for them) (`kind`,
+  `id`, `name`,
   `level` for a stage, `etaSeconds`, null when not in reach, and a
   `message` such as `"Next: First Foundry (Make 30 Steel), 12 of 30, in 1m
   30s"`); the projects that
@@ -170,8 +174,8 @@ commands:
   every megaproject (`megaprojects`: `id`, `name`, `level`, `bonuses` and
   `nextLevel` such as `"level 3: storage +30%, housing +15%, offline cap +3h,
   market depth ×1.95"`, `locked` such as `"opens at Orbital Station level 1
-  (now 0)"` while it is, and `auto` with `goods`, `creditReserve` and a `text`
-  when it is fed on its own), the contracts
+  (now 0)"` while it is, and `auto` with `goods`, `credits` and a `text`
+  when it is fed on its own; `autoPayReserve` beside `credits`), the contracts
   board (`contracts`: `id`, `issuer`, `resourceId`, `resource` name,
   `quantity`, `delivered`, `reward` in credits) and when its empty slots
   refill (`contractRefills`: `at` and `timeLeft`; a refill already due, which
@@ -311,7 +315,8 @@ their timers run while the player is away.
   (`setMegaprojectAuto`): goods from every body. Once credits are all the
   stage being paid for still lacks, the bot pays them by hand when it can
   and still keep a reserve of an hour of income; otherwise they go in on
-  their own above that reserve, and stop at the next decision after the
+  their own above the shared auto-pay reserve of that hour (one for every
+  megaproject, set before any credits go in), and stop at the next decision after the
   stage is paid (credits paid in earlier, or left flowing into the next
   stage, sit idle in a stage still short of goods). The bots deliver by
   hand only what auto-delivery does not cover. Stages go on being paid for

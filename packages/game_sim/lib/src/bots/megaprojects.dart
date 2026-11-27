@@ -26,22 +26,27 @@ extension _Megaprojects on _View {
   /// credits on their own ([autoDeliver]).
   static const double creditReserveSeconds = 3600;
 
-  /// One change to how a megaproject is fed on its own, the first in
-  /// content order that needs one; null when every setting is as wanted.
+  /// One change to how megaprojects are fed on their own, the first that
+  /// is needed; null when every setting is as wanted.
   ///
   /// Once a megaproject is open ([megaprojectLockedBy]) and its host is
   /// owned, every body feeds it goods. Its credits go in on their own,
-  /// above a reserve of [creditReserveSeconds] of income, only while they
-  /// are all the stage being paid for still lacks and the faction cannot
-  /// pay them now and keep the reserve ([deliverMegaproject] pays them by
-  /// hand when it can); at the next decision after that stage is paid
-  /// for, they stop again. Paid in earlier, credits would sit in a stage
-  /// still short of goods instead of growing the economy that makes them:
-  /// in 21-day runs that kept the casual bot's first station level a day
-  /// later and its income lower. And a reserve left on once the stage is
-  /// paid would pour the credits earned until the next decision into the
-  /// next stage, still short of its goods.
+  /// above the faction's auto-pay reserve of [creditReserveSeconds] of
+  /// income (one for every megaproject, so the credits above it are shared
+  /// out evenly), only while they are all the stage being paid for still
+  /// lacks and the faction cannot pay them now and keep the reserve
+  /// ([deliverMegaproject] pays them by hand when it can); at the next
+  /// decision after that stage is paid for, they stop again. Paid in
+  /// earlier, credits would sit in a stage still short of goods instead of
+  /// growing the economy that makes them: in 21-day runs that kept the
+  /// casual bot's first station level a day later and its income lower.
+  /// And credits left flowing once the stage is paid would pour what is
+  /// earned until the next decision into the next stage, still short of
+  /// its goods. The reserve is set before any credits go in, and kept
+  /// while within a factor of two of what is wanted.
   Command? autoDeliver() {
+    Command? setting;
+    var anyCredits = false;
     for (final m in c.megaprojects.values) {
       if (megaprojectLockedBy(s, c, factionId, m) != null) continue;
       if (m.hostBodyType case final t? when !owned.any((b) => b.typeId == t)) {
@@ -52,15 +57,17 @@ extension _Megaprojects on _View {
           ? _onlyCredits(megaprojectRemaining(s, c, factionId, m))
           : null;
       final payCredits = owedCredits != null && !_affordable(owedCredits);
-      final reserve = payCredits ? _creditReserve() : null;
-      if (now != null &&
-          now.goods &&
-          _closeEnough(now.creditReserve, reserve)) {
-        continue;
-      }
-      return SetMegaprojectAutoCommand(factionId, m.id, true, reserve);
+      anyCredits = anyCredits || payCredits;
+      if (now != null && now.goods && now.credits == payCredits) continue;
+      setting ??= SetMegaprojectAutoCommand(factionId, m.id, true, payCredits);
     }
-    return null;
+    if (anyCredits) {
+      final want = _creditReserve();
+      if (!_closeEnough(faction.autoPayReserve, want)) {
+        return SetAutoPayReserveCommand(factionId, want);
+      }
+    }
+    return setting;
   }
 
   /// Whether the faction can pay [credits] now and still keep the reserve
@@ -68,13 +75,11 @@ extension _Megaprojects on _View {
   bool _affordable(BigNum credits) =>
       faction.credits >= credits + _creditReserve();
 
-  /// Whether credit reserve [now] can stay for one of [want]: both none,
-  /// or both set and within a factor of two, so the reserve is not reset
-  /// for every small change of income.
-  bool _closeEnough(BigNum? now, BigNum? want) {
-    if (now == null || want == null) return now == want;
-    return now.mulDouble(2) >= want && want.mulDouble(2) >= now;
-  }
+  /// Whether credit reserve [now] can stay for one of [want]: within a
+  /// factor of two, so the reserve is not reset for every small change of
+  /// income.
+  bool _closeEnough(BigNum now, BigNum want) =>
+      now.mulDouble(2) >= want && want.mulDouble(2) >= now;
 
   /// Credits [autoDeliver] keeps back: [creditReserveSeconds] of income, in
   /// whole credits.
@@ -94,7 +99,7 @@ extension _Megaprojects on _View {
 
   /// Whether [m] takes credits on its own ([autoDeliver]).
   bool _fedCredits(MegaprojectDef m) =>
-      faction.megaprojectAuto[m.id]?.creditReserve != null;
+      faction.megaprojectAuto[m.id]?.credits ?? false;
 
   /// One delivery by hand toward the stage being paid for of the first
   /// megaproject, in content order, that still lacks something the engine

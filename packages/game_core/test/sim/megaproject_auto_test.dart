@@ -34,34 +34,44 @@ void main() {
       final auto = s.faction('player').megaprojectAuto;
       final r = ok(
         s,
-        SetMegaprojectAutoCommand('player', 'orbital_station', true, n(500)),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          true,
+          true,
+        ),
       );
       expect(
         r.outcome,
         isA<MegaprojectAutoSet>()
             .having((o) => o.megaprojectId, 'megaprojectId', 'orbital_station')
             .having((o) => o.goods, 'goods', isTrue)
-            .having((o) => o.creditReserve, 'creditReserve', n(500))
+            .having((o) => o.credits, 'credits', isTrue)
             .having((o) => o.bodyId, 'bodyId', isNull),
       );
       expect(auto['orbital_station']!.goods, isTrue);
-      expect(auto['orbital_station']!.creditReserve, n(500));
+      expect(auto['orbital_station']!.credits, isTrue);
       ok(
         s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, null),
+        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
       );
       ok(
         s,
-        SetMegaprojectAutoCommand('player', 'orbital_station', false, n(0)),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          false,
+          true,
+        ),
       );
       expect(auto.keys, ['orbital_station', 'mass_driver']);
       expect(auto['orbital_station']!.goods, isFalse);
-      expect(auto['orbital_station']!.creditReserve, n(0));
-      expect(auto['mass_driver']!.creditReserve, isNull);
+      expect(auto['orbital_station']!.credits, isTrue);
+      expect(auto['mass_driver']!.credits, isFalse);
       // Neither goods nor credits: the setting goes.
       ok(
         s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', false, null),
+        const SetMegaprojectAutoCommand('player', 'mass_driver', false, false),
       );
       expect(auto.keys, ['orbital_station']);
     });
@@ -70,40 +80,67 @@ void main() {
       final s = e.newGame(1);
       ok(
         s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, null),
+        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
       );
       expect(s.faction('player').megaprojectAuto['mass_driver']!.goods, isTrue);
     });
 
-    test('refuses an unknown megaproject, a negative reserve and an '
-        'unknown faction', () {
+    test('refuses an unknown megaproject and an unknown faction', () {
       final s = e.newGame(1);
       fails(
         s,
-        const SetMegaprojectAutoCommand('player', 'dyson', true, null),
+        const SetMegaprojectAutoCommand('player', 'dyson', true, false),
         CommandError.unknownDef,
       );
       fails(
         s,
-        SetMegaprojectAutoCommand('player', 'orbital_station', true, n(-1)),
+        const SetMegaprojectAutoCommand(
+          'ghost',
+          'orbital_station',
+          true,
+          false,
+        ),
+        CommandError.unknownFaction,
+      );
+    });
+
+    test('the auto-pay reserve is one for the faction, 0 or more', () {
+      final s = e.newGame(1);
+      final f = s.faction('player');
+      expect(f.autoPayReserve, const BigNum.zero());
+      final r = ok(s, SetAutoPayReserveCommand('player', n(500)));
+      expect(
+        r.outcome,
+        isA<AutoPayReserveSet>().having((o) => o.reserve, 'reserve', n(500)),
+      );
+      expect(f.autoPayReserve, n(500));
+      fails(
+        s,
+        SetAutoPayReserveCommand('player', n(-1)),
         CommandError.invalidAmount,
       );
       fails(
         s,
-        const SetMegaprojectAutoCommand('ghost', 'orbital_station', true, null),
+        SetAutoPayReserveCommand('ghost', n(1)),
         CommandError.unknownFaction,
       );
     });
 
     test('round-trips through JSON', () {
       for (final cmd in [
-        SetMegaprojectAutoCommand('player', 'orbital_station', true, n(5e6)),
-        const SetMegaprojectAutoCommand('player', 'mass_driver', false, null),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          true,
+          true,
+        ),
+        const SetMegaprojectAutoCommand('player', 'mass_driver', false, false),
+        SetAutoPayReserveCommand('player', n(5e6)),
       ]) {
         final back = Command.fromJson(
           jsonDecode(jsonEncode(cmd.toJson())) as Map<String, Object?>,
         );
-        expect(back, isA<SetMegaprojectAutoCommand>());
+        expect(back.runtimeType, cmd.runtimeType);
         expect(back.toJson(), cmd.toJson());
       }
     });
@@ -114,12 +151,18 @@ void main() {
       final s = e.newGame(1);
       ok(
         s,
-        SetMegaprojectAutoCommand('player', 'orbital_station', true, n(250)),
+        const SetMegaprojectAutoCommand(
+          'player',
+          'orbital_station',
+          true,
+          true,
+        ),
       );
       ok(
         s,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', true, null),
+        const SetMegaprojectAutoCommand('player', 'mass_driver', true, false),
       );
+      ok(s, SetAutoPayReserveCommand('player', n(250)));
       return s;
     }
 
@@ -128,24 +171,48 @@ void main() {
       final back =
           (SaveCodec.decode(SaveCodec.encode(s), content) as SaveOk).state;
       expect(encode(back), encode(s));
+      expect(back.faction('player').autoPayReserve, n(250));
       final copy = s.copy();
       expect(encode(copy), encode(s));
-      copy.faction('player').megaprojectAuto.clear();
+      copy.faction('player')
+        ..megaprojectAuto.clear()
+        ..autoPayReserve = n(1);
       expect(s.faction('player').megaprojectAuto, hasLength(2));
+      expect(s.faction('player').autoPayReserve, n(250));
     });
 
     test('an older save without it has none', () {
       final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
       for (final f in (m['factions']! as List).cast<Map<String, Object?>>()) {
-        f.remove('megaprojectAuto');
+        f
+          ..remove('megaprojectAuto')
+          ..remove('autoPayReserve');
       }
       final r = SaveCodec.decode(jsonEncode(m), content);
       expect(r, isA<SaveOk>(), reason: r is SaveError ? r.message : '');
-      expect((r as SaveOk).state.faction('player').megaprojectAuto, isEmpty);
+      final f = (r as SaveOk).state.faction('player');
+      expect(f.megaprojectAuto, isEmpty);
+      expect(f.autoPayReserve, const BigNum.zero());
     });
 
     Map<String, Object?> playerOf(Map<String, Object?> m) =>
         (m['factions']! as List).cast<Map<String, Object?>>().first;
+
+    test('a save with a reserve per megaproject feeds credits to those '
+        'that had one, above the lowest', () {
+      final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
+      playerOf(m)
+        ..remove('autoPayReserve')
+        ..['megaprojectAuto'] = {
+          'orbital_station': {'goods': true, 'creditReserve': '900'},
+          'mass_driver': {'goods': false, 'creditReserve': '300'},
+        };
+      final f = (SaveCodec.decode(jsonEncode(m), content) as SaveOk).state
+          .faction('player');
+      expect(f.megaprojectAuto['orbital_station']!.credits, isTrue);
+      expect(f.megaprojectAuto['mass_driver']!.credits, isTrue);
+      expect(f.autoPayReserve, n(300));
+    });
 
     test('an unknown megaproject is an unknown id', () {
       final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
@@ -154,15 +221,12 @@ void main() {
       expect((r as SaveError).kind, SaveErrorKind.unknownContentId);
     });
 
-    test('a negative credit reserve is refused', () {
+    test('a negative auto-pay reserve is refused', () {
       final m = jsonDecode(encode(withAuto())) as Map<String, Object?>;
-      (playerOf(m)['megaprojectAuto']! as Map)['orbital_station'] = {
-        'goods': true,
-        'creditReserve': '-1',
-      };
+      playerOf(m)['autoPayReserve'] = '-1';
       final r = SaveCodec.decode(jsonEncode(m), content);
       expect((r as SaveError).kind, SaveErrorKind.invalidValue);
-      expect(r.message, contains('orbital_station'));
+      expect(r.message, contains('auto-pay reserve'));
     });
 
     test('a setting that is not an object is malformed', () {
@@ -187,6 +251,13 @@ void main() {
       return r as CommandOk;
     }
 
+    /// Feeds [m] [goods], and credits above the shared [reserve] when one
+    /// is given.
+    void feed(GameState s, String m, bool goods, BigNum? reserve) {
+      ok(s, SetMegaprojectAutoCommand('player', m, goods, reserve != null));
+      if (reserve != null) ok(s, SetAutoPayReserveCommand('player', reserve));
+    }
+
     /// A new game at Orbital Station level 2, past where the Mass Driver
     /// opens, with no contracts on the board and none due, and
     /// [goods]/[reserve] auto-delivery to the Mass Driver.
@@ -198,7 +269,7 @@ void main() {
       f.contractRefillAt
         ..clear()
         ..addAll(List.filled(RulesDef.contractSlots, 1e12));
-      ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', goods, reserve));
+      feed(s, 'mass_driver', goods, reserve);
       return s;
     }
 
@@ -279,7 +350,7 @@ void main() {
       stepMegaprojectAuto(s, content, 60);
       stepMegaprojectCredits(s, content, 60);
       expect(f.credits, n(5000));
-      ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', false, n(1200)));
+      feed(s, 'mass_driver', false, n(1200));
       f.credits = n(5000.5);
       s.time = 60;
       // Goods go in before the market, credits after it.
@@ -484,7 +555,7 @@ void main() {
       stepMarket(s, content, 60);
       expect(kora.stock['steel'], n(400));
       // Goods only: credits alone hold nothing back.
-      ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', false, n(0)));
+      feed(s, 'mass_driver', false, n(0));
       expect(autoSellKeep(s, content, rule, 60).megaprojectHold.isZero, isTrue);
     });
 
@@ -497,6 +568,130 @@ void main() {
       s.body('kora').stock['iron_ore'] = n(900);
       return s;
     }
+
+    group('credits above the shared reserve', () {
+      final station = content.megaprojects['orbital_station']!;
+
+      /// [open] with both megaprojects fed credits above [reserve], each
+      /// with a stage under way (so the one after waits once paid) and
+      /// the next one's goods in, owing [owed] credits of it.
+      GameState both(Map<String, num> owed, {num reserve = 1000}) {
+        final s = open(goods: false, reserve: n(reserve));
+        feed(s, 'orbital_station', false, n(reserve));
+        final f = s.faction('player');
+        for (final m in [station, driver]) {
+          s.projects.add(
+            ProjectState(
+              id: s.newId('p'),
+              factionId: 'player',
+              kind: ProjectKind.megaprojectStage,
+              targetId: m.id,
+              startedAt: 0,
+              finishAt: 1e9,
+            ),
+          );
+          final cost = megaprojectCost(
+            content,
+            m,
+            megaprojectDeliveryLevel(s, 'player', m),
+          );
+          f.megaprojectProgress[m.id] = {
+            for (final MapEntry(key: id, value: v) in cost.entries)
+              id: id == 'credits' ? v - n(owed[m.id]!) : v,
+          };
+        }
+        return s;
+      }
+
+      BigNum paid(GameState s, String m) =>
+          s.faction('player').megaprojectProgress[m]!['credits']!;
+
+      test('are split evenly, so both progress', () {
+        final s = both({'orbital_station': 1e6, 'mass_driver': 1e6});
+        final f = s.faction('player')..credits = n(101000);
+        final before = {
+          for (final m in [station, driver]) m.id: paid(s, m.id),
+        };
+        stepMegaprojectCredits(s, content, 60);
+        for (final m in [station, driver]) {
+          expect(paid(s, m.id) - before[m.id]!, n(50000), reason: m.id);
+        }
+        expect(f.credits, n(1000));
+      });
+
+      test('a share one cannot use goes to the other', () {
+        // The station lacks 10K: it is topped off, and the rest of the
+        // 100K above the reserve goes to the Mass Driver.
+        final s = both({'orbital_station': 10000, 'mass_driver': 1e6});
+        final f = s.faction('player')..credits = n(101000);
+        final owed = megaprojectRemaining(s, content, 'player', station);
+        final rest = n(100000) - owed['credits']!;
+        final before = paid(s, 'mass_driver');
+        final got = stepMegaprojectCredits(s, content, 60)['player']!;
+        expect(got['orbital_station'], owed);
+        expect(got['mass_driver'], {'credits': rest});
+        expect(megaprojectStageQueued(s, content, 'player', station), isTrue);
+        expect(paid(s, 'mass_driver') - before, rest);
+        expect(f.credits, n(1000));
+      });
+
+      test('odd credits go one each in content order, and none below the '
+          'reserve', () {
+        final s = both({'orbital_station': 1e6, 'mass_driver': 1e6});
+        final f = s.faction('player')..credits = n(1003);
+        final got = stepMegaprojectCredits(s, content, 60)['player']!;
+        expect(got['orbital_station'], {'credits': n(2)});
+        expect(got['mass_driver'], {'credits': n(1)});
+        expect(f.credits, n(1000));
+        // At the reserve nothing goes in.
+        s.time = 60;
+        expect(stepMegaprojectCredits(s, content, 60), isEmpty);
+      });
+
+      test('1 s and 60 s steps pay both alike, never below the reserve', () {
+        GameState run(double step) {
+          final s = both({'orbital_station': 4e6, 'mass_driver': 4e6});
+          ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+          ok(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+          s.faction('player').credits = n(5000);
+          for (var t = 0.0; t < 3600; t += step) {
+            e.advance(s, step, maxStep: step);
+            expect(
+              s.faction('player').credits >= n(1000),
+              isTrue,
+              reason: 'at ${s.time}',
+            );
+          }
+          return s;
+        }
+
+        final start = both({'orbital_station': 4e6, 'mass_driver': 4e6});
+        BigNum gained(GameState g, String m) => paid(g, m) - paid(start, m);
+        final live = run(1);
+        final ticks = run(60);
+        final income = buildFlowReport(
+          live,
+          content,
+          'player',
+        ).creditsPerSec.toDouble();
+        for (final m in ['orbital_station', 'mass_driver']) {
+          final want = gained(live, m).toDouble();
+          expect(want, greaterThan(income * 1000), reason: m);
+          expect(
+            gained(ticks, m).toDouble(),
+            closeTo(want, income * 5),
+            reason: m,
+          );
+        }
+        // An odd credit a minute at most between them.
+        expect(
+          (gained(live, 'orbital_station') - gained(live, 'mass_driver'))
+              .toDouble()
+              .abs(),
+          lessThanOrEqualTo(60),
+        );
+      });
+    });
 
     test('1 s steps, 60 s steps and a catch-up deliver the same', () {
       final live = economy();
@@ -531,10 +726,7 @@ void main() {
     test('credits per second leave out the goods auto-delivery takes', () {
       final fed = economy();
       final sold = economy();
-      ok(
-        sold,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', false, null),
-      );
+      feed(sold, 'mass_driver', false, null);
       e.advance(fed, 600);
       e.advance(sold, 600);
       // Steel up to the cap, as between minutes in long steps: auto-sell
@@ -592,7 +784,7 @@ void main() {
       final s = open(reserve: n(0));
       ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
       ok(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
-      ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', false, n(0)));
+      feed(s, 'mass_driver', false, n(0));
       final kora = s.body('kora');
       for (final b in kora.buildings) {
         if (b.defId == 'mine' && b.depositResourceId == 'iron_ore') b.crew = 0;
@@ -635,10 +827,7 @@ void main() {
     test('feeding a megaproject does not shrink contract rewards', () {
       final fed = economy();
       final sold = economy();
-      ok(
-        sold,
-        const SetMegaprojectAutoCommand('player', 'mass_driver', false, null),
-      );
+      feed(sold, 'mass_driver', false, null);
       e.advance(fed, 1200);
       e.advance(sold, 1200);
       final withFeed = incomeBasis(
@@ -709,7 +898,7 @@ void main() {
             ).entries)
               if (id != 'credits' && id != 'steel') id: v,
           };
-        ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', true, n(0)));
+        feed(s, 'mass_driver', true, n(0));
         return s;
       }
 

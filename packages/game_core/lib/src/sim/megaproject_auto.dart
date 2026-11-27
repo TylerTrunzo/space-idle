@@ -99,20 +99,27 @@ AutoDeliveries stepMegaprojectAuto(
 }
 
 /// Pays every faction's megaprojects set to take credits on their own
-/// (`FactionState.megaprojectAuto` with a credit reserve) the whole
-/// credits it holds above the reserve, in a step of [dt] seconds from
-/// `s.time` that reaches a whole multiple of [autoDeliverySeconds]; a
-/// step that reaches none pays nothing. Returns what went in.
+/// ([MegaprojectAuto.credits]) the whole credits it holds above its
+/// shared reserve ([FactionState.autoPayReserve]), in a step of [dt]
+/// seconds from `s.time` that reaches a whole multiple of
+/// [autoDeliverySeconds]; a step that reaches none pays nothing. Returns
+/// what went in.
+///
+/// The credits above the reserve are split evenly among the credit-fed
+/// megaprojects that still owe credits for the stage they pay for (current
+/// or queued), in whole credits, the odd ones to the first in content
+/// order; a share a megaproject cannot use, owing less, goes on to the
+/// others in another round. So every credit-fed megaproject progresses,
+/// whatever its place in content order, and credits never go below the
+/// reserve. Each payment is a [DeliverToMegaprojectCommand]: a stage paid
+/// in full starts (or waits), and the next one, owing credits again, joins
+/// the later rounds.
 ///
 /// The engine runs it after the market, so a step pays in what was earned
 /// up to the minute, whatever its length. Payments are made as at the
-/// minute, factions in list order, megaprojects in content order, each a
-/// [DeliverToMegaprojectCommand]; a stage paid in full starts (or waits)
-/// and the credits left go on to the one after it.
+/// minute, factions in list order.
 AutoDeliveries stepMegaprojectCredits(GameState s, Content c, double dt) {
-  if (!s.factions.any(
-    (f) => f.megaprojectAuto.values.any((a) => a.creditReserve != null),
-  )) {
+  if (!s.factions.any((f) => f.megaprojectAuto.values.any((a) => a.credits))) {
     return const {};
   }
   final out = <String, Map<String, Map<String, BigNum>>>{};
@@ -239,25 +246,52 @@ void _payCredits(
   Map<String, Map<String, Map<String, BigNum>>> out,
 ) {
   for (final f in s.factions) {
-    if (f.megaprojectAuto.isEmpty) continue;
+    final fed = [
+      for (final m in c.megaprojects.values)
+        if (f.megaprojectAuto[m.id]?.credits ?? false) m,
+    ];
+    if (fed.isEmpty) continue;
     final payer = s.bodies.where((b) => b.ownerId == f.id).firstOrNull;
     if (payer == null) continue;
-    for (final m in c.megaprojects.values) {
-      final reserve = f.megaprojectAuto[m.id]?.creditReserve;
-      if (reserve == null) continue;
-      final got = <String, BigNum>{};
-      for (var pass = 0; pass < _maxPasses; pass++) {
-        if (!megaprojectTakesDeliveries(s, c, f.id, m)) break;
-        final owed = megaprojectRemaining(s, c, f.id, m)[creditsKey];
-        final spare = (f.credits - reserve).floor();
-        if (owed == null || spare < _oneUnit) break;
+    final got = {for (final m in fed) m.id: <String, BigNum>{}};
+    // Stages paid for in full per megaproject: at most [_maxPasses].
+    final paid = {for (final m in fed) m.id: 0};
+    for (var round = 0; round < fed.length * (_maxPasses + 1); round++) {
+      final spare = (f.credits - f.autoPayReserve).floor();
+      if (spare < _oneUnit) break;
+      final owing = [
+        for (final m in fed)
+          if (paid[m.id]! < _maxPasses &&
+              megaprojectTakesDeliveries(s, c, f.id, m))
+            if (megaprojectRemaining(s, c, f.id, m)[creditsKey]
+                case final owed?)
+              (m, owed),
+      ];
+      if (owing.isEmpty) break;
+      final n = BigNum.from(owing.length);
+      final share = (spare / n).floor();
+      // The odd credits, one each, to the first in content order.
+      final odd = (spare - share * n).toDouble().floor().clamp(
+        0,
+        owing.length - 1,
+      );
+      var moved = false;
+      for (final (i, (m, owed)) in owing.indexed) {
+        final give = (i < odd ? share + _oneUnit : share).min(owed);
+        if (give < _oneUnit) continue;
         final level = megaprojectDeliveryLevel(s, f.id, m);
-        if (!_deliver(s, c, f, m, payer, {creditsKey: spare.min(owed)}, got) ||
-            megaprojectDeliveryLevel(s, f.id, m) == level) {
-          break;
+        if (!_deliver(s, c, f, m, payer, {creditsKey: give}, got[m.id]!)) {
+          continue;
+        }
+        moved = true;
+        if (megaprojectDeliveryLevel(s, f.id, m) != level) {
+          paid[m.id] = paid[m.id]! + 1;
         }
       }
-      if (got.isNotEmpty) (out[f.id] ??= {})[m.id] = got;
+      if (!moved) break;
+    }
+    for (final m in fed) {
+      if (got[m.id]!.isNotEmpty) (out[f.id] ??= {})[m.id] = got[m.id]!;
     }
   }
 }

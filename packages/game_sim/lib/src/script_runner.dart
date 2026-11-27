@@ -35,6 +35,7 @@ const _gameCommands = {
   'startMegaprojectStage',
   'deliverToMegaproject',
   'setMegaprojectAuto',
+  'setAutoPayReserve',
   'deliverContract',
   'discardContract',
 };
@@ -263,6 +264,10 @@ final class ScriptRunner {
             '${formatNumber(o.quantity)} ${c.resources[o.resourceId]!.name}; '
             '${_nextContract(o.nextContractAt)}',
       MegaprojectAutoSet() => _autoText(o),
+      AutoPayReserveSet(:final reserve) =>
+        'Auto-pay now keeps ${formatNumber(reserve)} credits; the credits '
+            'above it are shared out each game minute among the megaprojects '
+            'taking credits on their own',
       Upgraded(track: UpgradeTrack.capacity) => _capacityMessage(o),
       CrewAssigned() ||
       Upgraded() ||
@@ -504,24 +509,33 @@ final class ScriptRunner {
 
   /// How [o] left a megaproject fed: "Orbital Station now takes goods
   /// from every body each game minute, above what each keeps for its own
-  /// use and open contracts, and credits above 5M", "… and no credits", "…
-  /// takes credits above 5M each game minute, and no goods", or "Orbital
-  /// Station is fed by hand only".
+  /// use and open contracts, and a share of the credits above the
+  /// auto-pay reserve (5M)", "… and no credits", "… takes a share of the
+  /// credits above the auto-pay reserve (5M) each game minute, and no
+  /// goods", or "Orbital Station is fed by hand only".
   String _autoText(MegaprojectAutoSet o) {
-    final name = engine.content.megaprojects[o.megaprojectId]!.name;
-    final reserve = o.creditReserve;
-    final credits = reserve == null
-        ? 'no credits'
-        : 'credits above ${formatNumber(reserve)}';
+    final name = _megaprojectName(o.megaprojectId);
+    final credits = o.credits ? _creditShare() : 'no credits';
     if (o.goods) {
       return '$name now takes goods from every body each game minute, above '
           'what each keeps for its own use and open contracts, and $credits';
     }
-    if (reserve != null) {
+    if (o.credits) {
       return '$name now takes $credits each game minute, and no goods';
     }
     return '$name is fed by hand only';
   }
+
+  /// "a share of the credits above the auto-pay reserve (5M)", the
+  /// player's reserve.
+  String _creditShare() =>
+      'a share of the credits above the auto-pay reserve '
+      '(${formatNumber(_player.autoPayReserve)})';
+
+  /// Display name of megaproject [id]; the id itself for one the content
+  /// does not have.
+  String _megaprojectName(String id) =>
+      engine.content.megaprojects[id]?.name ?? id;
 
   /// What [m]'s bonuses add up to at [level], from the typed
   /// [megaprojectBonusesAt]: "level 3: storage +30%, housing +15%, offline
@@ -565,13 +579,12 @@ final class ScriptRunner {
         '(now ${_level(_player.id, lock.megaprojectId)})';
   }
 
-  /// [auto] as "goods from every body, and credits above 1M", "goods from
-  /// every body, and no credits" or "credits above 1M, and no goods".
-  static String _autoSetting(MegaprojectAuto auto) {
-    final credits = switch (auto.creditReserve) {
-      final r? => 'credits above ${formatNumber(r)}',
-      null => 'no credits',
-    };
+  /// [auto] as "goods from every body, and a share of the credits above
+  /// the auto-pay reserve (1M)", "goods from every body, and no credits"
+  /// or "a share of the credits above the auto-pay reserve (1M), and no
+  /// goods".
+  String _autoSetting(MegaprojectAuto auto) {
+    final credits = auto.credits ? _creditShare() : 'no credits';
     return auto.goods
         ? 'goods from every body, and $credits'
         : '$credits, and no goods';
@@ -653,10 +666,9 @@ final class ScriptRunner {
         for (final MapEntry(key: id, value: got) in sum.autoDelivered.entries)
           {
             'id': id,
-            'name': engine.content.megaprojects[id]!.name,
+            'name': _megaprojectName(id),
             'delivered': _nums(got),
-            'message':
-                '${engine.content.megaprojects[id]!.name} got ${_list(got)}',
+            'message': '${_megaprojectName(id)} got ${_list(got)}',
           },
       ],
       'projectsCompleted': [
@@ -787,6 +799,7 @@ final class ScriptRunner {
       'ok': true,
       'time': state.time,
       'credits': _num(p.credits),
+      'autoPayReserve': _num(p.autoPayReserve),
       'crew': {
         'base': crew.base,
         'supported': crew.supported,
@@ -810,10 +823,7 @@ final class ScriptRunner {
             if (p.megaprojectAuto[m.id] case final auto?)
               'auto': {
                 'goods': auto.goods,
-                'creditReserve': switch (auto.creditReserve) {
-                  final v? => _num(v),
-                  null => null,
-                },
+                'credits': auto.credits,
                 'text': _autoSetting(auto),
               },
             if (p.megaprojectProgress[m.id] case final got?) ...{

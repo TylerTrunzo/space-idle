@@ -694,18 +694,29 @@ void main() {
 
   test('setMegaprojectAuto says how the megaproject is fed', () {
     final r = _runner();
+    final reserve = r.handle({'cmd': 'setAutoPayReserve', 'credits': '5e6'});
+    expect(reserve['ok'], isTrue, reason: '$reserve');
+    expect(
+      reserve['message'],
+      'Auto-pay now keeps 5M credits; the credits above it are shared out '
+      'each game minute among the megaprojects taking credits on their own',
+    );
+    expect(
+      r.handle({'cmd': 'setAutoPayReserve', 'credits': '-1'})['error'],
+      'invalidAmount',
+    );
     final on = r.handle({
       'cmd': 'setMegaprojectAuto',
       'megaprojectId': 'orbital_station',
       'goods': true,
-      'creditReserve': '5e6',
+      'credits': true,
     });
     expect(on['ok'], isTrue, reason: '$on');
     expect(
       on['message'],
       'Orbital Station now takes goods from every body each game minute, '
-      'above what each keeps for its own use and open contracts, and '
-      'credits above 5M',
+      'above what each keeps for its own use and open contracts, and a '
+      'share of the credits above the auto-pay reserve (5M)',
     );
     expect(
       r.handle({
@@ -720,10 +731,10 @@ void main() {
         'cmd': 'setMegaprojectAuto',
         'megaprojectId': 'orbital_station',
         'goods': false,
-        'creditReserve': '0',
+        'credits': true,
       })['message'],
-      'Orbital Station now takes credits above 0 each game minute, and no '
-      'goods',
+      'Orbital Station now takes a share of the credits above the auto-pay '
+      'reserve (5M) each game minute, and no goods',
     );
     expect(
       r.handle({
@@ -766,16 +777,23 @@ void main() {
     expect(driver['bonuses'], 'level 0: no bonus yet');
     expect(driver['nextLevel'], 'level 1: production speed ×1.15 (tiers 0-1)');
     expect(driver['locked'], 'opens at Orbital Station level 1 (now 0)');
+    r.handle({'cmd': 'setAutoPayReserve', 'credits': '1e6'});
     r.handle({
       'cmd': 'setMegaprojectAuto',
       'megaprojectId': 'mass_driver',
       'goods': true,
-      'creditReserve': '1e6',
+      'credits': true,
     });
     expect(entry('mass_driver')['auto'], {
       'goods': true,
-      'creditReserve': {'value': '1e6', 'display': '1M'},
-      'text': 'goods from every body, and credits above 1M',
+      'credits': true,
+      'text':
+          'goods from every body, and a share of the credits above the '
+          'auto-pay reserve (1M)',
+    });
+    expect(r.handle({'cmd': 'state'})['autoPayReserve'], {
+      'value': '1e6',
+      'display': '1M',
     });
     expect(
       (r.handle({'cmd': 'costs'})['megaprojects']! as Map)['mass_driver'],
@@ -795,11 +813,12 @@ void main() {
         .buildings
         .add(BuildingState(id: 'wm', defId: 'wire_mill', crew: 1));
     for (final cmd in [
+      {'cmd': 'setAutoPayReserve', 'credits': '1000'},
       {
         'cmd': 'setMegaprojectAuto',
         'megaprojectId': 'mass_driver',
         'goods': true,
-        'creditReserve': '1000',
+        'credits': true,
       },
       {
         'cmd': 'setAutoSell',

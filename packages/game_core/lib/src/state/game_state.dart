@@ -58,29 +58,25 @@ final class AutoSellRule {
 /// `stepMegaprojectAuto`). Immutable; a command replaces it.
 final class MegaprojectAuto {
   /// Creates a setting.
-  const MegaprojectAuto({required this.goods, this.creditReserve});
+  const MegaprojectAuto({required this.goods, this.credits = false});
 
-  /// Restores a setting written by [toJson].
+  /// Restores a setting written by [toJson]. A setting from before the
+  /// reserve was shared has a `creditReserve` instead of `credits`: credits
+  /// went in when it had one.
   factory MegaprojectAuto.fromJson(Map<String, Object?> j) => MegaprojectAuto(
     goods: j['goods']! as bool,
-    creditReserve: switch (j['creditReserve']) {
-      null => null,
-      final v => BigNum.fromJson(v as String),
-    },
+    credits: (j['credits'] as bool?) ?? j['creditReserve'] != null,
   );
 
   /// Whether goods go in from every owned body, above what each keeps.
   final bool goods;
 
-  /// Credits the faction always keeps: only credits above it are paid in.
-  /// Null pays no credits at all.
-  final BigNum? creditReserve;
+  /// Whether it takes a share of the credits above the faction's
+  /// [FactionState.autoPayReserve].
+  final bool credits;
 
-  /// Serializes this setting; a null reserve is left out.
-  Map<String, Object?> toJson() => {
-    'goods': goods,
-    'creditReserve': ?creditReserve?.toJson(),
-  };
+  /// Serializes this setting.
+  Map<String, Object?> toJson() => {'goods': goods, 'credits': credits};
 }
 
 /// A bottleneck a faction has had since [firstSeenAt], kept so reports can
@@ -238,6 +234,7 @@ final class FactionState {
     Map<String, int>? megaprojectLevels,
     Map<String, Map<String, BigNum>>? megaprojectProgress,
     Map<String, MegaprojectAuto>? megaprojectAuto,
+    this.autoPayReserve = const BigNum.zero(),
     List<ContractState>? contracts,
     List<double>? contractRefillAt,
     this.contractsCompleted = 0,
@@ -312,6 +309,12 @@ final class FactionState {
             for (final e in _asMap(j['megaprojectAuto']).entries)
               e.key: MegaprojectAuto.fromJson(_asMap(e.value)),
           },
+    autoPayReserve: switch (j['autoPayReserve']) {
+      final String v => BigNum.fromJson(v),
+      // Absent in saves from before the reserve was shared: the lowest of
+      // the per-megaproject reserves, which took the credits above it.
+      _ => _lowestReserve(j['megaprojectAuto']),
+    },
     // All three absent in saves from before contracts existed.
     contracts: j['contracts'] == null
         ? null
@@ -391,6 +394,27 @@ final class FactionState {
   /// only. See `SetMegaprojectAutoCommand`.
   final Map<String, MegaprojectAuto> megaprojectAuto;
 
+  /// Credits the faction always keeps from auto-pay: each game minute the
+  /// credits above it are shared out among the megaprojects it feeds
+  /// credits on their own ([MegaprojectAuto.credits]); zero or more. See
+  /// `SetAutoPayReserveCommand`.
+  BigNum autoPayReserve;
+
+  /// The lowest `creditReserve` among the settings of an older save's
+  /// `megaprojectAuto` JSON, zero when none has one.
+  static BigNum _lowestReserve(Object? auto) {
+    BigNum? lowest;
+    if (auto is Map) {
+      for (final a in auto.values) {
+        if (a is Map && a['creditReserve'] is String) {
+          final r = BigNum.fromJson(a['creditReserve'] as String);
+          if (lowest == null || r < lowest) lowest = r;
+        }
+      }
+    }
+    return lowest ?? const BigNum.zero();
+  }
+
   /// Its contracts board, in the order they were posted; at most
   /// [RulesDef.contractSlots]. Only the player has a board in stage 1.5.
   final List<ContractState> contracts;
@@ -443,6 +467,7 @@ final class FactionState {
       for (final MapEntry(key: id, value: a) in megaprojectAuto.entries)
         id: a.toJson(),
     },
+    'autoPayReserve': autoPayReserve.toJson(),
     'contracts': [for (final k in contracts) k.toJson()],
     'contractRefillAt': List.of(contractRefillAt),
     'contractsCompleted': contractsCompleted,
@@ -471,6 +496,7 @@ final class FactionState {
     },
     // Settings are immutable, so a new map is a deep copy.
     megaprojectAuto: Map.of(megaprojectAuto),
+    autoPayReserve: autoPayReserve,
     contracts: [for (final k in contracts) k.copy()],
     contractRefillAt: List.of(contractRefillAt),
     contractsCompleted: contractsCompleted,

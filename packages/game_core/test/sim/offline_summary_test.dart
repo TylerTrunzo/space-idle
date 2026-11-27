@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:game_core/game_core.dart';
 import 'package:game_core/src/sim/milestones.dart' show factionStock;
@@ -381,10 +382,17 @@ void main() {
           // credits are paid in.
           'mass_driver': {'credits': 12000, 'silicon_wafer': 1},
         }, credits: 3000);
-        e.apply(
-          s,
-          SetMegaprojectAutoCommand('player', 'mass_driver', true, n(1000)),
-        );
+        e
+          ..apply(
+            s,
+            const SetMegaprojectAutoCommand(
+              'player',
+              'mass_driver',
+              true,
+              true,
+            ),
+          )
+          ..apply(s, SetAutoPayReserveCommand('player', n(1000)));
         e.advance(s, 120);
         final goal =
             nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
@@ -401,16 +409,76 @@ void main() {
           'orbital_station': {'credits': 12000, 'reactor_core': 1},
           'mass_driver': {'credits': 9000},
         }, credits: 3000);
-        e.apply(
-          s,
-          SetMegaprojectAutoCommand('player', 'orbital_station', true, n(1000)),
-        );
+        e
+          ..apply(
+            s,
+            const SetMegaprojectAutoCommand(
+              'player',
+              'orbital_station',
+              true,
+              true,
+            ),
+          )
+          ..apply(s, SetAutoPayReserveCommand('player', n(1000)));
         e.advance(s, 120);
         final goal =
             nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
                 as MegaprojectGoal;
         expect(goal.megaprojectId, 'mass_driver');
         final actual = reached(s, driver);
+        expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
+      });
+
+      test('credits for two megaprojects fed them both are split evenly: '
+          'the one owing less is done first', () {
+        final s = shape({
+          'orbital_station': {'credits': 9000, 'reactor_core': 1},
+          'mass_driver': {'credits': 6000},
+        }, credits: 3000);
+        for (final m in [station, driver]) {
+          e.apply(s, SetMegaprojectAutoCommand('player', m.id, true, true));
+        }
+        e
+          ..apply(s, SetAutoPayReserveCommand('player', n(1000)))
+          ..advance(s, 120);
+        final report = buildFlowReport(s, c, 'player');
+        final etas = megaprojectEtas(s, c, 'player', report);
+        expect(etas['orbital_station'], isNull);
+        final goal = nextGoal(s, c, 'player', report)! as MegaprojectGoal;
+        expect(goal.megaprojectId, 'mass_driver');
+        final actual = reached(s, driver, fed: true);
+        expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
+        // Half the income went to each: the Mass Driver's 6K took about
+        // twice as long as its credits alone would.
+        final owed = 6000 - 2 * 60 * report.creditsPerSec.toDouble();
+        expect(actual, greaterThan(owed / report.creditsPerSec.toDouble()));
+      });
+
+      test('from the review\'s optimizer state on day 14, the ETA is the '
+          'one a run without commands gives', () {
+        // Balanced bot, seed 1, day 14, saved before the reserve was
+        // shared: both megaprojects take credits (above the lower of their
+        // two reserves, as the save is read) and lack nothing else.
+        final saved = File(
+          'test/fixtures/review_balanced_day14.json',
+        ).readAsStringSync();
+        final s = (SaveCodec.decode(saved, c) as SaveOk).state;
+        final f = s.faction('player');
+        expect(
+          [for (final a in f.megaprojectAuto.values) a.credits],
+          [true, true],
+        );
+        final goal =
+            nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!
+                as MegaprojectGoal;
+        expect(goal.megaprojectId, 'orbital_station');
+        expect(goal.remaining.keys, ['credits']);
+        final start = s.time;
+        while (megaprojectStageOf(s, 'player', 'orbital_station') == null) {
+          e.advance(s, 60);
+          expect(s.time - start, lessThan(120 * 3600));
+        }
+        final actual = s.time - start;
         expect(goal.etaSeconds, closeTo(actual, actual * 0.15));
       });
 
@@ -429,7 +497,7 @@ void main() {
           )
           ..stock['hull_plate'] = n(30);
         for (final m in [station, driver]) {
-          e.apply(s, SetMegaprojectAutoCommand('player', m.id, true, null));
+          e.apply(s, SetMegaprojectAutoCommand('player', m.id, true, false));
         }
         final goal =
             nextGoal(s, c, 'player', buildFlowReport(s, c, 'player'))!

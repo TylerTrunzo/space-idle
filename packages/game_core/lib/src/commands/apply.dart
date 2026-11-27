@@ -60,6 +60,7 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
     ),
     DeliverToMegaprojectCommand() => _deliverToMegaproject(s, c, faction, cmd),
     SetMegaprojectAutoCommand() => _setMegaprojectAuto(s, c, faction, cmd),
+    SetAutoPayReserveCommand() => _setAutoPayReserve(s, c, faction, cmd),
     DeliverContractCommand() => _deliverContract(s, c, faction, cmd),
     DiscardContractCommand() => _discardContract(s, c, faction, cmd),
   };
