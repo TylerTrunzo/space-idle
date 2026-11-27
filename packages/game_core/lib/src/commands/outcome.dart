@@ -13,7 +13,6 @@ sealed class CommandOutcome {
   /// Creates the parts every outcome has; the maps are copied
   /// unmodifiable.
   CommandOutcome({
-    this.bodyId,
     Map<String, BigNum> spent = const {},
     Map<String, BigNum> gained = const {},
   }) : spent = Map.unmodifiable(spent),
@@ -21,7 +20,7 @@ sealed class CommandOutcome {
 
   /// Body whose stock the goods in [spent] and [gained] left or reached;
   /// null when the command moved no goods.
-  final String? bodyId;
+  String? get bodyId;
 
   /// Credits and goods the command took.
   final Map<String, BigNum> spent;
@@ -34,12 +33,15 @@ sealed class CommandOutcome {
 final class Built extends CommandOutcome {
   /// Creates the outcome.
   Built({
-    required String super.bodyId,
+    required this.bodyId,
     required this.buildingId,
     required this.defId,
     required this.crew,
     super.spent,
   });
+
+  @override
+  final String bodyId;
 
   /// The new building.
   final String buildingId;
@@ -56,11 +58,14 @@ final class Built extends CommandOutcome {
 final class Demolished extends CommandOutcome {
   /// Creates the outcome.
   Demolished({
-    required String super.bodyId,
+    required this.bodyId,
     required this.buildingId,
     required this.defId,
     super.gained,
   });
+
+  @override
+  final String bodyId;
 
   /// The building removed.
   final String buildingId;
@@ -87,18 +92,24 @@ final class CrewAssigned extends CommandOutcome {
 
   /// Its crew now.
   final int crew;
+
+  @override
+  String? get bodyId => null;
 }
 
 /// An `UpgradeCommand` raised [track] on [buildingId] to [level].
 final class Upgraded extends CommandOutcome {
   /// Creates the outcome.
   Upgraded({
-    required String super.bodyId,
+    required this.bodyId,
     required this.buildingId,
     required this.track,
     required this.level,
     super.spent,
   });
+
+  @override
+  final String bodyId;
 
   /// The building upgraded.
   final String buildingId;
@@ -114,11 +125,10 @@ final class Upgraded extends CommandOutcome {
 /// [bodyId], the route's source.
 final class RouteCreated extends CommandOutcome {
   /// Creates the outcome.
-  RouteCreated({
-    required String super.bodyId,
-    required this.routeId,
-    super.spent,
-  });
+  RouteCreated({required this.bodyId, required this.routeId, super.spent});
+
+  @override
+  final String bodyId;
 
   /// The new route.
   final String routeId;
@@ -129,11 +139,14 @@ final class RouteCreated extends CommandOutcome {
 final class RouteUpdated extends CommandOutcome {
   /// Creates the outcome.
   RouteUpdated({
-    required String super.bodyId,
+    required this.bodyId,
     required this.routeId,
     super.spent,
     super.gained,
   });
+
+  @override
+  final String bodyId;
 
   /// The route changed.
   final String routeId;
@@ -143,11 +156,10 @@ final class RouteUpdated extends CommandOutcome {
 /// [bodyId], its source.
 final class RouteRemoved extends CommandOutcome {
   /// Creates the outcome.
-  RouteRemoved({
-    required String super.bodyId,
-    required this.routeId,
-    super.gained,
-  });
+  RouteRemoved({required this.bodyId, required this.routeId, super.gained});
+
+  @override
+  final String bodyId;
 
   /// The route closed.
   final String routeId;
@@ -158,13 +170,16 @@ final class RouteRemoved extends CommandOutcome {
 final class ShipsSent extends CommandOutcome {
   /// Creates the outcome.
   ShipsSent({
-    required String super.bodyId,
+    required this.bodyId,
     required this.shipmentId,
     required this.toBodyId,
     required this.count,
     required this.arriveAt,
     super.spent,
   });
+
+  @override
+  final String bodyId;
 
   /// The `Shipment.routeId` of the ships in flight.
   final String shipmentId;
@@ -184,11 +199,14 @@ final class ShipsSent extends CommandOutcome {
 final class Sold extends CommandOutcome {
   /// Creates the outcome; [spent] and [gained] follow from the sale.
   Sold({
-    required String super.bodyId,
+    required this.bodyId,
     required this.resourceId,
     required this.amount,
     required this.revenue,
   }) : super(spent: {resourceId: amount}, gained: {'credits': revenue});
+
+  @override
+  final String bodyId;
 
   /// Resource sold.
   final String resourceId;
@@ -205,10 +223,13 @@ final class Sold extends CommandOutcome {
 final class AutoSellSet extends CommandOutcome {
   /// Creates the outcome.
   AutoSellSet({
-    required String super.bodyId,
+    required this.bodyId,
     required this.resourceId,
     required this.keepAtLeast,
   });
+
+  @override
+  final String bodyId;
 
   /// Resource the rule sells.
   final String resourceId;
@@ -223,7 +244,7 @@ final class AutoSellSet extends CommandOutcome {
 final class ProjectStarted extends CommandOutcome {
   /// Creates the outcome.
   ProjectStarted({
-    required String super.bodyId,
+    required this.bodyId,
     required this.projectId,
     required this.kind,
     required this.targetId,
@@ -231,6 +252,9 @@ final class ProjectStarted extends CommandOutcome {
     this.noKitsNeeded = false,
     super.spent,
   });
+
+  @override
+  final String bodyId;
 
   /// The new project.
   final String projectId;
@@ -261,7 +285,7 @@ final class ProjectStarted extends CommandOutcome {
 final class MegaprojectDelivered extends CommandOutcome {
   /// Creates the outcome.
   MegaprojectDelivered({
-    required String super.bodyId,
+    required this.bodyId,
     required this.megaprojectId,
     required this.level,
     required Map<String, BigNum> delivered,
@@ -273,6 +297,9 @@ final class MegaprojectDelivered extends CommandOutcome {
   }) : delivered = Map.unmodifiable(delivered),
        remaining = Map.unmodifiable(remaining),
        super(spent: delivered);
+
+  @override
+  final String bodyId;
 
   /// The megaproject delivered to.
   final String megaprojectId;
@@ -311,7 +338,7 @@ final class MegaprojectDelivered extends CommandOutcome {
 final class ContractProgress extends CommandOutcome {
   /// Creates the outcome.
   ContractProgress({
-    required String super.bodyId,
+    required this.bodyId,
     required this.contractId,
     required this.resourceId,
     required this.delivered,
@@ -320,6 +347,9 @@ final class ContractProgress extends CommandOutcome {
     this.rewardPaid,
     this.nextContractAt,
   }) : super(spent: {resourceId: delivered}, gained: {'credits': ?rewardPaid});
+
+  @override
+  final String bodyId;
 
   /// The contract delivered to.
   final String contractId;
@@ -371,4 +401,7 @@ final class ContractDiscarded extends CommandOutcome {
   /// Game time in seconds of the board's soonest refill; null only if
   /// none is banked, which a board of full slots never has.
   final double? nextContractAt;
+
+  @override
+  String? get bodyId => null;
 }

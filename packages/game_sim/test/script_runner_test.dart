@@ -395,8 +395,39 @@ void main() {
     r.handle({'cmd': 'claimBody', 'bodyId': 'brine', 'sourceBodyId': 'kora'});
     final out = r.handle({'cmd': 'away', 'seconds': 3600});
     expect(out['projectsCompleted'], [
-      {'kind': 'claim', 'targetId': 'brine', 'name': 'Brine'},
+      {
+        'kind': 'claim',
+        'targetId': 'brine',
+        'name': 'Brine',
+        'message': 'Brine claimed',
+      },
     ]);
+  });
+
+  test('away lists the contracts posted while away', () {
+    final r = _runner();
+    final out = r.handle({'cmd': 'away', 'seconds': 14400 * 2 + 60});
+    final board = r.state.faction('player').contracts;
+    expect(board, hasLength(3));
+    final posted = (out['contractsPosted']! as List)
+        .cast<Map<String, Object?>>();
+    expect([for (final k in posted) k['id']], [for (final k in board) k.id]);
+    expect(posted.first.keys, [
+      'id',
+      'resourceId',
+      'resource',
+      'quantity',
+      'reward',
+    ]);
+  });
+
+  test('a command on a body being claimed says it is still being claimed', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e6);
+    r.handle({'cmd': 'claimBody', 'bodyId': 'brine', 'sourceBodyId': 'kora'});
+    final out = r.handle({'cmd': 'expandSlots', 'bodyId': 'brine'});
+    expect(out['error'], 'stillClaiming');
+    expect(out['message'], 'Brine is still being claimed (30m left)');
   });
 
   test('costs show no claim once every body is owned', () {
@@ -420,10 +451,13 @@ void main() {
 
   /// Puts the goods for the next Orbital Station stage on Kora and enough
   /// credits in hand.
-  void stockStation(ScriptRunner r) {
+  ///
+  /// [level], when given, picks the stage instead: the level it starts
+  /// from.
+  void stockStation(ScriptRunner r, {int? level}) {
     final c = r.engine.content;
     final station = c.megaprojects['orbital_station']!;
-    final level =
+    level ??=
         r.state.faction('player').megaprojectLevels['orbital_station'] ?? 0;
     for (final MapEntry(:key, :value) in megaprojectCost(
       c,
@@ -469,8 +503,11 @@ void main() {
         'kind': 'megaprojectStage',
         'targetId': 'orbital_station',
         'name': 'Orbital Station',
+        'level': 1,
+        'message': 'Orbital Station reached level 1',
       },
     ]);
+    expect(away['headline'], endsWith('; Orbital Station reached level 1'));
     expect(r.handle({'cmd': 'state'})['megaprojects'], [
       {'id': 'orbital_station', 'name': 'Orbital Station', 'level': 1},
     ]);
@@ -577,6 +614,88 @@ void main() {
             as Map);
     expect(later['nextLevel'], 2);
     expect(((later['cost']! as Map)['hull_plate']! as Map)['display'], '4.5K');
+    expect(later.containsKey('stillNeeded'), isFalse);
+  });
+
+  test('costs show what a part-paid level still needs', () {
+    final r = _runner();
+    r.state.body('kora').stock['hull_plate'] = BigNum.from(500);
+    r.handle({
+      'cmd': 'deliverToMegaproject',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+      'amounts': {'hull_plate': '500'},
+    });
+    final next =
+        ((r.handle({'cmd': 'costs'})['megaprojects']!
+                as Map)['orbital_station']!
+            as Map);
+    expect(((next['cost']! as Map)['hull_plate']! as Map)['display'], '1.5K');
+    expect(
+      ((next['stillNeeded']! as Map)['hull_plate']! as Map)['display'],
+      '1K',
+    );
+  });
+
+  test('costs mark what cannot be started now as busy', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1e9);
+    r.handle({'cmd': 'expandSlots', 'bodyId': 'kora'});
+    r.handle({'cmd': 'claimBody', 'bodyId': 'brine', 'sourceBodyId': 'kora'});
+    r.state.body('kora').stock['survey_drone'] = BigNum.from(6);
+    r.handle({'cmd': 'survey', 'sourceBodyId': 'kora'});
+    r.handle({'cmd': 'survey', 'sourceBodyId': 'kora'});
+    stockStation(r);
+    r.handle({
+      'cmd': 'startMegaprojectStage',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+    });
+    var costs = r.handle({'cmd': 'costs'});
+    expect(
+      (costs['extraSlot']! as Map)['kora'],
+      'busy: an extra slot arrives in 1h',
+    );
+    expect(costs['survey'], 'busy: every unsurveyed signal is being surveyed');
+    final running = (costs['megaprojects']! as Map)['orbital_station']! as Map;
+    expect(running['nextLevel'], 2);
+    expect(running['note'], startsWith('level 1 is under way (done in 2h)'));
+    stockStation(r, level: 1);
+    r.handle({
+      'cmd': 'startMegaprojectStage',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+    });
+    costs = r.handle({'cmd': 'costs'});
+    expect(
+      (costs['megaprojects']! as Map)['orbital_station'],
+      'busy: level 2 is paid for and starts when level 1 is done, in 2h',
+    );
+  });
+
+  test('a delivery while a stage runs says when the next one starts', () {
+    final r = _runner();
+    stockStation(r);
+    r.handle({
+      'cmd': 'startMegaprojectStage',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+    });
+    stockStation(r, level: 1);
+    final out = r.handle({
+      'cmd': 'startMegaprojectStage',
+      'megaprojectId': 'orbital_station',
+      'bodyId': 'kora',
+    });
+    expect(out['ok'], isTrue, reason: '$out');
+    expect(out['createdId'], isNull);
+    expect(
+      out['message'],
+      allOf(
+        startsWith('Paid for Orbital Station level 2 from Kora with '),
+        endsWith('; it starts when level 1 is done, in 2h'),
+      ),
+    );
   });
 
   test('away catches up offline and summarizes it', () {
@@ -766,7 +885,8 @@ void main() {
         gone['message'],
         'Discarded contract ${other.id} for '
         '${formatNumber(other.quantity)} $otherName; '
-        'a new contract arrives in 8h',
+        // The soonest refill: the one the completed contract banked.
+        'a new contract arrives in 4h',
       );
       expect(
         r.handle({'cmd': 'discardContract', 'contractId': other.id})['error'],

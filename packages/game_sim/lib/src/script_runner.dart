@@ -129,147 +129,123 @@ final class ScriptRunner {
     final j = {...line};
     j['factionId'] ??= _player.id;
     final cmd = Command.fromJson(j);
-    final before = _holdings(cmd.factionId);
-    // Read before a demolish removes the building.
-    final demolished = cmd is DemolishCommand
-        ? _describe(cmd.buildingId)
-        : null;
-    // Copied before the command changes it or takes it off the board.
-    final contract = switch (cmd) {
-      DeliverContractCommand(:final factionId, :final contractId) ||
-      DiscardContractCommand(
-        :final factionId,
-        :final contractId,
-      ) => _contract(factionId, contractId)?.copy(),
-      _ => null,
-    };
-    final result = engine.apply(state, cmd);
-    switch (result) {
+    switch (engine.apply(state, cmd)) {
       case CommandFailed(:final error, :final message):
         return _fail(error.name, message);
-      case CommandOk(:final createdId):
-        final after = _holdings(cmd.factionId);
-        final spent = <String, BigNum>{};
-        final gained = <String, BigNum>{};
-        for (final k in {...before.keys, ...after.keys}) {
-          final d = changeBetween(
-            after[k] ?? const BigNum.zero(),
-            before[k] ?? const BigNum.zero(),
-          );
-          if (d.isNegative) spent[k] = -d;
-          if (d > const BigNum.zero()) gained[k] = d;
-        }
-        final message =
-            _contractMessage(cmd, contract, spent) ??
-            _message(cmd, createdId, spent, gained, demolished);
+      case CommandOk(:final createdId, :final outcome):
+        // `applyCommand` gives every success an outcome.
+        final o = outcome!;
+        String key(String id) => id == 'credits' ? id : '${o.bodyId}/$id';
+        Map<String, BigNum> keyed(Map<String, BigNum> m) => {
+          for (final MapEntry(key: id, value: v) in m.entries)
+            if (!v.isZero) key(id): v,
+        };
+        final spent = keyed(o.spent);
+        final gained = keyed(o.gained);
         return {
           'ok': true,
           'createdId': ?createdId,
-          'message': ?message,
+          'message': ?_message(cmd, o),
           if (spent.isNotEmpty) 'spent': _nums(spent),
           if (gained.isNotEmpty) 'gained': _nums(gained),
         };
     }
   }
 
-  /// `credits` and `<body>/<resource>` to what [factionId] holds on its
-  /// bodies, for showing what a command took and gave.
-  Map<String, BigNum> _holdings(String factionId) {
-    final f = state.factions.where((x) => x.id == factionId).firstOrNull;
-    return {
-      if (f != null) 'credits': f.credits,
-      for (final b in state.bodies)
-        if (b.ownerId == factionId)
-          for (final MapEntry(key: id, value: v) in b.stock.entries)
-            '${b.id}/$id': v,
-    };
-  }
+  /// "Smelter on Kora (b3)": building [buildingId], a [defId], on [bodyId].
+  String _describe(String defId, String bodyId, String buildingId) =>
+      '${engine.content.buildings[defId]!.name} on '
+      '${state.body(bodyId).name} ($buildingId)';
 
-  /// "Smelter on Kora (b3)", or null if there is no such building.
-  String? _describe(String buildingId) {
-    final c = engine.content;
-    for (final body in state.bodies) {
-      for (final b in body.buildings) {
-        if (b.id == buildingId) {
-          return '${c.buildings[b.defId]!.name} on ${body.name} ($buildingId)';
-        }
-      }
-    }
-    return null;
-  }
+  /// Credits and goods as "5K credits and 20 Steel", in [m]'s order.
+  String _list(Map<String, BigNum> m) => [
+    for (final MapEntry(key: k, value: v) in m.entries)
+      k == 'credits'
+          ? '${formatNumber(v)} credits'
+          : '${formatNumber(v)} ${engine.content.resources[k]!.name}',
+  ].join(' and ');
 
-  /// A sentence on what a build, claim, extra slot, megaproject stage,
-  /// demolish, new or changed route or ship move did; null for other
-  /// commands.
-  String? _message(
-    Command cmd,
-    String? createdId,
-    Map<String, BigNum> spent,
-    Map<String, BigNum> gained,
-    String? demolished,
-  ) {
+  /// Game seconds from now until [at], as "2h 5m".
+  String _until(double at) => formatDuration(at - state.time);
+
+  /// A sentence on what [cmd] did, from its outcome [o]; null for
+  /// crew, upgrades, sales, auto-sell rules and closed routes, whose
+  /// `spent` and `gained` say it all.
+  String? _message(Command cmd, CommandOutcome o) {
     final c = engine.content;
-    String list(Map<String, BigNum> m) => [
-      for (final MapEntry(key: k, value: v) in m.entries)
-        k == 'credits'
-            ? '${formatNumber(v)} credits'
-            : '${formatNumber(v)} ${c.resources[k.split('/').last]!.name}',
-    ].join(' and ');
-    String done() => formatDuration(
-      state.projects.firstWhere((p) => p.id == createdId).finishAt - state.time,
-    );
-    final kit = c.rules.outpostKitResource;
-    String lands() => formatDuration(
-      state.shipments.firstWhere((sh) => sh.routeId == createdId).arriveAt -
-          state.time,
-    );
-    return switch (cmd) {
-      BuildCommand() => _builtMessage(createdId!),
-      ClaimBodyCommand(:final bodyId, :final sourceBodyId) =>
-        'Started claiming ${state.body(bodyId).name} for ${list(spent)}'
-            '${spent.containsKey('$sourceBodyId/$kit') ? '' : ' (no kits needed)'}'
-            '; done in ${done()}',
-      SurveyCommand() =>
-        'Started a survey for ${list(spent)}; done in ${done()}',
-      ExpandSlotsCommand(:final bodyId) =>
-        'Started an extra build slot on ${state.body(bodyId).name} for '
-            '${list(spent)}; done in ${done()}',
-      StartMegaprojectStageCommand(
-        :final factionId,
-        :final megaprojectId,
-        :final bodyId,
-      ) =>
-        'Started ${c.megaprojects[megaprojectId]!.name} level '
-            '${_level(factionId, megaprojectId) + 1} on '
-            '${state.body(bodyId).name} for ${list(spent)}; '
-            'done in ${done()}',
-      DeliverToMegaprojectCommand(:final factionId, :final megaprojectId) =>
-        _deliveredMessage(factionId, megaprojectId, createdId, list(spent)),
-      DemolishCommand() =>
-        'Demolished $demolished'
-            '${gained.isEmpty ? '' : '; got back ${list(gained)}'}',
-      CreateRouteCommand() =>
-        'Created route $createdId: ${_routeText(createdId!)}',
-      UpdateRouteCommand(:final routeId) =>
+    String body(String id) => state.body(id).name;
+    return switch (o) {
+      Built(:final bodyId, :final buildingId, :final defId, :final crew) =>
+        _builtMessage(defId, bodyId, buildingId, crew),
+      Demolished(:final bodyId, :final buildingId, :final defId) =>
+        'Demolished ${_describe(defId, bodyId, buildingId)}'
+            '${o.gained.isEmpty ? '' : '; got back ${_list(o.gained)}'}',
+      ProjectStarted(kind: ProjectKind.claim, :final targetId) =>
+        'Started claiming ${body(targetId)} for ${_list(o.spent)}'
+            '${o.noKitsNeeded ? ' (no kits needed)' : ''}'
+            '; done in ${_until(o.finishAt)}',
+      ProjectStarted(kind: ProjectKind.survey) =>
+        'Started a survey for ${_list(o.spent)}; done in '
+            '${_until(o.finishAt)}',
+      ProjectStarted(kind: ProjectKind.expandSlots, :final targetId) =>
+        'Started an extra build slot on ${body(targetId)} for '
+            '${_list(o.spent)}; done in ${_until(o.finishAt)}',
+      // Megaproject stages start from deliveries, not as projects here.
+      ProjectStarted(kind: ProjectKind.megaprojectStage) => null,
+      MegaprojectDelivered() => _deliveredMessage(
+        o,
+        start: cmd is StartMegaprojectStageCommand,
+      ),
+      RouteCreated(:final routeId) =>
+        'Created route $routeId: ${_routeText(routeId)}',
+      RouteUpdated(:final routeId) =>
         'Updated route $routeId: ${_routeText(routeId)}',
-      MoveShipsCommand(:final fromBodyId, :final toBodyId, :final count) =>
-        'Sent ${_ships(count)} from ${state.body(fromBodyId).name} to '
-            '${state.body(toBodyId).name}; '
-            '${count == 1 ? 'it lands' : 'they land'} in ${lands()}',
-      _ => null,
+      ShipsSent(:final bodyId, :final toBodyId, :final count) =>
+        'Sent ${_ships(count)} from ${body(bodyId)} to ${body(toBodyId)}; '
+            '${count == 1 ? 'it lands' : 'they land'} in '
+            '${_until(o.arriveAt)}',
+      ContractProgress(:final rewardPaid?) =>
+        'Delivered ${formatNumber(o.delivered)} '
+            '${c.resources[o.resourceId]!.name} from ${body(o.bodyId)} and '
+            'completed contract ${o.contractId}; paid '
+            '${formatNumber(rewardPaid)} credits. '
+            '${_nextContract(o.nextContractAt, capital: true)}',
+      ContractProgress() =>
+        'Delivered ${formatNumber(o.delivered)} '
+            '${c.resources[o.resourceId]!.name} from ${body(o.bodyId)} to '
+            'contract ${o.contractId} (${formatNumber(o.totalDelivered)} of '
+            '${formatNumber(o.quantity)})',
+      ContractDiscarded() =>
+        'Discarded contract ${o.contractId} for '
+            '${formatNumber(o.quantity)} ${c.resources[o.resourceId]!.name}; '
+            '${_nextContract(o.nextContractAt)}',
+      CrewAssigned() ||
+      Upgraded() ||
+      Sold() ||
+      AutoSellSet() ||
+      RouteRemoved() => null,
     };
   }
 
-  /// "Built Shipyard on Kora (b9) with 2 of 2 crew": new building [id] and
-  /// the crew it took of its base slots, which a building without crew
-  /// slots leaves out.
-  String _builtMessage(String id) {
-    final b = state.bodies
-        .expand((body) => body.buildings)
-        .firstWhere((b) => b.id == id);
-    final slots = engine.content.buildings[b.defId]!.crewSlots;
-    final crew = slots == 0 ? '' : ' with ${b.crew} of $slots crew';
-    return 'Built ${_describe(id)}$crew';
+  /// When the board's next contract arrives, from its soonest refill [at]:
+  /// "a new contract arrives in 4h", or "is due now" once that time has
+  /// come (it waits for something it can ask for).
+  String _nextContract(double? at, {bool capital = false}) {
+    final text = at == null
+        ? 'no new contract is due'
+        : at <= state.time
+        ? 'a new contract is due now'
+        : 'a new contract arrives in ${_until(at)}';
+    return capital ? '${text[0].toUpperCase()}${text.substring(1)}' : text;
+  }
+
+  /// "Built Shipyard on Kora (b9) with 2 of 2 crew": a new [defId] and the
+  /// [crew] it took of its base slots, which a building without crew slots
+  /// leaves out.
+  String _builtMessage(String defId, String bodyId, String id, int crew) {
+    final slots = engine.content.buildings[defId]!.crewSlots;
+    final staff = slots == 0 ? '' : ' with $crew of $slots crew';
+    return 'Built ${_describe(defId, bodyId, id)}$staff';
   }
 
   /// [n] cargo ships by their display name, such as "2 Cargo Ships".
@@ -295,81 +271,35 @@ final class ScriptRunner {
         '${formatNumber(r.ratePerSecond)}/s with ${_ships(r.cargoShips)}$stop';
   }
 
-  /// [factionId]'s contract [id], or null if there is no such faction or
-  /// contract.
-  ContractState? _contract(String factionId, String id) => state.factions
-      .where((f) => f.id == factionId)
-      .expand((f) => f.contracts)
-      .where((k) => k.id == id)
-      .firstOrNull;
-
-  /// A sentence on what a delivery or discard did to [before], the
-  /// contract as it was; null for other commands.
-  String? _contractMessage(
-    Command cmd,
-    ContractState? before,
-    Map<String, BigNum> spent,
-  ) {
-    if (before == null) return null;
-    final c = engine.content;
-    final what = c.resources[before.resourceId]!.name;
-    final f = state.faction(cmd.factionId);
-    // The freed slot's refill is the one banked last.
-    String wait() => formatDuration(f.contractRefillAt.last - state.time);
-    switch (cmd) {
-      case DeliverContractCommand(:final bodyId):
-        final sent =
-            spent['$bodyId/${before.resourceId}'] ?? const BigNum.zero();
-        final from = state.body(bodyId).name;
-        final now = _contract(cmd.factionId, before.id);
-        if (now != null) {
-          return 'Delivered ${formatNumber(sent)} $what from $from to '
-              'contract ${before.id} (${formatNumber(now.delivered)} of '
-              '${formatNumber(now.quantity)})';
-        }
-        return 'Delivered ${formatNumber(sent)} $what from $from and '
-            'completed contract ${before.id}; paid '
-            '${formatNumber(before.rewardCredits)} credits. '
-            'A new contract arrives in ${wait()}';
-      case DiscardContractCommand():
-        return 'Discarded contract ${before.id} for '
-            '${formatNumber(before.quantity)} $what; '
-            'a new contract arrives in ${wait()}';
-      default:
-        return null;
-    }
-  }
-
-  /// "Delivered 30 Hull Plate to Orbital Station level 2; it still needs
-  /// …", or "…; level 2 started, done in 2h" once [createdId], the stage,
-  /// has started.
-  String _deliveredMessage(
-    String factionId,
-    String megaprojectId,
-    String? createdId,
-    String delivered,
-  ) {
-    final c = engine.content;
-    final m = c.megaprojects[megaprojectId]!;
-    final level = _level(factionId, megaprojectId) + 1;
-    final head = 'Delivered $delivered to ${m.name} level $level';
-    if (createdId != null) {
-      final p = state.projects.firstWhere((p) => p.id == createdId);
-      return '$head; level $level started, done in '
-          '${formatDuration(p.finishAt - state.time)}';
-    }
-    final owed = [
-      for (final MapEntry(key: k, value: v) in megaprojectRemaining(
-        state,
-        c,
-        factionId,
-        m,
-      ).entries)
-        k == 'credits'
-            ? '${formatNumber(v)} credits'
-            : '${formatNumber(v)} ${c.resources[k]!.name}',
-    ];
-    return '$head; it still needs ${owed.join(' and ')}';
+  /// What a delivery to a megaproject did: "Delivered 30 Hull Plate to
+  /// Orbital Station level 2; it still needs …", "…; level 2 started, done
+  /// in 2h", or "…; level 3 starts when level 2 is done, in 25m" while the
+  /// stage before it is under way. A [start] (`startMegaprojectStage`)
+  /// says "Started Orbital Station level 1 on Kora for …; done in 2h", or
+  /// "Paid for Orbital Station level 3 from Kora with …; it starts when
+  /// level 2 is done, in 25m".
+  String _deliveredMessage(MegaprojectDelivered o, {required bool start}) {
+    final name = engine.content.megaprojects[o.megaprojectId]!.name;
+    final level = o.level;
+    final from = state.body(o.bodyId).name;
+    final paid = _list(o.delivered);
+    return switch (o) {
+      MegaprojectDelivered(stageStarted: true, :final finishAt?) when start =>
+        'Started $name level $level on $from for $paid; done in '
+            '${_until(finishAt)}',
+      MegaprojectDelivered(queued: true, :final finishAt?) when start =>
+        'Paid for $name level $level from $from with $paid; it starts when '
+            'level ${level - 1} is done, in ${_until(finishAt)}',
+      MegaprojectDelivered(stageStarted: true, :final finishAt?) =>
+        'Delivered $paid to $name level $level; level $level started, done '
+            'in ${_until(finishAt)}',
+      MegaprojectDelivered(queued: true, :final finishAt?) =>
+        'Delivered $paid to $name level $level; level $level starts when '
+            'level ${level - 1} is done, in ${_until(finishAt)}',
+      _ =>
+        'Delivered $paid to $name level $level; it still needs '
+            '${_list(o.remaining)}',
+    };
   }
 
   /// [factionId]'s level of megaproject [id]; 0 before its first stage.
@@ -437,10 +367,37 @@ final class ScriptRunner {
       ],
       'projectsCompleted': [
         for (final p in sum.projectsCompleted)
-          {'kind': p.kind.name, 'targetId': p.targetId, 'name': p.name},
+          {
+            'kind': p.kind.name,
+            'targetId': p.targetId,
+            'name': p.name,
+            'level': ?p.level,
+            'message': _completedText(p),
+          },
+      ],
+      'contractsPosted': [
+        for (final id in sum.contractsPosted)
+          if (_player.contracts.where((k) => k.id == id).firstOrNull
+              case final k?)
+            {
+              'id': k.id,
+              'resourceId': k.resourceId,
+              'resource': engine.content.resources[k.resourceId]!.name,
+              'quantity': _num(k.quantity),
+              'reward': _num(k.rewardCredits),
+            },
       ],
     };
   }
+
+  /// What a project completed while away did, such as "Brine claimed" or
+  /// "Orbital Station reached level 3".
+  String _completedText(CompletedProject p) => switch (p.kind) {
+    ProjectKind.claim => '${p.name} claimed',
+    ProjectKind.survey => '${p.name} surveyed',
+    ProjectKind.expandSlots => 'Extra build slot on ${p.name}',
+    ProjectKind.megaprojectStage => '${p.name} reached level ${p.level}',
+  };
 
   Map<String, Object?> _report() {
     final r = buildFlowReport(state, engine.content, _player.id);
@@ -611,33 +568,22 @@ final class ScriptRunner {
     };
   }
 
+  /// What the player's timed actions and upgrades cost now. An action that
+  /// cannot be taken now says why, as `"busy: …"` (or what it is at)
+  /// instead of a cost.
   Map<String, Object?> _costs() {
     final c = engine.content;
     final p = _player;
     return {
       'ok': true,
-      'claim': visibleBodies(state, p.id).any((b) => b.ownerId == null)
-          ? _nums(claimCost(state, c, p.id))
-          : 'no bodies left to claim',
-      'survey': {
-        'cost': _nums(surveyCost(c)),
-        'timeTaken': formatDuration(surveySeconds(c)),
-      },
+      'claim': _claimCost(),
+      'survey': _surveyCost(),
       'extraSlot': {
         for (final b in state.bodies)
-          if (b.ownerId == p.id) b.id: _nums(slotCost(c, b)),
+          if (b.ownerId == p.id) b.id: _slotCost(b),
       },
       'megaprojects': {
-        for (final m in c.megaprojects.values)
-          m.id: switch (_level(p.id, m.id)) {
-            final level when level >= SaveCodec.maxMegaprojectLevel =>
-              'at its highest level',
-            final level => {
-              'nextLevel': level + 1,
-              'cost': _nums(megaprojectCost(c, m, level)),
-              'timeTaken': formatDuration(megaprojectStageSeconds(m, level)),
-            },
-          },
+        for (final m in c.megaprojects.values) m.id: _megaprojectCost(m),
       },
       'upgradeNote': _upgradeNote(c),
       'upgrades': [
@@ -664,6 +610,83 @@ final class ScriptRunner {
                 },
               },
       ],
+    };
+  }
+
+  /// The next claim's cost, or why there is none to start: no body left,
+  /// or every one left already being claimed.
+  Object _claimCost() {
+    final p = _player;
+    final free = visibleBodies(
+      state,
+      p.id,
+    ).where((b) => b.ownerId == null).toList();
+    if (free.isEmpty) return 'no bodies left to claim';
+    if (free.every((b) => projectOn(state, ProjectKind.claim, b.id) != null)) {
+      return 'busy: every body left is being claimed';
+    }
+    return _nums(claimCost(state, engine.content, p.id));
+  }
+
+  /// A survey's cost and time, or why none can start in the player's
+  /// systems.
+  Object _surveyCost() {
+    final c = engine.content;
+    final systems = {
+      for (final b in state.bodies)
+        if (b.ownerId == _player.id) b.systemId,
+    };
+    final hidden = state.bodies.where(
+      (b) => systems.contains(b.systemId) && !b.surveyed,
+    );
+    if (hidden.isEmpty) return 'nothing left to survey';
+    if (hidden.every(
+      (b) => projectOn(state, ProjectKind.survey, b.id) != null,
+    )) {
+      return 'busy: every unsurveyed signal is being surveyed';
+    }
+    return {
+      'cost': _nums(surveyCost(c)),
+      'timeTaken': formatDuration(surveySeconds(c)),
+    };
+  }
+
+  /// [body]'s next extra build slot's cost, or why it cannot be bought now.
+  Object _slotCost(BodyState body) {
+    if (projectOn(state, ProjectKind.expandSlots, body.id) case final p?) {
+      return 'busy: an extra slot arrives in ${_until(p.finishAt)}';
+    }
+    if (body.extraSlots >= SaveCodec.maxExtraSlots) {
+      return 'at the most extra slots (${SaveCodec.maxExtraSlots})';
+    }
+    return _nums(slotCost(engine.content, body));
+  }
+
+  /// The cost of the stage of [m] deliveries pay for (while one is under
+  /// way, the one after it), with what it still needs once part-paid; or
+  /// why nothing more can be delivered.
+  Object _megaprojectCost(MegaprojectDef m) {
+    final c = engine.content;
+    final p = _player;
+    final level = megaprojectDeliveryLevel(state, p.id, m);
+    if (level >= SaveCodec.maxMegaprojectLevel) return 'at its highest level';
+    final running = megaprojectStageOf(state, p.id, m.id);
+    if (running != null && megaprojectStageQueued(state, c, p.id, m)) {
+      return 'busy: level ${level + 1} is paid for and starts when level '
+          '$level is done, in ${_until(running.finishAt)}';
+    }
+    return {
+      'nextLevel': level + 1,
+      'cost': _nums(megaprojectCost(c, m, level)),
+      if (p.megaprojectProgress.containsKey(m.id))
+        'stillNeeded': _nums(megaprojectRemaining(state, c, p.id, m)),
+      'timeTaken': formatDuration(megaprojectStageSeconds(m, level)),
+      if (running != null)
+        'note':
+            'level $level is under way (done in '
+            '${_until(running.finishAt)}); deliveries pay for level '
+            '${level + 1}, which starts when level $level is done if it is '
+            'paid for by then',
     };
   }
 
