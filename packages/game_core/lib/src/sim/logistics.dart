@@ -80,13 +80,37 @@ BigNum routeInFlight(GameState s, RouteState r) {
 /// its way: what the destination's buildings use of it a second at full
 /// supply ([fullRateFlow], its owner's crew efficiency) times the route's
 /// [travelSeconds].
-BigNum routeUseInTransit(GameState s, Content c, RouteState r) {
+BigNum routeUseInTransit(GameState s, Content c, RouteState r) =>
+    _useInTransit(s, c, r, _UseCache(s, c));
+
+/// [routeUseInTransit], reading the destination's use from [cache].
+BigNum _useInTransit(GameState s, Content c, RouteState r, _UseCache cache) {
   final to = s.body(r.toBodyId);
-  final owner = to.ownerId;
-  if (owner == null) return const BigNum.zero();
-  final use = _fullRateUse(c, to, 1, crewEfficiency(s, c, owner));
-  final perSecond = use[r.resourceId] ?? const BigNum.zero();
+  final perSecond = cache.of(to)[r.resourceId] ?? const BigNum.zero();
+  if (perSecond.isZero) return perSecond;
   return perSecond.mulDouble(travelSeconds(s, c, s.body(r.fromBodyId), to));
+}
+
+/// What each body's buildings use a second at full supply, at its owner's
+/// crew efficiency, worked out once per body (and per owner) on demand.
+final class _UseCache {
+  _UseCache(this.s, this.c);
+
+  final GameState s;
+  final Content c;
+  final _byBody = <String, Map<String, BigNum>>{};
+  final _crewEff = <String, double>{};
+
+  Map<String, BigNum> of(BodyState body) =>
+      _byBody[body.id] ??= switch (body.ownerId) {
+        null => const {},
+        final owner => _fullRateUse(
+          c,
+          body,
+          1,
+          _crewEff[owner] ??= crewEfficiency(s, c, owner),
+        ),
+      };
 }
 
 /// Units route [r] may still send before its destination would hold its
@@ -102,11 +126,22 @@ BigNum routeUseInTransit(GameState s, Content c, RouteState r) {
 /// level's worth per trip and leaving it dry between lots. Cargo in
 /// flight still counts once it is more than the trip uses, so the
 /// destination does not end up holding a trip's worth above its level.
-BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) {
+BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) =>
+    _roomBeforeStop(s, c, r, _UseCache(s, c), routeInFlight(s, r));
+
+/// [routeRoomBeforeStop], reading the destination's use from [cache],
+/// with [inFlight] the route's cargo in flight.
+BigNum? _roomBeforeStop(
+  GameState s,
+  Content c,
+  RouteState r,
+  _UseCache cache,
+  BigNum inFlight,
+) {
   final stop = r.stopAtDestination;
   if (stop == null) return null;
   final held = s.body(r.toBodyId).stock[r.resourceId] ?? const BigNum.zero();
-  return stop + routeUseInTransit(s, c, r) - held - routeInFlight(s, r);
+  return stop + _useInTransit(s, c, r, cache) - held - inFlight;
 }
 
 /// Whether route [r] is paused: its destination, with what is on its way
@@ -148,6 +183,14 @@ Map<String, BigNum> sendCargo(
 }) {
   final merge = mergeSeconds ?? c.rules.shipmentMergeSeconds;
   final sent = <String, BigNum>{};
+  // Use at full supply depends on crew and buildings, not stock, so it
+  // holds for the whole call.
+  final use = _UseCache(s, c);
+  final inFlight = <String, BigNum>{};
+  for (final sh in s.shipments) {
+    inFlight[sh.routeId] =
+        (inFlight[sh.routeId] ?? const BigNum.zero()) + sh.amount;
+  }
   for (final r in s.routes) {
     final from = s.body(r.fromBodyId);
     final to = s.body(r.toBodyId);
@@ -155,7 +198,8 @@ Map<String, BigNum> sendCargo(
     final held = from.stock[r.resourceId] ?? const BigNum.zero();
     final rate = r.ratePerSecond.min(routeCapacity(c, r));
     var amount = rate.mulDouble(dt).min(held);
-    if (routeRoomBeforeStop(s, c, r) case final room?) {
+    final onWay = inFlight[r.id] ?? const BigNum.zero();
+    if (_roomBeforeStop(s, c, r, use, onWay) case final room?) {
       amount = amount.min(room);
     }
     if (amount <= const BigNum.zero()) continue;
