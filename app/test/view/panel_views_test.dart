@@ -54,12 +54,18 @@ void main() {
       expect(kora.reason, isNull);
       expect(brine.canBuild, isFalse);
       expect(brine.reason, 'needs a Copper Ore deposit');
+      // "an" before a vowel.
+      final iron = _entry(catalogView(c), 'Mine (Iron Ore)');
+      expect(
+        iron.hosts.singleWhere((h) => h.bodyId == 'brine').reason,
+        'needs an Iron Ore deposit',
+      );
     });
 
     test('a full body or short credits say so', () {
-      final smelter = _entry(catalogView(c), 'Fusion Refinery');
-      expect(smelter.hosts.single.canBuild, isFalse);
-      expect(smelter.hosts.single.reason, 'needs 3K credits (you have 250)');
+      final refinery = _entry(catalogView(c), 'Fusion Refinery');
+      expect(refinery.hosts.single.canBuild, isFalse);
+      expect(refinery.hosts.single.reason, 'needs 3K credits (you have 250)');
 
       final kora = c.state.body('kora');
       c.state.faction(_p).credits = BigNum.from(1e6);

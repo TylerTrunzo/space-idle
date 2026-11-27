@@ -1,6 +1,7 @@
 import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/theme.dart';
+import 'package:space_idle/ui/blocked_reason.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/build_picker.dart';
 import 'package:space_idle/ui/planet/building_row.dart';
@@ -181,8 +182,7 @@ class _ExpandSlots extends StatelessWidget {
               ),
             ),
           ),
-          if (view.blockedReason case final why?)
-            Text(why, style: text.bodySmall?.copyWith(color: Palette.muted)),
+          if (view.blockedReason case final why?) BlockedReason(why),
         ],
       ),
     );

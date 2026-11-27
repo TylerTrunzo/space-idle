@@ -164,7 +164,8 @@ String? _blocked(
     return 'no free build slot';
   }
   if (deposit != null && !body.deposits.any((x) => x.resourceId == deposit)) {
-    return 'needs a ${content.resources[deposit]!.name} deposit';
+    final name = content.resources[deposit]!.name;
+    return 'needs ${_article(name)} $name deposit';
   }
   for (final MapEntry(key: id, value: need) in d.buildCost.entries) {
     if (id == creditsKey) {
@@ -190,3 +191,6 @@ String _costText(Content c, Map<String, BigNum> cost) => [
         ? '${formatNumber(v)} credits'
         : '${formatNumber(v)} ${c.resources[id]!.name}',
 ].join(' and ');
+
+/// "a" or "an" before [word], by its first letter.
+String _article(String word) => 'AEIOUaeiou'.contains(word[0]) ? 'an' : 'a';

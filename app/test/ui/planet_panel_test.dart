@@ -6,10 +6,12 @@ import 'package:space_idle/game/content_source.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/game/save_store.dart';
 import 'package:space_idle/theme.dart';
+import 'package:space_idle/ui/blocked_reason.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/build_picker.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/top_bar.dart';
+import 'package:space_idle/view/body_actions_view.dart';
 import 'package:space_idle/view/spend_view.dart';
 
 final Content content = loadEmbeddedContent();
@@ -455,6 +457,20 @@ void main() {
       await tester.tap(_key('expand-slots'));
       await tester.pump();
       expect(find.textContaining('Extra build slot on Kora'), findsOneWidget);
+    });
+
+    testWidgets('Expand slots blocked: a lock and the reason', (tester) async {
+      await _pump(tester, c, 'kora'); // 250 credits
+      final why = expandSlotsView(c, 'kora')!.blockedReason!;
+      final line = find.ancestor(
+        of: find.text(why),
+        matching: find.byType(BlockedReason),
+      );
+      expect(line, findsOneWidget);
+      expect(
+        find.descendant(of: line, matching: find.byIcon(Icons.lock_outline)),
+        findsOneWidget,
+      );
     });
 
     testWidgets('Buy max is in the top bar, not on a body', (tester) async {

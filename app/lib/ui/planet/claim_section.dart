@@ -2,6 +2,7 @@ import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/theme.dart';
+import 'package:space_idle/ui/blocked_reason.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/command_feedback.dart';
 import 'package:space_idle/ui/planet/spend_confirm.dart';
@@ -122,19 +123,7 @@ class _ClaimSectionState extends State<ClaimSection> {
               : null,
         ),
       ),
-      if (claim.blockedReason case final why?)
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Row(
-            children: [
-              const Icon(Icons.lock_outline, size: 16, color: Palette.amber),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(why, style: const TextStyle(color: Palette.amber)),
-              ),
-            ],
-          ),
-        ),
+      if (claim.blockedReason case final why?) BlockedReason(why),
     ];
   }
 }
