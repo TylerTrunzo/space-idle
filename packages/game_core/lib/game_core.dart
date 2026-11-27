@@ -10,18 +10,20 @@ export 'src/num/change.dart';
 export 'src/num/format.dart';
 export 'src/report/flow_report.dart';
 export 'src/rng.dart';
-export 'src/sim/contracts.dart';
+// Engine internals stay inside the package: the contract reward basis and
+// rounding, auto-delivery's steps and keeps, building tiers and the
+// end-of-tick landing.
+export 'src/sim/contracts.dart' hide incomeBasis, twoSignificantFigures;
 export 'src/sim/crew.dart';
 export 'src/sim/engine.dart';
-export 'src/sim/logistics.dart';
-export 'src/sim/market.dart';
-export 'src/sim/megaproject_auto.dart';
+export 'src/sim/logistics.dart' hide landArrivals;
+export 'src/sim/market.dart' hide DeliveryKeeps, autoDeliveryKeeps;
 export 'src/sim/megaprojects.dart';
 // The engine's own milestone helpers stay inside the package.
 export 'src/sim/milestones.dart'
     hide factionStock, hiddenBodies, milestoneProgressAt;
 export 'src/sim/offline_summary.dart';
-export 'src/sim/production.dart';
+export 'src/sim/production.dart' hide buildingTier;
 export 'src/sim/projects.dart';
 export 'src/sim/survey.dart';
 export 'src/state/game_state.dart';

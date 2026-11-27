@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
+import 'package:game_core/src/sim/contracts.dart'
+    show incomeBasis, twoSignificantFigures;
 import 'package:test/test.dart';
 
 import '../state/helpers.dart';

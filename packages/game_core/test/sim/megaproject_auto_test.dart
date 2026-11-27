@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:game_core/game_core.dart';
+import 'package:game_core/src/sim/contracts.dart' show incomeBasis;
+import 'package:game_core/src/sim/megaproject_auto.dart';
 import 'package:test/test.dart';
 
 import '../state/helpers.dart';
