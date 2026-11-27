@@ -225,6 +225,21 @@ void clampStorage(
   }
 }
 
+/// Per content, building type id to its tier ([buildingTier]).
+final _tiers = Expando<Map<String, int?>>();
+
+/// The tier of a [def] building: the highest [ResourceDef.tier] of what
+/// it makes (an extractor makes raw goods, tier 0); null for a building
+/// that makes nothing, such as a habitat or a warehouse. Tier-limited
+/// bonuses ([BonusDef.appliesToMaxTier]) go by it.
+int? buildingTier(Content c, BuildingDef def) => (_tiers[c] ??= {
+  for (final d in c.buildings.values)
+    d.id: d.outputs.keys.fold<int?>(
+      null,
+      (top, id) => math.max(top ?? 0, c.resources[id]!.tier),
+    ),
+})[def.id];
+
 /// Inputs and outputs of one building over a step at full input supply.
 typedef BuildingFlow = ({
   Map<String, BigNum> inputs,
@@ -232,9 +247,11 @@ typedef BuildingFlow = ({
 });
 
 /// What building [b] on [body] would take and make in [dt] game seconds if
-/// every input were fully supplied, with its faction working at [crewEff]
-/// and its outputs scaled by [bonuses]' [EmpireBonuses.outputMultiplier]
-/// (pass the owner's [bonusesFor]; none by default).
+/// every input were fully supplied, with its faction working at [crewEff],
+/// its cycles sped up by [bonuses]' [EmpireBonuses.productionSpeedFor] its
+/// [buildingTier] and its outputs scaled by their
+/// [EmpireBonuses.outputMultiplier] (pass the owner's [bonusesFor]; none
+/// by default). A speed bonus raises inputs and outputs alike.
 ///
 /// [stepProduction] scales both maps by the run fraction it settles on, so
 /// `amount × lastRunFraction` is what the building actually moved. Inputs
@@ -265,7 +282,8 @@ BuildingFlow fullRateFlow(
       dt /
       def.cycleSeconds *
       speedMultiplier(r, b.levels[UpgradeTrack.speed]!) *
-      crewFrac;
+      crewFrac *
+      bonuses.productionSpeedFor(buildingTier(c, def));
   // A habitat's capacity levels raise its life support with its housing.
   final inputMult =
       efficiencyMultiplier(r, b.levels[UpgradeTrack.efficiency]!) *

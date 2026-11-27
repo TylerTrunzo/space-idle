@@ -704,19 +704,50 @@ enum BonusKind {
 
   /// Percent added to the market depth of the faction's sales.
   marketDepthPercent,
+
+  /// Factor the market depth of the faction's sales is multiplied by per
+  /// level: `amount^level`, compounding.
+  marketDepthMultiplier,
+
+  /// Factor the cycle rate of the faction's buildings is multiplied by per
+  /// level: `amount^level`, compounding. A faster building uses its inputs
+  /// faster too. A building's tier is the highest tier of what it makes,
+  /// so buildings that make nothing (habitats, warehouses) are untouched.
+  productionSpeedMultiplier,
 }
 
 /// One permanent bonus a megaproject grants per level.
 final class BonusDef {
   /// Creates a bonus.
-  const BonusDef({required this.kind, required this.amount});
+  const BonusDef({
+    required this.kind,
+    required this.amount,
+    this.appliesToMaxTier,
+  });
 
   /// What it raises.
   final BonusKind kind;
 
   /// How much per level, above zero: percent for the `…Percent` kinds,
-  /// seconds for [BonusKind.offlineCapSeconds].
+  /// seconds for [BonusKind.offlineCapSeconds], and for the `…Multiplier`
+  /// kinds the factor per level, at least 1.
   final double amount;
+
+  /// For the `…Multiplier` kinds, the highest resource tier it applies to
+  /// (resources sold, or what a building makes); null for every tier.
+  final int? appliesToMaxTier;
+
+  /// Whether this bonus compounds per level, `amount^level`, and may take
+  /// an [appliesToMaxTier].
+  bool get isMultiplier => switch (kind) {
+    BonusKind.marketDepthMultiplier ||
+    BonusKind.productionSpeedMultiplier => true,
+    BonusKind.storagePercent ||
+    BonusKind.housingPercent ||
+    BonusKind.offlineCapSeconds ||
+    BonusKind.outputPercent ||
+    BonusKind.marketDepthPercent => false,
+  };
 }
 
 /// A repeatable megaproject: each completed stage raises its level by one

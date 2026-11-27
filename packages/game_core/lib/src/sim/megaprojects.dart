@@ -9,18 +9,27 @@ import '../state/game_state.dart';
 /// The one place a bonus becomes a multiplier: every formula a bonus
 /// touches reads it from [bonusesFor] through the getters here.
 final class EmpireBonuses {
-  /// Creates bonus totals; each defaults to none.
+  /// Creates bonus totals; each defaults to none. The factor lists hold
+  /// one factor per resource tier, 0 to [ResourceDef.megaprojectTier].
   const EmpireBonuses({
     this.storagePercent = 0,
     this.housingPercent = 0,
     this.offlineCapSeconds = 0,
     this.outputPercent = 0,
     this.marketDepthPercent = 0,
+    this.marketDepthFactors = _ones,
+    this.productionSpeedFactors = _ones,
   });
 
   /// No bonuses, as for a faction with no megaproject levels or a body
   /// nobody owns.
   static const EmpireBonuses none = EmpireBonuses();
+
+  /// The most a compounding bonus multiplies by, whatever the level: it
+  /// keeps every multiplier finite at any level a save may hold.
+  static const double maxMultiplier = 1e6;
+
+  static const List<double> _ones = [1, 1, 1, 1, 1];
 
   /// Percent added to every body's storage cap ([BonusKind.storagePercent]).
   final double storagePercent;
@@ -38,6 +47,15 @@ final class EmpireBonuses {
   /// Percent added to market depth on sales ([BonusKind.marketDepthPercent]).
   final double marketDepthPercent;
 
+  /// Per resource tier, the compounded [BonusKind.marketDepthMultiplier]
+  /// factors, each at most [maxMultiplier].
+  final List<double> marketDepthFactors;
+
+  /// Per building tier (the highest tier it makes), the compounded
+  /// [BonusKind.productionSpeedMultiplier] factors, each at most
+  /// [maxMultiplier].
+  final List<double> productionSpeedFactors;
+
   /// Multiplier on a body's storage cap: `1 + storagePercent / 100`.
   double get storageMultiplier => 1 + storagePercent / 100;
 
@@ -47,14 +65,25 @@ final class EmpireBonuses {
   /// Multiplier on what buildings make: `1 + outputPercent / 100`.
   double get outputMultiplier => 1 + outputPercent / 100;
 
-  /// Multiplier on a resource's market depth for this faction's sales:
-  /// `1 + marketDepthPercent / 100`.
-  double get marketDepthMultiplier => 1 + marketDepthPercent / 100;
+  /// Multiplier on the market depth of this faction's sales of a resource
+  /// of [tier]: `1 + marketDepthPercent / 100` times the
+  /// [marketDepthFactors] of that tier.
+  double marketDepthMultiplierFor(int tier) =>
+      (1 + marketDepthPercent / 100) * marketDepthFactors[tier];
+
+  /// Multiplier on the cycle rate of a building of [tier] (the highest
+  /// tier it makes; see `buildingTier`): its [productionSpeedFactors]; 1
+  /// for a null tier, a building that makes nothing.
+  double productionSpeedFor(int? tier) =>
+      tier == null ? 1 : productionSpeedFactors[tier];
 }
 
 /// The bonuses [factionId] has from its megaproject levels: each
-/// megaproject's [MegaprojectDef.bonusesPerLevel] times its level, summed
-/// over the megaprojects in content order.
+/// megaproject's [MegaprojectDef.bonusesPerLevel] at its level, summed
+/// over the megaprojects in content order. Percent and seconds bonuses add
+/// up, `amount × level`; multiplier bonuses compound, `amount^level`, and
+/// multiply together on each tier they apply to, at most
+/// [EmpireBonuses.maxMultiplier] per tier.
 ///
 /// A null [factionId] (an unowned body) and a faction that does not exist
 /// have [EmpireBonuses.none].
@@ -67,11 +96,23 @@ EmpireBonuses bonusesFor(GameState s, Content c, String? factionId) {
   var offline = 0.0;
   var output = 0.0;
   var depth = 0.0;
+  // Natural logs of the compounded factors, per tier, so a high level
+  // never overflows before the clamp.
+  const tiers = ResourceDef.megaprojectTier + 1;
+  final depthLogs = List<double>.filled(tiers, 0);
+  final speedLogs = List<double>.filled(tiers, 0);
   for (final m in c.megaprojects.values) {
     final level = levels[m.id] ?? 0;
     if (level == 0) continue;
     for (final b in m.bonusesPerLevel) {
       final add = b.amount * level;
+      void compound(List<double> logs) {
+        final top = b.appliesToMaxTier ?? ResourceDef.megaprojectTier;
+        for (var t = 0; t <= top; t++) {
+          logs[t] += level * math.log(b.amount);
+        }
+      }
+
       switch (b.kind) {
         case BonusKind.storagePercent:
           storage += add;
@@ -83,6 +124,10 @@ EmpireBonuses bonusesFor(GameState s, Content c, String? factionId) {
           output += add;
         case BonusKind.marketDepthPercent:
           depth += add;
+        case BonusKind.marketDepthMultiplier:
+          compound(depthLogs);
+        case BonusKind.productionSpeedMultiplier:
+          compound(speedLogs);
       }
     }
   }
@@ -92,8 +137,39 @@ EmpireBonuses bonusesFor(GameState s, Content c, String? factionId) {
     offlineCapSeconds: offline,
     outputPercent: output,
     marketDepthPercent: depth,
+    marketDepthFactors: _factors(depthLogs),
+    productionSpeedFactors: _factors(speedLogs),
   );
 }
+
+/// The factors whose natural logs are [logs], each at most
+/// [EmpireBonuses.maxMultiplier].
+List<double> _factors(List<double> logs) =>
+    List.unmodifiable([for (final l in logs) _compounded(l)]);
+
+/// `e^log`, at most [EmpireBonuses.maxMultiplier].
+double _compounded(double log) =>
+    math.exp(math.min(log, math.log(EmpireBonuses.maxMultiplier)));
+
+/// One bonus a megaproject's levels grant, as the app shows it: its
+/// [kind], its [value] at the level (percent for the `…Percent` kinds,
+/// seconds for [BonusKind.offlineCapSeconds], the compounded factor for
+/// the `…Multiplier` kinds, at most [EmpireBonuses.maxMultiplier]), and
+/// the highest tier it [appliesToMaxTier], null for every tier.
+typedef BonusAtLevel = ({BonusKind kind, double value, int? appliesToMaxTier});
+
+/// What [m]'s bonuses add up to at [level], in content order: each bonus
+/// as it stands at that level ([BonusAtLevel]), for the app to word.
+List<BonusAtLevel> megaprojectBonusesAt(MegaprojectDef m, int level) => [
+  for (final b in m.bonusesPerLevel)
+    (
+      kind: b.kind,
+      value: b.isMultiplier
+          ? _compounded(level * math.log(b.amount))
+          : b.amount * level,
+      appliesToMaxTier: b.appliesToMaxTier,
+    ),
+];
 
 Map<String, int>? _levelsOf(GameState s, String factionId) {
   for (final f in s.factions) {

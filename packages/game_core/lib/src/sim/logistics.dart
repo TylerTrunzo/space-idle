@@ -2,6 +2,7 @@ import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
 import 'crew.dart';
+import 'megaprojects.dart';
 import 'production.dart';
 
 /// Seconds a shipment takes between [a] and [b]:
@@ -110,6 +111,7 @@ final class _UseCache {
   final Content c;
   final _byBody = <String, Map<String, BigNum>>{};
   final _crewEff = <String, double>{};
+  final _bonuses = <String, EmpireBonuses>{};
   final _caps = <String, BigNum>{};
 
   /// [body]'s [storageCap]; it depends on buildings and bonuses, not
@@ -124,6 +126,7 @@ final class _UseCache {
           body,
           1,
           _crewEff[owner] ??= crewEfficiency(s, c, owner),
+          _bonuses[owner] ??= bonusesFor(s, c, owner),
         ),
       };
 }
@@ -258,16 +261,24 @@ Map<String, BigNum> sendCargo(
 }
 
 /// Resource id to what [body]'s buildings use in [seconds] at full
-/// supply, its owner's crew working at [crewEff].
+/// supply, its owner's crew working at [crewEff] with its [bonuses].
 Map<String, BigNum> _fullRateUse(
   Content c,
   BodyState body,
   double seconds,
   double crewEff,
+  EmpireBonuses bonuses,
 ) {
   final total = <String, BigNum>{};
   for (final b in body.buildings) {
-    final inputs = fullRateFlow(c, body, b, seconds, crewEff).inputs;
+    final inputs = fullRateFlow(
+      c,
+      body,
+      b,
+      seconds,
+      crewEff,
+      bonuses: bonuses,
+    ).inputs;
     for (final MapEntry(key: id, value: v) in inputs.entries) {
       total[id] = (total[id] ?? const BigNum.zero()) + v;
     }

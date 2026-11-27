@@ -26,15 +26,17 @@ double marketFloorOf(Content c, String resourceId) =>
 
 /// Market depth of [resourceId] for sales by [factionId]: its
 /// [ResourceDef.marketDepth] times the faction's
-/// [EmpireBonuses.marketDepthMultiplier].
+/// [EmpireBonuses.marketDepthMultiplierFor] the resource's tier.
 double marketDepthFor(
   GameState s,
   Content c,
   String factionId,
   String resourceId,
-) =>
-    c.resources[resourceId]!.marketDepth *
-    bonusesFor(s, c, factionId).marketDepthMultiplier;
+) {
+  final res = c.resources[resourceId]!;
+  return res.marketDepth *
+      bonusesFor(s, c, factionId).marketDepthMultiplierFor(res.tier);
+}
 
 /// Current price per unit of [resourceId]: base price × saturation.
 BigNum price(GameState s, Content c, String resourceId) => c
@@ -147,6 +149,7 @@ void stepMarket(
   final queued = <String, Map<String, BigNum>>{};
   for (final f in s.factions) {
     double? crewEff;
+    EmpireBonuses? bonuses;
     final holds = _contractHolds(s, c, f);
     for (final rule in f.autoSell) {
       final body = s.body(rule.bodyId);
@@ -156,6 +159,7 @@ void stepMarket(
         body,
         math.max(dt, c.rules.shipmentMergeSeconds),
         crewEff ??= crewEfficiency(s, c, f.id),
+        bonuses ??= bonusesFor(s, c, f.id),
       );
       final taken = queued[body.id] ??= {};
       final held =
@@ -249,6 +253,7 @@ AutoSellKeep autoSellKeep(
     body,
     math.max(dt, c.rules.shipmentMergeSeconds),
     owner == null ? 1 : crewEfficiency(s, c, owner),
+    bonusesFor(s, c, owner),
   );
   final hold = owner == null
       ? _zero
@@ -377,16 +382,25 @@ void _earn(FactionState f, String resourceId, BigNum revenue) {
   f.salesRevenue[resourceId] = (f.salesRevenue[resourceId] ?? _zero) + revenue;
 }
 
-/// Resource id to what [body]'s buildings use in [dt] at full supply.
+/// Resource id to what [body]'s buildings use in [dt] at full supply,
+/// their owner's crew working at [crewEff] with its [bonuses].
 Map<String, BigNum> _stepDemand(
   Content c,
   BodyState body,
   double dt,
   double crewEff,
+  EmpireBonuses bonuses,
 ) {
   final total = <String, BigNum>{};
   for (final b in body.buildings) {
-    final inputs = fullRateFlow(c, body, b, dt, crewEff).inputs;
+    final inputs = fullRateFlow(
+      c,
+      body,
+      b,
+      dt,
+      crewEff,
+      bonuses: bonuses,
+    ).inputs;
     for (final MapEntry(key: id, value: v) in inputs.entries) {
       total[id] = (total[id] ?? _zero) + v;
     }

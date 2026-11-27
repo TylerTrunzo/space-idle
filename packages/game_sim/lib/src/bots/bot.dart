@@ -329,6 +329,9 @@ final class _View {
   late final int freeCrew;
   late final double crewEff;
 
+  /// The faction's megaproject bonuses, which speed some buildings up.
+  late final EmpireBonuses bonuses = bonusesFor(s, c, factionId);
+
   RulesDef get r => c.rules;
 
   FactionState get faction => s.faction(factionId);
@@ -483,7 +486,7 @@ final class _View {
 
   /// Per-second flow of [b] at full input supply.
   BuildingFlow flowOf(BodyState body, BuildingState b) =>
-      fullRateFlow(c, body, b, 1, crewEff);
+      fullRateFlow(c, body, b, 1, crewEff, bonuses: bonuses);
 
   /// Per-second flow of a new one-crew [d] on [body].
   BuildingFlow probe(BuildingDef d, BodyState body, String? deposit) =>
@@ -493,6 +496,7 @@ final class _View {
         BuildingState(id: '', defId: d.id, depositResourceId: deposit, crew: 1),
         1,
         crewEff,
+        bonuses: bonuses,
       );
 
   /// Deposits [d] can be built on at [body]: each minable deposit for an

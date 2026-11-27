@@ -835,13 +835,31 @@ final class _Loader {
       final b = _objectAt('${f.path}.bonusesPerLevel[$i]', raw, const {
         'kind',
         'amount',
+        'appliesToMaxTier',
       });
       if (b == null) continue;
       final kind = b.choice('kind', BonusKind.values, 'bonus kind');
       final amount = b.number('amount', gt: 0);
-      if (kind != null && amount != null) {
-        bonuses.add(BonusDef(kind: kind, amount: amount));
+      final maxTier = b.map.containsKey('appliesToMaxTier')
+          ? b.integer(
+              'appliesToMaxTier',
+              min: 0,
+              max: ResourceDef.megaprojectTier,
+            )
+          : null;
+      if (kind == null || amount == null) continue;
+      final bonus = BonusDef(
+        kind: kind,
+        amount: amount,
+        appliesToMaxTier: maxTier,
+      );
+      if (bonus.isMultiplier && amount < 1) {
+        b.err('amount', 'must be >= 1 for a multiplier');
       }
+      if (!bonus.isMultiplier && b.map.containsKey('appliesToMaxTier')) {
+        b.err('appliesToMaxTier', 'only multiplier bonuses take a tier');
+      }
+      bonuses.add(bonus);
     }
     if (_errors.length > before) return null;
     return MegaprojectDef(

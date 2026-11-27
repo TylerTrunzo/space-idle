@@ -11,9 +11,9 @@ BigNum n(num v) => BigNum.from(v);
 String encode(GameState s) => jsonEncode(s.toJson());
 
 /// The shipped Orbital Station entry, as a fresh mutable JSON map.
-Map<String, Object?> stationJson() =>
-    ((shippedBundle()['megaprojects']! as List).single as Map)
-        .cast<String, Object?>();
+Map<String, Object?> stationJson() => (shippedBundle()['megaprojects']! as List)
+    .cast<Map<String, Object?>>()
+    .firstWhere((m) => m['id'] == 'orbital_station');
 
 /// The shipped content with its megaprojects file replaced by [megaprojects].
 Content contentWithMegaprojects(List<Map<String, Object?>> megaprojects) {
@@ -97,7 +97,7 @@ void main() {
           (BonusKind.storagePercent, 10),
           (BonusKind.housingPercent, 5),
           (BonusKind.offlineCapSeconds, 3600),
-          (BonusKind.marketDepthPercent, 25),
+          (BonusKind.marketDepthMultiplier, 1.2),
         ],
       );
     });
@@ -874,6 +874,197 @@ void main() {
       expect(revenue(1), closeTo(6 * 2 * depth * (1 - math.exp(-0.5)), tol));
     });
 
+    group('compounding multipliers', () {
+      final c = contentWithBonuses([
+        {'kind': 'marketDepthMultiplier', 'amount': 1.2, 'appliesToMaxTier': 1},
+        {'kind': 'productionSpeedMultiplier', 'amount': 1.1},
+      ]);
+      final boost = c.megaprojects['boost']!;
+
+      GameState at(int level) {
+        final s = GameEngine(c).newGame(1);
+        s.faction('player').megaprojectLevels['boost'] = level;
+        return s;
+      }
+
+      test('market depth is factor^level, only up to its tier', () {
+        for (final level in [0, 1, 3]) {
+          final s = at(level);
+          final want = math.pow(1.2, level).toDouble();
+          for (final id in ['iron_ore', 'steel']) {
+            expect(
+              marketDepthFor(s, c, 'player', id),
+              closeTo(c.resources[id]!.marketDepth * want, 1e-6),
+              reason: '$id at level $level',
+            );
+          }
+          // Hull plate is tier 2, past the bonus's tier.
+          expect(
+            marketDepthFor(s, c, 'player', 'hull_plate'),
+            c.resources['hull_plate']!.marketDepth,
+          );
+        }
+      });
+
+      test('production speed is factor^level on what a building uses and '
+          'makes', () {
+        final s = at(2);
+        final kora = s.body('kora');
+        final smelter = BuildingState(id: 'x', defId: 'smelter', crew: 1);
+        final plain = fullRateFlow(c, kora, smelter, 60, 1);
+        final fast = fullRateFlow(
+          c,
+          kora,
+          smelter,
+          60,
+          1,
+          bonuses: bonusesFor(s, c, 'player'),
+        );
+        expect(
+          fast.inputs['iron_ore']!.toDouble(),
+          closeTo(plain.inputs['iron_ore']!.toDouble() * 1.21, 1e-9),
+        );
+        expect(
+          fast.outputs['steel']!.toDouble(),
+          closeTo(plain.outputs['steel']!.toDouble() * 1.21, 1e-9),
+        );
+      });
+
+      test('production speed up to a tier leaves higher tiers and habitats '
+          'alone', () {
+        final c1 = contentWithBonuses([
+          {
+            'kind': 'productionSpeedMultiplier',
+            'amount': 1.1,
+            'appliesToMaxTier': 1,
+          },
+        ]);
+        final s = GameEngine(c1).newGame(1);
+        s.faction('player').megaprojectLevels['boost'] = 3;
+        final bonuses = bonusesFor(s, c1, 'player');
+        final kora = s.body('kora');
+        double rate(String defId, String id, {bool input = false}) {
+          final b = BuildingState(
+            id: 'x',
+            defId: defId,
+            crew: 1,
+            depositResourceId: defId == 'mine' ? 'iron_ore' : null,
+          );
+          final flow = fullRateFlow(c1, kora, b, 1, 1, bonuses: bonuses);
+          return (input ? flow.inputs : flow.outputs)[id]!.toDouble();
+        }
+
+        double plain(String defId, String id, {bool input = false}) {
+          final b = BuildingState(
+            id: 'x',
+            defId: defId,
+            crew: 1,
+            depositResourceId: defId == 'mine' ? 'iron_ore' : null,
+          );
+          final flow = fullRateFlow(c1, kora, b, 1, 1);
+          return (input ? flow.inputs : flow.outputs)[id]!.toDouble();
+        }
+
+        const f = 1.331;
+        expect(
+          rate('mine', 'iron_ore'),
+          closeTo(plain('mine', 'iron_ore') * f, 1e-9),
+        );
+        expect(
+          rate('smelter', 'steel'),
+          closeTo(plain('smelter', 'steel') * f, 1e-9),
+        );
+        expect(
+          rate('plate_press', 'hull_plate'),
+          plain('plate_press', 'hull_plate'),
+        );
+        expect(
+          rate('habitat', 'food', input: true),
+          plain('habitat', 'food', input: true),
+        );
+      });
+
+      test('the engine, the local use auto-sell keeps and the report all '
+          'run at the bonus speed', () {
+        final s = at(2);
+        final kora = s.body('kora');
+        final mine = kora.buildings.firstWhere((b) => b.defId == 'mine');
+        // Kora's one smelter, kept in ore.
+        kora.stock['iron_ore'] = n(500);
+        final eng = GameEngine(c);
+        eng.advance(s, 60);
+        final before = s.faction('player').lifetimeProduced['steel']!;
+        eng.advance(s, 60);
+        final made = (s.faction('player').lifetimeProduced['steel']! - before)
+            .toDouble();
+        final speed = 1.21;
+        // A smelter makes 1 steel per 5 s cycle.
+        expect(made, closeTo(60 / 5 * speed, 1e-6));
+        final report = buildFlowReport(s, c, 'player');
+        expect(
+          report.producedPerSec('steel').toDouble(),
+          closeTo(made / 60, 1e-9),
+        );
+        final rule = AutoSellRule(
+          bodyId: 'kora',
+          resourceId: 'iron_ore',
+          keepAtLeast: const BigNum.zero(),
+        );
+        // The smelter's use over a 60 s step: 2 ore per 5 s cycle.
+        expect(
+          autoSellKeep(s, c, rule, 60).localUse.toDouble(),
+          closeTo(60 / 5 * 2 * speed, 1e-6),
+        );
+        expect(mine.lastRunFraction, greaterThan(0));
+      });
+
+      test('both stay finite at level 1000', () {
+        final s = at(1000);
+        final b = bonusesFor(s, c, 'player');
+        for (var tier = 0; tier <= ResourceDef.megaprojectTier; tier++) {
+          expect(b.marketDepthMultiplierFor(tier).isFinite, isTrue);
+          expect(
+            b.marketDepthMultiplierFor(tier),
+            lessThanOrEqualTo(EmpireBonuses.maxMultiplier),
+          );
+          expect(b.productionSpeedFor(tier).isFinite, isTrue);
+          expect(
+            b.productionSpeedFor(tier),
+            lessThanOrEqualTo(EmpireBonuses.maxMultiplier),
+          );
+        }
+        s.body('kora').stock['steel'] = n(1e9);
+        final sale = sell(s, c, 'player', 'kora', 'steel', n(1e9));
+        expect(sale.revenue.toDouble().isFinite, isTrue);
+        GameEngine(c).advance(s, 600);
+        for (final v in s.body('kora').stock.values) {
+          expect(v.toDouble().isFinite, isTrue);
+        }
+        final shown = megaprojectBonusesAt(boost, 1000);
+        expect([for (final x in shown) x.value.isFinite], [true, true]);
+      });
+
+      test('the typed description gives each bonus at a level', () {
+        final station = content.megaprojects['orbital_station']!;
+        final at3 = megaprojectBonusesAt(station, 3);
+        expect(
+          [for (final b in at3) (b.kind, b.appliesToMaxTier)],
+          [
+            (BonusKind.storagePercent, null),
+            (BonusKind.housingPercent, null),
+            (BonusKind.offlineCapSeconds, null),
+            (BonusKind.marketDepthMultiplier, null),
+          ],
+        );
+        expect([for (final b in at3.take(3)) b.value], [30, 15, 10800]);
+        expect(at3.last.value, closeTo(1.728, 1e-12));
+        final boosted = megaprojectBonusesAt(boost, 2);
+        expect(boosted.first.appliesToMaxTier, 1);
+        expect(boosted.first.value, closeTo(1.44, 1e-12));
+        expect(megaprojectBonusesAt(station, 0).last.value, 1);
+      });
+    });
+
     test('market depth softens auto-sell too', () {
       final c = contentWithBonuses([
         {'kind': 'marketDepthPercent', 'amount': 100},
@@ -1199,6 +1390,40 @@ void main() {
           ],
         },
         'megaprojects.orbital_station.bonusesPerLevel[0].amount: must be > 0',
+      ),
+      'a multiplier below 1': (
+        {
+          ...stationJson(),
+          'bonusesPerLevel': [
+            {'kind': 'marketDepthMultiplier', 'amount': 0.9},
+          ],
+        },
+        'megaprojects.orbital_station.bonusesPerLevel[0].amount: must be >= '
+            '1 for a multiplier',
+      ),
+      'a tier on a bonus that takes none': (
+        {
+          ...stationJson(),
+          'bonusesPerLevel': [
+            {'kind': 'storagePercent', 'amount': 10, 'appliesToMaxTier': 1},
+          ],
+        },
+        'megaprojects.orbital_station.bonusesPerLevel[0].appliesToMaxTier: '
+            'only multiplier bonuses take a tier',
+      ),
+      'a tier out of range': (
+        {
+          ...stationJson(),
+          'bonusesPerLevel': [
+            {
+              'kind': 'productionSpeedMultiplier',
+              'amount': 1.1,
+              'appliesToMaxTier': 9,
+            },
+          ],
+        },
+        'megaprojects.orbital_station.bonusesPerLevel[0].appliesToMaxTier: '
+            'must be <= 4',
       ),
       'unknown field': (
         {...stationJson(), 'colour': 'red'},
