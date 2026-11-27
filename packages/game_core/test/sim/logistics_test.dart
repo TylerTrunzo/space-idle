@@ -271,6 +271,66 @@ void main() {
       );
     });
 
+    test('stop-level routes into one store share one target: the highest '
+        'stop plus the use over the farther trip, at most the cap', () {
+      // Into a, whose press uses 0.5 ore a second: from b (120 s away)
+      // stopping at 15, from c (60 s away) stopping at 40.
+      final withPress = pressContent();
+      final store = s.body('a')
+        ..buildings.add(BuildingState(id: 'press', defId: 'press', crew: 1))
+        ..stock['ore'] = n(30);
+      for (final id in ['b', 'c']) {
+        s.body(id)
+          ..ownerId = 'p'
+          ..stock['ore'] = n(1000);
+      }
+      RouteState into(String from, double stop) {
+        final r = RouteState(
+          id: s.newId('r'),
+          ownerId: 'p',
+          fromBodyId: from,
+          toBodyId: 'a',
+          resourceId: 'ore',
+          ratePerSecond: n(1),
+          cargoShips: 2,
+          stopAtDestination: n(stop),
+        );
+        s.routes.add(r);
+        return r;
+      }
+
+      final far = into('b', 15);
+      final near = into('c', 40);
+      expect(travelSeconds(s, withPress, s.body('b'), store), 120);
+      expect(travelSeconds(s, withPress, s.body('c'), store), 60);
+      // 40 + 0.5 × 120, for both.
+      for (final r in [far, near]) {
+        expect(routeStopTarget(s, withPress, r), n(100));
+      }
+      // Less what the store holds and all cargo on its way to it.
+      s.shipments.add(
+        Shipment(
+          routeId: far.id,
+          fromBodyId: 'b',
+          toBodyId: 'a',
+          ownerId: 'p',
+          resourceId: 'ore',
+          amount: n(10),
+          departAt: 0,
+          arriveAt: 120,
+        ),
+      );
+      for (final r in [far, near]) {
+        expect(routeRoomBeforeStop(s, withPress, r), n(60));
+      }
+      expect(routeStopTarget(s, withPress, route()), isNull);
+      // The cap binds: 990 + 60 would pass a's 1000.
+      near.stopAtDestination = n(990);
+      expect(storageCap(s, withPress, store), n(1000));
+      expect(routeStopTarget(s, withPress, far), n(1000));
+      expect(routeRoomBeforeStop(s, withPress, near), n(960));
+    });
+
     test('a route without a stop level never pauses', () {
       final r = route(rate: 1);
       b.stock['ore'] = n(900);

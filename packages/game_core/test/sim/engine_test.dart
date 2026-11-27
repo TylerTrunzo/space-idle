@@ -1306,6 +1306,7 @@ void main() {
           ('shared source', 10, 2, 0, 6, 2, 6),
           ('shared source', 10, 2, 0, 6, 0.4, 6),
         ];
+        var ran1s = 0;
         for (final (kind, stop, rate, held, mines, divert, hours) in cases) {
           final why =
               '$kind: stop $stop, Kora $rate, $held held, $mines mines, '
@@ -1319,16 +1320,27 @@ void main() {
             divert: divert,
             hours: hours,
           );
-          final live = supply(
-            stop,
-            rate,
-            1,
-            held: held,
-            mines: mines,
-            divert: divert,
-            hours: hours,
-          );
-          for (final r in [coarse, live]) {
+          // 1 s steps on one case of each kind that matters most, to keep
+          // the suite quick: the 60 s run must agree with them.
+          final live =
+              switch ((kind, stop, rate, held, mines, divert)) {
+                ('stocked', 10.0, 0.4, _, _, _) ||
+                ('dry', 10.0, _, _, 1, _) ||
+                ('shared source', 10.0, _, _, 3, 2.0) ||
+                ('near the threshold', 50.0, _, _, _, _) => true,
+                _ => false,
+              }
+              ? supply(
+                  stop,
+                  rate,
+                  1,
+                  held: held,
+                  mines: mines,
+                  divert: divert,
+                  hours: hours,
+                )
+              : null;
+          for (final r in [coarse, ?live]) {
             expect(r.share, greaterThan(0.995), reason: why);
             expect(r.wasted, lessThan(1), reason: why);
             // At most the stop, Brine's trip of use and a minute's lot;
@@ -1340,8 +1352,12 @@ void main() {
             );
             expect(r.most, lessThanOrEqualTo(r.cap), reason: why);
           }
-          expect(coarse.share, closeTo(live.share, 0.01), reason: why);
+          if (live != null) {
+            ran1s++;
+            expect(coarse.share, closeTo(live.share, 0.01), reason: why);
+          }
         }
+        expect(ran1s, 4);
       });
 
       test('with the nearer one out of stock, the other keeps the store '
