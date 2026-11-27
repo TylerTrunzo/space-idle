@@ -86,9 +86,10 @@ String projectTargetName(GameState s, Content c, ProjectState p) =>
 /// chain runs the same however long the ticks; one that is itself due by
 /// now completes too, in a later round.
 ///
-/// The engine runs it in every tick, before time moves on, so a project
-/// due at exactly the end of a tick completes at the start of the next,
-/// as a shipment lands.
+/// The engine runs it in every tick, before time moves on, and again once
+/// the tick's time has moved on, so a project due by the end of a tick
+/// completes in that tick and a command at exactly its finish time finds
+/// it done.
 ///
 /// With [only], just the projects it accepts complete; the stages a
 /// completed stage starts are offered to it too.

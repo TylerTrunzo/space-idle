@@ -76,14 +76,38 @@ void main() {
       e.advance(s, 1740);
       expect(s.body('brine').ownerId, isNull);
       expect(e.projectsFor(s, 'player'), hasLength(1));
-      // The tick that starts at its finish time completes it, as a
-      // shipment due then lands at the start of that tick.
+      // The tick that ends at its finish time completes it, so a command
+      // at exactly that time finds it done.
       e.tick(s, 60);
       expect(s.time, 1800);
-      expect(s.body('brine').ownerId, isNull);
-      e.tick(s, 60);
       expect(s.body('brine').ownerId, 'player');
       expect(e.projectsFor(s, 'player'), isEmpty);
+    });
+
+    test('a command at exactly its finish time finds it done', () {
+      // The optimizer's round-4 repro: a claim done in 30 m, then exactly
+      // 1,800 s, then a build on the claimed body.
+      final s = rich();
+      ok(s, claimBrine);
+      e.advance(s, 1800);
+      expect(s.time, 1800);
+      ok(
+        s,
+        const BuildCommand(
+          'player',
+          'brine',
+          'ice_drill',
+          depositResourceId: 'water_ice',
+        ),
+      );
+    });
+
+    test('completes within a step that passes its finish time', () {
+      final s = rich();
+      ok(s, claimBrine);
+      e.advance(s, 1790);
+      e.tick(s, 30);
+      expect(s.body('brine').ownerId, 'player');
     });
 
     test('a completed claim reaches the bodies-owned milestone', () {

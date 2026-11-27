@@ -812,8 +812,9 @@ void main() {
     test('raises the level once, and the next stage costs more', () {
       final s = stocked();
       ok(s, start);
-      e.advance(s, 7200);
+      e.advance(s, 7140);
       expect(s.faction('player').megaprojectLevels['orbital_station'], isNull);
+      // The tick that ends at its finish time completes it.
       e.tick(s, 60);
       expect(s.faction('player').megaprojectLevels['orbital_station'], 1);
       expect(s.projects, isEmpty);

@@ -69,8 +69,9 @@ final class GameEngine {
   /// ([stepMegaprojectCredits]), complete the projects due
   /// ([stepProjects]), [clampStorage], [noteBottlenecks], post the
   /// contracts due by `time + dt` ([stepContracts]), waste tracking,
-  /// milestone check, `time += dt`, then land the shipments due by the new
-  /// time that fit below the cap ([landArrivals]). Stock may pass the
+  /// milestone check, `time += dt`, land the shipments due by the new time
+  /// that fit below the cap ([landArrivals]), then complete the projects
+  /// due by the new time ([stepProjects]). Stock may pass the
   /// storage cap
   /// during the tick; production uses landed cargo, and cargo and
   /// auto-sell take from what is made, before the clamp, so long steps
@@ -80,9 +81,11 @@ final class GameEngine {
   /// once the tick ends, so ships are there at the arrival time a command
   /// reported; only cargo that would pass the cap waits for the start of
   /// the next tick, whose buildings use it before the clamp. A project due
-  /// at exactly `time + dt` completes at the start of the next tick; a
-  /// contract refill due then is posted in this one, from the state the
-  /// tick leaves, which is the state at `time + dt`.
+  /// by `time + dt` completes as the tick ends, so commands applied then,
+  /// at exactly its finish time, find it done; its effect (a body owned,
+  /// a level's bonus) counts from the next tick's production. A contract
+  /// refill due then is posted in this one, from the state the tick
+  /// leaves, which is the state at `time + dt`.
   ///
   /// Throws [ArgumentError], changing nothing, if [dt] is not finite and
   /// above zero.
@@ -117,6 +120,9 @@ final class GameEngine {
     _checkMilestones(s, dt);
     s.time += dt;
     landArrivals(s, content);
+    // What is due by the tick's end is done when the tick returns, so a
+    // command at exactly a project's finish time finds it complete.
+    stepProjects(s, content);
     return fed;
   }
 
