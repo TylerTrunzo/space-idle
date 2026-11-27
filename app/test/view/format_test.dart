@@ -47,6 +47,14 @@ void main() {
       expect(formatPercent(0.001), '1%');
     });
 
+    test('shows a share outside 0..1 as it is, sign kept', () {
+      // Capacity crew can lift output above base: 150% is honest.
+      expect(formatPercent(1.5), '150%');
+      expect(formatPercent(1.004), '100%');
+      expect(formatPercent(-0.25), '-25%');
+      expect(formatPercent(-0.004), '0%');
+    });
+
     test('shows non-finite input as 0%', () {
       expect(formatPercent(double.nan), '0%');
     });

@@ -41,7 +41,8 @@ String _trimZeros(String s) =>
 ///
 /// A part is never shown as all or nothing: anything strictly between 0
 /// and 1 reads 1% to 99%, so a building at 99.9% does not look unhindered.
-/// Non-finite input reads `0%`.
+/// A share outside 0 to 1 is shown as it is (`150%`, `-25%`): output above
+/// base crew is real. Non-finite input reads `0%`.
 String formatPercent(double fraction) {
   if (!fraction.isFinite) return '0%';
   var pct = (fraction * 100).round();
