@@ -215,7 +215,9 @@ Examples:
 actual `inputs` and `outputs`. The rates are steady-state rates: cargo on
 routes counts as arriving at the rate it is sent. `creditsPerSec` is what
 auto-sell earns a second in steady play, the lower of two estimates: every
-building held to the inputs it can get without drawing stock down, and what
+building held to the inputs it can get without drawing stock down (cargo
+sent round a cycle of routes counts only as far as the cycle's own production
+feeds it, and habitats draw what they draw now), and what
 a short run of play (5 min, then 10 min measured) earns. Goods made from a
 stock nothing refills, and stock above an auto-sell keep, do not count, and
 what auto-sell holds back for open contracts is left out (it fills once and
