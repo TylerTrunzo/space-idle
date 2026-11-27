@@ -728,8 +728,8 @@ enum BonusKind {
 
   /// Factor the credits the faction's market sales earn are multiplied by
   /// per level: `amount^level`, compounding, on goods of the tiers it
-  /// applies to. Saturation, depth and what sells are untouched, and
-  /// contracts value goods at the plain market price.
+  /// applies to. Saturation, depth and what sells are untouched; contracts
+  /// value goods at the bonused price too, so a reward beats selling.
   salePriceMultiplier,
 }
 

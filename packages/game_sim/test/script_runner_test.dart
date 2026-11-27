@@ -837,7 +837,7 @@ void main() {
     f.megaprojectLevels['orbital_station'] = 0;
     final driver = entry('mass_driver');
     expect(driver['bonuses'], 'level 0: no bonus yet');
-    expect(driver['nextLevel'], 'level 1: sale price ×1.15 (tiers 1-2)');
+    expect(driver['nextLevel'], 'level 1: sale price ×1.25 (tiers 1-2)');
     expect(driver['locked'], 'opens at Orbital Station level 1 (now 0)');
     r.handle({'cmd': 'setAutoPayReserve', 'credits': '1e6'});
     r.handle({

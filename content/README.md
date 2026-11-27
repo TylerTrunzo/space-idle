@@ -52,21 +52,25 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
   `rewardMultiplier`.
 - **Orbital Station.** Each level's goods and credits are delivered bit by bit, from any body, so a
   level may cost far more than one body holds; its timer starts once the last of it is in.
-- **Mass Driver.** Opens at Orbital Station level 1 (`requiresMegaproject`). It takes credits and bulk
-  goods that otherwise saturate (hull plate, copper wire, water, silicon wafers), costs ×2.3 a level,
-  and each level multiplies what market sales of tier-1 and tier-2 goods earn by 1.15, compounding
-  (`salePriceMultiplier`; saturation, depth and what sells are untouched, and contracts value goods
-  at the plain price). Stage 1.7 replaced its production speed bonus: no tier range of that lifted
-  the balanced bot's day-7 or day-14 steady income by more than 1.3% a level, and any range with
-  tier 2 overflowed the kits/modules/ships target. The sale price of tiers 1-2 adds about 15% a level
-  on both days; tiers 0-1 add 8-10% but make tier 0-1 goods most of day-14 sales. What a level used to
-  cost was the goods its next stage took from sales; feeding goods only near ready
-  (`setMegaprojectAuto`) removes that.
-  It asks for no food (habitats eat all a young economy makes) and no steel (plate presses take it for
-  the station's hull plates), and it does not deepen markets: deeper tier 0–1 markets made those goods
-  most of an optimizer's sales. Tuned in stage 1.6 so a casual player opens it on days 6–8 and gets a
-  level every 1–5 days through day 21 (the casual bot on seeds 1–3, `docs/balance/`; it opens on
-  day 10 on seed 2).
+- **Mass Driver.** Opens at Orbital Station level 1 (`requiresMegaproject`). It takes credits and
+  bulk goods that otherwise saturate (hull plate, copper wire, water, silicon wafers), costs ×2.3 a
+  level, and each level multiplies what market sales of tier-1 and tier-2 goods earn by 1.25,
+  compounding (`salePriceMultiplier`; saturation, depth and what sells are untouched, and contracts
+  value goods at the same bonused price, so a reward still beats selling). Stage 1.7 replaced its
+  production speed bonus: no tier range of that lifted the balanced bot's day-7 or day-14 steady
+  income by more than 1.3% a level, and any range with tier 2 overflowed the kits/modules/ships
+  target. At ×1.15 the sale price of tiers 1-2 adds about 15% a level on both days, ×1.2 about 20%
+  and ×1.25 about 25%. Tiers 0-1 and tier 1 alone make tier 0-1 goods most of day-14 sales, tier 2
+  alone and tiers 0-2 put one good past 40% of it, and once contracts paid the bonused price, ×1.15
+  on tiers 1-2 left the casual bot's day 21 just short of twice its day 14 (1.98×). ×1.2 meets every
+  balance target but the day-7 report-vs-away probe reads 26% high (the report's short run catches a
+  stage's held goods selling at once), and ×1.225 reads 47% low; ×1.25 passes all of them. What a
+  level used to cost was the goods its next stage took from sales; feeding goods only near ready
+  (`setMegaprojectAuto`) removes that. It asks for no food (habitats eat all a young economy makes)
+  and no steel (plate presses take it for the station's hull plates), and it does not deepen
+  markets: deeper tier 0–1 markets made those goods most of an optimizer's sales. Tuned in stage 1.6
+  so a casual player opens it on days 6–8 and gets a level every 1–5 days through day 21 (the casual
+  bot on seeds 1–3, `docs/balance/`; it opens on day 10 on seed 2).
 - **Megaproject bonuses.** `bonusesPerLevel` kinds: `storagePercent`, `housingPercent`,
   `outputPercent` and `marketDepthPercent` add `amount` percent a level; `offlineCapSeconds` adds
   seconds; `marketDepthMultiplier`, `productionSpeedMultiplier` and `salePriceMultiplier` (the credits
