@@ -149,9 +149,10 @@ final class Bottleneck {
     required this.buildingId,
     required this.resourceId,
     required this.runFraction,
-    required this.message,
+    this.message = '',
     this.firstSeenAt = 0,
     this.lostCreditsPerHour,
+    this.fromAbsence = false,
     this.count = 1,
     this.buildingIds = const [],
     this.megaprojectId,
@@ -215,8 +216,18 @@ final class Bottleneck {
   final double runFraction;
 
   /// Plain-English description using display names, such as
-  /// "Smelter on Kora is running at 50%: not enough Iron Ore".
+  /// "Smelter on Kora is running at 50%: not enough Iron Ore", for the
+  /// kinds of stage 1.6 and before; empty for
+  /// [BottleneckKind.megaprojectDiversion],
+  /// [BottleneckKind.keepBlocksDelivery] and a [fromAbsence] entry, whose
+  /// text a display builds from the typed fields. (Stage 2 builds every
+  /// kind's text from them.)
   final String message;
+
+  /// Whether an away summary shows this [BottleneckKind.storageFull] only
+  /// for what the storage cap cut while the player was away: its store is
+  /// not full now, in the report on return. False otherwise.
+  final bool fromAbsence;
 
   /// Game time in seconds since which the faction has had it without a
   /// break, from [FactionState.seenBottlenecks]; the report's own time when
@@ -246,13 +257,14 @@ final class Bottleneck {
     buildingId: j['buildingId'] as String?,
     resourceId: j['resourceId'] as String?,
     runFraction: (j['runFraction']! as num).toDouble(),
-    message: j['message']! as String,
+    message: (j['message'] as String?) ?? '',
     firstSeenAt: (j['firstSeenAt']! as num).toDouble(),
     lostCreditsPerHour: switch (j['lostCreditsPerHour']) {
       final String v => BigNum.fromJson(v),
       _ => null,
     },
     // Absent in bottlenecks from before grouping: one building or none.
+    fromAbsence: (j['fromAbsence'] as bool?) ?? false,
     count: (j['count'] as int?) ?? 1,
     buildingIds: switch (j['buildingIds']) {
       final List<Object?> ids => ids.cast<String>(),
@@ -287,6 +299,7 @@ final class Bottleneck {
     'message': message,
     'firstSeenAt': firstSeenAt,
     'lostCreditsPerHour': ?lostCreditsPerHour?.toJson(),
+    if (fromAbsence) 'fromAbsence': true,
     'count': count,
     if (buildingIds.isNotEmpty) 'buildingIds': buildingIds,
     'megaprojectId': ?megaprojectId,
@@ -306,6 +319,7 @@ final class Bottleneck {
         message: message,
         firstSeenAt: firstSeenAt ?? this.firstSeenAt,
         lostCreditsPerHour: lostCreditsPerHour ?? this.lostCreditsPerHour,
+        fromAbsence: fromAbsence,
         count: count,
         buildingIds: buildingIds,
         megaprojectId: megaprojectId,
@@ -960,10 +974,17 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         for (final id in m.baseCost.keys)
           if (id != creditsKey) id: price(s, c, id),
   };
-  // Goods the faction auto-sells on a body it owns.
-  final autoSold = {
+  // What the diversions read of the state, taken now: the report holds no
+  // state but its own.
+  final now = s.time;
+  final market = {
     for (final r in s.faction(factionId).autoSell)
-      if (s.body(r.bodyId).ownerId == factionId) r.resourceId,
+      if (s.body(r.bodyId).ownerId == factionId &&
+          prices.containsKey(r.resourceId))
+        r.resourceId: (
+          saturation: s.market.saturation[r.resourceId] ?? 1,
+          depth: marketDepthFor(s, c, factionId, r.resourceId),
+        ),
   };
   SteadyFlows steadyOf() => steady ??= steadyFlows(
     played!,
@@ -977,7 +998,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
     prices: prices,
     keepBlocks: _keepBlocks(s, c, factionId),
-    diversions: (income) => _diversions(c, income, prices, autoSold, s.time),
+    diversions: (income) => _diversions(c, income, market, now),
     income: () {
       final v = saleRevenuePerSec(
         played!,
@@ -1006,43 +1027,62 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
 const double minDiversionShare = 0.1;
 
 /// The [BottleneckKind.megaprojectDiversion]s of [income], the faction's
-/// steady income in the report: for each good a megaproject is handed a
-/// second there that the faction auto-sells ([autoSold]), what it would
-/// sell for at [prices] (resource id to price as the report was built),
-/// against that plus what auto-sell earns of it a second
-/// ([SteadyIncome.soldPerSec]), where that share is [minDiversionShare]
-/// or more; seen at [now].
+/// steady income in the report, seen at [now]: for each good a megaproject
+/// is handed a second there that the faction auto-sells ([market],
+/// resource id to its saturation and the faction's market depth as the
+/// report was built), where it is [minDiversionShare] or more of what
+/// would otherwise sell of it.
+///
+/// What sells now, in units, is what auto-sell earns of the good a second
+/// ([SteadyIncome.soldPerSec]) at today's price. The goods taken are valued
+/// at the price the good would fetch if they sold too: the saturation that
+/// selling both a second settles the market at, `1 / (1 + rate ×
+/// marketRecoverySeconds / depth)`, no lower than its floor (as
+/// `stepMarket` settles it). So a good the megaproject takes all of, whose
+/// market sits near full price for want of sales, is not valued at that
+/// price.
 List<Bottleneck> _diversions(
   Content c,
   SteadyIncome income,
-  Map<String, BigNum> prices,
-  Set<String> autoSold,
+  Map<String, ({double saturation, double depth})> market,
   double now,
-) => [
-  for (final MapEntry(key: m, value: got) in income.deliveredPerSec.entries)
-    for (final MapEntry(key: id, value: rate) in got.entries)
-      if (id != creditsKey && autoSold.contains(id))
-        if (rate * (prices[id] ?? const BigNum.zero()) case final value
-            when value > const BigNum.zero())
-          if ((value / (value + (income.soldPerSec[id] ?? const BigNum.zero())))
-                  .toDouble()
-              case final share when share >= minDiversionShare)
-            Bottleneck(
-              kind: BottleneckKind.megaprojectDiversion,
-              bodyId: null,
-              buildingId: null,
-              resourceId: id,
-              megaprojectId: m,
-              shareOfSales: share,
-              runFraction: 1 - share,
-              lostCreditsPerHour: value.mulDouble(3600),
-              firstSeenAt: now,
-              message:
-                  '${c.megaprojects[m]!.name} takes '
-                  '${math.min(100, (share * 100).round())}% of the '
-                  '${c.resources[id]!.name} that would sell',
-            ),
-];
+) {
+  final out = <Bottleneck>[];
+  for (final MapEntry(key: m, value: got) in income.deliveredPerSec.entries) {
+    for (final MapEntry(key: id, value: taken) in got.entries) {
+      final (:saturation, :depth) = market[id] ?? (saturation: 0.0, depth: 0.0);
+      if (id == creditsKey || depth <= 0 || taken <= const BigNum.zero()) {
+        continue;
+      }
+      final base = c.resources[id]!.basePrice;
+      final today = base.mulDouble(saturation);
+      final sold = today.isZero
+          ? 0.0
+          : ((income.soldPerSec[id] ?? const BigNum.zero()) / today).toDouble();
+      final share = taken.toDouble() / (taken.toDouble() + sold);
+      if (share < minDiversionShare) continue;
+      final both = taken.toDouble() + sold;
+      final settled = math.max(
+        marketFloorOf(c, id),
+        1 / (1 + both * c.rules.marketRecoverySeconds / depth),
+      );
+      out.add(
+        Bottleneck(
+          kind: BottleneckKind.megaprojectDiversion,
+          bodyId: null,
+          buildingId: null,
+          resourceId: id,
+          megaprojectId: m,
+          shareOfSales: share,
+          runFraction: 1 - share,
+          lostCreditsPerHour: (taken * base).mulDouble(settled * 3600),
+          firstSeenAt: now,
+        ),
+      );
+    }
+  }
+  return out;
+}
 
 /// The [BottleneckKind.keepBlocksDelivery]s of [factionId] in [s]: for
 /// each megaproject it feeds goods on its own that takes deliveries and
@@ -1103,10 +1143,6 @@ List<Bottleneck> _keepBlocks(GameState s, Content c, String factionId) {
           heldByKeep: held,
           runFraction: 0,
           firstSeenAt: s.time,
-          message:
-              '${m.name} still needs ${c.resources[id]!.name}, but '
-              "${s.body(bodyId).name}'s auto-sell keepAtLeast holds "
-              'back what it has',
         ),
   ];
 }

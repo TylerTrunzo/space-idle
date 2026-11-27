@@ -347,6 +347,8 @@ void main() {
       final top = sum.topBottlenecks.first;
       expect(top.kind, BottleneckKind.storageFull);
       expect((top.bodyId, top.resourceId), ('kora', 'steel'));
+      // Its text is the display's to build: the summary has no English.
+      expect((top.fromAbsence, top.message), (true, ''));
       // The value cut, an hour, over the hour away.
       expect(
         top.lostCreditsPerHour!.toDouble(),

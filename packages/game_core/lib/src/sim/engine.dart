@@ -314,7 +314,8 @@ final class GameEngine {
   /// the larger loss; otherwise a new entry follows the report's, bodies
   /// and resources in the order first cut, first seen when the cut began
   /// unless [before] (the report as the absence began, by
-  /// [Bottleneck.groupKey]) had it already.
+  /// [Bottleneck.groupKey]) had it already, marked
+  /// [Bottleneck.fromAbsence].
   ///
   /// So waste that came and went while away, which a report on return may
   /// not see, competes for the top bottlenecks with the rest.
@@ -345,7 +346,6 @@ final class GameEngine {
           }
           continue;
         }
-        final body = s.body(bodyId).name;
         at[key] = out.length;
         out.add(
           Bottleneck(
@@ -354,10 +354,7 @@ final class GameEngine {
             buildingId: null,
             resourceId: id,
             runFraction: 0,
-            message:
-                '$body storage filled up with '
-                '${content.resources[id]!.name} while you were away: '
-                'output was wasted',
+            fromAbsence: true,
             firstSeenAt: before[key]?.firstSeenAt ?? since,
             lostCreditsPerHour: lost,
           ),

@@ -1153,12 +1153,25 @@ void main() {
       expect(d.bodyId, isNull);
       expect(d.shareOfSales!, greaterThanOrEqualTo(0.1));
       expect(d.runFraction, closeTo(1 - d.shareOfSales!, 1e-12));
+      // Valued at the price the plates would fetch if they sold as well as
+      // what sells now: the saturation selling both settles the market at.
+      final today = price(t, c, 'hull_plate');
+      final sold = d.shareOfSales! >= 1
+          ? 0.0
+          : fed.toDouble() * (1 - d.shareOfSales!) / d.shareOfSales!;
+      final depth = marketDepthFor(t, c, 'player', 'hull_plate');
+      final settled =
+          1 /
+          (1 + (fed.toDouble() + sold) * c.rules.marketRecoverySeconds / depth);
+      final base = c.resources['hull_plate']!.basePrice.toDouble();
       expect(
         d.lostCreditsPerHour!.toDouble(),
-        closeTo(
-          fed.toDouble() * price(t, c, 'hull_plate').toDouble() * 3600,
-          1e-6,
-        ),
+        closeTo(fed.toDouble() * base * settled * 3600, 1e-6),
+      );
+      // Below today's price, which the market sits at for want of sales.
+      expect(
+        d.lostCreditsPerHour!.toDouble(),
+        lessThan(fed.toDouble() * today.toDouble() * 3600),
       );
       // The away summary names it among the top 3.
       final sum = engine.catchUpOffline(t, 3600);
