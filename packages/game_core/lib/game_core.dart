@@ -15,6 +15,7 @@ export 'src/sim/crew.dart';
 export 'src/sim/engine.dart';
 export 'src/sim/logistics.dart';
 export 'src/sim/market.dart';
+export 'src/sim/megaproject_auto.dart';
 export 'src/sim/megaprojects.dart';
 // The engine's own milestone helpers stay inside the package.
 export 'src/sim/milestones.dart'

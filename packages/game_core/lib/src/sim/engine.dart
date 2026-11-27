@@ -11,6 +11,7 @@ import 'contracts.dart';
 import 'crew.dart';
 import 'logistics.dart';
 import 'market.dart';
+import 'megaproject_auto.dart';
 import 'megaprojects.dart';
 import 'milestones.dart';
 import 'offline_summary.dart';
@@ -61,7 +62,8 @@ final class GameEngine {
   ///
   /// In order: reset each body's [BodyState.wastedThisStep], land the
   /// shipments due ([deliverShipments]), production, send cargo
-  /// ([sendCargo]), market (recovery and auto-sell), complete the projects
+  /// ([sendCargo]), auto-delivery to megaprojects once a game minute
+  /// ([stepMegaprojectAuto]), market (recovery and auto-sell), complete the projects
   /// due ([stepProjects]), [clampStorage], [noteBottlenecks], post the
   /// contracts due by `time + dt` ([stepContracts]), waste tracking,
   /// milestone check, `time += dt`, then land the shipments due by the new
@@ -95,6 +97,7 @@ final class GameEngine {
     deliverShipments(s);
     stepProduction(s, content, dt);
     sendCargo(s, content, dt);
+    stepMegaprojectAuto(s, content, dt);
     stepMarket(s, content, dt);
     stepProjects(s, content);
     clampStorage(s, content, kept);

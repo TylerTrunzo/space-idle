@@ -4,6 +4,7 @@ import '../content/content.dart';
 import '../num/big_num.dart';
 import '../sim/logistics.dart';
 import '../sim/market.dart';
+import '../sim/megaproject_auto.dart';
 import '../sim/megaprojects.dart';
 import '../sim/production.dart';
 import '../state/game_state.dart';
@@ -70,6 +71,8 @@ BigNum saleRevenuePerSec(
 /// of play from [s], after [_warmUpSeconds] of it, in 60 s ticks of the
 /// economy: what `GameEngine.tick` runs, without projects, contracts,
 /// milestones or bottleneck notes, so nothing but the economy moves.
+/// Auto-delivery to megaprojects runs as in the tick, so goods it takes
+/// do not count as sold.
 ///
 /// [s] is played forward; pass a copy.
 BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
@@ -90,6 +93,7 @@ BigNum measuredSaleRevenue(GameState s, Content c, String factionId) {
       deliverShipments(s);
       stepProduction(s, c, _stepSeconds);
       sendCargo(s, c, _stepSeconds);
+      stepMegaprojectAuto(s, c, _stepSeconds);
       stepMarket(s, c, _stepSeconds);
       clampStorage(s, c, kept);
       s.time += _stepSeconds;
