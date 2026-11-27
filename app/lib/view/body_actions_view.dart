@@ -3,6 +3,7 @@ import 'package:meta/meta.dart';
 import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/view/messages.dart';
 import 'package:space_idle/view/project_views.dart';
+import 'package:space_idle/view/spend_view.dart';
 
 /// The "Expand slots (+1)" row of an owned body.
 @immutable
@@ -10,6 +11,7 @@ final class ExpandSlotsView {
   /// Creates a view.
   const ExpandSlotsView({
     required this.cost,
+    required this.price,
     required this.time,
     required this.affordable,
     required this.running,
@@ -18,6 +20,9 @@ final class ExpandSlotsView {
 
   /// What the next slot costs, such as "2K credits".
   final String cost;
+
+  /// Its price in credits, as a number, for the spend confirm.
+  final BigNum price;
 
   /// How long it takes, such as "4h".
   final String time;
@@ -57,6 +62,7 @@ ExpandSlotsView? expandSlotsView(GameController c, String bodyId) {
   }
   return ExpandSlotsView(
     cost: '${formatNumber(cost)} credits',
+    price: cost,
     time: formatDuration(c.content.rules.expandSlotsSeconds),
     affordable: running == null && blocked == null,
     running: running == null ? null : projectView(c, running),
@@ -77,9 +83,6 @@ final class BuyMaxView {
     required this.share,
     required this.blockedReason,
   });
-
-  /// Spends above this share of the credits ask for a second tap.
-  static const double confirmShare = 0.5;
 
   /// Levels it would buy.
   final int levels;

@@ -6,6 +6,7 @@ import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/game/save_store.dart';
 import 'package:space_idle/view/body_actions_view.dart';
 import 'package:space_idle/view/catalog_view.dart';
+import 'package:space_idle/view/spend_view.dart';
 import 'package:space_idle/view/view_models.dart';
 
 final Content content = loadEmbeddedContent();
@@ -156,6 +157,52 @@ void main() {
       expect(view.levels, greaterThan(0));
       expect(view.share, greaterThan(0.5));
       expect(view.confirm, isTrue);
+    });
+  });
+
+  group('spends', () {
+    test('over half the credits held asks for a confirm', () {
+      expect(needsConfirm(BigNum.from(51), BigNum.from(100)), isTrue);
+      expect(needsConfirm(BigNum.from(50), BigNum.from(100)), isFalse);
+      expect(needsConfirm(const BigNum.zero(), const BigNum.zero()), isFalse);
+      expect(
+        needsConfirm(BigNum.from(101), BigNum.from(100)),
+        isFalse,
+        reason: 'unaffordable: the command says why',
+      );
+    });
+
+    test('each spend button carries its price in credits', () {
+      c.state.body('brine').ownerId = _p;
+      final mine = _entry(catalogView(c), 'Mine (Iron Ore)');
+      expect(mine.price, content.buildings['mine']!.buildCost[creditsKey]);
+      final claim = bodyView(c, 'cinder')!.claim!;
+      expect(claim.price, claimCost(c.state, content, _p)[creditsKey]);
+      final slots = expandSlotsView(c, 'kora')!;
+      expect(slots.price, slotCost(content, c.state.body('kora'))[creditsKey]);
+      // An upgrade is priced at the tap (bulkUpgrade with one level).
+      final b3 = c.state.body('kora').buildings.firstWhere((b) => b.id == 'b3');
+      expect(
+        bulkUpgrade(c, 'b3', UpgradeTrack.speed, 1).price,
+        upgradeCost(content, b3, UpgradeTrack.speed)[creditsKey],
+      );
+    });
+
+    test('bulkUpgrade totals the levels a long press would buy', () {
+      final before = SaveCodec.encode(c.state);
+      c.state.faction(_p).credits = BigNum.from(1e9);
+      final ten = bulkUpgrade(c, 'b3', UpgradeTrack.speed, 10);
+      expect(ten.levels, 10);
+      final b3 = c.state.body('kora').buildings.firstWhere((b) => b.id == 'b3');
+      expect(b3.levels[UpgradeTrack.speed], 0, reason: 'a dry run');
+      expect(ten.price > BigNum.from(75 * 10), isTrue);
+
+      c.state.faction(_p).credits = BigNum.from(160); // two levels, 75 + ~84
+      final some = bulkUpgrade(c, 'b3', UpgradeTrack.speed, 10);
+      expect(some.levels, inInclusiveRange(1, 2));
+      expect(some.price <= BigNum.from(160), isTrue);
+      c.state.faction(_p).credits = BigNum.from(250);
+      expect(SaveCodec.encode(c.state), before);
     });
   });
 

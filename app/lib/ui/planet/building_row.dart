@@ -4,6 +4,8 @@ import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/build_picker.dart';
 import 'package:space_idle/ui/planet/command_feedback.dart';
+import 'package:space_idle/ui/planet/spend_confirm.dart';
+import 'package:space_idle/view/spend_view.dart';
 import 'package:space_idle/view/view_models.dart';
 
 /// One building in Mission Control: its name and level, crew pips with
@@ -268,6 +270,31 @@ class _Upgrades extends StatelessWidget {
       }
     }
 
+    // One level: its price is on the button, so only a big one confirms.
+    // Priced from the state at the tap, not the button: after a rapid
+    // tap the button is stale, and an unaffordable level goes straight
+    // to the command to say why.
+    Spend one(UpgradeTrack t, UpgradeButtonView u) => Spend(
+      price: bulkUpgrade(c, view.id, t, 1).price,
+      what: 'on ${u.label} for ${view.name}',
+      run: () => buy(t),
+    );
+
+    // Up to ten: the button shows one level's price, so the total always
+    // shows first.
+    Spend bulk(UpgradeTrack t, UpgradeButtonView u) {
+      final b = bulkUpgrade(c, view.id, t, BuildingRow.bulkLevels);
+      // None affordable any more (a stale button): the command says why.
+      if (b.levels == 0) return one(t, u);
+      final levels = b.levels == 1 ? 'level' : 'levels';
+      return Spend(
+        price: b.price,
+        what: 'on ${b.levels} ${u.label} $levels for ${view.name}',
+        run: () => buy(t, times: b.levels),
+        always: true,
+      );
+    }
+
     final maxed = [
       for (final MapEntry(key: t, value: u) in view.upgrades.entries)
         if (u.maxedReason case final why?) (t, u.label, why),
@@ -275,37 +302,38 @@ class _Upgrades extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final MapEntry(key: t, value: u) in view.upgrades.entries)
-              if (u.maxedReason == null)
-                OutlinedButton(
-                  key: ValueKey('upgrade-${view.id}-${t.name}'),
-                  onPressed: u.affordable ? () => buy(t) : null,
-                  onLongPress: u.affordable
-                      ? () => buy(t, times: BuildingRow.bulkLevels)
-                      : null,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (!u.affordable) ...[
-                            const Icon(Icons.lock_outline, size: 16),
-                            const SizedBox(width: 4),
+        SpendConfirm(
+          id: 'upgrade-${view.id}',
+          builder: (context, ask) => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final MapEntry(key: t, value: u) in view.upgrades.entries)
+                if (u.maxedReason == null)
+                  OutlinedButton(
+                    key: ValueKey('upgrade-${view.id}-${t.name}'),
+                    onPressed: u.affordable ? () => ask(one(t, u)) : null,
+                    onLongPress: u.affordable ? () => ask(bulk(t, u)) : null,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!u.affordable) ...[
+                              const Icon(Icons.lock_outline, size: 16),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(u.label),
                           ],
-                          Text(u.label),
-                        ],
-                      ),
-                      Text('${u.cost} credits', style: mono),
-                      if (u.payback case final p?) Text(p, style: mono),
-                    ],
+                        ),
+                        Text('${u.cost} credits', style: mono),
+                        if (u.payback case final p?) Text(p, style: mono),
+                      ],
+                    ),
                   ),
-                ),
-          ],
+            ],
+          ),
         ),
         for (final (_, label, why) in maxed)
           Padding(

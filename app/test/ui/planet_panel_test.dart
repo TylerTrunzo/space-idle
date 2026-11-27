@@ -10,6 +10,7 @@ import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/build_picker.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/top_bar.dart';
+import 'package:space_idle/view/spend_view.dart';
 
 final Content content = loadEmbeddedContent();
 const _p = 'player';
@@ -134,7 +135,9 @@ void main() {
 
     testWidgets('a rapid triple tap with credits for one: +1, one SnackBar, '
         'then unaffordable (Review Focus 3)', (tester) async {
-      c.state.faction(_p).credits = BigNum.from(80); // one speed level, 75
+      // One speed level (75) is half of 150: no confirm, and the next
+      // costs more than the 75 left.
+      c.state.faction(_p).credits = BigNum.from(150);
       await _pump(tester, c, 'kora');
       final button = _key('upgrade-b3-speed');
       await tester.tap(button);
@@ -176,6 +179,16 @@ void main() {
       c.state.faction(_p).credits = BigNum.from(1e9);
       await _pump(tester, c, 'kora');
       await tester.longPress(_key('upgrade-b3-speed'));
+      await tester.pump();
+      // The long press shows the ten levels' total before buying.
+      expect(_level(c, 'b3', UpgradeTrack.speed), 0);
+      final ten = bulkUpgrade(c, 'b3', UpgradeTrack.speed, 10);
+      expect(
+        find.textContaining('Spend ${formatNumber(ten.price)} of'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('on 10 Speed levels'), findsOneWidget);
+      await tester.tap(_key('confirm-upgrade-b3'));
       await tester.pump();
       expect(_level(c, 'b3', UpgradeTrack.speed), 10);
     });
@@ -257,6 +270,90 @@ void main() {
         );
       },
     );
+  });
+
+  group('spends over half the credits take a second tap', () {
+    BigNum half(BigNum price) => price.mulDouble(1.5);
+
+    testWidgets('Upgrade', (tester) async {
+      c.state.faction(_p).credits = BigNum.from(100); // 75 of 100
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('upgrade-b3-speed'));
+      await tester.pump();
+      expect(_level(c, 'b3', UpgradeTrack.speed), 0);
+      expect(find.textContaining('Spend 75 of 100 credits'), findsOneWidget);
+      await tester.tap(_key('confirm-upgrade-b3'));
+      await tester.pump();
+      expect(_level(c, 'b3', UpgradeTrack.speed), 1);
+    });
+
+    testWidgets('Cancel spends nothing', (tester) async {
+      c.state.faction(_p).credits = BigNum.from(100);
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('upgrade-b3-speed'));
+      await tester.pump();
+      await tester.tap(_key('cancel-upgrade-b3'));
+      await tester.pump();
+      expect(_key('confirm-upgrade-b3'), findsNothing);
+      expect(_level(c, 'b3', UpgradeTrack.speed), 0);
+    });
+
+    testWidgets('Claim', (tester) async {
+      final price = claimCost(c.state, content, _p)[creditsKey]!;
+      c.state.faction(_p).credits = half(price);
+      await _pump(tester, c, 'cinder');
+      await tester.tap(_key('claim'));
+      await tester.pump();
+      expect(projectOn(c.state, ProjectKind.claim, 'cinder'), isNull);
+      expect(find.textContaining('to claim Cinder'), findsOneWidget);
+      await tester.tap(_key('confirm-claim'));
+      await tester.pump();
+      expect(projectOn(c.state, ProjectKind.claim, 'cinder'), isNotNull);
+    });
+
+    testWidgets('Expand slots', (tester) async {
+      final price = slotCost(content, c.state.body('kora'))[creditsKey]!;
+      c.state.faction(_p).credits = half(price);
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('expand-slots'));
+      await tester.pump();
+      expect(projectOn(c.state, ProjectKind.expandSlots, 'kora'), isNull);
+      await tester.tap(_key('confirm-expand-slots'));
+      await tester.pump();
+      expect(projectOn(c.state, ProjectKind.expandSlots, 'kora'), isNotNull);
+    });
+
+    testWidgets('Build', (tester) async {
+      final price = content.buildings['mine']!.buildCost[creditsKey]!;
+      c.state.faction(_p).credits = half(price);
+      await _pump(tester, c, 'kora');
+      final before = c.state.body('kora').buildings.length;
+      await tester.tap(find.text('Build'));
+      await tester.pumpAndSettle();
+      await tester.tap(_key('build-mine-silicon-kora'));
+      await tester.pumpAndSettle();
+      expect(c.state.body('kora').buildings, hasLength(before));
+      await tester.tap(_key('confirm-catalog-Mine (Silicon)'));
+      await tester.pumpAndSettle();
+      expect(c.state.body('kora').buildings, hasLength(before + 1));
+    });
+
+    testWidgets('under half, one tap: Upgrade, Claim, Expand slots', (
+      tester,
+    ) async {
+      c.state.faction(_p).credits = BigNum.from(1e9);
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('upgrade-b3-speed'));
+      await tester.tap(_key('expand-slots'));
+      await tester.pump();
+      expect(_level(c, 'b3', UpgradeTrack.speed), 1);
+      expect(projectOn(c.state, ProjectKind.expandSlots, 'kora'), isNotNull);
+      await _pump(tester, c, 'cinder');
+      await tester.tap(_key('claim'));
+      await tester.pump();
+      expect(projectOn(c.state, ProjectKind.claim, 'cinder'), isNotNull);
+      expect(find.textContaining('Spend '), findsNothing);
+    });
   });
 
   group('switching bodies', () {

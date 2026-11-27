@@ -180,6 +180,7 @@ final class ClaimView {
   /// Creates a claim view.
   const ClaimView({
     required this.creditsCost,
+    required this.price,
     required this.kitsNeeded,
     required this.affordable,
     required this.sourceBodyIds,
@@ -190,6 +191,9 @@ final class ClaimView {
 
   /// Credits it costs, formatted.
   final String creditsCost;
+
+  /// Its price in credits, as a number, for the spend confirm.
+  final BigNum price;
 
   /// Outpost kits it takes; 0 for the first claim.
   final int kitsNeeded;
@@ -438,6 +442,7 @@ ClaimView _claim(GameController c, BodyState body) {
   }
   return ClaimView(
     creditsCost: formatNumber(credits),
+    price: credits,
     kitsNeeded: kits.toDouble().round(),
     affordable: running == null && blocked == null,
     sourceBodyIds: sources,

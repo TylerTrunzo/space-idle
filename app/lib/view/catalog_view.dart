@@ -39,6 +39,7 @@ final class CatalogEntryView {
     required this.depositResourceId,
     required this.name,
     required this.cost,
+    required this.price,
     required this.crewSlots,
     required this.uses,
     required this.makes,
@@ -56,6 +57,9 @@ final class CatalogEntryView {
 
   /// What it costs to build, such as "150 credits".
   final String cost;
+
+  /// The credits part of its cost, as a number, for the spend confirm.
+  final BigNum price;
 
   /// Its base crew slots.
   final int crewSlots;
@@ -132,6 +136,7 @@ CatalogEntryView _entry(
     depositResourceId: deposit,
     name: deposit == null ? d.name : '${d.name} (${res(deposit)})',
     cost: _costText(content, d.buildCost),
+    price: d.buildCost[creditsKey] ?? const BigNum.zero(),
     crewSlots: d.crewSlots,
     uses: perSecond(d.inputs, used: true),
     makes: perSecond(d.outputs),

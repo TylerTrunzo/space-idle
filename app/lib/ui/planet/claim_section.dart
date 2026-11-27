@@ -4,6 +4,7 @@ import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/command_feedback.dart';
+import 'package:space_idle/ui/planet/spend_confirm.dart';
 import 'package:space_idle/view/view_models.dart';
 
 /// An unowned body's panel: its deposits and how to claim it, or the claim
@@ -99,18 +100,27 @@ class _ClaimSectionState extends State<ClaimSection> {
           ),
         ),
       const SizedBox(height: 8),
-      FilledButton.icon(
-        key: const ValueKey('claim'),
-        icon: const Icon(Icons.flag_outlined),
-        label: const Text('Claim'),
-        onPressed: claim.affordable && source != null
-            ? () => runAndReport(
-                context,
-                c,
-                ClaimBodyCommand(c.playerId, widget.view.id, source),
-                announce: true,
-              )
-            : null,
+      SpendConfirm(
+        id: 'claim',
+        builder: (context, ask) => FilledButton.icon(
+          key: const ValueKey('claim'),
+          icon: const Icon(Icons.flag_outlined),
+          label: const Text('Claim'),
+          onPressed: claim.affordable && source != null
+              ? () => ask(
+                  Spend(
+                    price: claim.price,
+                    what: 'to claim ${widget.view.name}',
+                    run: () => runAndReport(
+                      context,
+                      c,
+                      ClaimBodyCommand(c.playerId, widget.view.id, source),
+                      announce: true,
+                    ),
+                  ),
+                )
+              : null,
+        ),
       ),
       if (claim.blockedReason case final why?)
         Padding(

@@ -1,8 +1,10 @@
 import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/command_feedback.dart';
+import 'package:space_idle/ui/planet/spend_confirm.dart';
 import 'package:space_idle/view/catalog_view.dart';
 import 'package:space_idle/view/view_models.dart';
 
@@ -109,42 +111,58 @@ class _Entry extends StatelessWidget {
                 style: text.bodySmall?.copyWith(color: Palette.muted),
               ),
             const SizedBox(height: 4),
-            for (final h in e.hosts)
-              if (h.canBuild)
-                TextButton.icon(
-                  key: ValueKey(
-                    e.depositResourceId == null
-                        ? 'build-${e.defId}-${h.bodyId}'
-                        : 'build-${e.defId}-${e.depositResourceId}-${h.bodyId}',
-                  ),
-                  icon: const Icon(Icons.add),
-                  label: Text('Build on ${h.bodyName}'),
-                  onPressed: () {
-                    final r = runAndReport(
-                      context,
-                      c,
-                      BuildCommand(
-                        c.playerId,
-                        h.bodyId,
-                        e.defId,
-                        depositResourceId: e.depositResourceId,
+            SpendConfirm(
+              id: 'catalog-${e.name}',
+              builder: (context, ask) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final h in e.hosts)
+                    if (h.canBuild)
+                      TextButton.icon(
+                        key: ValueKey(
+                          e.depositResourceId == null
+                              ? 'build-${e.defId}-${h.bodyId}'
+                              : 'build-${e.defId}-${e.depositResourceId}'
+                                    '-${h.bodyId}',
+                        ),
+                        icon: const Icon(Icons.add),
+                        label: Text('Build on ${h.bodyName}'),
+                        onPressed: () => ask(_spend(context, c, h)),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          '${h.bodyName}: ${h.reason}',
+                          style: text.bodySmall?.copyWith(color: Palette.muted),
+                        ),
                       ),
-                      announce: true,
-                    );
-                    if (r is CommandOk) Navigator.of(context).maybePop();
-                  },
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    '${h.bodyName}: ${h.reason}',
-                    style: text.bodySmall?.copyWith(color: Palette.muted),
-                  ),
-                ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+
+  /// Building this entry on [h]; the sheet closes once it is built.
+  Spend _spend(BuildContext context, GameController c, CatalogHost h) => Spend(
+    price: entry.price,
+    what: 'on ${entry.name} on ${h.bodyName}',
+    run: () {
+      final r = runAndReport(
+        context,
+        c,
+        BuildCommand(
+          c.playerId,
+          h.bodyId,
+          entry.defId,
+          depositResourceId: entry.depositResourceId,
+        ),
+        announce: true,
+      );
+      if (r is CommandOk) Navigator.of(context).maybePop();
+    },
+  );
 }

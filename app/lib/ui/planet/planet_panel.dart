@@ -6,6 +6,7 @@ import 'package:space_idle/ui/planet/build_picker.dart';
 import 'package:space_idle/ui/planet/building_row.dart';
 import 'package:space_idle/ui/planet/claim_section.dart';
 import 'package:space_idle/ui/planet/command_feedback.dart';
+import 'package:space_idle/ui/planet/spend_confirm.dart';
 import 'package:space_idle/view/body_actions_view.dart';
 import 'package:space_idle/view/view_models.dart';
 
@@ -63,7 +64,7 @@ class _PlanetPanelState extends State<PlanetPanel> {
           else if (view.owned) ...[
             _buyMax(context),
             if (expandSlotsView(c, view.id) case final slots?)
-              _ExpandSlots(view: slots, bodyId: view.id),
+              _ExpandSlots(view: slots, bodyId: view.id, bodyName: view.name),
             const Divider(color: Palette.border),
             // Keyed by building, so a pending confirm stays with its own.
             for (final b in view.buildings)
@@ -194,10 +195,15 @@ class _Header extends StatelessWidget {
 
 /// "Expand slots (+1)": its price and time, or the slot under way.
 class _ExpandSlots extends StatelessWidget {
-  const _ExpandSlots({required this.view, required this.bodyId});
+  const _ExpandSlots({
+    required this.view,
+    required this.bodyId,
+    required this.bodyName,
+  });
 
   final ExpandSlotsView view;
   final String bodyId;
+  final String bodyName;
 
   @override
   Widget build(BuildContext context) {
@@ -221,25 +227,34 @@ class _ExpandSlots extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          OutlinedButton(
-            key: const ValueKey('expand-slots'),
-            onPressed: view.affordable
-                ? () => runAndReport(
-                    context,
-                    c,
-                    ExpandSlotsCommand(c.playerId, bodyId),
-                    announce: true,
-                  )
-                : null,
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(text: 'Expand slots (+1)  '),
-                  TextSpan(
-                    text: '${view.cost} · ${view.time}',
-                    style: monoText(text.bodyMedium),
-                  ),
-                ],
+          SpendConfirm(
+            id: 'expand-slots',
+            builder: (context, ask) => OutlinedButton(
+              key: const ValueKey('expand-slots'),
+              onPressed: view.affordable
+                  ? () => ask(
+                      Spend(
+                        price: view.price,
+                        what: 'on a build slot on $bodyName',
+                        run: () => runAndReport(
+                          context,
+                          c,
+                          ExpandSlotsCommand(c.playerId, bodyId),
+                          announce: true,
+                        ),
+                      ),
+                    )
+                  : null,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: 'Expand slots (+1)  '),
+                    TextSpan(
+                      text: '${view.cost} · ${view.time}',
+                      style: monoText(text.bodyMedium),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
