@@ -28,6 +28,21 @@ String crewShortText(GameState s, Content c, String factionId) {
   return 'Short of crew: ${t.supported} of ${t.assigned} crew housed';
 }
 
+/// Why a buy-max stopped: "the next costs 58.5 credits, more than the
+/// budget allows", "stopped at 2000 levels, the most this command buys" or
+/// "nothing is left to upgrade".
+String upgradesStopText(UpgradesBought o) {
+  final next = formatNumber(o.nextCost ?? const BigNum.zero());
+  return switch (o.stop) {
+    UpgradeBuyStop.budget =>
+      '${o.levels == 0 ? 'the cheapest' : 'the next'} costs $next credits, '
+          'more than the budget allows',
+    UpgradeBuyStop.maxPurchases =>
+      'stopped at ${o.levels} levels, the most this command buys',
+    UpgradeBuyStop.nothingToBuy => 'nothing is left to upgrade',
+  };
+}
+
 /// What [m]'s bonuses add up to at [level]: "storage +30%, housing +15%,
 /// offline cap +3h" with " (tiers 0-1)" on a bonus limited to some tiers;
 /// "no bonus" at level 0.
@@ -310,15 +325,7 @@ final class _Words {
   /// costs 58.5 credits, more than the budget allows": what a buy-max
   /// bought and why it stopped, as the CLI says it.
   String bought(UpgradesBought o) {
-    final next = formatNumber(o.nextCost ?? const BigNum.zero());
-    final why = switch (o.stop) {
-      UpgradeBuyStop.budget =>
-        '${o.levels == 0 ? 'the cheapest' : 'the next'} costs $next credits, '
-            'more than the budget allows',
-      UpgradeBuyStop.maxPurchases =>
-        'stopped at ${o.levels} levels, the most this command buys',
-      UpgradeBuyStop.nothingToBuy => 'nothing is left to upgrade',
-    };
+    final why = upgradesStopText(o);
     if (o.levels == 0) return 'Bought no upgrades: $why';
     final buildings = {for (final p in o.purchases) p.buildingId}.length;
     final levels = o.levels == 1

@@ -79,6 +79,7 @@ final class BuildingRowView {
     required this.upgrades,
     required this.canAddCrew,
     required this.canRemoveCrew,
+    this.neededResourceId,
   });
 
   /// Building id.
@@ -125,6 +126,10 @@ final class BuildingRowView {
 
   /// Whether it has crew to take out.
   final bool canRemoveCrew;
+
+  /// The input it is short of, when its problem is one ("not enough Iron
+  /// Ore"), so the panel can offer what makes it; else null.
+  final String? neededResourceId;
 }
 
 /// What every building row of one body view shares, worked out once for
@@ -236,6 +241,10 @@ BuildingRowView buildingRowView(
     },
     canAddCrew: ctx.owned && b.crew < most && ctx.freeCrew > 0,
     canRemoveCrew: ctx.owned && b.crew > 0,
+    neededResourceId: switch (neck?.kind) {
+      BottleneckKind.input || BottleneckKind.routeLimited => neck?.resourceId,
+      _ => null,
+    },
   );
 }
 

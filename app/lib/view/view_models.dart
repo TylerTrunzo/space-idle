@@ -183,6 +183,8 @@ final class ClaimView {
     required this.kitsNeeded,
     required this.affordable,
     required this.sourceBodyIds,
+    required this.time,
+    this.blockedReason,
     this.running,
   });
 
@@ -204,6 +206,14 @@ final class ClaimView {
   /// for the panel to show its countdown instead of a button; null when
   /// none is.
   final ProjectView? running;
+
+  /// How long the claim takes once started, such as "30m".
+  final String time;
+
+  /// Why it cannot start now ("needs 5K credits (you have 250)", "needs
+  /// 10 Outpost Kit on one of your bodies"); null when it can, or while a
+  /// claim is [running].
+  final String? blockedReason;
 }
 
 /// A body's Mission Control panel.
@@ -411,14 +421,28 @@ ClaimView _claim(GameController c, BodyState body) {
           (b.stock[kit] ?? const BigNum.zero()) >= kits)
         b.id,
   ];
+  final have = s.faction(c.playerId).credits;
+  final String? blocked;
+  if (running != null) {
+    blocked = null;
+  } else if (have < credits) {
+    blocked =
+        'needs ${formatNumber(credits)} credits '
+        '(you have ${formatNumber(have, rounding: NumberRounding.down)})';
+  } else if (sources.isEmpty) {
+    blocked =
+        'needs ${formatNumber(kits)} ${c.content.resources[kit]!.name} '
+        'on one of your bodies';
+  } else {
+    blocked = null;
+  }
   return ClaimView(
     creditsCost: formatNumber(credits),
     kitsNeeded: kits.toDouble().round(),
-    affordable:
-        running == null &&
-        s.faction(c.playerId).credits >= credits &&
-        sources.isNotEmpty,
+    affordable: running == null && blocked == null,
     sourceBodyIds: sources,
+    time: formatDuration(claimSeconds(s, c.content, c.playerId)),
+    blockedReason: blocked,
     running: running == null ? null : projectView(c, running),
   );
 }
