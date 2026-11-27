@@ -115,6 +115,61 @@ void main() {
       expect(mine.canRemoveCrew, isFalse);
     });
 
+    test('a starved building with a capacity level is still a warning', () {
+      // Capacity crew lifts effectiveFraction above its supply share, so
+      // clamping it alone read a starved smelter as ok.
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      c.run(const UpgradeCommand(_p, 'b3', UpgradeTrack.capacity));
+      c.state.body('kora').stock['iron_ore'] = const BigNum.zero();
+      c.tickSeconds(30);
+
+      final status = c.flow.bodies
+          .firstWhere((b) => b.bodyId == 'kora')
+          .buildings
+          .firstWhere((b) => b.buildingId == 'b3');
+      expect(status.runFraction, lessThan(1), reason: 'fixture: starved');
+      final smelter = _row(bodyView(c, 'kora')!, 'Smelter');
+      expect(smelter.severity, isNot(Severity.ok));
+      expect(smelter.runFraction, lessThan(1));
+      expect(smelter.problem, contains('Iron Ore'));
+    });
+
+    test('a building named in a bottleneck is at least a warning', () {
+      final s = c.state;
+      final body = s.body('kora');
+      final b = body.buildings.firstWhere((x) => x.id == 'b3');
+      final row = buildingRowView(
+        s,
+        content,
+        _p,
+        body,
+        b,
+        BuildingStatus(
+          buildingId: 'b3',
+          defId: 'smelter',
+          runFraction: 1,
+          effectiveFraction: 1,
+          limitReason: null,
+          crew: 1,
+          slots: 1,
+          inputsPerSec: const {},
+          outputsPerSec: const {},
+        ),
+        const [
+          Bottleneck(
+            kind: BottleneckKind.understaffed,
+            bodyId: 'kora',
+            buildingId: 'b3',
+            resourceId: null,
+            runFraction: 0.5,
+            buildingIds: ['b3'],
+          ),
+        ],
+      );
+      expect(row.severity, Severity.warning);
+      expect(row.problem, isNotNull);
+    });
+
     test('a building running freely is ok with no problem', () {
       c.tickSeconds(5);
       final mine = bodyView(

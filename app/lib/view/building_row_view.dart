@@ -100,10 +100,12 @@ final class BuildingRowView {
   /// Each output and what it actually makes a second (`+0.2/s`).
   final List<NamedValue> makes;
 
-  /// Output as a share of full rate (supply, staffing and housing), 0 to 1.
+  /// Share of full rate, 0 to 1: the lower of its input supply and its
+  /// output against base crew (staffing and housing).
   final double runFraction;
 
-  /// [runFraction] as ok, warning (between 0 and 1) or stopped (0).
+  /// [runFraction] as ok, warning (between 0 and 1) or stopped (0); a
+  /// building a bottleneck names is at least a warning.
   final Severity severity;
 
   /// What holds it back, in plain English; null when nothing does.
@@ -138,9 +140,7 @@ BuildingRowView buildingRowView(
       : def.outputs.keys;
   BigNum rate(Map<String, BigNum>? m, String id) =>
       m?[id] ?? const BigNum.zero();
-  final fraction = !runsRecipe(def)
-      ? 1.0
-      : (status?.effectiveFraction ?? b.lastRunFraction).clamp(0.0, 1.0);
+  final fraction = runsRecipe(def) ? _fraction(b, status) : 1.0;
   final neck = bottlenecks.where((n) => n.buildingId == b.id).firstOrNull;
   final credits = s.faction(playerId).credits;
   final most = maxCrew(c.rules, def, b);
@@ -166,9 +166,12 @@ BuildingRowView buildingRowView(
         ),
     ],
     runFraction: fraction,
-    severity: fraction <= 0
-        ? Severity.stopped
-        : (fraction < 1 ? Severity.warning : Severity.ok),
+    severity: switch (fraction) {
+      <= 0 => Severity.stopped,
+      < 1 => Severity.warning,
+      // A building a bottleneck names is held back, whatever its share.
+      _ => neck == null ? Severity.ok : Severity.warning,
+    },
     problem: neck == null ? null : bottleneckText(s, c, playerId, neck),
     upgrades: {
       for (final t in UpgradeTrack.values)
@@ -177,6 +180,16 @@ BuildingRowView buildingRowView(
     canAddCrew: b.crew < most && availableCrew(s, c, playerId) > 0,
     canRemoveCrew: b.crew > 0,
   );
+}
+
+/// A recipe building's share of full rate, 0 to 1: the lower of its supply
+/// share ([BuildingStatus.runFraction]) and its output share
+/// ([BuildingStatus.effectiveFraction]). Capacity crew lifts the output
+/// share above 1, which on its own would hide a starved input.
+double _fraction(BuildingState b, BuildingStatus? status) {
+  final supply = status?.runFraction ?? b.lastRunFraction;
+  final output = status?.effectiveFraction ?? supply;
+  return (supply < output ? supply : output).clamp(0.0, 1.0);
 }
 
 UpgradeButtonView _upgrade(
