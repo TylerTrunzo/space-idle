@@ -14,6 +14,7 @@ class BrokenSaveScreen extends StatelessWidget {
     required this.brokenText,
     required this.reason,
     required this.onNewGame,
+    this.onRetry,
   });
 
   /// The stored text, for Export; null when storage could not be read at
@@ -26,9 +27,21 @@ class BrokenSaveScreen extends StatelessWidget {
   /// Starts a new game over the broken save.
   final VoidCallback onNewGame;
 
+  /// Reads the store again; offered when it could not be read at all,
+  /// which may pass (the save may still be there). Null hides it.
+  final VoidCallback? onRetry;
+
   Future<void> _export(BuildContext context, String text) async {
     final messenger = ScaffoldMessenger.of(context);
-    await Clipboard.setData(ClipboardData(text: text));
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+    } on PlatformException {
+      // A browser can refuse the clipboard: say so; the save stays stored.
+      messenger.showSnackBar(
+        const SnackBar(content: Text("Couldn't copy the save text")),
+      );
+      return;
+    }
     messenger.showSnackBar(
       const SnackBar(content: Text('Copied the save text')),
     );
@@ -53,7 +66,8 @@ class BrokenSaveScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   broken == null
-                      ? 'The game could not read its save from this device.'
+                      ? 'The game could not read its save from this device. '
+                            'It may still be there: try again first.'
                       : 'It may come from another version of the game. '
                             'Export it to keep a copy before you start over.',
                   style: text.bodyMedium,
@@ -64,18 +78,29 @@ class BrokenSaveScreen extends StatelessWidget {
                   style: monoText(text.bodySmall)
                       .copyWith(color: Palette.muted),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Start new game replaces whatever is stored on this device.',
+                  style: text.bodyMedium?.copyWith(color: Palette.amber),
+                ),
                 const SizedBox(height: 24),
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
                   children: [
+                    if (onRetry case final retry?)
+                      FilledButton.icon(
+                        icon: const Icon(Icons.replay),
+                        label: const Text('Retry'),
+                        onPressed: retry,
+                      ),
                     if (broken != null)
                       OutlinedButton.icon(
                         icon: const Icon(Icons.copy),
                         label: const Text('Export'),
                         onPressed: () => _export(context, broken),
                       ),
-                    FilledButton.icon(
+                    OutlinedButton.icon(
                       icon: const Icon(Icons.refresh),
                       label: const Text('Start new game'),
                       onPressed: onNewGame,

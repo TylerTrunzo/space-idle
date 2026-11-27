@@ -25,6 +25,32 @@ final class _SlowStore implements SaveStore {
   Future<void> write(String text) async {}
 }
 
+/// A slot that reads [text] (or throws while [failReads] is above 0, one
+/// failure a read) and whose writes throw while [failWrites] is set.
+final class _FlakyStore implements SaveStore {
+  _FlakyStore({this.text, this.failReads = 0, this.failWrites = false});
+  String? text;
+  int failReads;
+  bool failWrites;
+  int reads = 0;
+
+  @override
+  Future<String?> read() async {
+    reads++;
+    if (failReads > 0) {
+      failReads--;
+      throw StateError('storage busy');
+    }
+    return text;
+  }
+
+  @override
+  Future<void> write(String t) async {
+    if (failWrites) throw StateError('storage full');
+    text = t;
+  }
+}
+
 /// Steps the binding through [states] in order: the test binding, unlike
 /// the platform, does not fill in the states between two.
 void _go(WidgetTester tester, List<AppLifecycleState> states) {
@@ -95,6 +121,34 @@ void main() {
   });
 
   group('lifecycle', () {
+    testWidgets('a load that finishes in the background starts no timer', (
+      tester,
+    ) async {
+      final store = _SlowStore();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      addTearDown(() => _go(tester, _toForeground));
+      await tester.pumpWidget(SpaceIdleApp(store: store, clock: clock));
+      await tester.pump();
+      _go(tester, _toBackground);
+      store.gate.complete(null);
+      await tester.pump();
+      await tester.pump();
+      final c = _controllerIn(tester);
+
+      // In the background: game time must stand still.
+      final time = c.state.time;
+      clock.advance(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 5));
+      expect(c.state.time, time);
+
+      // Back in front, it runs.
+      _go(tester, _toForeground);
+      await tester.pump();
+      clock.advance(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(c.state.time, greaterThan(time));
+    });
+
     testWidgets('pausing saves and stops the timer; resuming catches up', (
       tester,
     ) async {
@@ -195,6 +249,49 @@ void main() {
     });
   });
 
+  group('a save that cannot be read', () {
+    testWidgets('offers Retry, which reads the store again', (tester) async {
+      final store = _FlakyStore(text: _savedNow(clock), failReads: 1);
+      await _pumpApp(tester, store, clock);
+      // The controller reports the failed read; a widget test hands it back.
+      expect(tester.takeException(), isA<StateError>());
+      expect(find.byType(BrokenSaveScreen), findsOneWidget);
+      expect(find.text('Export'), findsNothing, reason: 'nothing to export');
+
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(store.reads, 2);
+      expect(find.byType(Shell), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('says Start new game replaces whatever is stored', (
+      tester,
+    ) async {
+      await _pumpApp(tester, _FlakyStore(failReads: 1), clock);
+      expect(tester.takeException(), isA<StateError>());
+      expect(find.textContaining('replaces'), findsOneWidget);
+    });
+
+    testWidgets('a new game whose save fails still plays, and says so', (
+      tester,
+    ) async {
+      final store = _FlakyStore(text: 'garbage', failWrites: true);
+      await _pumpApp(tester, store, clock);
+
+      await tester.tap(find.text('Start new game'));
+      await tester.pump();
+      await tester.pump();
+      // Reported through FlutterError.reportError, which a widget test
+      // hands back here.
+      expect(tester.takeException(), isA<StateError>());
+      expect(find.byType(Shell), findsOneWidget);
+      expect(find.textContaining("couldn't be saved"), findsOneWidget);
+    });
+  });
+
   group('a save that cannot be loaded', () {
     late List<String> clipboard;
     setUp(() => clipboard = []);
@@ -226,6 +323,29 @@ void main() {
       expect(find.text("Your save couldn't be loaded"), findsOneWidget);
       expect(find.byType(Shell), findsNothing);
       expect(store.text, 'garbage from an older build');
+    });
+
+    testWidgets('a failed copy says so instead of failing silently', (
+      tester,
+    ) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async => call.method == 'Clipboard.setData'
+            ? throw PlatformException(code: 'denied')
+            : null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await _pumpApp(tester, MemorySaveStore('garbage'), clock);
+
+      await tester.tap(find.text('Export'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text("Couldn't copy the save text"), findsOneWidget);
     });
 
     testWidgets('Export copies the broken text', (tester) async {
