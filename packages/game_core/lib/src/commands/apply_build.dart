@@ -298,3 +298,109 @@ CommandResult _upgrade(
     ),
   );
 }
+
+/// A level [_buyUpgrades] could buy next: track [track] of [b] on [body]
+/// at [cost] credits.
+typedef _Offer = ({
+  BigNum cost,
+  BodyState body,
+  BuildingState b,
+  UpgradeTrack track,
+});
+
+/// Cheapest first, ties by building id, then track order.
+int _byCost(_Offer x, _Offer y) {
+  final byCost = x.cost.compareTo(y.cost);
+  if (byCost != 0) return byCost;
+  final byId = x.b.id.compareTo(y.b.id);
+  return byId != 0 ? byId : x.track.index.compareTo(y.track.index);
+}
+
+CommandResult _buyUpgrades(
+  GameState s,
+  Content c,
+  FactionState f,
+  BuyUpgradesCommand cmd,
+) {
+  if (cmd.budget < const BigNum.zero()) {
+    return _fail(CommandError.invalidAmount, 'The budget must be at least 0');
+  }
+  if (cmd.maxPurchases < 1 ||
+      cmd.maxPurchases > BuyUpgradesCommand.defaultMaxPurchases) {
+    return _fail(
+      CommandError.invalidAmount,
+      'Buy from 1 to ${BuyUpgradesCommand.defaultMaxPurchases} levels at '
+      'a time',
+    );
+  }
+  final limit = cmd.budget.min(f.credits);
+  final offers = SplayTreeSet<_Offer>(_byCost);
+  // Each building's offers in [offers], to replace once a level is bought.
+  final byBuilding = <BuildingState, List<_Offer>>{};
+  void offer(BodyState body, BuildingState b) {
+    final mine = byBuilding[b] ??= [];
+    offers.removeAll(mine);
+    mine.clear();
+    for (final t in c.buildings[b.defId]!.upgrades.keys) {
+      if (upgradeMaxedReason(c, b, t) != null) continue;
+      final o = (
+        cost: upgradeCost(c, b, t)[_credits]!,
+        body: body,
+        b: b,
+        track: t,
+      );
+      mine.add(o);
+      offers.add(o);
+    }
+  }
+
+  for (final body in s.bodies) {
+    if (body.ownerId != f.id) continue;
+    for (final b in body.buildings) {
+      offer(body, b);
+    }
+  }
+  final bought = <(BuildingState, UpgradeTrack), UpgradePurchase>{};
+  var total = const BigNum.zero();
+  var count = 0;
+  UpgradeBuyStop? stop;
+  while (stop == null) {
+    if (offers.isEmpty) {
+      stop = UpgradeBuyStop.nothingToBuy;
+    } else if (count >= cmd.maxPurchases) {
+      stop = UpgradeBuyStop.maxPurchases;
+    } else if (total + offers.first.cost > limit) {
+      stop = UpgradeBuyStop.budget;
+    } else {
+      final o = offers.first;
+      final r = _upgrade(s, c, f, UpgradeCommand(f.id, o.b.id, o.track));
+      // The offer passed every check the command makes, so it buys.
+      if (r case CommandOk(outcome: final Upgraded up)) {
+        total = total + o.cost;
+        count++;
+        final key = (o.b, o.track);
+        final was = bought[key];
+        bought[key] = UpgradePurchase(
+          bodyId: o.body.id,
+          buildingId: o.b.id,
+          track: o.track,
+          levels: (was?.levels ?? 0) + 1,
+          level: up.level,
+          cost: (was?.cost ?? const BigNum.zero()) + o.cost,
+          crewAdded: (was?.crewAdded ?? 0) + up.crewAdded,
+        );
+        offer(o.body, o.b);
+      } else {
+        throw StateError('buyUpgrades: ${o.b.id} ${o.track.name} refused');
+      }
+    }
+  }
+  return CommandOk(
+    outcome: UpgradesBought(
+      purchases: bought.values.toList(),
+      total: total,
+      stop: stop,
+      nextCost: offers.isEmpty ? null : offers.first.cost,
+    ),
+  );
+}

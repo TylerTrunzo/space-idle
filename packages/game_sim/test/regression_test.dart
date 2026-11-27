@@ -224,7 +224,7 @@ void main() {
 
     Command next() {
       final f = pick(factions);
-      return switch (rng.nextInt(19)) {
+      return switch (rng.nextInt(20)) {
         0 => BuildCommand(
           f,
           pick(bodies),
@@ -284,6 +284,18 @@ void main() {
           creditWeight: rng.nextInt(13) - 1,
         ),
         17 => SetAutoPayReserveCommand(f, pick(amounts)),
+        18 => BuyUpgradesCommand(
+          f,
+          pick(amounts),
+          // 0 and one past the cap are refused.
+          maxPurchases: pick([
+            1,
+            7,
+            0,
+            BuyUpgradesCommand.defaultMaxPurchases,
+            BuyUpgradesCommand.defaultMaxPurchases + 1,
+          ]),
+        ),
         _ => DiscardContractCommand(f, pick(contracts())),
       };
     }
@@ -298,6 +310,7 @@ void main() {
     }
 
     var applied = 0;
+    var boughtLevels = 0;
     for (var i = 0; i < 1500; i++) {
       final cmd = next();
       final json = cmd.toJson();
@@ -319,6 +332,9 @@ void main() {
         case CommandOk(:final outcome):
           applied++;
           expect(outcome, isNotNull, reason: jsonEncode(json));
+          if (outcome case UpgradesBought(:final levels) when levels > 0) {
+            boughtLevels += levels;
+          }
       }
       // The app may save between any two commands, before a tick.
       decodes(jsonEncode(json));
@@ -329,6 +345,8 @@ void main() {
     }
     // Enough of them were valid to exercise success paths too.
     expect(applied, greaterThan(50));
+    // Buy-max bought levels, not only refusals and empty budgets.
+    expect(boughtLevels, greaterThan(0));
   }, timeout: const Timeout(Duration(minutes: 1)));
 
   test('report credits per second match what 2.5 h away earns, from a '

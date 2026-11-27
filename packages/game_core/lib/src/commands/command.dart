@@ -121,6 +121,13 @@ sealed class Command {
         _int(j, 'crew'),
       ),
       'upgrade' => UpgradeCommand(f, _str(j, 'buildingId'), _track(j, 'track')),
+      'buyUpgrades' => BuyUpgradesCommand(
+        f,
+        _big(j, 'budget'),
+        maxPurchases:
+            _optInt(j, 'maxPurchases') ??
+            BuyUpgradesCommand.defaultMaxPurchases,
+      ),
       'createRoute' => CreateRouteCommand(
         f,
         _str(j, 'fromBodyId'),
@@ -295,6 +302,47 @@ final class UpgradeCommand extends Command {
   Map<String, Object?> get _fields => {
     'buildingId': buildingId,
     'track': track.name,
+  };
+}
+
+/// Buys upgrade levels for credits, cheapest first, the way an app's
+/// "buy max" button would: again and again the cheapest level any building
+/// on a body the faction owns can still take (an [UpgradeCommand] that
+/// would not be refused: its track exists and is not maxed), ties by
+/// building id, then by track in [UpgradeTrack] order; until the next one
+/// would take the total past [budget] or the credits held, or
+/// [maxPurchases] levels are bought.
+///
+/// Each level is bought exactly as an [UpgradeCommand] buys it (a capacity
+/// level fills its new crew slots from the free crew), so the command ends
+/// where that loop of single commands would. The outcome is
+/// `UpgradesBought`.
+final class BuyUpgradesCommand extends Command {
+  /// Creates a buy-upgrades command.
+  const BuyUpgradesCommand(
+    super.factionId,
+    this.budget, {
+    this.maxPurchases = defaultMaxPurchases,
+  });
+
+  /// The most levels one command buys, and the default: it bounds the
+  /// command's work whatever the budget.
+  static const int defaultMaxPurchases = 2000;
+
+  /// Credits the levels may cost in all; at least zero. The credits held
+  /// cap it too, so credits never go below zero.
+  final BigNum budget;
+
+  /// Most levels to buy, from 1 to [defaultMaxPurchases].
+  final int maxPurchases;
+
+  @override
+  String get _cmd => 'buyUpgrades';
+
+  @override
+  Map<String, Object?> get _fields => {
+    'budget': budget.toJson(),
+    'maxPurchases': maxPurchases,
   };
 }
 

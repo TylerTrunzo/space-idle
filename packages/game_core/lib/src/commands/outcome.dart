@@ -127,6 +127,91 @@ final class Upgraded extends CommandOutcome {
   final int crewAdded;
 }
 
+/// Why a `BuyUpgradesCommand` stopped buying.
+enum UpgradeBuyStop {
+  /// The next cheapest level would take the total past the budget or the
+  /// credits held.
+  budget,
+
+  /// It bought as many levels as the command allows.
+  maxPurchases,
+
+  /// No building on an owned body has a level left to buy.
+  nothingToBuy,
+}
+
+/// The levels a `BuyUpgradesCommand` bought on one building's track.
+final class UpgradePurchase {
+  /// Creates a purchase.
+  const UpgradePurchase({
+    required this.bodyId,
+    required this.buildingId,
+    required this.track,
+    required this.levels,
+    required this.level,
+    required this.cost,
+    required this.crewAdded,
+  });
+
+  /// Body the building stands on.
+  final String bodyId;
+
+  /// The building upgraded.
+  final String buildingId;
+
+  /// The track raised.
+  final UpgradeTrack track;
+
+  /// Levels bought on it, at least 1.
+  final int levels;
+
+  /// Its level now.
+  final int level;
+
+  /// Credits those levels cost together.
+  final BigNum cost;
+
+  /// Crew moved from the free crew into the slots its capacity levels
+  /// added, as `Upgraded.crewAdded`; 0 for the other tracks.
+  final int crewAdded;
+}
+
+/// A `BuyUpgradesCommand` bought [levels] upgrade levels for [total]
+/// credits ([spent] holds them as `credits`; empty when nothing was
+/// bought).
+final class UpgradesBought extends CommandOutcome {
+  /// Creates the outcome; [purchases] is copied unmodifiable.
+  UpgradesBought({
+    required List<UpgradePurchase> purchases,
+    required this.total,
+    required this.stop,
+    this.nextCost,
+  }) : purchases = List.unmodifiable(purchases),
+       super(spent: total.isZero ? const {} : {'credits': total});
+
+  /// What was bought, one entry per building and track, in the order each
+  /// was first bought.
+  final List<UpgradePurchase> purchases;
+
+  /// Credits spent in all.
+  final BigNum total;
+
+  /// Why it stopped.
+  final UpgradeBuyStop stop;
+
+  /// Credits the cheapest level not bought costs; null when there is none
+  /// ([UpgradeBuyStop.nothingToBuy]).
+  final BigNum? nextCost;
+
+  /// Levels bought in all.
+  int get levels => purchases.fold(0, (t, p) => t + p.levels);
+
+  /// Levels may be bought on several bodies; the credits are the
+  /// faction's.
+  @override
+  String? get bodyId => null;
+}
+
 /// A `CreateRouteCommand` opened [routeId], taking its cargo ships from
 /// [bodyId], the route's source.
 final class RouteCreated extends CommandOutcome {

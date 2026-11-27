@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import '../content/content.dart';
@@ -44,6 +45,7 @@ CommandResult applyCommand(GameState s, Content c, Command cmd) {
     DemolishCommand() => _demolish(s, c, faction, cmd),
     AssignCrewCommand() => _assignCrew(s, c, faction, cmd),
     UpgradeCommand() => _upgrade(s, c, faction, cmd),
+    BuyUpgradesCommand() => _buyUpgrades(s, c, faction, cmd),
     CreateRouteCommand() => _createRoute(s, c, faction, cmd),
     UpdateRouteCommand() => _updateRoute(s, c, faction, cmd),
     MoveShipsCommand() => _moveShips(s, c, faction, cmd),

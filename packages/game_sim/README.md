@@ -10,10 +10,10 @@ dart run game_sim:game_sim bot --bot balanced|casual|greedy --hours 168 --seed 1
 ```
 
 Game commands use the `Command.toJson` format (`build`, `demolish`, `assignCrew`,
-`upgrade`, `createRoute`, `updateRoute`, `moveShips`, `removeRoute`, `sell`,
-`setAutoSell`, `claimBody`, `survey`, `expandSlots`, `startMegaprojectStage`,
-`deliverToMegaproject`, `setMegaprojectAuto`, `deliverContract`,
-`discardContract`);
+`upgrade`, `buyUpgrades`, `createRoute`, `updateRoute`, `moveShips`,
+`removeRoute`, `sell`, `setAutoSell`, `claimBody`, `survey`, `expandSlots`,
+`startMegaprojectStage`, `deliverToMegaproject`, `setMegaprojectAuto`,
+`setAutoPayReserve`, `deliverContract`, `discardContract`);
 `factionId` defaults to the player. A successful game command
 replies with `spent` and `gained` (credits and `body/resource` amounts it took
 and gave), `createdId` for a new building, route, ship move or project, and for
@@ -295,6 +295,14 @@ A capacity upgrade on a crewed building fills its new slot from free crew:
 the reply has `crewAdded` and a message such as `"Mine on Kora (b1) is at
 capacity level 1; 1 free crew moved into its new slot (2 of 2 crew)"`, or
 says the slot is empty when no crew is free.
+`buyUpgrades` (`{"cmd":"buyUpgrades","budget":"5e6"}`, optional
+`maxPurchases`, 1 to 2000) is the app's buy-max button: it buys the cheapest
+upgrade level of any building you own, again and again, until the next would
+pass the budget or your credits, ties by building id then track. The reply
+lists `upgrades` (each building and track: `levels` bought, `level` now,
+`cost`), `stop` (`budget`, `maxPurchases` or `nothingToBuy`) and `nextCost`,
+with a message such as `"Bought 3 upgrade levels on 2 buildings for 159
+credits; the next costs 58.5 credits, more than the budget allows"`.
 Error messages are plain sentences with display names: an unknown building
 type lists what the body can build with each one's cost (`"Mine (mine, 100
 credits), Smelter (smelter, 150 credits), ..."`), an upgrade track the

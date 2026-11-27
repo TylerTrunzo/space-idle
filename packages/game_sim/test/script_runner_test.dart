@@ -68,6 +68,63 @@ void main() {
     expect(speed['message'], isNull);
   });
 
+  test('buyUpgrades buys cheapest first and says what it bought', () {
+    final r = _runner();
+    r.state.faction('player').credits = BigNum.from(1000);
+    final none = r.handle({'cmd': 'buyUpgrades', 'budget': '49'});
+    expect(none['ok'], isTrue, reason: '$none');
+    expect(none['upgrades'], isEmpty);
+    expect(none['stop'], 'budget');
+    expect(none['nextCost'], _numJson(50));
+    expect(
+      none['message'],
+      'Bought no upgrades: the cheapest costs 50 credits, more than the '
+      'budget allows',
+    );
+    final buy = r.handle({'cmd': 'buyUpgrades', 'budget': '200'});
+    expect(buy['ok'], isTrue, reason: '$buy');
+    // The two mines' first speed levels at 50, then the first mine's
+    // second at 58.5 (the smelter's first is 75); the second mine's
+    // second, 58.5 more, would pass 200.
+    expect(buy['spent'], {'credits': _numJson(158.5)});
+    expect(buy['upgrades'], [
+      {
+        'buildingId': 'b1',
+        'bodyId': 'kora',
+        'track': 'speed',
+        'levels': 2,
+        'level': 2,
+        'cost': _numJson(108.5),
+      },
+      {
+        'buildingId': 'b2',
+        'bodyId': 'kora',
+        'track': 'speed',
+        'levels': 1,
+        'level': 1,
+        'cost': _numJson(50),
+      },
+    ]);
+    String f(double v) => formatNumber(BigNum.from(v));
+    expect(
+      buy['message'],
+      'Bought 3 upgrade levels on 2 buildings for ${f(158.5)} credits; the '
+      'next costs ${f(58.5)} credits, more than the budget allows',
+    );
+    r.state.faction('player').credits = BigNum.from(1e9);
+    final capped = r.handle({
+      'cmd': 'buyUpgrades',
+      'budget': '1e9',
+      'maxPurchases': 2,
+    });
+    expect(capped['stop'], 'maxPurchases');
+    expect(
+      capped['message'],
+      'Bought 2 upgrade levels on 2 buildings for ${f(58.5 + 68.445)} '
+      'credits; stopped at 2 levels, the most this command buys',
+    );
+  });
+
   test('advance then state shows time passing and stock/credits', () {
     final r = _runner();
     final before = r.handle({'cmd': 'state'});
