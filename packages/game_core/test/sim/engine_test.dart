@@ -1156,9 +1156,11 @@ void main() {
         final (_, used, wasted, held) = play(500);
         expect(used, closeTo(1.2 * 6 * 3600, 1.2 * 6 * 3600 * 0.01));
         expect(wasted, lessThan(1));
-        // A minute's use of a lot either way of the stop, not a second
-        // trip's worth above it.
-        expect(held, closeTo(500, 1.2 * 60 + 1));
+        // The shared target is timed by Brine's longer trip while Kora,
+        // 60 s nearer, sends: up to that minute's use above the stop, and
+        // a minute's use of a lot either way.
+        expect(held, greaterThan(500 - 1.2 * 60 - 1));
+        expect(held, lessThan(500 + 1.2 * 60 + 1.2 * 60 + 1));
       });
 
       test('they share one target, and the nearer route sends first', () {
@@ -1171,19 +1173,23 @@ void main() {
         expect(brine, lessThan(sent * 0.01));
       });
 
-      test('a nearer route too slow for the demand leaves the farther one '
-          'room for its trip: fully supplied, at 1 s and 60 s', () {
+      test('whatever the near source, the store is fully supplied, at 1 s '
+          'and 60 s, with no waste and no overfill', () {
         // Hollow Reach's smelters use 1.2 ore a second; Kora (120 s) sends
-        // at most [rate], Brine (180 s) 2 a second. A target timed by
-        // Kora's trip kept Brine's lots too small, and the smelters ran at
-        // 76-95%.
-        // With [mines], Kora holds no ore and makes it with that many
-        // crewed iron mines (0.4 a second each): its route runs dry.
-        (double, double, double) supply(
+        // at most [rate], Brine (180 s) 2 a second, both with [stop]. The
+        // shared target is timed by Brine's trip, the farthest, whichever
+        // route ends up sending: estimating what the nearer one would carry
+        // starved the store whenever the estimate was high (a slow route,
+        // a source that makes less than its route's rate, or a source that
+        // also ships the good elsewhere).
+        ({double share, double wasted, double most, double cap}) supply(
           double stop,
           double rate,
           double step, {
-          int? mines,
+          double held = 1e6,
+          int mines = 0,
+          double? divert,
+          double hours = 6,
         }) {
           final s = engine.newGame(1);
           s.faction('player').baseCrew = 100;
@@ -1197,13 +1203,13 @@ void main() {
           final kora = s.body('kora');
           for (final b in kora.buildings) {
             b.crew =
-                mines != null &&
+                mines > 0 &&
                     b.defId == 'mine' &&
                     b.depositResourceId == 'iron_ore'
                 ? 1
                 : 0;
           }
-          for (var i = 1; i < (mines ?? 0); i++) {
+          for (var i = 1; i < mines; i++) {
             kora.buildings.add(
               BuildingState(
                 id: s.newId('b'),
@@ -1213,11 +1219,28 @@ void main() {
               ),
             );
           }
-          for (final from in ['kora', 'brine']) {
-            s.body(from)
-              ..stock['iron_ore'] = n(from == 'kora' && mines != null ? 0 : 1e6)
-              ..stock['cargo_ship'] = n(1);
+          kora
+            ..stock['iron_ore'] = n(held)
+            ..stock['cargo_ship'] = n(divert == null ? 1 : 2);
+          s.body('brine')
+            ..stock['iron_ore'] = n(1e6)
+            ..stock['cargo_ship'] = n(1);
+          // A plain route out of Kora too, made first so it sends first.
+          if (divert != null) {
             engine.apply(
+              s,
+              CreateRouteCommand(
+                'player',
+                'kora',
+                'brine',
+                'iron_ore',
+                n(divert),
+                1,
+              ),
+            );
+          }
+          for (final from in ['kora', 'brine']) {
+            final r = engine.apply(
               s,
               CreateRouteCommand(
                 'player',
@@ -1229,12 +1252,13 @@ void main() {
                 stopAtDestination: n(stop),
               ),
             );
+            expect(r, isA<CommandOk>());
           }
           engine.advance(s, 3600, maxStep: step);
           final steel = s.faction('player').lifetimeProduced['steel']!;
           var wasted = 0.0;
           var most = 0.0;
-          for (var i = 0; i < 6 * 3600 ~/ step; i++) {
+          for (var i = 0; i < hours * 3600 ~/ step; i++) {
             engine.tick(s, step);
             wasted += reach.wastedThisStep['iron_ore']?.toDouble() ?? 0;
             most = math.max(most, reach.stock['iron_ore']!.toDouble());
@@ -1243,42 +1267,80 @@ void main() {
               (s.faction('player').lifetimeProduced['steel']! - steel)
                   .toDouble() *
               2;
-          return (used / (1.2 * 6 * 3600), wasted, most);
+          return (
+            share: used / (1.2 * hours * 3600),
+            wasted: wasted,
+            most: most,
+            cap: storageCap(s, engine.content, reach).toDouble(),
+          );
         }
 
-        for (final (stop, rate, mines) in <(double, double, int?)>[
-          (10.0, 0.2, null),
-          (10.0, 0.4, null),
-          (10.0, 0.8, null),
-          (50.0, 0.2, null),
-          // Set at 2 a second, but Kora makes only 0.4 or 0.8: it counts
-          // at what it makes, not its setting.
-          (10.0, 2, 1),
-          (10.0, 2, 2),
-          (50.0, 2, 1),
-          (10.0, 2, 3),
-        ]) {
-          final (coarse, wasteCoarse, mostCoarse) = supply(
+        final cases = <(String, double, double, double, int, double?, double)>[
+          // Kora stocked, at rates below and above the demand.
+          ('stocked', 1, 0.2, 1e6, 0, null, 6),
+          ('stocked', 10, 0.2, 1e6, 0, null, 6),
+          ('stocked', 10, 0.8, 1e6, 0, null, 6),
+          ('stocked', 50, 0.2, 1e6, 0, null, 6),
+          ('stocked', 10, 0.4, 1e6, 0, null, 6),
+          ('stocked', 50, 0.8, 1e6, 0, null, 6),
+          ('stocked', 100, 1.2, 1e6, 0, null, 6),
+          ('stocked, all fast', 10, 2, 1e6, 0, null, 6),
+          ('stocked, all fast', 500, 2, 1e6, 0, null, 6),
+          // Kora set at 2 a second, fed only by its mines (0.4 each).
+          ('dry', 10, 2, 0, 1, null, 6),
+          ('dry', 10, 2, 0, 2, null, 6),
+          ('dry', 10, 2, 0, 3, null, 6),
+          ('dry', 50, 2, 0, 1, null, 6),
+          ('dry', 10, 2, 0, 4, null, 6),
+          // Some ore held on top of the mines, about a trip's sending.
+          ('near the threshold', 10, 2, 240, 1, null, 12),
+          ('near the threshold', 10, 2, 2000, 2, null, 12),
+          ('near the threshold', 50, 2, 300, 2, null, 12),
+          // A route slower than the mines, so stock builds.
+          ('slower than production', 10, 0.8, 0, 3, null, 6),
+          ('slower than production', 10, 0.8, 50, 3, null, 6),
+          // Kora's mines also ship ore to Brine on a plain route.
+          ('shared source', 10, 2, 0, 3, 0.4, 6),
+          ('shared source', 10, 2, 0, 3, 2, 6),
+          ('shared source', 10, 2, 0, 4, 2, 6),
+          ('shared source', 10, 2, 0, 6, 2, 6),
+          ('shared source', 10, 2, 0, 6, 0.4, 6),
+        ];
+        for (final (kind, stop, rate, held, mines, divert, hours) in cases) {
+          final why =
+              '$kind: stop $stop, Kora $rate, $held held, $mines mines, '
+              'divert $divert';
+          final coarse = supply(
             stop,
             rate,
             60,
+            held: held,
             mines: mines,
+            divert: divert,
+            hours: hours,
           );
-          final (live, wasteLive, mostLive) = supply(
+          final live = supply(
             stop,
             rate,
             1,
+            held: held,
             mines: mines,
+            divert: divert,
+            hours: hours,
           );
-          final why = 'stop $stop, Kora $rate, mines $mines';
-          expect(coarse, greaterThan(0.995), reason: why);
-          expect(live, greaterThan(0.995), reason: why);
-          expect(coarse, closeTo(live, 0.01), reason: why);
-          expect(wasteCoarse + wasteLive, lessThan(1), reason: why);
-          // No overfill: never more than the stop plus a farther trip's use.
-          for (final most in [mostCoarse, mostLive]) {
-            expect(most, lessThan(stop + 1.2 * 180 + 1.2 * 60), reason: why);
+          for (final r in [coarse, live]) {
+            expect(r.share, greaterThan(0.995), reason: why);
+            expect(r.wasted, lessThan(1), reason: why);
+            // At most the stop, Brine's trip of use and a minute's lot;
+            // never past the cap.
+            expect(
+              r.most,
+              lessThan(stop + 1.2 * 180 + 2 * 60 + 1),
+              reason: why,
+            );
+            expect(r.most, lessThanOrEqualTo(r.cap), reason: why);
           }
+          expect(coarse.share, closeTo(live.share, 0.01), reason: why);
         }
       });
 

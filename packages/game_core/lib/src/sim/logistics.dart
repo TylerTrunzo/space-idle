@@ -1,7 +1,6 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
-import 'megaprojects.dart';
 import 'production.dart';
 import 'step_cache.dart';
 
@@ -106,23 +105,26 @@ Map<String, BigNum> _inFlightTo(GameState s) {
 /// [RouteState.stopAtDestination] once what is on its way lands; null for
 /// a route with no stop level.
 ///
-/// That is the destination's target less what it holds and all the cargo
-/// in flight to it of the resource, on any route. Every route with a stop
-/// level bringing the resource to that body shares one target: the
-/// largest of their stop levels plus what the destination's buildings use
-/// at full supply while a lot of the farthest of them needed to meet that
-/// use travels ([sendCargo] runs them nearest first), but never more than
-/// the destination's storage cap. So the stop level is the stock the
-/// destination keeps, not a cap on the destination plus the cargo on its
-/// way: a route whose rate times its travel time passes its stop level
-/// keeps enough in flight to cover the trip and the destination supplied,
-/// instead of sending one stop level's worth per trip and leaving it dry
-/// between lots. The store plus the cargo on its way never pass the cap,
-/// however little of it the buildings there can use, and however many
-/// routes bring it: each counts what the others have on the way, so their
-/// trips' use is not counted twice; and one route's longer trip never
-/// keeps the store above a nearer one's own target, pausing it for good
-/// ([sendCargo] lets the nearest send first).
+/// That is the destination's target ([routeStopTarget]) less what it holds
+/// and all the cargo in flight to it of the resource, on any route. Every
+/// route with a stop level bringing the resource to that body shares the
+/// target: the largest of their stop levels plus what the destination's
+/// buildings use at full supply while a lot of the farthest of them
+/// travels, but never more than the destination's storage cap. So the
+/// stop level is the stock the destination keeps, not a cap on the
+/// destination plus the cargo on its way: a route whose rate times its
+/// travel time passes its stop level keeps enough in flight to cover the
+/// trip and the destination supplied, instead of sending one stop level's
+/// worth per trip and leaving it dry between lots. Timed by the farthest
+/// trip, the target covers whichever of the routes ends up sending, so
+/// the store is never starved; the price is that while a nearer route
+/// does the sending, the store can hold up to the destination's use over
+/// the difference between the longest and shortest trips above the stop
+/// level. The store plus the cargo on its way never pass the cap, however
+/// little of it the buildings there can use, and however many routes bring
+/// it: each counts what the others have on the way, so their trips' use is
+/// not counted twice. [sendCargo] runs them nearest first, so a farther
+/// route only tops up what the nearer ones leave.
 BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) =>
     _roomBeforeStop(
       s,
@@ -131,21 +133,22 @@ BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) =>
       _inFlightTo(s)[_toKey(r.toBodyId, r.resourceId)] ?? const BigNum.zero(),
     );
 
+/// The stock route [r]'s destination keeps of its resource, cargo on its
+/// way included, before the routes with a stop level into it pause
+/// ([routeRoomBeforeStop]): shared by all of them; null for a route with no
+/// stop level.
+BigNum? routeStopTarget(GameState s, Content c, RouteState r) {
+  if (r.stopAtDestination == null) return null;
+  return _stopTargets(s, c, StepCache(s, c))[_toKey(r.toBodyId, r.resourceId)];
+}
+
 /// Destination and resource ([_toKey]) to the target every route with a
 /// stop level bringing the resource there shares ([routeRoomBeforeStop]):
 /// the largest of their stop levels plus what the destination uses while
-/// a lot of the farthest of them it needs travels, at most the
-/// destination's cap. Taking the routes whose source holds some of the
-/// resource nearest first, as [sendCargo] does, that is the one whose
-/// rate brings what they carry together up to what the destination uses
-/// a second, each counted at what it can keep sending ([_sustained]);
-/// the farthest of them when they never get there, and the nearest of
-/// all when no source holds any. So a near route too slow for the demand,
-/// or fed by less than it is set to carry, leaves room for the farther
-/// ones' longer trips.
+/// a lot of the farthest of them travels, at most the destination's cap.
 Map<String, BigNum> _stopTargets(GameState s, Content c, StepCache cache) {
   final stops = <String, BigNum>{};
-  final groups = <String, List<(RouteState, double)>>{};
+  final farthest = <String, (RouteState, double)>{};
   for (final r in s.routes) {
     final stop = r.stopAtDestination;
     if (stop == null) continue;
@@ -153,73 +156,15 @@ Map<String, BigNum> _stopTargets(GameState s, Content c, StepCache cache) {
     final most = stops[key];
     if (most == null || stop > most) stops[key] = stop;
     final trip = travelSeconds(s, c, s.body(r.fromBodyId), s.body(r.toBodyId));
-    (groups[key] ??= []).add((r, trip));
+    final far = farthest[key];
+    if (far == null || trip > far.$2) farthest[key] = (r, trip);
   }
-  final targets = <String, BigNum>{};
-  for (final MapEntry(key: key, value: group) in groups.entries) {
-    // A stable sort, nearest first.
-    final byTrip = [for (final (i, g) in group.indexed) (i, g)]
-      ..sort((x, y) {
-        final t = x.$2.$2.compareTo(y.$2.$2);
-        return t != 0 ? t : x.$1.compareTo(y.$1);
-      });
-    final first = byTrip.first.$2.$1;
-    final to = s.body(first.toBodyId);
-    final use = cache.use(to, 1)[first.resourceId] ?? const BigNum.zero();
-    RouteState timedBy = first;
-    var carried = const BigNum.zero();
-    for (final (_, (r, trip)) in byTrip) {
-      final from = s.body(r.fromBodyId);
-      final held = from.stock[r.resourceId] ?? const BigNum.zero();
-      if (held <= const BigNum.zero()) continue;
-      timedBy = r;
-      carried = carried + _sustained(s, c, r, held, trip, cache);
-      if (carried >= use) break;
-    }
-    targets[key] = (stops[key]! + _useInTransit(s, c, timedBy, cache)).min(
-      cache.cap(to),
-    );
-  }
-  return targets;
-}
-
-/// Units a second route [r] can keep sending: its rate, at most its
-/// capacity, while its source holds [held] of the resource, at least a
-/// trip ([trip] seconds) of that; with less, no more than its source makes
-/// of it a second beyond what its buildings use, at their last run
-/// fractions. So a route set faster than what feeds it counts at what it
-/// carries over time, however short the step that left a little stock.
-BigNum _sustained(
-  GameState s,
-  Content c,
-  RouteState r,
-  BigNum held,
-  double trip,
-  StepCache cache,
-) {
-  final most = r.ratePerSecond.min(routeCapacity(c, r));
-  if (held >= most.mulDouble(trip)) return most;
-  final from = s.body(r.fromBodyId);
-  final owner = from.ownerId;
-  if (owner == null) return const BigNum.zero();
-  var net = const BigNum.zero();
-  for (final b in from.buildings) {
-    if (b.lastRunFraction == 0) continue;
-    final flow = fullRateFlow(
-      c,
-      from,
-      b,
-      1,
-      cache.crewEff(owner),
-      bonuses: bonusesFor(s, c, owner),
-    );
-    net =
-        net +
-        ((flow.outputs[r.resourceId] ?? const BigNum.zero()) -
-                (flow.inputs[r.resourceId] ?? const BigNum.zero()))
-            .mulDouble(b.lastRunFraction);
-  }
-  return most.min(net.max(const BigNum.zero()));
+  return {
+    for (final MapEntry(key: key, value: (r, _)) in farthest.entries)
+      key: (stops[key]! + _useInTransit(s, c, r, cache)).min(
+        cache.cap(s.body(r.toBodyId)),
+      ),
+  };
 }
 
 /// [routeRoomBeforeStop] given the shared [targets] ([_stopTargets]) and
@@ -266,9 +211,11 @@ List<RouteState> _sendOrder(GameState s, Content c) {
   return order;
 }
 
-/// Whether route [r] is paused: its destination, with what is on its way
-/// less what it uses before that lands, holds its stop level
-/// ([routeRoomBeforeStop]); never for a route with no stop level.
+/// Whether route [r] is paused: its destination, with what is on its way,
+/// holds the target it shares with every stop-level route into it
+/// ([routeStopTarget], [routeRoomBeforeStop]); never for a route with no
+/// stop level. A farther route into a store a nearer one also feeds may
+/// send little while not paused: the nearest sends first.
 bool routePaused(GameState s, Content c, RouteState r) {
   final room = routeRoomBeforeStop(s, c, r);
   return room != null && room <= const BigNum.zero();
@@ -282,8 +229,9 @@ bool routePaused(GameState s, Content c, RouteState r) {
 /// route ([routePaused]) sends nothing until the destination uses some
 /// up. Routes run in list order, but those with a stop level into one
 /// store nearest first, so the nearest fills the room they share and the
-/// others top it up. So the route restocks its destination as a shop reorders: what is
-/// on its way counts, less what will be used before it lands. That runs
+/// others top it up. So the route restocks its destination as a shop
+/// reorders: what is on its way counts, less what will be used before it
+/// lands. That runs
 /// the same in long steps as in short ones, where a rule on the
 /// destination's stock alone pauses and resumes a trip late, by up to a
 /// step, and leaves the destination dry between lots.
