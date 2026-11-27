@@ -771,6 +771,40 @@ void main() {
       })['message'],
       'Orbital Station is fed by hand only',
     );
+    expect(
+      r.handle({
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'orbital_station',
+        'goods': 'nearReady',
+        'credits': true,
+        'creditWeight': 3,
+      })['message'],
+      'Orbital Station now takes goods from every body each game minute '
+      'once a stage is near ready (its credits due within 12h), above what '
+      'each keeps for its own use and open contracts, and a share, at '
+      'weight 3, of the credits above the auto-pay reserve (5M)',
+    );
+    expect(
+      r.handle({
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'orbital_station',
+        'goods': 'off',
+        'credits': true,
+        'creditWeight': 0,
+      })['message'],
+      'Orbital Station now takes the credits above the auto-pay reserve '
+      '(5M) only when nothing else takes them (weight 0) each game minute, '
+      'and no goods',
+    );
+    expect(
+      r.handle({
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'orbital_station',
+        'credits': true,
+        'creditWeight': 11,
+      })['error'],
+      'invalidAmount',
+    );
     final bad = r.handle({
       'cmd': 'setMegaprojectAuto',
       'megaprojectId': 'orbital_station',
@@ -815,9 +849,27 @@ void main() {
     expect(entry('mass_driver')['auto'], {
       'goods': 'always',
       'credits': true,
+      'creditWeight': 1,
       'text':
           'goods from every body, and a share of the credits above the '
           'auto-pay reserve (1M)',
+    });
+    r.handle({
+      'cmd': 'setMegaprojectAuto',
+      'megaprojectId': 'mass_driver',
+      'goods': 'nearReady',
+      'credits': true,
+      'creditWeight': 2,
+    });
+    expect(entry('mass_driver')['auto'], {
+      'goods': 'nearReady',
+      'credits': true,
+      'creditWeight': 2,
+      'goodsFedNow': false,
+      'text':
+          'goods from every body once a stage is near ready (its credits '
+          'due within 12h), not fed yet, and a share, at weight 2, of the '
+          'credits above the auto-pay reserve (1M)',
     });
     expect(r.handle({'cmd': 'state'})['autoPayReserve'], {
       'value': '1e6',

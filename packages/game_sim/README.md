@@ -50,18 +50,28 @@ permanent bonus. A megaproject with `requiresMegaproject` refuses deliveries
 with `megaprojectLocked` until it opens ("Mass Driver opens at Orbital Station
 level 1 (you have level 0)").
 
-`{"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station","goods":true,
-"credits":true}` feeds a megaproject on its own every game minute: with
-`goods`, each owned body hands over what the stage still needs above what it
-keeps (local use, its auto-sell rule's `keepAtLeast`, open contract needs);
-with `credits` (default false), a share of the credits above the faction's
-one auto-pay reserve, set with `{"cmd":"setAutoPayReserve","credits":"5e6"}`
-(0 until set). The credits above the reserve are split evenly among the
-megaprojects taking credits that still owe some, a share one cannot use
-going to the others, so each progresses. Neither `goods` nor `credits`
-clears it. It may be set while the megaproject is locked. Between minutes auto-sell holds back what a fed
-megaproject still needs, up to the storage cap, and what a body holds of it
-above the cap goes in at once, so deliveries are the same for any step size.
+`{"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station",
+"goods":"nearReady","credits":true,"creditWeight":1}` feeds a megaproject on
+its own every game minute. `goods` says when each owned body hands over what
+the stage still needs above what it keeps (local use, its auto-sell rule's
+`keepAtLeast`, open contract needs): `"off"` (the default) never, `"always"`
+every minute, and `"nearReady"` only once the stage is near ready, until it
+is paid for. A stage is near ready when the credits it still owes are no more
+than the credits above the reserve plus 12 hours (`nearReadyHorizonSeconds`
+in the rules) of what credit auto-pay gives it, or, with `credits` off, no
+more than the credits you hold; until then its goods sell as usual (`state`
+shows `goodsFedNow`). `true` and `false`, from older scripts, mean
+`"always"` and `"off"`. With `credits` (default false) it takes a share of the
+credits above the faction's one auto-pay reserve, set with
+`{"cmd":"setAutoPayReserve","credits":"5e6"}` (0 until set). The credits
+above the reserve are split among the megaprojects taking credits that still
+owe some, in proportion to `creditWeight` (0 to 10, default 1; another value
+fails with `invalidAmount`), a share one cannot use going to the others. At
+weight 0 a megaproject takes credits only when none of the others owing has a
+weight. No goods and no credits clears it. It may be set while the
+megaproject is locked. Between minutes auto-sell holds back what a fed stage
+still needs, up to the storage cap, and what a body holds of it above the cap
+goes in at once, so deliveries are the same for any step size.
 
 A new building takes free crew up to its base crew slots (fewer if fewer are
 free; the reply says `"Built Shipyard on Kora (b9) with 2 of 2 crew. At full
@@ -398,7 +408,8 @@ first in a check-in (surveys, claims, contracts, megaproject deliveries), so
 their timers run while the player is away.
 
 - **Megaprojects.** Once a megaproject opens, each bot feeds it on its own
-  (`setMegaprojectAuto`): goods from every body. Once credits are all the
+  (`setMegaprojectAuto`): goods from every body once a stage is near ready
+  (`"goods":"nearReady"`), credits at the default weight 1. Once credits are all the
   stage being paid for still lacks, the bot pays them by hand when it can
   and still keep a reserve of an hour of income; otherwise they go in on
   their own above the shared auto-pay reserve of that hour (one for every

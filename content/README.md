@@ -63,14 +63,18 @@ The game's data, validated at load by `game_core` (`dart run game_sim:game_sim c
 - **Megaproject bonuses.** `bonusesPerLevel` kinds: `storagePercent`, `housingPercent`,
   `outputPercent` and `marketDepthPercent` add `amount` percent a level; `offlineCapSeconds` adds
   seconds; `marketDepthMultiplier` and `productionSpeedMultiplier` multiply by `amount^level`
-  (`amount` at least 1), optionally only up to `appliesToMaxTier` (the tier of the good sold, or the
-  highest tier a building makes; habitats and depots make nothing and are never sped up). A
-  multiplier never passes ×1,000,000, so every level stays finite.
+  (`amount` at least 1), optionally only from `appliesToMinTier` and up to `appliesToMaxTier` (the
+  tier of the good sold, or the highest tier a building makes; habitats and depots make nothing and
+  are never sped up; the lowest tier must not pass the highest). A multiplier never passes
+  ×1,000,000, so every level stays finite.
 - **Auto-delivery.** A megaproject can be fed on its own (`setMegaprojectAuto`): every game minute
   each body hands over what the stage still needs above what it keeps (its buildings' use over the
-  step, its auto-sell rule's `keepAtLeast`, and what open contracts still need); with `credits` on,
-  the credits above your one auto-pay reserve go in after the minute's sales, split evenly among
-  the megaprojects taking them. Between minutes auto-sell
+  step, its auto-sell rule's `keepAtLeast`, and what open contracts still need), every minute with
+  goods `always`, or with `nearReady` only once the stage's credits still owed are within
+  `nearReadyHorizonSeconds` (rules, default 43,200) of what credit auto-pay gives it (with credits
+  off, within the credits held), until that stage is paid; with `credits` on, the credits above
+  your one auto-pay reserve go in after the minute's sales, split among the megaprojects taking
+  them by `creditWeight` (0 to 10). Between minutes auto-sell
   holds those goods back, up to the storage cap; what a body holds of them above its cap goes in at
   once. Stages due by the minute complete first, so the next one starts at the same time at any
   step size.

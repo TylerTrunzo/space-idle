@@ -688,15 +688,26 @@ final class ScriptRunner {
   /// How [o] left a megaproject fed: "Orbital Station now takes goods
   /// from every body each game minute, above what each keeps for its own
   /// use and open contracts, and a share of the credits above the
-  /// auto-pay reserve (5M)", "… and no credits", "… takes a share of the
-  /// credits above the auto-pay reserve (5M) each game minute, and no
-  /// goods", or "Orbital Station is fed by hand only".
+  /// auto-pay reserve (5M)"; with goods near ready, "… now takes goods
+  /// from every body each game minute once a stage is near ready (its
+  /// credits due within 12h), …"; "… and no credits", "… takes a share of
+  /// the credits above the auto-pay reserve (5M) each game minute, and no
+  /// goods", or "Orbital Station is fed by hand only". A weight other than
+  /// 1 reads "a share, at weight 3, of the credits …"; weight 0 "the
+  /// credits … only when nothing else takes them (weight 0)".
   String _autoText(MegaprojectAutoSet o) {
     final name = _megaprojectName(o.megaprojectId);
-    final credits = o.credits ? _creditShare() : 'no credits';
-    if (o.goods != GoodsFeedMode.off) {
-      return '$name now takes goods from every body each game minute, above '
-          'what each keeps for its own use and open contracts, and $credits';
+    final credits = o.credits ? _creditShare(o.creditWeight) : 'no credits';
+    final goods = switch (o.goods) {
+      GoodsFeedMode.off => null,
+      GoodsFeedMode.always => 'goods from every body each game minute',
+      GoodsFeedMode.nearReady =>
+        'goods from every body each game minute once a stage is near '
+            'ready (${_nearReadyText()})',
+    };
+    if (goods != null) {
+      return '$name now takes $goods, above what each keeps for its own '
+          'use and open contracts, and $credits';
     }
     if (o.credits) {
       return '$name now takes $credits each game minute, and no goods';
@@ -704,11 +715,25 @@ final class ScriptRunner {
     return '$name is fed by hand only';
   }
 
+  /// "its credits due within 12h", the rules' near-ready horizon.
+  String _nearReadyText() =>
+      'its credits due within '
+      '${formatDuration(engine.content.rules.nearReadyHorizonSeconds)}';
+
   /// "a share of the credits above the auto-pay reserve (5M)", the
-  /// player's reserve.
-  String _creditShare() =>
-      'a share of the credits above the auto-pay reserve '
-      '(${formatNumber(_player.autoPayReserve)})';
+  /// player's reserve; "a share, at weight 3, of the credits …" for a
+  /// [weight] other than 1, and "the credits above the auto-pay reserve
+  /// (5M) only when nothing else takes them (weight 0)" for 0.
+  String _creditShare([int weight = 1]) {
+    final above =
+        'the credits above the auto-pay reserve '
+        '(${formatNumber(_player.autoPayReserve)})';
+    return switch (weight) {
+      0 => '$above only when nothing else takes them (weight 0)',
+      1 => 'a share of $above',
+      _ => 'a share, at weight $weight, of $above',
+    };
+  }
 
   /// Display name of megaproject [id]; the id itself for one the content
   /// does not have.
@@ -733,14 +758,20 @@ final class ScriptRunner {
           BonusKind.marketDepthPercent => 'market depth ${pct(b.value)}',
           BonusKind.marketDepthMultiplier => 'market depth ${times(b.value)}',
           BonusKind.productionSpeedMultiplier => 'production speed ${times(b.value)}',
-        }}${switch (b.appliesToMaxTier) {
-          null => '',
-          0 => ' (tier 0)',
-          final t => ' (tiers 0-$t)',
-        }}',
+        }}${_tiersText(b.appliesToMinTier ?? 0, b.appliesToMaxTier)}',
     ];
     return 'level $level: ${parts.join(', ')}';
   }
+
+  /// The tiers a bonus applies to, [from] to [to] (null for the top), as
+  /// " (tier 0)", " (tiers 0-2)", " (tiers 1-2)", " (tiers 2 and up)", or
+  /// nothing for every tier.
+  static String _tiersText(int from, int? to) => switch ((from, to)) {
+    (0, null) => '',
+    (_, null) => ' (tiers $from and up)',
+    (_, final t?) when t == from => ' (tier $t)',
+    (_, final t?) => ' (tiers $from-$t)',
+  };
 
   /// [v] with at most two decimals, trailing zeros dropped: 1.728 as
   /// "1.73", 1.1 as "1.1", 30 as "30".
@@ -758,14 +789,24 @@ final class ScriptRunner {
   }
 
   /// [auto] as "goods from every body, and a share of the credits above
-  /// the auto-pay reserve (1M)", "goods from every body, and no credits"
-  /// or "a share of the credits above the auto-pay reserve (1M), and no
-  /// goods".
-  String _autoSetting(MegaprojectAuto auto) {
-    final credits = auto.credits ? _creditShare() : 'no credits';
-    return auto.goods != GoodsFeedMode.off
-        ? 'goods from every body, and $credits'
-        : '$credits, and no goods';
+  /// the auto-pay reserve (1M)", "goods from every body once a stage is
+  /// near ready (its credits due within 12h), and …" (with ", fed now" or
+  /// ", not fed yet" after the bracket), "goods from every body, and no
+  /// credits" or "a share of the credits above the auto-pay reserve (1M),
+  /// and no goods"; the weight as in [_creditShare].
+  String _autoSetting(MegaprojectDef m, MegaprojectAuto auto) {
+    final credits = auto.credits
+        ? _creditShare(auto.creditWeight)
+        : 'no credits';
+    return switch (auto.goods) {
+      GoodsFeedMode.off => '$credits, and no goods',
+      GoodsFeedMode.always => 'goods from every body, and $credits',
+      GoodsFeedMode.nearReady =>
+        'goods from every body once a stage is near ready '
+            '(${_nearReadyText()}), '
+            '${megaprojectGoodsFed(state, _player, m) ? 'fed now' : 'not fed yet'}'
+            ', and $credits',
+    };
   }
 
   /// [factionId]'s level of megaproject [id]; 0 before its first stage.
@@ -1006,7 +1047,10 @@ final class ScriptRunner {
               'auto': {
                 'goods': auto.goods.name,
                 'credits': auto.credits,
-                'text': _autoSetting(auto),
+                'creditWeight': auto.creditWeight,
+                if (auto.goods == GoodsFeedMode.nearReady)
+                  'goodsFedNow': megaprojectGoodsFed(state, p, m),
+                'text': _autoSetting(m, auto),
               },
             if (p.megaprojectProgress[m.id] case final got?) ...{
               'delivered': _nums(got, rounding: NumberRounding.down),
