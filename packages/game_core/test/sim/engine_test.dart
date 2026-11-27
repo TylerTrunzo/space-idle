@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
 import 'package:test/test.dart';
@@ -1250,6 +1252,80 @@ void main() {
         watch.stop();
         expect(sum.secondsSimulated, 43200);
         expect(watch.elapsedMilliseconds, lessThan(1000));
+      },
+    );
+
+    test(
+      'performance: a day-14 optimizer state, both megaprojects fed: 48 h '
+      'away and its credits a second',
+      tags: ['perf'],
+      () {
+        // A balanced bot's state on day 14, seed 1 (30 routes, an open
+        // contract, 123 buildings on 7 bodies), with the station fed goods
+        // and credits above 1M and the Mass Driver fed goods: every
+        // feature of a tick at work. To make it again, save the state a
+        // 336 h `runBotSession(BalancedBot(), seed: 1)` ends in, after
+        // those two SetMegaprojectAutoCommands, with SaveCodec.encode.
+        //
+        // The budgets are multiples of what the same machine takes for
+        // the synthetic 24 h of `fullEmpire` (no routes, contracts or
+        // auto-delivery), so a slow runner slows both alike and the gate
+        // still catches the realistic state's own costs growing; each
+        // also has a ceiling far above any healthy run, for a runner so
+        // slow that the multiple says nothing. Desktop JIT at the end of
+        // stage 1.6: the synthetic 24 h in 0.45-0.65 s, the 48 h here in
+        // about 1.8 s (3-4x; 6x allowed; before the stage 1.6 fixes it
+        // was about 7x); a first read of credits a second about 11 ms
+        // (under a twentieth of the synthetic run), a second read of the
+        // same state about 1 ms.
+        final c = shippedContent();
+        final e = GameEngine(c);
+        final saved = File(
+          'test/fixtures/balanced_day14_fed.json',
+        ).readAsStringSync();
+        final s = (SaveCodec.decode(saved, c) as SaveOk).state;
+        expect(s.faction('player').megaprojectAuto.keys, [
+          'orbital_station',
+          'mass_driver',
+        ]);
+        // Warm up the VM before timing.
+        e.catchUpOffline(s.copy(), 3600, capSeconds: 3600);
+        final (be, bs) = fullEmpire();
+        be.catchUpOffline(bs.copy(), 3600, capSeconds: 3600);
+        final watch = Stopwatch()..start();
+        be.catchUpOffline(bs, 86400, capSeconds: 86400);
+        final base = watch.elapsedMicroseconds;
+
+        watch.reset();
+        final away = s.copy();
+        final sum = e.catchUpOffline(away, 172800, capSeconds: 172800);
+        final catchUp = watch.elapsedMicroseconds;
+        expect(sum.secondsSimulated, 172800);
+
+        // Credits a second, read three times from states not read before,
+        // then once again from the last.
+        var first = 0;
+        final ahead = s.copy();
+        for (var i = 0; i < 3; i++) {
+          e.advance(ahead, 60);
+          final r = buildFlowReport(ahead, c, 'player');
+          watch.reset();
+          r.creditsPerSec;
+          first = math.max(first, watch.elapsedMicroseconds);
+        }
+        final again = buildFlowReport(ahead, c, 'player');
+        watch.reset();
+        again.creditsPerSec;
+        final second = watch.elapsedMicroseconds;
+        final seen =
+            'synthetic 24 h ${base ~/ 1000} ms, day-14 48 h '
+            '${catchUp ~/ 1000} ms, credits a second ${first ~/ 1000} ms '
+            'first, ${second ~/ 1000} ms again';
+        expect(catchUp, lessThan(base * 6), reason: seen);
+        expect(catchUp, lessThan(30e6), reason: seen);
+        expect(first, lessThan(base ~/ 20), reason: seen);
+        expect(first, lessThan(500e3), reason: seen);
+        expect(second, lessThan(first ~/ 2), reason: seen);
       },
     );
 
