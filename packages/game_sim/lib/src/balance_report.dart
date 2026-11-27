@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:game_core/game_core.dart';
 
 import 'bots/bot.dart';
+import 'script_runner.dart';
 
 /// Game seconds between bot decisions while the player is checked in.
 const double decisionEverySeconds = 10;
@@ -597,7 +598,8 @@ BalanceReport runBotSession(
     final necks = buildFlowReport(s, c, faction.id).bottlenecks;
     if (necks.isNotEmpty) {
       bottleneckLog.add(
-        '#$checkIn ${_hours(clock / 3600)}h: ${_logText(necks.first)}',
+        '#$checkIn ${_hours(clock / 3600)}h: '
+        '${ScriptRunner(e, s).bottleneckText(necks.first)}',
       );
     }
     final checkInStart = clock;
@@ -861,16 +863,3 @@ final class _Tracker {
       if (!_produced.contains(id) || !_used.contains(id)) id,
   ];
 }
-
-/// [n] for the session's bottleneck log: its message, or for a kind whose
-/// text a display builds ([BottleneckKind.routeLimited]) its typed fields.
-String _logText(Bottleneck n) => n.message.isNotEmpty
-    ? n.message
-    : [
-        n.kind.name,
-        ?n.bodyId,
-        ?n.buildingId,
-        ?n.resourceId,
-        if (n.routeId case final r?) 'route $r',
-        ?n.binding?.name,
-      ].join(' ');

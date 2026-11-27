@@ -215,6 +215,9 @@ final class ScriptRunner {
   /// Station Docks on Cinder are running at 40%: not enough Hull Plate";
   /// for the megaproject kinds, what is taken or held back, in numbers; for
   /// a route-limited shortage, the route's limit and what raises it.
+  ///
+  /// Public so the bot session's bottleneck log reads as the CLI does
+  /// (`runBotSession`), and for tests.
   String bottleneckText(Bottleneck n) {
     final c = engine.content;
     String res(String id) => c.resources[id]!.name;
