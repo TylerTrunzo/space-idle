@@ -181,6 +181,45 @@ void main() {
     expect(st['notes'], isNotEmpty);
   });
 
+  test('state shows what each auto-sell rule keeps, and why', () {
+    final r = _runner();
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'iron_ore',
+      'keepAtLeast': '10',
+    });
+    final rule = r.state.faction('player').autoSell.single;
+    final keep = autoSellKeep(r.state, r.engine.content, rule, 60);
+    // Kora's smelter uses iron ore, so the rule keeps a minute of it too.
+    expect(keep.localUse > const BigNum.zero(), isTrue);
+    final rules = (r.handle({'cmd': 'state'})['autoSell']! as List)
+        .cast<Map<String, Object?>>();
+    expect(rules.single['bodyId'], 'kora');
+    expect(rules.single['resourceId'], 'iron_ore');
+    expect(
+      (rules.single['keeps']! as Map)['display'],
+      formatNumber(keep.keeps),
+    );
+    expect(
+      rules.single['text'],
+      'keeps ${formatNumber(keep.keeps)} (keepAtLeast 10 + '
+      '${formatNumber(keep.localUse)} local use)',
+    );
+    final cap = storageCap(r.state, r.engine.content, r.state.body('kora'));
+    r.handle({
+      'cmd': 'setAutoSell',
+      'bodyId': 'kora',
+      'resourceId': 'iron_ore',
+      'keepAtLeast': (cap - BigNum.from(1)).toJson(),
+    });
+    final capped = (r.handle({'cmd': 'state'})['autoSell']! as List).single;
+    expect(
+      (capped as Map)['text'],
+      endsWith('local use, cut to the storage cap)'),
+    );
+  });
+
   test('claim, demolish and route replies say what they took and gave', () {
     final r = _runner();
     r.state.faction('player').credits = BigNum.from(1e6);

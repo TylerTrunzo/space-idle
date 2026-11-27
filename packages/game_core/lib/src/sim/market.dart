@@ -100,13 +100,14 @@ SaleResult sell(
 /// ([fullRateFlow]) over the keep horizon, `max(dt,
 /// shipmentMergeSeconds)` ([RulesDef.shipmentMergeSeconds]), the two
 /// together kept no higher than the body's [storageCap] unless
-/// `keepAtLeast` alone is; only while its faction owns the body. A rule
-/// sees the stock less what earlier rules on the same body and resource
-/// queued, so duplicate rules (which saves reject) never sell more than is
-/// held. Keeping that demand back means auto-selling an input never starves
-/// the factories that use it, however long the step; and since a route's
-/// sends land in lots up to `shipmentMergeSeconds` apart, short steps keep
-/// enough of a lot to last until the next one lands.
+/// `keepAtLeast` alone is ([autoSellKeep]); only while its faction owns
+/// the body. A rule sees the stock less what earlier rules on the same
+/// body and resource queued, so duplicate rules (which saves reject)
+/// never sell more than is held. Keeping that demand back means
+/// auto-selling an input never starves the factories that use it, however
+/// long the step; and since a route's sends land in lots up to
+/// `shipmentMergeSeconds` apart, short steps keep enough of a lot to last
+/// until the next one lands.
 ///
 /// The engine runs this after `sendCargo`, so what a route sends this
 /// step has already left the source's stock: a rule there with
@@ -154,11 +155,7 @@ void stepMarket(
       final held =
           (body.stock[rule.resourceId] ?? _zero) -
           (taken[rule.resourceId] ?? _zero);
-      // The demand kept never pushes stock past the cap, where the end of
-      // the tick would waste it instead.
-      final keep = (rule.keepAtLeast + (used[rule.resourceId] ?? _zero)).min(
-        rule.keepAtLeast.max(storageCap(s, c, body)),
-      );
+      final keep = _keep(s, c, body, rule, used).keeps;
       var excess = held - keep;
       if (limits != null) {
         excess = excess.min(
@@ -201,6 +198,63 @@ void stepMarket(
     }
     sat[id] = end;
   }
+}
+
+/// What an auto-sell rule holds back from sale on its body, and why.
+typedef AutoSellKeep = ({
+  BigNum keepAtLeast,
+  BigNum localUse,
+  BigNum keeps,
+  bool cappedAtStorage,
+});
+
+/// What [rule] keeps on its body in a market step of [dt] seconds (the
+/// engine's ticks are 60 s by default), as [stepMarket] works it out:
+/// `keepAtLeast` plus the body's own buildings' use of the resource at
+/// full supply over `max(dt, shipmentMergeSeconds)` ([localUse]), the sum
+/// ([keeps]) no higher than the body's storage cap unless `keepAtLeast`
+/// alone is ([cappedAtStorage] when the cap cut it).
+///
+/// The rule sells only what the body holds above [keeps]. The buildings
+/// run at the crew efficiency of the body's owner (full for an unowned
+/// body, whose rules sell nothing).
+AutoSellKeep autoSellKeep(
+  GameState s,
+  Content c,
+  AutoSellRule rule,
+  double dt,
+) {
+  final body = s.body(rule.bodyId);
+  final owner = body.ownerId;
+  final used = _stepDemand(
+    c,
+    body,
+    math.max(dt, c.rules.shipmentMergeSeconds),
+    owner == null ? 1 : crewEfficiency(s, c, owner),
+  );
+  return _keep(s, c, body, rule, used);
+}
+
+/// [autoSellKeep] for [rule] on [body], given [used], what the body's
+/// buildings use over the keep horizon.
+AutoSellKeep _keep(
+  GameState s,
+  Content c,
+  BodyState body,
+  AutoSellRule rule,
+  Map<String, BigNum> used,
+) {
+  final local = used[rule.resourceId] ?? _zero;
+  final wanted = rule.keepAtLeast + local;
+  // The demand kept never pushes stock past the cap, where the end of the
+  // tick would waste it instead.
+  final most = rule.keepAtLeast.max(storageCap(s, c, body));
+  return (
+    keepAtLeast: rule.keepAtLeast,
+    localUse: local,
+    keeps: wanted.min(most),
+    cappedAtStorage: wanted > most,
+  );
 }
 
 /// Selling at a steady rate over [dt] seconds from saturation [s0] while

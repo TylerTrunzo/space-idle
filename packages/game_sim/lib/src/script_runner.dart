@@ -559,6 +559,7 @@ final class ScriptRunner {
               ),
             },
       ],
+      'autoSell': [for (final rule in p.autoSell) _autoSellRule(rule)],
       'projects': [
         for (final pr in engine.projectsFor(state, p.id))
           {
@@ -585,6 +586,25 @@ final class ScriptRunner {
             'ships and outpost kits) shows whole units; the part-made unit '
             'is kept and finishes later.',
       ],
+    };
+  }
+
+  /// Auto-sell [rule] as JSON, with what it keeps back in a 60 s step
+  /// ([autoSellKeep]): "keeps 34 (keepAtLeast 10 + 24 local use)", plus
+  /// ", cut to the storage cap" inside the brackets when the cap cut it.
+  Map<String, Object?> _autoSellRule(AutoSellRule rule) {
+    final k = autoSellKeep(state, engine.content, rule, 60);
+    final cut = k.cappedAtStorage ? ', cut to the storage cap' : '';
+    return {
+      'bodyId': rule.bodyId,
+      'resourceId': rule.resourceId,
+      'keepAtLeast': _num(k.keepAtLeast),
+      'localUse': _num(k.localUse),
+      'keeps': _num(k.keeps),
+      'text':
+          'keeps ${formatNumber(k.keeps)} (keepAtLeast '
+          '${formatNumber(k.keepAtLeast)} + ${formatNumber(k.localUse)} '
+          'local use$cut)',
     };
   }
 

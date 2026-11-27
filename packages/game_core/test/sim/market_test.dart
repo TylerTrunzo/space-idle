@@ -261,6 +261,19 @@ void main() {
         .faction('p')
         .autoSell
         .add(AutoSellRule(bodyId: 'a', resourceId: 'ore', keepAtLeast: n(100)));
+    final rule = s.faction('p').autoSell.single;
+    final keep = autoSellKeep(s, c, rule, 10);
+    expect(
+      (keep.keepAtLeast, keep.localUse, keep.keeps, keep.cappedAtStorage),
+      (n(100), n(20), n(120), false),
+    );
+    // The horizon is at least the merge window: a 1 s step keeps 10 s.
+    expect(autoSellKeep(s, c, rule, 1).localUse, n(20));
+    // Kept no higher than the storage cap of 1000.
+    rule.keepAtLeast = n(990);
+    final capped = autoSellKeep(s, c, rule, 10);
+    expect((capped.keeps, capped.cappedAtStorage), (n(1000), true));
+    rule.keepAtLeast = n(100);
     stepMarket(s, c, 10);
     expect(stock(), n(120));
     // An unstaffed press uses nothing.
