@@ -27,7 +27,7 @@ final class PrefsSaveStore implements SaveStore {
   Future<void> write(String text) => _prefs.setString(key, text);
 }
 
-/// An in-memory save slot for tests, counting [writes].
+/// An in-memory save slot for tests, counting [reads] and [writes].
 final class MemorySaveStore implements SaveStore {
   /// Creates a store holding [text]; seeding it does not count as a write.
   MemorySaveStore([this.text]);
@@ -35,11 +35,17 @@ final class MemorySaveStore implements SaveStore {
   /// The stored text, which tests may set directly.
   String? text;
 
+  /// Number of [read] calls so far.
+  int reads = 0;
+
   /// Number of [write] calls so far.
   int writes = 0;
 
   @override
-  Future<String?> read() async => text;
+  Future<String?> read() async {
+    reads++;
+    return text;
+  }
 
   @override
   Future<void> write(String text) async {

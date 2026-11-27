@@ -6,7 +6,7 @@ import 'package:space_idle/game/save_store.dart';
 
 void main() {
   group('MemorySaveStore', () {
-    test('reads back what was written and counts writes', () async {
+    test('reads back what was written and counts reads and writes', () async {
       final store = MemorySaveStore();
       expect(await store.read(), isNull);
 
@@ -14,6 +14,7 @@ void main() {
       await store.write('b');
       expect(await store.read(), 'b');
       expect(store.writes, 2);
+      expect(store.reads, 2);
     });
 
     test('can start with text, which is not a write', () async {

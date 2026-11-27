@@ -27,6 +27,17 @@ GameController _controller(MemorySaveStore store, FakeClock clock) =>
 String _storedSave(MemorySaveStore store) =>
     (jsonDecode(store.text!) as Map<String, Object?>)['save']! as String;
 
+/// A save slot that cannot be read, as when platform storage fails.
+final class _FailingReadStore implements SaveStore {
+  int writes = 0;
+
+  @override
+  Future<String?> read() async => throw StateError('disk on fire');
+
+  @override
+  Future<void> write(String text) async => writes++;
+}
+
 /// Epoch milliseconds past `DateTime`'s ±8.64e15 range (the review probe).
 const _outOfRangeMs = 9999999999999999;
 
@@ -60,6 +71,75 @@ void main() {
   setUp(() {
     store = MemorySaveStore();
     clock = FakeClock(DateTime.utc(2026, 11, 27, 12));
+  });
+
+  group('before start', () {
+    test('save() before start() leaves the stored save alone', () async {
+      store.text = 'garbage';
+      final c = _controller(store, clock);
+
+      await c.save();
+      c.tickSeconds(60);
+      await pumpEventQueue();
+      expect(store.text, 'garbage');
+      expect(store.writes, 0);
+    });
+
+    test('resume() before start() does nothing', () async {
+      final c = _controller(store, clock);
+      final before = c.state.time;
+      clock.advance(const Duration(hours: 1));
+
+      expect(await c.resume(), isNull);
+      expect(c.state.time, before);
+      expect(store.writes, 0);
+    });
+
+    testWidgets('the timer does nothing before start()', (tester) async {
+      final c = _controller(store, clock);
+      final before = c.state.time;
+
+      c.startTimer();
+      clock.advance(const Duration(minutes: 5));
+      await tester.pump(const Duration(seconds: 1));
+      expect(c.state.time, before);
+      expect(c.pendingAwaySummary, isNull);
+      c.dispose();
+    });
+
+    test('start() twice reads the store once and gives one result', () async {
+      final c = _controller(store, clock);
+
+      final first = c.start();
+      final second = c.start();
+      expect(identical(await first, await second), isTrue);
+      expect(store.reads, 1);
+      expect(store.writes, 1);
+    });
+
+    test('a store whose read throws gives LoadFailed and no write', () async {
+      final failing = _FailingReadStore();
+      final c = GameController(
+        content: content,
+        store: failing,
+        clock: clock,
+        newGameSeed: 7,
+      );
+
+      final result = await c.start();
+      expect(
+        result,
+        isA<LoadFailed>().having(
+          (r) => r.reason,
+          'reason',
+          contains('disk on fire'),
+        ),
+      );
+      await c.save();
+      c.tickSeconds(60);
+      await pumpEventQueue();
+      expect(failing.writes, 0);
+    });
   });
 
   group('start', () {

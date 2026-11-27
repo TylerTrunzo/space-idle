@@ -108,8 +108,16 @@ class GameController extends ChangeNotifier {
   /// Wall-clock time up to which [_state] has been simulated.
   DateTime _syncedAt;
 
-  /// False after a failed load, until the player replaces the broken save.
-  bool _canWrite = true;
+  /// Whether [save] may write: false until [start] has read the slot and
+  /// found it empty or loadable, and after a failed load until the player
+  /// replaces the broken save, so a save is never written over unread.
+  bool _canWrite = false;
+
+  /// The one [start] run, shared by every caller.
+  Future<StartResult>? _starting;
+
+  /// Whether [start] has finished; [resume] and the timer wait for it.
+  bool _started = false;
 
   double _sinceAutosave = 0;
   FlowReport? _flow;
@@ -136,26 +144,44 @@ class GameController extends ChangeNotifier {
   OfflineSummary? get pendingAwaySummary => _pendingAwaySummary;
 
   /// Loads the save slot and catches it up, or starts a new game.
-  Future<StartResult> start() async {
-    final text = await _store.read();
+  ///
+  /// Runs once: later calls get the first call's result. Until it has
+  /// finished nothing is written, and [resume] and the timer do nothing.
+  Future<StartResult> start() => _starting ??= _start();
+
+  Future<StartResult> _start() async {
+    final result = await _load();
+    _started = true;
+    _notify();
+    return result;
+  }
+
+  Future<StartResult> _load() async {
+    final String? text;
+    try {
+      text = await _store.read();
+    } catch (e, st) {
+      // Storage itself failed: the save may still be there, so keep
+      // writes off and let the player decide, as for a broken save.
+      _reportError(e, st, 'while reading the save');
+      return LoadFailed('', 'the save could not be read: $e');
+    }
     if (text == null) {
       _syncedAt = _clock.now();
+      _canWrite = true;
       await save();
-      _notify();
       return const StartedNew();
     }
     switch (_decode(text, envelopeOnly: true)) {
       case _Bad(:final reason):
-        _canWrite = false;
-        _notify();
         return LoadFailed(text, reason);
       case _Good(:final state, :final savedAt):
         _state = state;
         _flow = null;
         _syncedAt = savedAt ?? _clock.now();
+        _canWrite = true;
         _catchUp();
         await save();
-        _notify();
         return const Loaded();
     }
   }
@@ -187,7 +213,8 @@ class GameController extends ChangeNotifier {
     _notify();
   }
 
-  /// Writes the save envelope, unless a failed load is still unresolved.
+  /// Writes the save envelope, unless [start] has not read the slot yet or
+  /// a failed load is still unresolved.
   Future<void> save() async {
     _sinceAutosave = 0;
     if (!_canWrite) return;
@@ -200,7 +227,9 @@ class GameController extends ChangeNotifier {
 
   /// Catches up the time since the state was last current (the app was in
   /// the background), saves, and returns the away summary if there is one.
+  /// Does nothing before [start] has finished.
   Future<OfflineSummary?> resume() async {
+    if (!_started) return null;
     final summary = _catchUp();
     await save();
     _notify();
@@ -256,6 +285,8 @@ class GameController extends ChangeNotifier {
   }
 
   void _onTimer() {
+    // Before start() the state is a placeholder about to be replaced.
+    if (!_started) return;
     final now = _clock.now();
     final gap = _secondsBetween(_syncedAt, now);
     if (gap >= awaySummarySeconds) {
@@ -299,15 +330,19 @@ class GameController extends ChangeNotifier {
   void _autosave() {
     unawaited(
       save().catchError((Object e, StackTrace st) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: e,
-            stack: st,
-            library: 'space_idle',
-            context: ErrorDescription('while autosaving'),
-          ),
-        );
+        _reportError(e, st, 'while autosaving');
       }),
+    );
+  }
+
+  static void _reportError(Object e, StackTrace st, String doing) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'space_idle',
+        context: ErrorDescription(doing),
+      ),
     );
   }
 
