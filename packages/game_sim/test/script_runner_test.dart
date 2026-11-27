@@ -401,6 +401,8 @@ void main() {
     // toward the stop: the route waits for them to land.
     expect((routes.single as Map)['paused'], isTrue);
     expect(((routes.single as Map)['inFlight']! as Map)['display'], '20');
+    expect(((routes.single as Map)['stopTarget']! as Map)['display'], '20');
+    expect((routes.single as Map)['stopSharedWith'], isEmpty);
     final reachCap = storageCap(
       r.state,
       r.engine.content,

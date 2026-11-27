@@ -81,11 +81,13 @@ some up. So a long trip keeps enough in flight that the destination never
 runs dry and settles near its level, and 60 s steps move what 1 s steps do.
 The store plus the cargo on its way never pass the storage cap, even when
 nothing there can use what arrives. Several routes with stop levels into
-one store share one target (the highest of their levels, plus the trip's
-use of the farthest of them needed to meet the destination's use, counting
-stocked routes nearest first) and its room, the nearest sending first and
-the others topping it up, so none is left paused
-by another's longer trip. A level
+one store share one target (the highest of their levels, plus what the
+destination uses during the trip of the farthest of them) and its room, the
+nearest sending first and the others topping it up. Timed by the farthest
+trip, the store is never starved, whichever route sends; while a nearer one
+does, it can hold up to the destination's use over the difference between
+the longest and shortest trips above the stop level (never past the cap). A
+farther route can then send little while not paused. A level
 above the destination's storage cap is cut to the cap; the reply ends "The
 stop level was cut to Brine's storage cap: stock above it is wasted". Moved
 ships and landed cargo can be used at the arrival time a reply gave. `{"cmd":"updateRoute","routeId":"r4",
@@ -184,9 +186,12 @@ commands:
   instead), the unsurveyed signals of
   each system the player has a body in (`unsurveyedSignals`), every body
   (type, deposits, owner, slots, storage cap, and stock if owned), the
-  player's routes (`stopAtDestination`, null for none, `paused`, true while
-  the destination would hold that much once its cargo in flight, less what
-  it uses during the trip, lands, `inFlight` and `travelTime`), its
+  player's routes (`stopAtDestination`, null for none; for a route with
+  one, `stopTarget`, the stock the destination keeps with its cargo in
+  flight, shared by every stop-level route into it and timed by the
+  farthest, and `stopSharedWith`, the ids of those other routes; `paused`,
+  true while the destination and its cargo in flight hold that target;
+  `inFlight` and `travelTime`), its
   auto-sell rules (`autoSell`: `bodyId`, `resourceId`, `keepAtLeast`,
   `localUse`, `contractHold` (what open contracts still need, less what
   bodies with no rule for the good hold, held on the body with a rule on the

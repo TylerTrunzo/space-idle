@@ -907,6 +907,20 @@ final class ScriptRunner {
                 final v? => _num(v),
                 null => null,
               },
+              if (routeStopTarget(state, c, r) case final target?) ...{
+                // The stock the store keeps, cargo on its way included,
+                // shared by every stop-level route into it and timed by
+                // the farthest of them.
+                'stopTarget': _num(target),
+                'stopSharedWith': [
+                  for (final o in state.routes)
+                    if (o != r &&
+                        o.stopAtDestination != null &&
+                        o.toBodyId == r.toBodyId &&
+                        o.resourceId == r.resourceId)
+                      o.id,
+                ],
+              },
               'paused': routePaused(state, c, r),
               'inFlight': _num(routeInFlight(state, r)),
               'travelTime': formatDuration(
