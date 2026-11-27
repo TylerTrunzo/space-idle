@@ -51,6 +51,14 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   final TransformationController _zoom = TransformationController();
   late final Ticker _ticker;
 
+  /// The scene drawn, rebuilt when the game notifies, and the game time
+  /// it was built at.
+  late StarMapScene _scene;
+  late double _sceneTime;
+
+  /// Whether the platform allows animation (`disableAnimations` is off).
+  bool _animationsAllowed = true;
+
   /// Ticker time of the latest frame, and of the latest game tick.
   Duration _frameAt = Duration.zero;
   Duration _tickAt = Duration.zero;
@@ -59,7 +67,16 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _ticker = createTicker(_onFrame);
+    _scene = _buildScene();
+    _sceneTime = widget.controller.state.time;
     widget.controller.addListener(_onGameChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _animationsAllowed = !MediaQuery.disableAnimationsOf(context);
+    _syncTicker();
   }
 
   @override
@@ -68,6 +85,7 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
     if (old.controller != widget.controller) {
       old.controller.removeListener(_onGameChanged);
       widget.controller.addListener(_onGameChanged);
+      _refresh();
     }
   }
 
@@ -80,9 +98,25 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  void _onGameChanged() {
-    // A new tick: shipments restart their in-between motion from here.
-    setState(() => _tickAt = _frameAt);
+  StarMapScene _buildScene() {
+    final c = widget.controller;
+    return buildStarMapScene(c.state, c.content, c.playerId, c.flow);
+  }
+
+  void _onGameChanged() => setState(_refresh);
+
+  /// Rebuilds the scene. Only a tick (game time moved) restarts the
+  /// in-between motion: a command or a cleared summary also notifies, and
+  /// restarting then would pull every shipment back to where it was at the
+  /// last tick.
+  void _refresh() {
+    _scene = _buildScene();
+    final time = widget.controller.state.time;
+    if (time != _sceneTime) {
+      _sceneTime = time;
+      _tickAt = _frameAt;
+    }
+    _syncTicker();
   }
 
   void _onFrame(Duration elapsed) {
@@ -98,7 +132,10 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   }
 
   /// Runs the ticker only while something moves and motion is allowed.
-  void _syncTicker({required bool animate}) {
+  void _syncTicker() {
+    final animate =
+        _animationsAllowed &&
+        (_scene.shipments.isNotEmpty || _scene.signals.isNotEmpty);
     if (animate && !_ticker.isActive) {
       _frameAt = Duration.zero;
       _tickAt = Duration.zero;
@@ -129,13 +166,8 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
-    final scene = buildStarMapScene(c.state, c.content, c.playerId, c.flow);
-    final animate =
-        !MediaQuery.disableAnimationsOf(context) &&
-        (scene.shipments.isNotEmpty || scene.signals.isNotEmpty);
-    // Starting or stopping a ticker schedules at most a frame; it changes no
-    // widget state, so it is safe here.
-    _syncTicker(animate: animate);
+    final scene = _scene;
+    final animate = _ticker.isActive;
 
     return ColoredBox(
       color: Palette.background,

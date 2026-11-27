@@ -47,6 +47,22 @@ Widget _app(
   ),
 );
 
+/// Where the map currently draws the first shipment: its trip fraction at
+/// the last tick plus the in-between motion since, as the painter computes.
+double _shipmentProgress(WidgetTester tester) {
+  final paint = tester.widget<CustomPaint>(
+    find.byWidgetPredicate(
+      (w) =>
+          w is CustomPaint &&
+          w.painter is StarMapPainter &&
+          (w.painter! as StarMapPainter).scene.shipments.isNotEmpty,
+    ),
+  );
+  final painter = paint.painter! as StarMapPainter;
+  final ship = painter.scene.shipments.first;
+  return ship.progress + ship.progressPerSecond * painter.motion.sinceTick;
+}
+
 void main() {
   testWidgets('hidden bodies have no node until surveyed', (tester) async {
     final handle = tester.ensureSemantics();
@@ -142,6 +158,39 @@ void main() {
     expect(tester.takeException(), isNull);
     // Shipments move between ticks: the ticker keeps frames coming.
     expect(tester.binding.hasScheduledFrame, isTrue);
+  });
+
+  testWidgets('a command between ticks does not pull a shipment back', (
+    tester,
+  ) async {
+    final c = _controller();
+    addRouteAndShipment(c.state, departIn: -25, tripSeconds: 100);
+    await tester.pumpWidget(_app(c));
+    c.tickSeconds(1);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    final before = _shipmentProgress(tester);
+    expect(before, greaterThan(0.26 + 0.004), reason: 'moved since the tick');
+
+    // A failed command notifies but does not advance game time.
+    c.run(const BuildCommand('player', 'kora', 'fusion_refinery'));
+    expect(c.lastError, isNotNull);
+    await tester.pump();
+    expect(_shipmentProgress(tester), greaterThanOrEqualTo(before));
+  });
+
+  testWidgets('turning animations off while running stops the ticker', (
+    tester,
+  ) async {
+    final c = _controller();
+    addRouteAndShipment(c.state, departIn: -25, tripSeconds: 100);
+    await tester.pumpWidget(_app(c));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.binding.hasScheduledFrame, isTrue);
+
+    await tester.pumpWidget(_app(c, disableAnimations: true));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
   testWidgets('with animations off nothing moves between ticks', (
