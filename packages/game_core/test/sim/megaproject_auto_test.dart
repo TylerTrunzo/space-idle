@@ -305,6 +305,31 @@ void main() {
       expect(f.credits < credits, isTrue);
     });
 
+    test('a stage it starts runs from the game minute, whatever the step', () {
+      ProjectState started(double from, double step) {
+        final s = open(reserve: n(0));
+        s.time = from;
+        s.faction('player')
+          ..credits = n(1e12)
+          ..megaprojectProgress['mass_driver'] = {
+            for (final MapEntry(key: id, value: v) in megaprojectCost(
+              content,
+              driver,
+              0,
+            ).entries)
+              if (id != 'credits') id: v,
+          };
+        e.advance(s, 120, maxStep: step);
+        return megaprojectStageOf(s, 'player', 'mass_driver')!;
+      }
+
+      for (final (from, step) in [(0.0, 1.0), (0.0, 60.0), (30.0, 60.0)]) {
+        final p = started(from, step);
+        expect(p.startedAt, 60, reason: '$from, $step');
+        expect(p.finishAt, 60 + megaprojectStageSeconds(driver, 0));
+      }
+    });
+
     test('delivers nothing to a locked megaproject, and auto-sell sells '
         'its goods', () {
       final s = open();

@@ -42,11 +42,32 @@ typedef AutoDeliveries = Map<String, Map<String, Map<String, BigNum>>>;
 /// rules of deliveries hold: a stage paid in full starts, or waits for the
 /// one under way, and deliveries go on to the stage after it.
 ///
-/// The engine runs it after production and cargo, before the market.
+/// Deliveries are made as at that first whole minute, so a stage they
+/// start runs from it whatever the step. The engine runs it after
+/// production and cargo, before the market.
 AutoDeliveries stepMegaprojectAuto(GameState s, Content c, double dt) {
   final out = <String, Map<String, Map<String, BigNum>>>{};
   final from = (s.time / autoDeliverySeconds).floor();
   if (((s.time + dt) / autoDeliverySeconds).floor() <= from) return out;
+  // Deliveries happen at the first whole minute the step reaches, so a
+  // stage they start runs from it, as with any step size.
+  final now = s.time;
+  s.time = (from + 1) * autoDeliverySeconds;
+  try {
+    _deliverAll(s, c, dt, out);
+  } finally {
+    s.time = now;
+  }
+  return out;
+}
+
+/// [stepMegaprojectAuto]'s deliveries, at `s.time`, into [out].
+void _deliverAll(
+  GameState s,
+  Content c,
+  double dt,
+  Map<String, Map<String, Map<String, BigNum>>> out,
+) {
   for (final f in s.factions) {
     if (f.megaprojectAuto.isEmpty) continue;
     final owned = [
@@ -116,7 +137,6 @@ AutoDeliveries stepMegaprojectAuto(GameState s, Content c, double dt) {
       if (got.isNotEmpty) (out[f.id] ??= {})[m.id] = got;
     }
   }
-  return out;
 }
 
 /// The goods of every megaproject [f] feeds goods to on its own, in

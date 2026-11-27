@@ -275,8 +275,7 @@ final class GameEngine {
       creditsPerSecAfter: report.creditsPerSec,
       nextGoal: nextGoal(s, content, player.id, report),
       autoDelivered: {
-        for (final m in content.megaprojects.keys)
-          m: ?autoDelivered[m],
+        for (final m in content.megaprojects.keys) m: ?autoDelivered[m],
       },
     );
   }
