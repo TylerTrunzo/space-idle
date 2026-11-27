@@ -220,12 +220,42 @@ void main() {
       expect(smelter.problem, startsWith('Short of crew: '));
     });
 
-    test('a full crew with no housing shortfall gets no crew blame', () {
-      // Everyone housed: no crewShortage, so no crew text anywhere.
+    test('during a crew shortage, rows housing is not slowing go unblamed', () {
+      // A shortage is on (housing for 1 of 3), but an empty smelter and a
+      // depot (no crew slots) are not held back by housing: they must not
+      // be told they are short of crew.
+      final kora = c.state.body('kora');
+      kora.buildings
+        ..add(
+          BuildingState(
+            id: 'b_empty',
+            defId: 'smelter',
+            crew: 0,
+            levels: {for (final t in UpgradeTrack.values) t: 0},
+          ),
+        )
+        ..add(
+          BuildingState(
+            id: 'b_depot',
+            defId: 'depot',
+            crew: 0,
+            levels: {for (final t in UpgradeTrack.values) t: 0},
+          ),
+        );
+      kora.stock['iron_ore'] = BigNum.from(1e6);
+      c.state.faction(_p).baseCrew = 1;
       c.tickSeconds(5);
-      for (final row in bodyView(c, 'kora')!.buildings) {
-        expect(row.problem ?? '', isNot(startsWith('Short of crew')));
-      }
+      expect(
+        c.flow.bottlenecks.map((n) => n.kind),
+        contains(BottleneckKind.crewShortage),
+        reason: 'fixture: a shortage is on',
+      );
+
+      final rows = {for (final r in bodyView(c, 'kora')!.buildings) r.id: r};
+      expect(rows['b_empty']!.problem, 'Smelter on Kora has no crew');
+      expect(rows['b_depot']!.problem, isNull);
+      // A crewed row the shortage does slow still says so.
+      expect(rows['b1']!.problem, startsWith('Short of crew'));
     });
 
     test('a building held back only by a crew shortage says so', () {

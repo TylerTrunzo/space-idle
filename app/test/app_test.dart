@@ -212,15 +212,11 @@ void main() {
 
       expect(find.byType(AlertDialog), findsOneWidget, reason: 'one dialog');
       await tester.tap(find.text('OK'));
-      // Frames until the dialog's route has gone (the map's ticker never
-      // lets pumpAndSettle settle), at most 5 s of game frames.
-      for (
-        var i = 0;
-        i < 25 && find.byType(AlertDialog).evaluate().isNotEmpty;
-        i++
-      ) {
-        await tester.pump(const Duration(milliseconds: 200));
-      }
+      // The tap's frame starts the pop, 300 ms runs the exit animation,
+      // and one more frame removes the finished route.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
       expect(find.text('While you were away'), findsNothing);
       expect(_controllerIn(tester).pendingAwaySummaries, isEmpty);
     });
