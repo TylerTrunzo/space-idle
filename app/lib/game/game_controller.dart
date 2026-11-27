@@ -161,13 +161,30 @@ class GameController extends ChangeNotifier {
   ///
   /// Runs once: later calls get the first call's result. Until it has
   /// finished nothing is written, and [resume] and the timer do nothing.
+  /// It always finishes started: a failed write is reported, not thrown,
+  /// and the game runs in memory until a later save succeeds.
   Future<StartResult> start() => _starting ??= _start();
 
   Future<StartResult> _start() async {
-    final result = await _load();
-    _started = true;
-    _notify();
-    return result;
+    try {
+      return await _load();
+    } finally {
+      // Whatever happened, the session runs: a start that never finishes
+      // would leave resume() and the timer off for good.
+      _started = true;
+      _notify();
+    }
+  }
+
+  /// [save] where the game in memory is already current ([start],
+  /// [resume]): a failed write is reported and play goes on; the next save
+  /// retries.
+  Future<void> _saveOrReport(String doing) async {
+    try {
+      await save();
+    } catch (e, st) {
+      _reportError(e, st, doing);
+    }
   }
 
   Future<StartResult> _load() async {
@@ -183,7 +200,7 @@ class GameController extends ChangeNotifier {
     if (text == null) {
       _syncedAt = _clock.now();
       _canWrite = true;
-      await save();
+      await _saveOrReport('while saving after loading');
       return const StartedNew();
     }
     switch (_decode(text, envelopeOnly: true)) {
@@ -196,7 +213,7 @@ class GameController extends ChangeNotifier {
         _syncedAt = savedAt ?? _clock.now();
         _canWrite = true;
         _catchUp();
-        await save();
+        await _saveOrReport('while saving after loading');
         return const Loaded();
     }
   }
@@ -242,11 +259,12 @@ class GameController extends ChangeNotifier {
 
   /// Catches up the time since the state was last current (the app was in
   /// the background), saves, and returns the away summary if there is one.
-  /// Does nothing before [start] has finished.
+  /// Does nothing before [start] has finished. A failed write is reported,
+  /// not thrown: the caught-up game runs on in memory.
   Future<OfflineSummary?> resume() async {
     if (!_started) return null;
     final summary = _catchUp();
-    await save();
+    await _saveOrReport('while saving after resuming');
     _notify();
     return summary;
   }

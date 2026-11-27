@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/game_core.dart';
 import 'package:space_idle/game/clock.dart';
@@ -36,6 +37,22 @@ final class _FailingReadStore implements SaveStore {
 
   @override
   Future<void> write(String text) async => writes++;
+}
+
+/// A save slot whose writes throw while [failWrites] is set, as when
+/// platform storage is full; it stores what it is given otherwise.
+final class _FailingWriteStore implements SaveStore {
+  bool failWrites = true;
+  String? text;
+
+  @override
+  Future<String?> read() async => text;
+
+  @override
+  Future<void> write(String text) async {
+    if (failWrites) throw StateError('storage full');
+    this.text = text;
+  }
 }
 
 /// Epoch milliseconds past `DateTime`'s ±8.64e15 range (the review probe).
@@ -116,6 +133,40 @@ void main() {
       expect(store.reads, 1);
       expect(store.writes, 1);
     });
+
+    test(
+      'a write that fails inside start() or resume() leaves the game running',
+      () async {
+        final failing = _FailingWriteStore();
+        final c = GameController(
+          content: content,
+          store: failing,
+          clock: clock,
+          newGameSeed: 7,
+        );
+        final reported = <FlutterErrorDetails>[];
+        final previous = FlutterError.onError;
+        FlutterError.onError = reported.add;
+        addTearDown(() => FlutterError.onError = previous);
+
+        expect(await c.start(), isA<StartedNew>());
+        expect(reported.single.exception, isA<StateError>());
+
+        final before = c.state.time;
+        c.tickSeconds(10);
+        expect(c.state.time, closeTo(before + 10, 1e-9));
+        clock.advance(const Duration(minutes: 10));
+        expect(await c.resume(), isNotNull);
+        expect(reported, hasLength(2));
+
+        failing.failWrites = false;
+        await c.save();
+        expect(failing.text, isNotNull);
+        final saved =
+            (jsonDecode(failing.text!) as Map<String, Object?>)['save'];
+        expect(saved, SaveCodec.encode(c.state));
+      },
+    );
 
     test('a store whose read throws gives LoadFailed and no write', () async {
       final failing = _FailingReadStore();
