@@ -85,7 +85,8 @@ final class BuildingRowView {
   /// Building id.
   final String id;
 
-  /// Its type's display name.
+  /// Its type's display name; an extractor's with the resource it mines,
+  /// such as "Mine (Iron Ore)".
   final String name;
 
   /// Its speed level, shown as "Lv".
@@ -206,7 +207,11 @@ BuildingRowView buildingRowView(
   final most = maxCrew(c.rules, def, b);
   return BuildingRowView(
     id: b.id,
-    name: def.name,
+    name: switch (b.depositResourceId) {
+      final id? when def.kind == BuildingKind.extractor =>
+        '${def.name} (${c.resources[id]?.name ?? id})',
+      _ => def.name,
+    },
     level: b.levels[UpgradeTrack.speed] ?? 0,
     crew: b.crew,
     crewBaseSlots: def.crewSlots,

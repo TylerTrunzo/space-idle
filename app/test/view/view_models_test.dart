@@ -69,6 +69,11 @@ void main() {
   });
 
   group('bodyView of an owned body', () {
+    test('an extractor row is named for what it mines', () {
+      final names = bodyView(c, 'kora')!.buildings.map((b) => b.name);
+      expect(names, ['Mine (Iron Ore)', 'Mine (Copper Ore)', 'Smelter']);
+    });
+
     test('Kora has its 3 starting buildings and its slots', () {
       final kora = bodyView(c, 'kora')!;
       expect(kora.name, 'Kora');

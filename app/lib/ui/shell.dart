@@ -1,11 +1,10 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/away_dialog.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/map/star_map.dart';
+import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/settings_sheet.dart';
 import 'package:space_idle/ui/top_bar.dart';
-import 'package:space_idle/view/view_models.dart';
 
 /// The selected body, and how to change it, for any widget in the shell.
 class ShellScope extends InheritedWidget {
@@ -199,7 +198,10 @@ class _MapTab extends StatelessWidget {
             SizedBox(
               key: Shell.sidePanelKey,
               width: Shell.panelWidth,
-              child: _PanelPlaceholder(bodyId: id),
+              child: PlanetPanel(
+                bodyId: id,
+                onClose: ShellScope.of(context).clearSelection,
+              ),
             ),
         ],
       );
@@ -221,58 +223,14 @@ class _MapTab extends StatelessWidget {
               initialChildSize: 0.45,
               minChildSize: 0.2,
               maxChildSize: 1,
-              builder: (context, scroll) =>
-                  _PanelPlaceholder(bodyId: id, scroll: scroll),
+              builder: (context, scroll) => PlanetPanel(
+                bodyId: id,
+                scroll: scroll,
+                onClose: ShellScope.of(context).clearSelection,
+              ),
             ),
           ),
       ],
-    );
-  }
-}
-
-/// The selected body's panel until Mission Control lands (Task 6): its
-/// name and type, and a close button.
-class _PanelPlaceholder extends StatelessWidget {
-  const _PanelPlaceholder({required this.bodyId, this.scroll});
-
-  final String bodyId;
-  final ScrollController? scroll;
-
-  @override
-  Widget build(BuildContext context) {
-    final view = bodyView(ControllerScope.of(context), bodyId);
-    final text = Theme.of(context).textTheme;
-    return Material(
-      color: Palette.panel,
-      shape: const Border(top: BorderSide(color: Palette.border)),
-      child: ListView(
-        controller: scroll,
-        padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 16),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(view?.name ?? bodyId, style: text.titleLarge),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Close',
-                onPressed: ShellScope.of(context).clearSelection,
-              ),
-            ],
-          ),
-          if (view != null)
-            Text(
-              '${view.typeName} · ${view.owned ? 'Yours' : 'Unclaimed'}',
-              style: text.bodyMedium?.copyWith(color: Palette.muted),
-            ),
-          const SizedBox(height: 16),
-          Text(
-            'Mission Control for this body is on its way.',
-            style: text.bodyMedium,
-          ),
-        ],
-      ),
     );
   }
 }
