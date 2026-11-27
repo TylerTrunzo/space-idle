@@ -233,6 +233,54 @@ void main() {
       expect(encode(s), encode(ref));
     });
 
+    test('a habitat capacity level bought partway frees crew for the next '
+        'slots at once, as the single-command loop does', () {
+      // Review of stage 1.7 task 4's fix round 1: crew-first read the free
+      // crew once per command, so housing bought in it went unused and the
+      // command ended away from the loop (28 of 196 swept states).
+      var states = 0;
+      for (final habitats in [1, 2]) {
+        for (var free = 0; free <= 6; free++) {
+          for (final budget in [1000, 5000, 3e4]) {
+            GameState make() {
+              final s = game(credits: 1e9);
+              s.body('kora').stock['habitat_module'] = n(2);
+              for (var h = 0; h < habitats; h++) {
+                expect(
+                  applyCommand(
+                    s,
+                    content,
+                    BuildCommand('player', 'kora', 'habitat', autoCrew: false),
+                  ),
+                  isA<CommandOk>(),
+                );
+              }
+              // Running habitats house crew at once.
+              for (final b in s.body('kora').buildings) {
+                if (b.defId == 'habitat') b.lastRunFraction = 1;
+              }
+              final f = s.faction('player');
+              f.baseCrew += free - availableCrew(s, content, 'player');
+              return s;
+            }
+
+            final a = make();
+            final b = make();
+            expect(availableCrew(a, content, 'player'), free);
+            bought(a, BuyUpgradesCommand('player', n(budget)));
+            oneByOne(b, n(budget));
+            expect(
+              encode(a),
+              encode(b),
+              reason: '$habitats habitats, $free free, budget $budget',
+            );
+            states++;
+          }
+        }
+      }
+      expect(states, 42);
+    });
+
     test('with no crew free, crew slots do not come first', () {
       final s = game()..faction('player').baseCrew = 3;
       expect(availableCrew(s, content, 'player'), 0);
