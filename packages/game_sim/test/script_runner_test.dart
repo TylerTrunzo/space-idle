@@ -287,6 +287,7 @@ void main() {
     expect(market.keys, containsAll(['iron_ore', 'steel', 'cargo_ship']));
     expect(market['steel'], {
       'price': {'value': '6e0', 'display': '6'},
+      'salePrice': {'value': '6e0', 'display': '6'},
       'saturation': 1.0,
     });
     // Cargo ships are whole units in state: 1.6 shows as 1.
@@ -295,6 +296,27 @@ void main() {
       '1',
     );
     expect(st['notes'], isNotEmpty);
+  });
+
+  test('state shows the sale price the Mass Driver raises next to the '
+      'market price', () {
+    final r = _runner();
+    r.state.faction('player').megaprojectLevels['mass_driver'] = 2;
+    r.state.body('kora').stock['hull_plate'] = BigNum.from(5);
+    final market = r.handle({'cmd': 'state'})['market']! as Map;
+    final plate = market['hull_plate']! as Map;
+    final factor = 1.05 * 1.05;
+    expect(
+      (plate['salePrice']! as Map)['value'],
+      BigNum.parse(
+        (plate['price']! as Map)['value']! as String,
+      ).mulDouble(factor).toJson(),
+    );
+    // Tier 0 goods take no bonus.
+    expect(
+      (market['iron_ore']! as Map)['salePrice'],
+      (market['iron_ore']! as Map)['price'],
+    );
   });
 
   test('state shows what each auto-sell rule keeps, and why', () {

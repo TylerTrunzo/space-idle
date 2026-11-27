@@ -1235,6 +1235,9 @@ final class ScriptRunner {
           if (held.contains(id))
             id: {
               'price': _num(price(state, c, id)),
+              // What the player's sales earn: the price with the sale
+              // bonuses its megaproject levels give.
+              'salePrice': _num(salePrice(state, c, p.id, id)),
               'saturation': state.market.saturation[id] ?? 1.0,
             },
       },
