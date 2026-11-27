@@ -127,6 +127,57 @@ void main() {
     ], everyElement(isNotEmpty));
   });
 
+  test('crew commands in any order leave a save that loads', () {
+    // Round-1 review: a build short of crew, crew freed, then a capacity
+    // level, made a save the integrity check refused. Builds, crew,
+    // upgrades and demolitions on a crew-starved empire, with a save and
+    // load after every command and the odd short tick.
+    final e = _engine();
+    final c = e.content;
+    final s = e.newGame(1);
+    s.faction('player')
+      ..baseCrew = 6
+      ..credits = BigNum.parse('1e12');
+    for (final id in c.resources.keys) {
+      s.body('kora').stock[id] = BigNum.from(1e4);
+    }
+    final rng = Rng(11);
+    T pick<T>(List<T> xs) => xs[rng.nextInt(xs.length)];
+    const defs = [
+      'circuit_fab',
+      'shipyard',
+      'smelter',
+      'station_dock',
+      'depot',
+    ];
+    final kora = s.body('kora');
+    for (var i = 0; i < 1000; i++) {
+      final ids = [for (final b in kora.buildings) b.id];
+      // The newest buildings most often: those are the ones short of crew.
+      final recent = ids.sublist(ids.length < 3 ? 0 : ids.length - 3);
+      final cmd = switch (rng.nextInt(10)) {
+        0 || 1 => BuildCommand('player', 'kora', pick(defs)),
+        2 || 3 => AssignCrewCommand('player', pick(ids), rng.nextInt(3)),
+        4 ||
+        5 ||
+        6 => UpgradeCommand('player', pick(recent), UpgradeTrack.capacity),
+        7 || 8 => DemolishCommand('player', pick(ids)),
+        _ => null,
+      };
+      if (cmd == null) {
+        e.tick(s, 1 + rng.nextInt(60).toDouble());
+      } else {
+        e.apply(s, cmd);
+      }
+      final r = SaveCodec.decode(SaveCodec.encode(s), c);
+      expect(
+        r,
+        isA<SaveOk>(),
+        reason: r is SaveError ? '${cmd?.toJson()}: ${r.message}' : '',
+      );
+    }
+  });
+
   test('seeded random commands never break the state', () {
     final e = _engine();
     final c = e.content;
@@ -135,7 +186,9 @@ void main() {
     T pick<T>(List<T> xs) => xs[rng.nextInt(xs.length)];
 
     final bodies = [...s.bodies.map((b) => b.id), 'nowhere', ''];
-    final buildings = [
+    // Buildings as they are now, so those the fuzzer builds get crewed,
+    // upgraded and demolished too.
+    List<String> buildings() => [
       for (final b in s.bodies)
         for (final x in b.buildings) x.id,
       'b0',
@@ -170,9 +223,9 @@ void main() {
           depositResourceId: pick([null, ...resources]),
           autoCrew: rng.nextInt(2) == 0,
         ),
-        1 => DemolishCommand(f, pick(buildings)),
-        2 => AssignCrewCommand(f, pick(buildings), pick(counts)),
-        3 => UpgradeCommand(f, pick(buildings), pick(UpgradeTrack.values)),
+        1 => DemolishCommand(f, pick(buildings())),
+        2 => AssignCrewCommand(f, pick(buildings()), pick(counts)),
+        3 => UpgradeCommand(f, pick(buildings()), pick(UpgradeTrack.values)),
         4 => CreateRouteCommand(
           f,
           pick(bodies),
@@ -255,8 +308,9 @@ void main() {
         case CommandOk(:final outcome):
           applied++;
           expect(outcome, isNotNull, reason: jsonEncode(json));
-          decodes(jsonEncode(json));
       }
+      // The app may save between any two commands, before a tick.
+      decodes(jsonEncode(json));
       if (i % 50 == 49) {
         e.advance(s, 600);
         decodes('after ticks');

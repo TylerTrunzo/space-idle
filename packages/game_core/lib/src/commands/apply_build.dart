@@ -224,9 +224,10 @@ CommandResult _assignCrew(
   }
 
   final previous = b.crew;
-  b
-    ..crew = cmd.crew
-    ..awaitingCrew = false;
+  // Crew set by hand is the player's choice: the building no longer waits
+  // for crew whatever it now holds.
+  setBuildingCrew(b, c.buildings[b.defId]!, cmd.crew);
+  b.awaitingCrew = false;
   return CommandOk(
     outcome: CrewAssigned(
       buildingId: b.id,
@@ -285,7 +286,7 @@ CommandResult _upgrade(
           ].reduce(math.min),
         )
       : 0;
-  b.crew += added;
+  setBuildingCrew(b, def, b.crew + added);
   return CommandOk(
     outcome: Upgraded(
       bodyId: body.id,

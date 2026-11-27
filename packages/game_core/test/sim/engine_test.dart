@@ -242,6 +242,26 @@ void main() {
       expect(availableCrew(s, c, 'player'), greaterThan(0));
     });
 
+    test('a capacity level that fills the base slots ends the wait, so the '
+        'save loads', () {
+      // Round-1 review probe: built short of crew, crew freed, then a
+      // capacity level filled the slots; the save before the next tick
+      // was refused ("awaiting crew with 2 of 2 base slots").
+      final s = engine.newGame(1);
+      s.faction('player')
+        ..baseCrew = 4
+        ..credits = n(1e9);
+      for (final id in c.resources.keys) {
+        s.body('kora').stock[id] = n(1000);
+      }
+      final fab = ok(s, const BuildCommand('player', 'kora', 'circuit_fab'))!;
+      expect((find(s, fab).crew, find(s, fab).awaitingCrew), (1, true));
+      ok(s, const AssignCrewCommand('player', 'b1', 0));
+      ok(s, UpgradeCommand('player', fab, UpgradeTrack.capacity));
+      expect((find(s, fab).crew, find(s, fab).awaitingCrew), (2, false));
+      expect(SaveCodec.decode(SaveCodec.encode(s), c), isA<SaveOk>());
+    });
+
     test('survive a save and load in between', () {
       final s = crewedOut();
       ok(s, const BuildCommand('player', 'kora', 'habitat'));

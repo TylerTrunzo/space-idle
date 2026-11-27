@@ -137,6 +137,15 @@ const double housingTolerance = 1e-9;
 /// [housed] crew with [housingTolerance] added.
 double _settled(double housed) => housed + housingTolerance;
 
+/// Sets [b]'s crew to [crew], [def] being its type: the one way commands
+/// and ticks change a building's crew. Once its base slots are full it no
+/// longer waits for crew ([BuildingState.awaitingCrew] cleared), so no
+/// sequence of crew changes leaves a flag a save would refuse.
+void setBuildingCrew(BuildingState b, BuildingDef def, int crew) {
+  b.crew = crew;
+  if (crew >= def.crewSlots) b.awaitingCrew = false;
+}
+
 /// Fills every building [BuildingState.awaitingCrew] from its faction's
 /// free crew, up to its base slots, factions in list order and their
 /// buildings in body and list order, and clears the flag on each, filled
@@ -156,9 +165,10 @@ void fillAwaitingCrew(GameState s, Content c) {
         if (!b.awaitingCrew) continue;
         b.awaitingCrew = false;
         free ??= availableCrew(s, c, f.id);
-        final take = math.min(free, c.buildings[b.defId]!.crewSlots - b.crew);
+        final def = c.buildings[b.defId]!;
+        final take = math.min(free, def.crewSlots - b.crew);
         if (take <= 0) continue;
-        b.crew += take;
+        setBuildingCrew(b, def, b.crew + take);
         free -= take;
       }
     }
