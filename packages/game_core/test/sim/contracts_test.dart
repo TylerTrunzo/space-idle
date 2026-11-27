@@ -403,6 +403,52 @@ void main() {
       expect(k.quantity >= n(50), isTrue, reason: '${k.quantity} drones');
     });
 
+    test('a refill waiting on a starved maker is checked again only at '
+        'each whole minute of game time, whatever the step', () {
+      GameState starved() {
+        final s = e.newGame(1);
+        final kora = s.body('kora');
+        for (final b in kora.buildings) {
+          b.crew = 0;
+        }
+        kora.buildings.add(
+          BuildingState(id: s.newId('b'), defId: 'drone_works', crew: 2),
+        );
+        player(s).lifetimeProduced
+          ..clear()
+          ..['survey_drone'] = n(2);
+        player(s).contractRefillAt
+          ..clear()
+          ..add(0);
+        return s;
+      }
+
+      void feed(GameState s) => s.body('kora').stock
+        ..['magnet'] = n(400)
+        ..['circuit'] = n(400)
+        ..['fuel'] = n(600);
+
+      // 1 s steps: fed at 30 s, it is asked for at the next minute.
+      final live = starved();
+      e.advance(live, 30, maxStep: 1);
+      expect(player(live).contracts, isEmpty);
+      feed(live);
+      e.advance(live, 1, maxStep: 1);
+      expect(player(live).contracts, isEmpty, reason: 'not before 60 s');
+      e.advance(live, 29, maxStep: 1);
+      expect(player(live).contracts.single.postedAt, 60);
+
+      // 60 s steps post it at the same time.
+      final away = starved();
+      feed(away);
+      e.advance(away, 60);
+      expect(player(away).contracts.single.postedAt, 60);
+      expect(
+        player(away).contracts.single.resourceId,
+        player(live).contracts.single.resourceId,
+      );
+    });
+
     test('a good made below minQuantity / quantitySeconds is not asked '
         'for', () {
       GameState steelAt(String minQuantity) {

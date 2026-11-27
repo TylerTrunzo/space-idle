@@ -43,7 +43,11 @@ import 'production.dart';
 /// refill left waiting through a long catch-up costs one cheap comparison
 /// a tick, not an eligibility scan; and the flow report is only built
 /// when some building could make a candidate fast enough at full rate.
-/// Neither ever changes what is posted. The RNG is drawn only when a
+/// Neither changes what is posted. A refill already due before the step
+/// that ends at [now] began is checked again only in a step that reaches a
+/// whole game minute ([_dueNowOrOnMinute]), so one waiting on a starved
+/// maker builds a report once a game minute, at the same game times for
+/// any step size. The RNG is drawn only when a
 /// contract is posted, two numbers each time, and the flow report built
 /// at most once per faction per call, so a tick without a due refill
 /// costs next to nothing. A faction with no refills banked (every faction
@@ -65,7 +69,11 @@ void stepContracts(GameState s, Content c, double now) {
         _nothingEligible[f] = key;
         break;
       }
-      if (report == null && !_couldQualify(s, c, f, candidates)) break;
+      if (report == null &&
+          (!_dueNowOrOnMinute(s, f, now) ||
+              !_couldQualify(s, c, f, candidates))) {
+        break;
+      }
       final made = report ??= buildFlowReport(s, c, f.id);
       final choices = [
         for (final (t, ids) in candidates)
@@ -138,6 +146,20 @@ T _draw<T>(Rng rng, List<T> items, double Function(T) weight) {
   }
   return items.last;
 }
+
+/// Game seconds between checks of a refill left waiting.
+const double _recheckSeconds = 60;
+
+/// Whether [f]'s first refill is worth a flow report at [now]: it came due
+/// in the step that ends at [now] (from `s.time`), the call is not a
+/// step's (`now <= s.time`), or the step reaches a whole multiple of
+/// [_recheckSeconds] of game time. So a refill left waiting on a maker that
+/// is staffed but short of inputs is checked once a game minute, at the
+/// same game times whatever the step, not every tick.
+bool _dueNowOrOnMinute(GameState s, FactionState f, double now) =>
+    f.contractRefillAt.first > s.time ||
+    now <= s.time ||
+    (now / _recheckSeconds).floor() > (s.time / _recheckSeconds).floor();
 
 /// Units a second [t] needs of a resource to ask for it at all: its
 /// `minQuantity` over its `quantitySeconds`.
