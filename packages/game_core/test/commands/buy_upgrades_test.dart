@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:game_core/game_core.dart';
 import 'package:test/test.dart';
@@ -47,7 +48,8 @@ void main() {
 
   /// The reference: single [UpgradeCommand]s, each the cheapest level any
   /// owned building can still take (ties by building id, then track
-  /// order), while the total stays within [budget]; at most [max].
+  /// order), while the total stays within [budget] and the credits left
+  /// cover it; at most [max].
   /// Returns the commands applied, in order.
   List<UpgradeCommand> oneByOne(
     GameState s,
@@ -78,7 +80,11 @@ void main() {
           }
         }
       }
-      if (best == null || spent + best.$1 > limit) break;
+      if (best == null ||
+          spent + best.$1 > limit ||
+          s.faction('player').credits < best.$1) {
+        break;
+      }
       final cmd = UpgradeCommand('player', best.$2, best.$3);
       final r = applyCommand(s, cc, cmd);
       expect(r, isA<CommandOk>());
@@ -210,6 +216,39 @@ void main() {
         expect(o.stop, UpgradeBuyStop.budget);
         expect(o.total + o.nextCost!, greaterThan(limit));
       }
+    });
+
+    test('credits equal to a cheapest-first partial sum, or a rounding '
+        'step either side, stop cleanly at the budget', () {
+      // The budget check and the upgrade's own check of the credits left
+      // once disagreed by an ulp at such a boundary, and the command threw
+      // partway (review of stage 1.7 task 4: 100 throws in 8,000 tries).
+      final rnd = math.Random(7);
+      var tries = 0;
+      for (var k = 1; k <= 240; k += 7) {
+        final a = game(credits: 1e300);
+        final o = bought(
+          a,
+          BuyUpgradesCommand('player', BigNum.parse('1e300'), maxPurchases: k),
+        );
+        final t = o.total;
+        final near = [
+          t,
+          for (var j = 0; j < 40; j++)
+            t + t.mulDouble((rnd.nextDouble() * 2 - 1) * 1e-14),
+        ];
+        for (final credits in near) {
+          tries++;
+          final b = e.newGame(1)..faction('player').credits = credits;
+          final r = bought(b, BuyUpgradesCommand('player', credits));
+          expect(r.stop, UpgradeBuyStop.budget);
+          expect(r.total <= credits, isTrue);
+          expect(b.faction('player').credits >= const BigNum.zero(), isTrue);
+          // Within a level of the partial sum.
+          expect((r.levels - k).abs(), lessThanOrEqualTo(1));
+        }
+      }
+      expect(tries, greaterThan(1000));
     });
 
     test('a huge budget stops at maxPurchases', () {

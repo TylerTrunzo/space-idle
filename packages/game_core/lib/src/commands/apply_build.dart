@@ -369,12 +369,17 @@ CommandResult _buyUpgrades(
       stop = UpgradeBuyStop.nothingToBuy;
     } else if (count >= cmd.maxPurchases) {
       stop = UpgradeBuyStop.maxPurchases;
-    } else if (total + offers.first.cost > limit) {
+    } else if (total + offers.first.cost > limit ||
+        // The upgrade's own test, on the credits left: summed costs and
+        // credits paid down can differ by an ulp at the budget's edge.
+        f.credits < offers.first.cost) {
       stop = UpgradeBuyStop.budget;
     } else {
       final o = offers.first;
       final r = _upgrade(s, c, f, UpgradeCommand(f.id, o.b.id, o.track));
-      // The offer passed every check the command makes, so it buys.
+      // The offer passed every check the command makes, so it buys; were
+      // it refused all the same, the levels bought stand and the budget
+      // is what stopped it.
       if (r case CommandOk(outcome: final Upgraded up)) {
         total = total + o.cost;
         count++;
@@ -391,7 +396,7 @@ CommandResult _buyUpgrades(
         );
         offer(o.body, o.b);
       } else {
-        throw StateError('buyUpgrades: ${o.b.id} ${o.track.name} refused');
+        stop = UpgradeBuyStop.budget;
       }
     }
   }
