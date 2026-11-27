@@ -427,5 +427,9 @@ bool megaprojectGoodsFed(GameState s, FactionState f, MegaprojectDef m) =>
 const String creditsKey = 'credits';
 
 /// How many level vectors [bonusesFor] holds totals for on [c]; at most
-/// 256. For tests: it shows the shared cache stays bounded.
+/// 256.
+///
+/// It exists for tests, which check the shared cache stays bounded
+/// (game_core has no `package:meta` for `@visibleForTesting`); the
+/// package's library hides it.
 int bonusVectorsKept(Content c) => _byLevels[c]?.length ?? 0;
