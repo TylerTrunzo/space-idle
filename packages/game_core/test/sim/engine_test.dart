@@ -1333,11 +1333,12 @@ void main() {
       tags: ['perf'],
       () {
         // A balanced bot's state on day 14, seed 1 (30 routes, an open
-        // contract, 123 buildings on 7 bodies), with the station fed goods
+        // contract, 130 buildings on 7 bodies), with the station fed goods
         // and credits above 1M and the Mass Driver fed goods: every
         // feature of a tick at work. To make it again, save the state a
         // 336 h `runBotSession(BalancedBot(), seed: 1)` ends in, after
-        // those two SetMegaprojectAutoCommands, with SaveCodec.encode.
+        // those two SetMegaprojectAutoCommands and a SetAutoPayReserveCommand
+        // of 1M, with SaveCodec.encode.
         //
         // The budgets are multiples of what the same machine takes for
         // the synthetic 24 h of `fullEmpire` (no routes, contracts or

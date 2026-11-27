@@ -29,11 +29,11 @@ void main() {
       .fold(const BigNum.zero(), (t, v) => t + v);
 
   test('a catch-up is 60 s steps to the unit, and 1 s steps earn within '
-      '3%, wasting nothing and keeping every crew housed', () {
-    // 1 s steps earn 2.1-2.3% less here, the same before and after the
-    // stage 1.6 fixes: the tier-3 chain (magnets into reactor cores and
-    // segments) sells differently. Within the plan's 2% elsewhere; this
-    // state is the one known exception, kept in view at 3%.
+      '2%, wasting nothing and keeping every crew housed', () {
+    // On the round-1 version of this state 1 s steps earned 2.1-2.3% less,
+    // in the tier-3 chain (magnets into reactor cores and segments), the
+    // same before and after the fix wave; on this one they are within
+    // 0.01%. Seen again, that gap is the one to chase.
     final start = load();
     final away = start.copy();
     final ticks = start.copy();
@@ -63,7 +63,7 @@ void main() {
         start.faction('player').lifetimeCredits;
     expect(
       earned(live).toDouble(),
-      closeTo(earned(ticks).toDouble(), earned(ticks).toDouble() * 0.03),
+      closeTo(earned(ticks).toDouble(), earned(ticks).toDouble() * 0.02),
     );
     expect(wasted.toDouble(), lessThan(1e-6));
     expect(least, housed);
