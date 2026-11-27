@@ -1,5 +1,5 @@
 [
-  {"id": "veyra_bulk", "issuer": "Veyra Exchange", "minTier": 0, "maxTier": 1, "quantitySeconds": 14400, "rewardMultiplier": 2.5, "minQuantity": "100", "maxQuantity": "5000", "rewardIncomeSeconds": 1800},
-  {"id": "veyra_parts", "issuer": "Veyra Exchange", "minTier": 2, "maxTier": 2, "quantitySeconds": 14400, "rewardMultiplier": 2.5, "minQuantity": "10", "maxQuantity": "1000", "rewardIncomeSeconds": 3600},
-  {"id": "veyra_advanced", "issuer": "Veyra Exchange", "minTier": 3, "maxTier": 3, "quantitySeconds": 14400, "rewardMultiplier": 2.5, "minQuantity": "2", "maxQuantity": "100", "rewardIncomeSeconds": 7200}
+  {"id": "veyra_bulk", "issuer": "Veyra Exchange", "minTier": 0, "maxTier": 1, "quantitySeconds": 3600, "rewardMultiplier": 3, "minQuantity": "100", "maxQuantity": "5000", "rewardIncomeSeconds": 600, "rewardCapIncomeSeconds": 3600},
+  {"id": "veyra_parts", "issuer": "Veyra Exchange", "minTier": 2, "maxTier": 2, "quantitySeconds": 7200, "rewardMultiplier": 3, "minQuantity": "20", "maxQuantity": "1000", "rewardIncomeSeconds": 600, "rewardCapIncomeSeconds": 3600},
+  {"id": "veyra_advanced", "issuer": "Veyra Exchange", "minTier": 3, "maxTier": 3, "quantitySeconds": 10800, "rewardMultiplier": 3, "minQuantity": "5", "maxQuantity": "100", "rewardIncomeSeconds": 600, "rewardCapIncomeSeconds": 3600}
 ]

@@ -1,8 +1,11 @@
+import 'dart:math' as math;
+
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../report/flow_report.dart';
 import '../rng.dart';
 import '../state/game_state.dart';
+import 'megaprojects.dart';
 import 'production.dart';
 
 /// Posts contracts on every faction's board whose slots are due to refill
@@ -10,25 +13,40 @@ import 'production.dart';
 /// and `now >= contractRefillAt[0]`, a contract is posted from the state's
 /// [Rng] and that refill is used up.
 ///
-/// A contract asks for a resource of a template's tiers that the faction
-/// has made (`lifetimeProduced > 0`), or that a recipe makes from inputs it
-/// has all made, and that has a base price and is not already on its board.
-/// The template is drawn first among those with such a resource, then the
-/// resource. Its quantity is `max(minQuantity, net production rate ×
-/// quantitySeconds)`, rounded to two significant figures, in whole units
-/// ([twoSignificantFigures]), with the rate from the flow report's steady
-/// rates ([FlowReport.netProducedPerSec]); its reward is `quantity ×
-/// basePrice × rewardMultiplier` credits.
+/// A contract asks for a resource of a template's tiers that has a base
+/// price, is not already on the board, and that the faction makes now:
+/// its buildings' output of it ([FlowReport.producedPerSec], gross of what
+/// they use) is at least the template's `minQuantity / quantitySeconds`
+/// a second, so a trickle never gets an order. The template is drawn
+/// first among those with such a resource, then the resource, each in
+/// proportion to its weight: 1 for most goods, [lifeSupportWeight] for
+/// what a habitat consumes, so orders seldom compete with crew upkeep; a
+/// template weighs as much as its heaviest resource.
+///
+/// Its quantity is the gross rate × `quantitySeconds`, rounded to two
+/// significant figures, at most the template's `maxQuantity` × (1 + the
+/// faction's megaproject levels summed) and the largest storage cap among
+/// its bodies (each rounded down to two figures), at least `minQuantity`,
+/// in whole units ([twoSignificantFigures]). Its reward is `quantity ×
+/// basePrice × rewardMultiplier` credits, at least `rewardIncomeSeconds`
+/// of the faction's income ([FlowReport.creditsPerSec]) and at most
+/// `rewardCapIncomeSeconds` of it. The first contract a faction is ever
+/// offered ([FactionState.contractsPosted] 0) is exempt from the cap, as
+/// is any posted while the faction earns nothing at all (an hour of no
+/// income would make the order worthless).
 ///
 /// When nothing qualifies, the refill stays due and is used once something
-/// does. That finding is remembered per faction, for as long as the
-/// resources it has made and those on its board stay the same, so a refill
-/// left waiting through a long catch-up costs one cheap comparison a tick,
-/// not an eligibility scan; the memory only skips work, never changes what
-/// is posted. The RNG is drawn only when a contract is posted, two numbers
-/// each time, and the flow report built at most once per faction per call,
-/// so a tick without a due refill costs next to nothing. A faction with no
-/// refills banked (every faction but the player in stage 1.5) has no board.
+/// does. Whether a resource is made at all, and on the board, is
+/// remembered per faction, for as long as the resources it has made
+/// (`lifetimeProduced > 0`) and those on its board stay the same, so a
+/// refill left waiting through a long catch-up costs one cheap comparison
+/// a tick, not an eligibility scan; and the flow report is only built
+/// when some building could make a candidate fast enough at full rate.
+/// Neither ever changes what is posted. The RNG is drawn only when a
+/// contract is posted, two numbers each time, and the flow report built
+/// at most once per faction per call, so a tick without a due refill
+/// costs next to nothing. A faction with no refills banked (every faction
+/// but the player in stage 1.5) has no board.
 ///
 /// The engine runs it at the end of every tick with the tick's end time,
 /// so a refill due within the tick is posted in it.
@@ -41,23 +59,42 @@ void stepContracts(GameState s, Content c, double now) {
         f.contractRefillAt.first <= now) {
       final key = _EligibilityKey.of(c, f);
       if (_nothingEligible[f]?.matches(key) ?? false) break;
-      final choices = _choices(c, f);
-      if (choices.isEmpty) {
+      final candidates = _candidates(c, f);
+      if (candidates.isEmpty) {
         _nothingEligible[f] = key;
         break;
       }
+      if (report == null && !_couldQualify(s, c, f, candidates)) break;
+      final made = report ??= buildFlowReport(s, c, f.id);
+      final choices = [
+        for (final (t, ids) in candidates)
+          if ([
+                for (final id in ids)
+                  if (made.producedPerSec(id) >= _floorRate(t)) id,
+              ]
+              case final ok when ok.isNotEmpty)
+            (t, ok),
+      ];
+      if (choices.isEmpty) break;
+      final weights = _weights(c);
+      double weight(String id) => weights[id] ?? 1;
       final rng = Rng.fromState(s.rngState);
-      final (template, resources) = choices[rng.nextInt(choices.length)];
-      final resourceId = resources[rng.nextInt(resources.length)];
+      final (template, resources) = _draw(rng, choices, (choice) {
+        var most = 0.0;
+        for (final id in choice.$2) {
+          most = math.max(most, weight(id));
+        }
+        return most;
+      });
+      final resourceId = _draw(rng, resources, weight);
       s.rngState = rng.state;
-      report ??= buildFlowReport(s, c, f.id);
-      final rate = report.netProducedPerSec(resourceId);
-      final quantity = _quantity(s, c, f, template, rate);
-      final byQuantity =
-          quantity *
-          c.resources[resourceId]!.basePrice.mulDouble(
-            template.rewardMultiplier,
-          );
+      final quantity = _quantity(
+        s,
+        c,
+        f,
+        template,
+        made.producedPerSec(resourceId),
+      );
       f.contractRefillAt.removeAt(0);
       f.contracts.add(
         ContractState(
@@ -65,14 +102,98 @@ void stepContracts(GameState s, Content c, double now) {
           templateId: template.id,
           resourceId: resourceId,
           quantity: quantity,
-          rewardCredits: byQuantity.max(
-            report.creditsPerSec.mulDouble(template.rewardIncomeSeconds),
-          ),
+          rewardCredits: _reward(c, f, template, resourceId, quantity, made),
           postedAt: now,
         ),
       );
+      f.contractsPosted++;
     }
   }
+}
+
+/// Weight of a resource a habitat consumes when a contract's template and
+/// resource are drawn; every other resource weighs 1.
+const double lifeSupportWeight = 0.25;
+
+/// Resource id to its draw weight where it is not 1: [lifeSupportWeight]
+/// for every input of a habitat in [c]. Worked out once per content.
+Map<String, double> _weights(Content c) => _weightsOf[c] ??= {
+  for (final b in c.buildings.values)
+    if (b.kind == BuildingKind.habitat)
+      for (final id in b.inputs.keys) id: lifeSupportWeight,
+};
+
+final _weightsOf = Expando<Map<String, double>>('contractWeights');
+
+/// One of [items], drawn from [rng] in proportion to [weight] (all above
+/// zero): one number drawn. With equal weights it is the item
+/// `rng.nextInt(items.length)` would pick.
+T _draw<T>(Rng rng, List<T> items, double Function(T) weight) {
+  var total = 0.0;
+  for (final x in items) {
+    total += weight(x);
+  }
+  final at = rng.nextDouble() * total;
+  var sum = 0.0;
+  for (final x in items) {
+    sum += weight(x);
+    if (at < sum) return x;
+  }
+  return items.last;
+}
+
+/// Units a second [t] needs of a resource to ask for it at all: its
+/// `minQuantity` over its `quantitySeconds`.
+BigNum _floorRate(ContractTemplateDef t) =>
+    t.minQuantity.mulDouble(1 / t.quantitySeconds);
+
+/// Whether a building of [f] at full rate, fully crewed and housed, could
+/// make a candidate of [candidates] at its template's [_floorRate]: what
+/// the flow report shows is never more, so when none could, nothing
+/// qualifies and the report need not be built.
+bool _couldQualify(
+  GameState s,
+  Content c,
+  FactionState f,
+  List<(ContractTemplateDef, List<String>)> candidates,
+) {
+  final bonuses = bonusesFor(s, c, f.id);
+  final most = <String, BigNum>{};
+  for (final body in s.bodies) {
+    if (body.ownerId != f.id) continue;
+    for (final b in body.buildings) {
+      final out = fullRateFlow(c, body, b, 1, 1, bonuses: bonuses).outputs;
+      for (final MapEntry(key: id, value: v) in out.entries) {
+        most[id] = (most[id] ?? const BigNum.zero()) + v;
+      }
+    }
+  }
+  return candidates.any(
+    (k) =>
+        k.$2.any((id) => (most[id] ?? const BigNum.zero()) >= _floorRate(k.$1)),
+  );
+}
+
+/// What a contract from [t] for [quantity] of [resourceId] pays [f]: by
+/// quantity, at least `rewardIncomeSeconds` and, but for the first
+/// contract [f] is offered and while it earns nothing, at most
+/// `rewardCapIncomeSeconds` of [report]'s income.
+BigNum _reward(
+  Content c,
+  FactionState f,
+  ContractTemplateDef t,
+  String resourceId,
+  BigNum quantity,
+  FlowReport report,
+) {
+  final income = report.creditsPerSec;
+  final byQuantity =
+      quantity *
+      c.resources[resourceId]!.basePrice.mulDouble(t.rewardMultiplier);
+  final reward = byQuantity.max(income.mulDouble(t.rewardIncomeSeconds));
+  final cap = t.rewardCapIncomeSeconds;
+  if (cap == null || f.contractsPosted == 0 || income.isZero) return reward;
+  return reward.min(income.mulDouble(cap));
 }
 
 /// What decides whether any contract can be posted to a board: the
@@ -123,12 +244,13 @@ void freeContractSlot(FactionState f, Content c, double now) {
   refills.add(last + c.rules.contractRefillSeconds);
 }
 
-/// Units a contract from [t] asks [f] for, given its net production
+/// Units a contract from [t] asks [f] for, given its gross production
 /// [rate] of the resource: `rate × quantitySeconds` rounded to two
 /// significant figures, at most the largest storage cap among the bodies
-/// [f] owns and [ContractTemplateDef.maxQuantity] (each rounded down to two
-/// figures), and at least [ContractTemplateDef.minQuantity]; then rounded
-/// down to whole units, at least 1.
+/// [f] owns and [ContractTemplateDef.maxQuantity] × (1 + [f]'s megaproject
+/// levels summed) (each rounded down to two figures), and at least
+/// [ContractTemplateDef.minQuantity]; then rounded down to whole units, at
+/// least 1.
 BigNum _quantity(
   GameState s,
   Content c,
@@ -142,7 +264,8 @@ BigNum _quantity(
     final cap = storageCap(s, c, b);
     if (largest == null || cap > largest) largest = cap;
   }
-  final most = t.maxQuantity;
+  final levels = f.megaprojectLevels.values.fold(0, (t, v) => t + v);
+  final most = t.maxQuantity?.mulDouble(1.0 + levels);
   final ceiling = largest == null || most == null
       ? largest ?? most
       : largest.min(most);
@@ -168,25 +291,22 @@ BigNum twoSignificantFigures(BigNum v) {
 }
 
 /// Each template, in content order, with the resources a contract from it
-/// may ask [f] for, in content order; templates with none left out.
-List<(ContractTemplateDef, List<String>)> _choices(Content c, FactionState f) {
-  bool made(String id) =>
-      (f.lifetimeProduced[id] ?? const BigNum.zero()) > const BigNum.zero();
+/// may ask [f] for, made rate aside, in content order: priced, made at
+/// some time (`lifetimeProduced > 0`) and not on the board; templates with
+/// none left out.
+List<(ContractTemplateDef, List<String>)> _candidates(
+  Content c,
+  FactionState f,
+) {
   final onBoard = {for (final k in f.contracts) k.resourceId};
-  final eligible = <ResourceDef>[];
-  for (final r in c.resources.values) {
-    if (r.basePrice.isZero || onBoard.contains(r.id)) continue;
-    if (made(r.id) ||
-        c.buildings.values.any(
-          (b) =>
-              b.kind != BuildingKind.extractor &&
-              b.outputs.containsKey(r.id) &&
-              b.inputs.isNotEmpty &&
-              b.inputs.keys.every(made),
-        )) {
-      eligible.add(r);
-    }
-  }
+  final eligible = [
+    for (final r in c.resources.values)
+      if (!r.basePrice.isZero &&
+          !onBoard.contains(r.id) &&
+          (f.lifetimeProduced[r.id] ?? const BigNum.zero()) >
+              const BigNum.zero())
+        r,
+  ];
   return [
     for (final t in c.contractTemplates.values)
       if ([

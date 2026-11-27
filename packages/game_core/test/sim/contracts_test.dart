@@ -96,8 +96,11 @@ void main() {
       final tiers = <int>{};
       for (final t in content.contractTemplates.values) {
         expect(t.issuer, 'Veyra Exchange');
-        expect(t.quantitySeconds, 14400);
-        expect(t.rewardMultiplier, 2.5);
+        // 1 to 3 h of production, longer for higher tiers.
+        expect(t.quantitySeconds, inInclusiveRange(3600, 10800));
+        expect(t.rewardMultiplier, 3);
+        expect(t.rewardIncomeSeconds, 600);
+        expect(t.rewardCapIncomeSeconds, 3600);
         for (var i = t.minTier; i <= t.maxTier; i++) {
           tiers.add(i);
         }
@@ -290,57 +293,130 @@ void main() {
           expect(r.tier, inInclusiveRange(t.minTier, t.maxTier));
           expect(resources.add(r.id), isTrue, reason: 'one per resource');
           final made = f.lifetimeProduced[r.id] ?? const BigNum.zero();
-          final inputsMade = content.buildings.values.any(
-            (b) =>
-                b.kind != BuildingKind.extractor &&
-                b.outputs.containsKey(r.id) &&
-                b.inputs.isNotEmpty &&
-                b.inputs.keys.every(
-                  (i) =>
-                      (f.lifetimeProduced[i] ?? const BigNum.zero()) >
-                      const BigNum.zero(),
-                ),
-          );
-          expect(made > const BigNum.zero() || inputsMade, isTrue);
+          expect(made > const BigNum.zero(), isTrue);
           expect(k.quantity, twoSignificantFigures(k.quantity));
           expect(k.quantity >= t.minQuantity, isTrue);
           if (t.maxQuantity case final most?) {
             expect(k.quantity <= most, isTrue);
           }
-          expect(
-            k.rewardCredits >=
-                k.quantity * r.basePrice.mulDouble(t.rewardMultiplier),
-            isTrue,
-          );
+          expect(k.rewardCredits > const BigNum.zero(), isTrue);
           expect(k.delivered, const BigNum.zero());
           expect(k.postedAt, lessThanOrEqualTo(s.time));
         }
       }
     });
 
-    test('the quantity is about 4 h of net production, at least the '
-        'minimum', () {
+    test('the quantity is hours of gross production, not net', () {
       final s = e.newGame(1);
       final f = player(s);
-      // Only steel (and what is made from it) is eligible.
+      // A plate press uses most of the smelter's steel, so steel's net rate
+      // is far below what is made.
+      s
+          .body('kora')
+          .buildings
+          .add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1));
+      // Only steel is eligible.
       f.lifetimeProduced
         ..clear()
         ..['steel'] = n(1);
       f.contractRefillAt
         ..clear()
         ..add(0);
-      final rate = buildFlowReport(s, content, f.id).netProducedPerSec('steel');
-      expect(rate > const BigNum.zero(), isTrue);
+      final report = buildFlowReport(s, content, f.id);
+      final gross = report.producedPerSec('steel');
+      expect(gross > const BigNum.zero(), isTrue);
+      expect(report.netProducedPerSec('steel') < gross.mulDouble(0.5), isTrue);
       stepContracts(s, content, 0);
       final k = f.contracts.single;
+      expect(k.resourceId, 'steel');
       final t = content.contractTemplates[k.templateId]!;
-      if (k.resourceId == 'steel') {
-        expect(k.quantity, twoSignificantFigures(rate.mulDouble(14400)));
-      } else {
-        // Hull plates: made from steel, not yet made at all.
-        expect(k.resourceId, 'hull_plate');
-        expect(k.quantity, t.minQuantity);
+      expect(
+        k.quantity,
+        twoSignificantFigures(gross.mulDouble(t.quantitySeconds)),
+      );
+    });
+
+    test('the bug-1 shape: a good made before but at a trickle now gets no '
+        'order, and hours of it once it is made', () {
+      final s = e.newGame(1);
+      final f = player(s);
+      final kora = s.body('kora');
+      kora.buildings.add(
+        BuildingState(id: s.newId('b'), defId: 'drone_works', crew: 2),
+      );
+      // Drones were made once; the works now stands idle, short of inputs.
+      f.lifetimeProduced
+        ..clear()
+        ..['survey_drone'] = n(2);
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
+      final rng = s.rngState;
+      stepContracts(s, content, 0);
+      expect(f.contracts, isEmpty, reason: 'no order of 2 drones');
+      expect(f.contractRefillAt, [0], reason: 'the refill waits');
+      expect(s.rngState, rng);
+
+      kora.stock
+        ..['magnet'] = n(400)
+        ..['circuit'] = n(400)
+        ..['fuel'] = n(600);
+      final gross = buildFlowReport(
+        s,
+        content,
+        f.id,
+      ).producedPerSec('survey_drone');
+      stepContracts(s, content, 0);
+      final k = f.contracts.single;
+      expect(k.resourceId, 'survey_drone');
+      final t = content.contractTemplates[k.templateId]!;
+      expect(
+        k.quantity,
+        twoSignificantFigures(gross.mulDouble(t.quantitySeconds)),
+      );
+      expect(k.quantity >= n(50), isTrue, reason: '${k.quantity} drones');
+    });
+
+    test('a good made below minQuantity / quantitySeconds is not asked '
+        'for', () {
+      GameState steelAt(String minQuantity) {
+        final c = contentWith((b) {
+          for (final t
+              in (b['contracts']! as List).cast<Map<String, Object?>>()) {
+            t
+              ..['minQuantity'] = minQuantity
+              ..remove('maxQuantity');
+          }
+        });
+        final s = GameEngine(c).newGame(1);
+        final f = player(s);
+        f.lifetimeProduced
+          ..clear()
+          ..['steel'] = n(1);
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        stepContracts(s, c, 0);
+        return s;
       }
+
+      final s = e.newGame(1);
+      final gross = buildFlowReport(
+        s,
+        content,
+        'player',
+      ).producedPerSec('steel');
+      final t = content.contractTemplates.values.firstWhere(
+        (t) => t.minTier <= 1 && t.maxTier >= 1,
+      );
+      final atRate = gross.mulDouble(t.quantitySeconds).toDouble();
+      expect(player(steelAt('${atRate * 1.05}')).contracts, isEmpty);
+      final k = player(steelAt('${atRate * 0.95}')).contracts.single;
+      expect(k.resourceId, 'steel');
+      expect(
+        k.quantity,
+        twoSignificantFigures(gross.mulDouble(t.quantitySeconds)),
+      );
     });
 
     /// A game whose only eligible resource is steel, made fast enough that
@@ -407,33 +483,128 @@ void main() {
       expect(k.quantity, n(120));
     });
 
+    test('the maximum quantity grows with every megaproject level', () {
+      final c = steelOnly((t) => t['maxQuantity'] = '120');
+      final s = steelFlood(c);
+      player(s).megaprojectLevels['orbital_station'] = 2;
+      expect(storageCap(s, c, s.body('kora')) > n(360), isTrue);
+      // 1 + 2 levels.
+      expect(postSteel(s, c).quantity, n(360));
+    });
+
     test('the reward is at least rewardIncomeSeconds of income', () {
       final c = steelOnly(
         (t) => t
-          ..['rewardIncomeSeconds'] = 3600
+          ..['rewardIncomeSeconds'] = 600
           ..['maxQuantity'] = '10'
           ..['minQuantity'] = '10',
       );
       final s = steelFlood(c);
+      player(s).contractsPosted = 1;
       final income = buildFlowReport(s, c, 'player').creditsPerSec;
       expect(income > const BigNum.zero(), isTrue);
       final k = postSteel(s, c);
       expect(k.quantity, n(10));
-      expect(k.rewardCredits, income.mulDouble(3600));
-      // A small income leaves the per-unit reward.
+      expect(k.rewardCredits, income.mulDouble(600));
+      // Between the floor and the cap, the reward is by quantity.
       final plain = steelOnly(
         (t) => t
           ..['rewardIncomeSeconds'] = 1
+          ..['rewardCapIncomeSeconds'] = 1e9
           ..['maxQuantity'] = '1000',
       );
       final big = postSteel(steelFlood(plain), plain);
       expect(
         big.rewardCredits,
-        big.quantity * c.resources['steel']!.basePrice.mulDouble(2.5),
+        big.quantity * c.resources['steel']!.basePrice.mulDouble(3),
       );
     });
 
-    test('picks resources made, or whose inputs are made', () {
+    /// Only steel, paying a million times its price, capped at 1 h of
+    /// income.
+    Content lavish() => steelOnly(
+      (t) => t
+        ..['rewardMultiplier'] = 1e6
+        ..['rewardIncomeSeconds'] = 600
+        ..['rewardCapIncomeSeconds'] = 3600,
+    );
+
+    test('the reward is at most rewardCapIncomeSeconds of income', () {
+      final c = lavish();
+      final s = steelFlood(c);
+      player(s).contractsPosted = 1;
+      final income = buildFlowReport(s, c, 'player').creditsPerSec;
+      expect(income > const BigNum.zero(), isTrue);
+      final k = postSteel(s, c);
+      expect(
+        k.quantity * c.resources['steel']!.basePrice.mulDouble(1e6) >
+            income.mulDouble(3600),
+        isTrue,
+      );
+      expect(k.rewardCredits, income.mulDouble(3600));
+    });
+
+    test('the first contract a faction is ever offered is exempt from the '
+        'cap', () {
+      final c = lavish();
+      final s = steelFlood(c);
+      expect(player(s).contractsPosted, 0);
+      final income = buildFlowReport(s, c, 'player').creditsPerSec;
+      final k = postSteel(s, c);
+      expect(
+        k.rewardCredits,
+        k.quantity * c.resources['steel']!.basePrice.mulDouble(1e6),
+      );
+      expect(k.rewardCredits > income.mulDouble(3600), isTrue);
+    });
+
+    test("a new game's first contract pays by quantity and counts as "
+        'posted; the next ones keep within the cap', () {
+      final s = e.newGame(1);
+      final f = player(s);
+      expect(f.contractsPosted, 0);
+      e.advance(s, 60);
+      final first = f.contracts.single;
+      expect(f.contractsPosted, 1);
+      final t = content.contractTemplates[first.templateId]!;
+      expect(
+        first.rewardCredits,
+        first.quantity *
+            content.resources[first.resourceId]!.basePrice.mulDouble(
+              t.rewardMultiplier,
+            ),
+      );
+
+      // Sell everything, then let the next refills come due.
+      for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+        ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+      }
+      final x = s.copy();
+      e.advance(x, refill - 120);
+      final income = buildFlowReport(x, content, 'player').creditsPerSec;
+      e.advance(x, 120);
+      expect(player(x).contractsPosted, 2);
+      final second = player(x).contracts.last;
+      expect(second.rewardCredits <= income.mulDouble(3600 * 1.01), isTrue);
+      expect(second.rewardCredits >= income.mulDouble(600 * 0.99), isTrue);
+    });
+
+    test('with no income at all, the cap does not bring the reward to '
+        'nothing', () {
+      final c = lavish();
+      final s = steelFlood(c);
+      player(s).contractsPosted = 1;
+      // No auto-sell rule: nothing earns a steady income.
+      player(s).autoSell.clear();
+      expect(buildFlowReport(s, c, 'player').creditsPerSec.isZero, isTrue);
+      final k = postSteel(s, c);
+      expect(
+        k.rewardCredits,
+        k.quantity * c.resources['steel']!.basePrice.mulDouble(1e6),
+      );
+    });
+
+    test('asks only for goods being made now', () {
       final picked = <String>{};
       for (var seed = 1; seed <= 40; seed++) {
         final s = e.newGame(seed);
@@ -447,8 +618,62 @@ void main() {
         stepContracts(s, content, 0);
         picked.add(f.contracts.single.resourceId);
       }
-      // Copper ore is made; wire is made from it alone.
-      expect(picked, {'copper_ore', 'copper_wire'});
+      // Copper wire could be made from copper ore, but is not made.
+      expect(picked, {'copper_ore'});
+    });
+
+    group('life-support goods', () {
+      /// The share of [draws] contracts on [s]'s board, each from another
+      /// RNG state, that ask for a life-support good.
+      double lifeSupportShare(GameState s, int draws) {
+        var hits = 0;
+        for (var i = 0; i < draws; i++) {
+          final x = s.copy()..rngState = i * 7919 + 1;
+          stepContracts(x, content, x.time);
+          final id = player(x).contracts.single.resourceId;
+          if (const {'water', 'food', 'oxygen'}.contains(id)) hits++;
+        }
+        return hits / draws;
+      }
+
+      /// A new game whose only goods made are [made]; Kora melts ice into
+      /// water and presses plates from stocked steel.
+      GameState makes(List<String> made) {
+        final s = e.newGame(1);
+        final kora = s.body('kora');
+        kora.buildings
+          ..add(BuildingState(id: s.newId('b'), defId: 'ice_melter', crew: 1))
+          ..add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1));
+        kora.stock
+          ..['water_ice'] = n(900)
+          ..['steel'] = n(900);
+        final f = player(s);
+        f.lifetimeProduced
+          ..clear()
+          ..addAll({for (final id in made) id: n(1)});
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        return s;
+      }
+
+      test('weigh a quarter beside another good of the template', () {
+        // Steel and water both come from the bulk template: water is drawn
+        // 0.25 / 1.25 of the time, not half.
+        final share = lifeSupportShare(makes(['steel', 'water']), 400);
+        expect(share, closeTo(0.2, 0.05));
+      });
+
+      test('weigh a template down when they are all it could ask for', () {
+        // Water is all the bulk template has; hull plates are the parts
+        // template's.
+        final share = lifeSupportShare(makes(['water', 'hull_plate']), 400);
+        expect(share, closeTo(0.2, 0.05));
+      });
+
+      test('are still asked for when nothing else is made', () {
+        expect(lifeSupportShare(makes(['water']), 10), 1);
+      });
     });
 
     test('a refill waits while nothing is made, and RNG is not used', () {
@@ -488,7 +713,7 @@ void main() {
       expect(f.contracts, isEmpty);
       f.lifetimeProduced['copper_ore'] = n(1);
       stepContracts(s, content, 300);
-      expect(f.contracts.single.resourceId, anyOf('copper_ore', 'copper_wire'));
+      expect(f.contracts.single.resourceId, 'copper_ore');
       expect(f.contractRefillAt, isEmpty);
     });
 
@@ -917,6 +1142,23 @@ void main() {
       expect(player(s).contracts, hasLength(3));
     });
 
+    test('a save from before posts were counted counts every open and '
+        'completed contract as posted', () {
+      final s = fullBoard();
+      final k = player(s).contracts.first;
+      s.body('kora').stock[k.resourceId] = k.quantity;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', k.quantity));
+      expect(player(s).contractsPosted, 3);
+      final m = jsonDecode(encode(s)) as Map<String, Object?>;
+      final f = (m['factions']! as List).cast<Map<String, Object?>>().first;
+      expect(f['contractsPosted'], 3);
+      f.remove('contractsPosted');
+      final back = (SaveCodec.decode(jsonEncode(m), content) as SaveOk).state;
+      // 2 open and 1 completed.
+      expect(player(back).contractsPosted, 3);
+      expect(player(back.copy()).contractsPosted, 3);
+    });
+
     group('integrity:', () {
       List<Map<String, Object?>> list(Object? v) =>
           (v! as List).cast<Map<String, Object?>>();
@@ -985,6 +1227,10 @@ void main() {
         'contract id suffix too large for an int': (m) =>
             first(m)['id'] = 'c99999999999999999999999',
         'negative contracts completed': (m) => me(m)['contractsCompleted'] = -1,
+        'negative contracts posted': (m) => me(m)['contractsPosted'] = -1,
+        'fewer posted than open and completed': (m) => me(m)
+          ..['contractsCompleted'] = 2
+          ..['contractsPosted'] = 4,
       };
       for (final MapEntry(key: name, value: corrupt) in invalid.entries) {
         test(name, () {

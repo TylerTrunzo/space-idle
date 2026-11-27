@@ -222,6 +222,12 @@ final class SaveCodec {
       if (f.contractsCompleted < 0) {
         return 'faction ${f.id}: negative contracts completed';
       }
+      // Every open or completed contract was posted once.
+      if (f.contractsPosted < f.contracts.length + f.contractsCompleted) {
+        return 'faction ${f.id}: ${f.contractsPosted} contracts posted, '
+            'fewer than ${f.contracts.length} open and '
+            '${f.contractsCompleted} completed';
+      }
       if (f.contracts.length > RulesDef.contractSlots) {
         return 'faction ${f.id}: ${f.contracts.length} contracts, at most '
             '${RulesDef.contractSlots}';

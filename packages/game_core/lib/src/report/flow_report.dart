@@ -274,6 +274,18 @@ final class FlowReport {
   /// its full stores in content resource order.
   final List<Bottleneck> bottlenecks;
 
+  /// Units of [resourceId] the faction's buildings make a second, summed
+  /// over its bodies ([BodyFlow.producedPerSec]): their output at the run
+  /// fractions of the sample step, before the storage cap, whatever uses
+  /// it up.
+  BigNum producedPerSec(String resourceId) {
+    var made = const BigNum.zero();
+    for (final b in bodies) {
+      made = made + (b.producedPerSec[resourceId] ?? const BigNum.zero());
+    }
+    return made;
+  }
+
   /// Units of [resourceId] the faction's buildings make a second less what
   /// they use, summed over its bodies: [BodyFlow.producedPerSec] minus
   /// [BodyFlow.consumedPerSec]. Before the storage cap, cargo and sales;

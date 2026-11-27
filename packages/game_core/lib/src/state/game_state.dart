@@ -210,8 +210,11 @@ final class FactionState {
     List<ContractState>? contracts,
     List<double>? contractRefillAt,
     this.contractsCompleted = 0,
+    int? contractsPosted,
     this.wasteFreeSince = 0,
-  }) : autoSell = autoSell ?? [],
+  }) : contractsPosted =
+           contractsPosted ?? (contracts?.length ?? 0) + contractsCompleted,
+       autoSell = autoSell ?? [],
        megaprojectLevels = megaprojectLevels ?? {},
        megaprojectProgress = megaprojectProgress ?? {},
        contracts = contracts ?? [],
@@ -284,6 +287,9 @@ final class FactionState {
       final v => [for (final t in v as List) (t! as num).toDouble()],
     },
     contractsCompleted: (j['contractsCompleted'] as int?) ?? 0,
+    // Absent in saves from before posts were counted: every contract open
+    // or completed then counts as posted.
+    contractsPosted: j['contractsPosted'] as int?,
     // Absent in saves from before waste-free time was tracked.
     wasteFreeSince: (j['wasteFreeSince'] as num?)?.toDouble() ?? 0,
   );
@@ -355,6 +361,12 @@ final class FactionState {
   /// milestones count it.
   int contractsCompleted;
 
+  /// Contracts posted on its board since the game began, discarded ones
+  /// included; at least its open and completed contracts together. The
+  /// first is exempt from the reward cap (see `stepContracts`). Defaults to
+  /// the open and completed contracts together.
+  int contractsPosted;
+
   /// Game time in seconds since which the faction has had no waste (or the
   /// game's start); the engine moves it to the end of every tick in which a
   /// body it owns wasted anything, or it owns no building. Zero-waste
@@ -386,6 +398,7 @@ final class FactionState {
     'contracts': [for (final k in contracts) k.toJson()],
     'contractRefillAt': List.of(contractRefillAt),
     'contractsCompleted': contractsCompleted,
+    'contractsPosted': contractsPosted,
     'wasteFreeSince': wasteFreeSince,
   };
 
@@ -411,6 +424,7 @@ final class FactionState {
     contracts: [for (final k in contracts) k.copy()],
     contractRefillAt: List.of(contractRefillAt),
     contractsCompleted: contractsCompleted,
+    contractsPosted: contractsPosted,
     wasteFreeSince: wasteFreeSince,
   );
 }
