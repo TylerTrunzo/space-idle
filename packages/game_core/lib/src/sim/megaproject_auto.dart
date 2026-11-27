@@ -132,6 +132,11 @@ AutoDeliveries stepMegaprojectCredits(GameState s, Content c, double dt) {
       (a) => a.credits || a.goods == GoodsFeedMode.nearReady,
     ),
   )) {
+    // Nothing measures income now: a mark left from before would make the
+    // next first minute measure over the gap.
+    for (final f in s.factions) {
+      f.incomeMark = null;
+    }
     return const {};
   }
   final out = <String, Map<String, Map<String, BigNum>>>{};

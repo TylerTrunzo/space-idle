@@ -1283,6 +1283,15 @@ void main() {
         expect(s.faction('player').salesRevenue['steel'], isNull);
       });
 
+      test('the income mark goes once nothing measures income', () {
+        final s = near(owed: 2e9, credits: true);
+        e.advance(s, 120);
+        expect(s.faction('player').incomeMark, isNotNull);
+        feed(s, 'mass_driver', true, null);
+        e.advance(s, 60);
+        expect(s.faction('player').incomeMark, isNull);
+      });
+
       test('once started, feeding goes on until that stage is paid', () {
         final s = near(owed: 5000, held: 6000);
         e.advance(s, 60);
