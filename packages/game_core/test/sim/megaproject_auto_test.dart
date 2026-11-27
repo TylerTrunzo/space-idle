@@ -582,6 +582,54 @@ void main() {
       expect(none.autoDeliveredValuePerSec.isZero, isTrue);
     });
 
+    test('credits paid in a second are a share of the income shown, never '
+        'more', () {
+      // Kora's smelter runs on a stockpile of ore, which the short run of
+      // play sells and the steady figure leaves out: the income shown is
+      // the steady one, and so are the credits paid from it.
+      final s = open(reserve: n(0));
+      ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+      ok(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+      ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', false, n(0)));
+      final kora = s.body('kora');
+      for (final b in kora.buildings) {
+        if (b.defId == 'mine' && b.depositResourceId == 'iron_ore') b.crew = 0;
+      }
+      kora.stock['iron_ore'] = n(1e5);
+      e.advance(s, 120);
+      final r = buildFlowReport(s, content, 'player');
+      final paid = r.autoDeliveredPerSec['mass_driver']!['credits']!;
+      expect(
+        paid <= r.creditsPerSec,
+        isTrue,
+        reason: '$paid of ${r.creditsPerSec}',
+      );
+      expect(
+        paid.toDouble(),
+        closeTo(r.creditsPerSec.toDouble(), r.creditsPerSec.toDouble() * 0.05),
+      );
+    });
+
+    test('credits per second read again for the same state are the same, '
+        'and a changed state gets its own', () {
+      final s = economy();
+      e.advance(s, 600);
+      final first = buildFlowReport(s, content, 'player');
+      final again = buildFlowReport(s.copy(), content, 'player');
+      expect(again.creditsPerSec, first.creditsPerSec);
+      expect(
+        again.autoDeliveredPerSec.toString(),
+        first.autoDeliveredPerSec.toString(),
+      );
+      // Copper ore no longer sold: less income.
+      s
+          .faction('player')
+          .autoSell
+          .removeWhere((r) => r.resourceId == 'copper_ore');
+      final changed = buildFlowReport(s, content, 'player').creditsPerSec;
+      expect(changed < first.creditsPerSec, isTrue);
+    });
+
     test('feeding a megaproject does not shrink contract rewards', () {
       final fed = economy();
       final sold = economy();

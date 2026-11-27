@@ -269,19 +269,26 @@ final class FlowReport {
   /// does not count; commands (sales, contracts) are not part of it.
   ///
   /// Worked out the first time it is read, from the state the report was
-  /// built from: it plays a copy of it forward, which costs several ticks.
-  /// Until then the report keeps two copies of that state; it drops them
-  /// once this is read.
+  /// built from: it plays a copy of it forward, which costs several ticks
+  /// (a reading of the same state again reuses it). Until then the report
+  /// keeps two copies of that state; it drops them once this is read.
   ///
-  /// What auto-delivery hands to megaprojects is not in it, goods or
-  /// credits: see [autoDeliveredPerSec].
+  /// It is what sales earn, before auto-delivery pays any of it to
+  /// megaprojects; goods auto-delivery takes never sell, so they are not
+  /// in it. See [autoDeliveredPerSec].
   BigNum get creditsPerSec => _measured.creditsPerSec;
 
   /// Megaproject id to what the faction's auto-delivery hands it a second
   /// in the same short run of play as [creditsPerSec], by cost key
-  /// (`credits` or a resource id); empty when it feeds none. Credits paid
-  /// in come out of what [creditsPerSec] earns, so the two are not to be
-  /// added for income; the app can show "income, plus this to projects".
+  /// (`credits` or a resource id); empty when it feeds none.
+  ///
+  /// Credits paid in come out of what [creditsPerSec] earns: summed over
+  /// the megaprojects they are never more than it, and income less them
+  /// is what the faction keeps a second. So the two are not to be added;
+  /// the app can show "income 78/s, 60/s of it to projects". Goods are
+  /// what goes in instead of being sold, at no cost to [creditsPerSec].
+  /// While a contract is open, its good can read a little high: the run
+  /// clears the board, so goods the contract would hold back go in.
   Map<String, Map<String, BigNum>> get autoDeliveredPerSec =>
       _measured.deliveredPerSec;
 
@@ -583,7 +590,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         played!,
         c,
         factionId,
-        steady: steadyOf(),
+        steady: steadyOf,
         market: sold!,
       );
       played = null;

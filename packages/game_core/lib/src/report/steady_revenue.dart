@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import '../content/content.dart';
 import '../num/big_num.dart';
+import '../sim/crew.dart';
 import '../sim/logistics.dart';
 import '../sim/market.dart';
 import '../sim/megaproject_auto.dart';
@@ -48,26 +50,75 @@ typedef SteadyIncome = ({
 /// goods made from steady supply. The lower of the two is what the empire
 /// keeps earning.
 ///
+/// Credits auto-paid to megaprojects come out of those sales, so they are
+/// shown as a share of [SteadyIncome.creditsPerSec]: when the steady
+/// figure is the lower, the measured run's payments are scaled down by
+/// the same ratio, and all of them together are never more than the
+/// credits earned.
+///
 /// Neither counts the faction's open contracts: what auto-sell holds back
 /// for them fills once and then sells as before, so holding it is not
 /// lost income; and an order just posted must not lower the income that
 /// sizes the next one's reward. Both copies' boards are cleared for it.
+/// Auto-delivery still runs in the measured run, so while a contract is
+/// open, goods it would have held back can go to megaprojects there: what
+/// is delivered of that good a second can read a little high.
 ///
 /// [s] is a copy of the state to work from, played forward here; its
 /// buildings, routes and stock must be the state's, though a second's
-/// production may have moved it on. [steady] is the faction's
+/// production may have moved it on. [steady] gives the faction's
 /// [steadyFlows] in it. [market] is another copy whose market is the
 /// state's, give or take a second of sales, on which the steady sales are
 /// made; it is changed too.
+///
+/// The last few results are kept, by what the work reads ([s]'s saved
+/// form with its board cleared, [market]'s saturation and crew
+/// efficiency) and [factionId]: reading the income of a state again, as
+/// the away summary, the report and a bot's or the app's next look at it
+/// may, costs an encoding of the state instead of the run.
 SteadyIncome saleRevenuePerSec(
   GameState s,
   Content c,
   String factionId, {
-  required SteadyFlows steady,
+  required SteadyFlows Function() steady,
   required GameState market,
 }) {
   s.faction(factionId).contracts.clear();
   market.faction(factionId).contracts.clear();
+  // [market] is a copy of the same state as [s], with no command between,
+  // so of it the work reads only what its own sample step moved: the
+  // saturation its sales start from and the crew efficiency its keeps use.
+  final key = jsonEncode([
+    factionId,
+    s.toJson(),
+    market.market.toJson(),
+    crewEfficiency(market, c, factionId),
+  ]);
+  final known = _incomes[c] ??= [];
+  for (final (k, v) in known) {
+    if (k == key) return v;
+  }
+  final income = _saleRevenuePerSec(s, c, factionId, steady(), market);
+  known.add((key, income));
+  if (known.length > _incomesKept) known.removeAt(0);
+  return income;
+}
+
+/// Content to the last [saleRevenuePerSec] results, oldest first, each
+/// with its key.
+final _incomes = Expando<List<(String, SteadyIncome)>>('incomes');
+
+/// Results [_incomes] keeps per content.
+const int _incomesKept = 4;
+
+/// [saleRevenuePerSec], worked out; the boards are already cleared.
+SteadyIncome _saleRevenuePerSec(
+  GameState s,
+  Content c,
+  String factionId,
+  SteadyFlows steady,
+  GameState market,
+) {
   final steadyRevenue = steadySaleRevenue(
     c,
     factionId,
@@ -79,11 +130,29 @@ SteadyIncome saleRevenuePerSec(
     return (creditsPerSec: const BigNum.zero(), deliveredPerSec: const {});
   }
   final measured = measuredSaleRevenue(s, c, factionId);
+  final earned = steadyRevenue <= const BigNum.zero()
+      ? const BigNum.zero()
+      : steadyRevenue.min(measured.creditsPerSec).max(const BigNum.zero());
+  // Credits paid in come out of what is earned: the same share of it as
+  // in the run, and never more than all of it.
+  var paid = const BigNum.zero();
+  for (final got in measured.deliveredPerSec.values) {
+    paid = paid + (got[creditsKey] ?? const BigNum.zero());
+  }
+  var share = measured.creditsPerSec > earned
+      ? (earned / measured.creditsPerSec).toDouble()
+      : 1.0;
+  if (paid.mulDouble(share) > earned) share = (earned / paid).toDouble();
   return (
-    creditsPerSec: steadyRevenue <= const BigNum.zero()
-        ? const BigNum.zero()
-        : steadyRevenue.min(measured.creditsPerSec).max(const BigNum.zero()),
-    deliveredPerSec: measured.deliveredPerSec,
+    creditsPerSec: earned,
+    deliveredPerSec: Map.unmodifiable({
+      for (final MapEntry(key: m, value: got)
+          in measured.deliveredPerSec.entries)
+        m: Map<String, BigNum>.unmodifiable({
+          for (final MapEntry(key: id, value: v) in got.entries)
+            id: id == creditsKey ? v.mulDouble(share) : v,
+        }),
+    }),
   );
 }
 
