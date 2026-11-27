@@ -60,8 +60,9 @@ final class GreedyBot implements Bot {
 /// the player is away: survey a hidden body with drones the station does
 /// not need ([_View.survey]), claim a body when affordable, deliver to or
 /// discard contracts ([_View.workContracts]), have every open megaproject
-/// fed its goods on their own, and its credits once they are all it lacks
-/// ([_View.autoDeliver]), and deliver by hand what that does not cover
+/// fed its goods on their own, and its credits once every good its stage
+/// lacks is made or held ([_View.autoDeliver]), and deliver by hand what
+/// that does not cover
 /// ([_View.deliverMegaproject]); fix one of the worst
 /// bottlenecks (an efficiency or speed upgrade on the starving supplier,
 /// another supplier, or a route, grown when too small); auto-sell surplus;
