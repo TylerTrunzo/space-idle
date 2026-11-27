@@ -1,9 +1,8 @@
 import '../content/content.dart';
 import '../num/big_num.dart';
 import '../state/game_state.dart';
-import 'crew.dart';
-import 'megaprojects.dart';
 import 'production.dart';
+import 'step_cache.dart';
 
 /// Seconds a shipment takes between [a] and [b]:
 /// `baseTravelSeconds × (1 + |orbit difference|)`.
@@ -81,9 +80,9 @@ BigNum routeInFlight(GameState s, RouteState r) {
 /// its way: what the destination's buildings use of it a second at full
 /// supply ([fullRateFlow], its owner's crew efficiency, read from
 /// [cache]) times the route's [travelSeconds].
-BigNum _useInTransit(GameState s, Content c, RouteState r, _UseCache cache) {
+BigNum _useInTransit(GameState s, Content c, RouteState r, StepCache cache) {
   final to = s.body(r.toBodyId);
-  final perSecond = cache.of(to)[r.resourceId] ?? const BigNum.zero();
+  final perSecond = cache.use(to, 1)[r.resourceId] ?? const BigNum.zero();
   if (perSecond.isZero) return perSecond;
   return perSecond.mulDouble(travelSeconds(s, c, s.body(r.fromBodyId), to));
 }
@@ -100,35 +99,6 @@ Map<String, BigNum> _inFlightTo(GameState s) {
     total[key] = (total[key] ?? const BigNum.zero()) + sh.amount;
   }
   return total;
-}
-
-/// What each body's buildings use a second at full supply, at its owner's
-/// crew efficiency, worked out once per body (and per owner) on demand.
-final class _UseCache {
-  _UseCache(this.s, this.c);
-
-  final GameState s;
-  final Content c;
-  final _byBody = <String, Map<String, BigNum>>{};
-  final _crewEff = <String, double>{};
-  final _bonuses = <String, EmpireBonuses>{};
-  final _caps = <String, BigNum>{};
-
-  /// [body]'s [storageCap]; it depends on buildings and bonuses, not
-  /// stock.
-  BigNum capOf(BodyState body) => _caps[body.id] ??= storageCap(s, c, body);
-
-  Map<String, BigNum> of(BodyState body) =>
-      _byBody[body.id] ??= switch (body.ownerId) {
-        null => const {},
-        final owner => _fullRateUse(
-          c,
-          body,
-          1,
-          _crewEff[owner] ??= crewEfficiency(s, c, owner),
-          _bonuses[owner] ??= bonusesFor(s, c, owner),
-        ),
-      };
 }
 
 /// Units route [r] may still send before its destination would hold its
@@ -153,7 +123,7 @@ BigNum? routeRoomBeforeStop(GameState s, Content c, RouteState r) =>
       s,
       c,
       r,
-      _UseCache(s, c),
+      StepCache(s, c),
       _inFlightTo(s)[_toKey(r.toBodyId, r.resourceId)] ?? const BigNum.zero(),
     );
 
@@ -164,14 +134,14 @@ BigNum? _roomBeforeStop(
   GameState s,
   Content c,
   RouteState r,
-  _UseCache cache,
+  StepCache cache,
   BigNum inFlight,
 ) {
   final stop = r.stopAtDestination;
   if (stop == null) return null;
   final to = s.body(r.toBodyId);
   final held = to.stock[r.resourceId] ?? const BigNum.zero();
-  final target = (stop + _useInTransit(s, c, r, cache)).min(cache.capOf(to));
+  final target = (stop + _useInTransit(s, c, r, cache)).min(cache.cap(to));
   return target - held - inFlight;
 }
 
@@ -206,17 +176,20 @@ bool routePaused(GameState s, Content c, RouteState r) {
 /// its source's stock before auto-sell works out what it may sell there.
 ///
 /// Returns route id to the units it sent, for the routes that sent any.
+///
+/// [cache], when given, is the step's [StepCache]; one is made otherwise.
 Map<String, BigNum> sendCargo(
   GameState s,
   Content c,
   double dt, {
   double? mergeSeconds,
+  StepCache? cache,
 }) {
   final merge = mergeSeconds ?? c.rules.shipmentMergeSeconds;
   final sent = <String, BigNum>{};
   // Use at full supply depends on crew and buildings, not stock, so it
   // holds for the whole call.
-  final use = _UseCache(s, c);
+  final use = cache ?? StepCache(s, c);
   // Kept up to date as routes send, so a route later in the list counts
   // what one earlier sent this step: routes into one store share its room
   // in route order.
@@ -258,32 +231,6 @@ Map<String, BigNum> sendCargo(
     );
   }
   return sent;
-}
-
-/// Resource id to what [body]'s buildings use in [seconds] at full
-/// supply, its owner's crew working at [crewEff] with its [bonuses].
-Map<String, BigNum> _fullRateUse(
-  Content c,
-  BodyState body,
-  double seconds,
-  double crewEff,
-  EmpireBonuses bonuses,
-) {
-  final total = <String, BigNum>{};
-  for (final b in body.buildings) {
-    final inputs = fullRateFlow(
-      c,
-      body,
-      b,
-      seconds,
-      crewEff,
-      bonuses: bonuses,
-    ).inputs;
-    for (final MapEntry(key: id, value: v) in inputs.entries) {
-      total[id] = (total[id] ?? const BigNum.zero()) + v;
-    }
-  }
-  return total;
 }
 
 /// The shipment route [routeId] sent last, or null if none is in flight.

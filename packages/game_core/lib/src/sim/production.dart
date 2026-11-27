@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import '../content/content.dart';
@@ -261,6 +262,10 @@ typedef BuildingFlow = ({
 /// capacity levels as its housing does ([habitatCapacityScale]). A
 /// habitat with no crew slots runs at full rate, ignoring [crewEff]; other
 /// buildings that do not [runsRecipe] (warehouses) take and make nothing.
+///
+/// The maps are not to be changed: the flow is kept with [b] and handed
+/// out again while nothing it depends on changes, as most ticks of a
+/// catch-up ask for the same flows.
 BuildingFlow fullRateFlow(
   Content c,
   BodyState body,
@@ -269,6 +274,84 @@ BuildingFlow fullRateFlow(
   double crewEff, {
   EmpireBonuses bonuses = EmpireBonuses.none,
 }) {
+  final known = _flows[b];
+  if (known != null && known.matches(c, body, b, dt, crewEff, bonuses)) {
+    return known.flow;
+  }
+  final flow = _flowOf(c, body, b, dt, crewEff, bonuses);
+  _flows[b] = _KnownFlow(c, body, b, dt, crewEff, bonuses, (
+    inputs: UnmodifiableMapView(flow.inputs),
+    outputs: UnmodifiableMapView(flow.outputs),
+  ));
+  return _flows[b]!.flow;
+}
+
+/// Each building's last [fullRateFlow].
+final _flows = Expando<_KnownFlow>('flows');
+
+/// A [fullRateFlow] and everything it was worked out from.
+final class _KnownFlow {
+  _KnownFlow(
+    this.content,
+    this.body,
+    BuildingState b,
+    this.dt,
+    this.crewEff,
+    this.bonuses,
+    this.flow,
+  ) : defId = b.defId,
+      deposit = b.depositResourceId,
+      deposits = body.deposits,
+      crew = b.crew,
+      speed = b.levels[UpgradeTrack.speed]!,
+      efficiency = b.levels[UpgradeTrack.efficiency]!,
+      capacity = b.levels[UpgradeTrack.capacity]!;
+
+  final Content content;
+  final BodyState body;
+  final double dt;
+  final double crewEff;
+  final EmpireBonuses bonuses;
+  final String defId;
+  final String? deposit;
+  final List<DepositDef> deposits;
+  final int crew;
+  final int speed;
+  final int efficiency;
+  final int capacity;
+  final BuildingFlow flow;
+
+  bool matches(
+    Content c,
+    BodyState body,
+    BuildingState b,
+    double dt,
+    double crewEff,
+    EmpireBonuses bonuses,
+  ) =>
+      dt == this.dt &&
+      crewEff == this.crewEff &&
+      identical(bonuses, this.bonuses) &&
+      identical(c, content) &&
+      identical(body, this.body) &&
+      identical(body.deposits, deposits) &&
+      b.crew == crew &&
+      b.defId == defId &&
+      b.depositResourceId == deposit &&
+      b.levels[UpgradeTrack.speed] == speed &&
+      b.levels[UpgradeTrack.efficiency] == efficiency &&
+      b.levels[UpgradeTrack.capacity] == capacity;
+}
+
+/// [fullRateFlow], worked out.
+BuildingFlow _flowOf(
+  Content c,
+  BodyState body,
+  BuildingState b,
+  double dt,
+  double crewEff,
+  EmpireBonuses bonuses,
+) {
   final r = c.rules;
   final def = c.buildings[b.defId]!;
   if (!runsRecipe(def)) return (inputs: const {}, outputs: const {});

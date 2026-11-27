@@ -7,6 +7,7 @@ import '../sim/market.dart';
 import '../sim/megaproject_auto.dart';
 import '../sim/megaprojects.dart';
 import '../sim/production.dart';
+import '../sim/step_cache.dart';
 import '../state/game_state.dart';
 
 /// Rounds of [steadySaleRevenue]'s balance at most; each one only lowers
@@ -115,17 +116,15 @@ SteadyIncome measuredSaleRevenue(GameState s, Content c, String factionId) {
       final kept = stockOverCap(s, c);
       deliverShipments(s);
       stepProduction(s, c, _stepSeconds);
-      sendCargo(s, c, _stepSeconds);
-      final fed = stepMegaprojectAuto(s, c, _stepSeconds)[factionId];
-      if (measure && fed != null) {
-        for (final MapEntry(key: m, value: got) in fed.entries) {
-          final into = delivered[m] ??= {};
-          for (final MapEntry(key: id, value: v) in got.entries) {
-            into[id] = (into[id] ?? const BigNum.zero()) + v;
-          }
-        }
+      final cache = StepCache(s, c);
+      sendCargo(s, c, _stepSeconds, cache: cache);
+      final goods = stepMegaprojectAuto(s, c, _stepSeconds, cache: cache);
+      stepMarket(s, c, _stepSeconds, cache: cache);
+      final credits = stepMegaprojectCredits(s, c, _stepSeconds);
+      if (measure) {
+        addDeliveries(delivered, goods[factionId] ?? const {});
+        addDeliveries(delivered, credits[factionId] ?? const {});
       }
-      stepMarket(s, c, _stepSeconds);
       clampStorage(s, c, kept);
       s.time += _stepSeconds;
       landArrivals(s, c);

@@ -17,6 +17,7 @@ import 'milestones.dart';
 import 'offline_summary.dart';
 import 'production.dart';
 import 'projects.dart';
+import 'step_cache.dart';
 
 /// Step of [GameEngine.catchUpOffline] and default step of
 /// [GameEngine.advance], in game seconds.
@@ -62,9 +63,11 @@ final class GameEngine {
   ///
   /// In order: reset each body's [BodyState.wastedThisStep], land the
   /// shipments due ([deliverShipments]), production, send cargo
-  /// ([sendCargo]), auto-delivery to megaprojects once a game minute
-  /// ([stepMegaprojectAuto]), market (recovery and auto-sell), complete the projects
-  /// due ([stepProjects]), [clampStorage], [noteBottlenecks], post the
+  /// ([sendCargo]), goods auto-delivered to megaprojects once a game
+  /// minute ([stepMegaprojectAuto]), market (recovery and auto-sell),
+  /// credits auto-paid to megaprojects once a game minute
+  /// ([stepMegaprojectCredits]), complete the projects due
+  /// ([stepProjects]), [clampStorage], [noteBottlenecks], post the
   /// contracts due by `time + dt` ([stepContracts]), waste tracking,
   /// milestone check, `time += dt`, then land the shipments due by the new
   /// time that fit below the cap ([landArrivals]). Stock may pass the
@@ -99,9 +102,13 @@ final class GameEngine {
     final kept = stockOverCap(s, content);
     deliverShipments(s);
     stepProduction(s, content, dt);
-    sendCargo(s, content, dt);
-    final fed = stepMegaprojectAuto(s, content, dt);
-    stepMarket(s, content, dt);
+    // Crew, buildings and storage caps hold from here to the end of the
+    // tick: the steps that move goods share what they read of them.
+    final cache = StepCache(s, content);
+    sendCargo(s, content, dt, cache: cache);
+    final goods = stepMegaprojectAuto(s, content, dt, cache: cache);
+    stepMarket(s, content, dt, cache: cache);
+    final fed = mergeDeliveries(goods, stepMegaprojectCredits(s, content, dt));
     stepProjects(s, content);
     clampStorage(s, content, kept);
     noteBottlenecks(s, content, s.time);
@@ -188,13 +195,7 @@ final class GameEngine {
     final wasted = <String, BigNum>{};
     final autoDelivered = <String, Map<String, BigNum>>{};
     _advance(s, simulated, _offlineStepSeconds, (fed) {
-      for (final MapEntry(key: m, value: got)
-          in (fed[player.id] ?? const {}).entries) {
-        final into = autoDelivered[m] ??= {};
-        for (final MapEntry(key: id, value: v) in got.entries) {
-          into[id] = (into[id] ?? const BigNum.zero()) + v;
-        }
-      }
+      addDeliveries(autoDelivered, fed[player.id] ?? const {});
       for (final b in s.bodies) {
         if (b.ownerId != player.id) continue;
         for (final MapEntry(key: id, value: v) in b.wastedThisStep.entries) {

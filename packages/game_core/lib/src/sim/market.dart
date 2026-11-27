@@ -6,6 +6,7 @@ import '../state/game_state.dart';
 import 'crew.dart';
 import 'megaprojects.dart';
 import 'production.dart';
+import 'step_cache.dart';
 
 /// What a sale moved and earned.
 final class SaleResult {
@@ -136,42 +137,38 @@ SaleResult sell(
 /// [limits], when given, caps what auto-sell may sell this step: body id
 /// to resource id to units, a missing entry meaning nothing. The flow
 /// report uses it to sell only what a step makes (see `buildFlowReport`).
+/// [cache], when given, is the step's [StepCache]; one is made otherwise.
 void stepMarket(
   GameState s,
   Content c,
   double dt, {
   Map<String, Map<String, BigNum>>? limits,
+  StepCache? cache,
 }) {
+  final k = cache ?? StepCache(s, c);
+  final horizon = math.max(dt, c.rules.shipmentMergeSeconds);
   final sales = <String, List<(FactionState, BodyState, BigNum)>>{};
-  final demand = <String, Map<String, BigNum>>{};
   // Body id to resource id to what earlier rules already queued for sale,
   // so a second rule on the same stock never sells it twice.
   final queued = <String, Map<String, BigNum>>{};
   for (final f in s.factions) {
-    double? crewEff;
-    EmpireBonuses? bonuses;
-    final holds = _contractHolds(s, c, f);
+    if (f.autoSell.isEmpty) continue;
+    final holds = _contractHolds(s, k, f);
     final fed = _megaprojectHolds(s, c, f);
     for (final rule in f.autoSell) {
       final body = s.body(rule.bodyId);
       if (body.ownerId != f.id) continue;
-      final used = demand[body.id] ??= _stepDemand(
-        c,
-        body,
-        math.max(dt, c.rules.shipmentMergeSeconds),
-        crewEff ??= crewEfficiency(s, c, f.id),
-        bonuses ??= bonusesFor(s, c, f.id),
-      );
       final taken = queued[body.id] ??= {};
       final held =
           (body.stock[rule.resourceId] ?? _zero) -
           (taken[rule.resourceId] ?? _zero);
+      // Nothing to sell whatever the keep: skip working it out.
+      if (held <= rule.keepAtLeast) continue;
       final keep = _keep(
-        s,
-        c,
-        body,
-        rule,
-        used,
+        k.cap(body),
+        rule.keepAtLeast,
+        k.use(body, horizon),
+        rule.resourceId,
         holds[body.id]?[rule.resourceId] ?? _zero,
         fed[rule.resourceId] ?? _zero,
       ).keeps;
@@ -263,33 +260,41 @@ AutoSellKeep autoSellKeep(
   final f = owner == null ? null : s.faction(owner);
   final hold = f == null
       ? _zero
-      : _contractHolds(s, c, f)[body.id]?[rule.resourceId] ?? _zero;
+      : _contractHolds(s, StepCache(s, c), f)[body.id]?[rule.resourceId] ??
+            _zero;
   final fed = f == null
       ? _zero
       : _megaprojectHolds(s, c, f)[rule.resourceId] ?? _zero;
-  return _keep(s, c, body, rule, used, hold, fed);
+  return _keep(
+    storageCap(s, c, body),
+    rule.keepAtLeast,
+    used,
+    rule.resourceId,
+    hold,
+    fed,
+  );
 }
 
-/// [autoSellKeep] for [rule] on [body], given [used], what the body's
-/// buildings use over the keep horizon, [hold], what it holds back for
-/// contracts, and [fed], what it holds back for megaprojects fed on their
-/// own.
+/// [autoSellKeep] for a rule keeping [keepAtLeast] of [resourceId] on a
+/// body whose storage cap is [cap], given [used], what the body's
+/// buildings use over the keep horizon, [hold],
+/// what it holds back for contracts, and [fed], what it holds back for
+/// megaprojects fed on their own.
 AutoSellKeep _keep(
-  GameState s,
-  Content c,
-  BodyState body,
-  AutoSellRule rule,
+  BigNum cap,
+  BigNum keepAtLeast,
   Map<String, BigNum> used,
+  String resourceId,
   BigNum hold,
   BigNum fed,
 ) {
-  final local = used[rule.resourceId] ?? _zero;
-  final wanted = rule.keepAtLeast + local + hold + fed;
+  final local = used[resourceId] ?? _zero;
+  final wanted = keepAtLeast + local + hold + fed;
   // The demand kept never pushes stock past the cap, where the end of the
   // tick would waste it instead.
-  final most = rule.keepAtLeast.max(storageCap(s, c, body));
+  final most = keepAtLeast.max(cap);
   return (
-    keepAtLeast: rule.keepAtLeast,
+    keepAtLeast: keepAtLeast,
     localUse: local,
     contractHold: hold,
     megaprojectHold: fed,
@@ -316,7 +321,7 @@ Map<String, BigNum> _contractNeeds(FactionState f) {
 /// Written in rule order.
 Map<String, Map<String, BigNum>> _contractHolds(
   GameState s,
-  Content c,
+  StepCache cache,
   FactionState f,
 ) {
   if (f.contracts.isEmpty) return const {};
@@ -344,7 +349,7 @@ Map<String, Map<String, BigNum>> _contractHolds(
       }
     }
     if (left <= _zero) continue;
-    (holds[body.id] ??= {})[id] = left.min(storageCap(s, c, body));
+    (holds[body.id] ??= {})[id] = left.min(cache.cap(body));
   }
   return holds;
 }
@@ -367,24 +372,81 @@ Map<String, BigNum> _megaprojectHolds(GameState s, Content c, FactionState f) {
       f.id,
       m,
     ).entries) {
-      if (id != _creditsKey) hold[id] = (hold[id] ?? _zero) + v;
+      if (id != creditsKey) hold[id] = (hold[id] ?? _zero) + v;
     }
   }
   return hold;
 }
 
-/// Body id to resource id to what auto-delivery to megaprojects leaves of
-/// each of [resourceIds] on each body [f] owns, in a step of [dt] seconds:
-/// what auto-sell keeps there ([autoSellKeep]: the body's rule's
-/// `keepAtLeast`, 0 with no rule, plus its buildings' local use, plus the
-/// contract hold, at most the storage cap unless `keepAtLeast` alone is),
-/// but never the megaproject hold. Of each open contract need, what the
-/// holding body does not keep stays on the faction's other bodies, in body
-/// order, as much as each holds, so deliveries never take what contracts
-/// still need. Bodies in body order, resources in [resourceIds] order.
-Map<String, Map<String, BigNum>> autoDeliveryKeeps(
+/// What auto-delivery to megaprojects leaves of each good on each body
+/// [f] owns, in a step of [dt] seconds ([autoDeliveryKeeps]).
+final class DeliveryKeeps {
+  DeliveryKeeps._(
+    this._cache,
+    this._horizon,
+    this._holds,
+    this._rest,
+    this._keepAtLeast,
+  );
+
+  final StepCache _cache;
+  final double _horizon;
+  final Map<String, Map<String, BigNum>> _holds;
+  final Map<String, Map<String, BigNum>> _rest;
+  final Map<String, Map<String, BigNum>> _keepAtLeast;
+
+  /// Whole units of [resourceId] [body] can hand over: what it holds above
+  /// what it keeps ([keeps]), rounded down; zero or less when nothing.
+  /// With [atLeast], it keeps no less than that either.
+  ///
+  /// A body holding less than one unit above its `keepAtLeast` and contract
+  /// share has nothing to give, and its buildings' use is not worked out.
+  BigNum spare(BodyState body, String resourceId, {BigNum? atLeast}) {
+    final held = body.stock[resourceId] ?? _zero;
+    // The keep is at least these, so with less than a unit above them
+    // there is nothing to give.
+    final atLeastKept = _keepAtLeast[body.id]?[resourceId] ?? _zero;
+    final floor = (atLeastKept + _hold(body, resourceId)).min(
+      atLeastKept.max(_cache.cap(body)),
+    );
+    if (held - floor < _one) return _zero;
+    if (atLeast != null && held - atLeast < _one) return _zero;
+    var keep = keeps(body, resourceId);
+    if (atLeast != null) keep = keep.max(atLeast);
+    return (held - keep).floor();
+  }
+
+  /// Units of [resourceId] auto-delivery leaves on [body]: what auto-sell
+  /// keeps there ([autoSellKeep]), but never the megaproject hold.
+  BigNum keeps(BodyState body, String resourceId) => _keep(
+    _cache.cap(body),
+    _keepAtLeast[body.id]?[resourceId] ?? _zero,
+    _cache.use(body, _horizon),
+    resourceId,
+    _hold(body, resourceId),
+    _zero,
+  ).keeps;
+
+  BigNum _hold(BodyState body, String id) =>
+      _holds[body.id]?[id] ?? _rest[body.id]?[id] ?? _zero;
+}
+
+/// What auto-delivery to megaprojects leaves of each of [resourceIds] on
+/// each body [f] owns, in a step of [dt] seconds: what auto-sell keeps
+/// there ([autoSellKeep]: the body's rule's `keepAtLeast`, 0 with no rule,
+/// plus its buildings' local use, plus the contract hold, at most the
+/// storage cap unless `keepAtLeast` alone is), but never the megaproject
+/// hold. With several rules on one body and good, the one keeping least
+/// counts, as auto-sell sells down to it ([stepMarket]). Of each open
+/// contract need, what the holding body does not keep stays on the
+/// faction's other bodies, in body order, as much as each holds, so
+/// deliveries never take what contracts still need.
+///
+/// Worked out as [cache] holds the state; each body's use only when it is
+/// asked for and holds enough to give.
+DeliveryKeeps autoDeliveryKeeps(
   GameState s,
-  Content c,
+  StepCache cache,
   FactionState f,
   List<String> resourceIds,
   double dt,
@@ -393,12 +455,13 @@ Map<String, Map<String, BigNum>> autoDeliveryKeeps(
     for (final b in s.bodies)
       if (b.ownerId == f.id) b,
   ];
-  final holds = _contractHolds(s, c, f);
+  final holds = _contractHolds(s, cache, f);
   final need = _contractNeeds(f);
   // The rest of each contract need, on the bodies that do not hold it.
   final rest = <String, Map<String, BigNum>>{};
   for (final id in resourceIds) {
     var left = need[id] ?? _zero;
+    if (left <= _zero) continue;
     for (final b in owned) {
       left = left - (holds[b.id]?[id] ?? _zero);
     }
@@ -410,39 +473,21 @@ Map<String, Map<String, BigNum>> autoDeliveryKeeps(
       left = left - share;
     }
   }
-  final crewEff = crewEfficiency(s, c, f.id);
-  final bonuses = bonusesFor(s, c, f.id);
-  return {
-    for (final b in owned)
-      b.id: () {
-        final used = _stepDemand(
-          c,
-          b,
-          math.max(dt, c.rules.shipmentMergeSeconds),
-          crewEff,
-          bonuses,
-        );
-        return {
-          for (final id in resourceIds)
-            id: _keep(
-              s,
-              c,
-              b,
-              f.autoSell
-                      .where((r) => r.bodyId == b.id && r.resourceId == id)
-                      .firstOrNull ??
-                  AutoSellRule(
-                    bodyId: b.id,
-                    resourceId: id,
-                    keepAtLeast: _zero,
-                  ),
-              used,
-              holds[b.id]?[id] ?? rest[b.id]?[id] ?? _zero,
-              _zero,
-            ).keeps,
-        };
-      }(),
-  };
+  final keepAtLeast = <String, Map<String, BigNum>>{};
+  for (final rule in f.autoSell) {
+    final on = keepAtLeast[rule.bodyId] ??= {};
+    final now = on[rule.resourceId];
+    on[rule.resourceId] = now == null
+        ? rule.keepAtLeast
+        : now.min(rule.keepAtLeast);
+  }
+  return DeliveryKeeps._(
+    cache,
+    math.max(dt, cache.c.rules.shipmentMergeSeconds),
+    holds,
+    rest,
+    keepAtLeast,
+  );
 }
 
 /// Selling at a steady rate over [dt] seconds from saturation [s0] while
@@ -480,8 +525,7 @@ Map<String, Map<String, BigNum>> autoDeliveryKeeps(
 
 const _zero = BigNum.zero();
 
-/// Key of the credits entry in a megaproject cost.
-const _creditsKey = 'credits';
+final _one = BigNum.from(1);
 
 /// Pays [f] [revenue] for a sale of [resourceId], adding it to the
 /// faction's [FactionState.salesRevenue] and

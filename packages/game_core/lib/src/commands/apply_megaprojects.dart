@@ -17,10 +17,8 @@ CommandResult _startMegaprojectStage(
   if (short != null) return short;
 
   _pay(f, body, owed);
-  f.megaprojectProgress[def.id] = megaprojectCost(
-    c,
-    def,
-    megaprojectDeliveryLevel(s, f.id, def),
+  f.megaprojectProgress[def.id] = Map.of(
+    megaprojectCost(c, def, megaprojectDeliveryLevel(s, f.id, def)),
   );
   return _delivered(s, c, f, def, body, owed);
 }

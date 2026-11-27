@@ -92,6 +92,35 @@ EmpireBonuses bonusesFor(GameState s, Content c, String? factionId) {
   if (factionId == null || c.megaprojects.isEmpty) return EmpireBonuses.none;
   final levels = _levelsOf(s, factionId);
   if (levels == null || levels.isEmpty) return EmpireBonuses.none;
+  // The totals depend on the levels alone, and the engine reads them many
+  // times a tick: they are kept with the levels map until it changes.
+  final ms = c.megaprojects.values;
+  if (_bonusCache[levels] case (
+    final Content of,
+    final List<int> at,
+    final EmpireBonuses cached,
+  ) when identical(of, c)) {
+    var i = 0;
+    var same = true;
+    for (final m in ms) {
+      if ((levels[m.id] ?? 0) != at[i++]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return cached;
+  }
+  final bonuses = _bonusesAt(c, levels);
+  _bonusCache[levels] = (c, [for (final m in ms) levels[m.id] ?? 0], bonuses);
+  return bonuses;
+}
+
+/// A faction's levels map to the content, the levels (in content order)
+/// and the [bonusesFor] totals they were last worked out for.
+final _bonusCache = Expando<(Content, List<int>, EmpireBonuses)>('bonuses');
+
+/// [bonusesFor] a faction at megaproject [levels].
+EmpireBonuses _bonusesAt(Content c, Map<String, int> levels) {
   var storage = 0.0;
   var housing = 0.0;
   var offline = 0.0;
@@ -193,13 +222,25 @@ double offlineCapFor(GameState s, Content c, String factionId) => math.min(
 /// [MegaprojectDef.baseCost].
 ///
 /// [BigNum] keeps it finite at any level a save may hold.
+///
+/// The map is not to be changed: it is worked out once per megaproject and
+/// level.
 Map<String, BigNum> megaprojectCost(Content c, MegaprojectDef m, int level) {
+  final known = _costs[m] ??= {};
+  if (known[level] case final cost?) return cost;
+  if (known.length >= _costsKept) known.clear();
   final growth = BigNum.from(m.costGrowth).powInt(level);
-  return {
+  return known[level] = Map.unmodifiable({
     for (final MapEntry(key: id, value: base) in m.baseCost.entries)
       id: (base * growth).ceil(),
-  };
+  });
 }
+
+/// Each megaproject's [megaprojectCost] by level.
+final _costs = Expando<Map<int, Map<String, BigNum>>>('costs');
+
+/// Levels [_costs] keeps per megaproject before it starts over.
+const int _costsKept = 64;
 
 /// The level from which the stage [factionId]'s deliveries to [m] pay
 /// for starts: its level of [m], or one more while a stage of [m] is under
@@ -325,3 +366,7 @@ ProjectState? megaprojectStageOf(
   }
   return null;
 }
+
+/// Key of the credits entry in a megaproject cost
+/// ([MegaprojectDef.baseCost]); every other key is a resource id.
+const String creditsKey = 'credits';

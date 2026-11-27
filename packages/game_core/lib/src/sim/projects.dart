@@ -89,16 +89,25 @@ String projectTargetName(GameState s, Content c, ProjectState p) =>
 /// The engine runs it in every tick, before time moves on, so a project
 /// due at exactly the end of a tick completes at the start of the next,
 /// as a shipment lands.
-List<ProjectState> stepProjects(GameState s, Content c) {
+///
+/// With [only], just the projects it accepts complete; the stages a
+/// completed stage starts are offered to it too.
+List<ProjectState> stepProjects(
+  GameState s,
+  Content c, {
+  bool Function(ProjectState p)? only,
+}) {
+  bool isDue(ProjectState p) =>
+      p.finishAt <= s.time && (only == null || only(p));
   final done = <ProjectState>[];
   while (true) {
     final due = [
       for (final p in s.projects)
-        if (p.finishAt <= s.time) p,
+        if (isDue(p)) p,
     ];
     if (due.isEmpty) return done;
     due.sort(_byFinish);
-    s.projects.removeWhere((p) => p.finishAt <= s.time);
+    s.projects.removeWhere(due.contains);
     for (final p in due) {
       switch (p.kind) {
         case ProjectKind.claim:

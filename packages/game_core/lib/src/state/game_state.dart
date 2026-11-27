@@ -1015,7 +1015,22 @@ final class GameState {
   FactionState faction(String id) => factions.firstWhere((f) => f.id == id);
 
   /// Returns the body with [id]; throws if there is none.
-  BodyState body(String id) => bodies.firstWhere((b) => b.id == id);
+  BodyState body(String id) {
+    // An index of [bodies] by id, rebuilt whenever it is out of date: the
+    // engine looks bodies up many times a tick.
+    var at = _bodyIndex[id];
+    if (at == null || at >= bodies.length || bodies[at].id != id) {
+      _bodyIndex
+        ..clear()
+        ..addAll({for (final (i, b) in bodies.indexed) b.id: i});
+      at = _bodyIndex[id];
+    }
+    if (at == null) throw StateError('No body $id');
+    return bodies[at];
+  }
+
+  /// Body id to its index in [bodies], as [body] last found it.
+  final Map<String, int> _bodyIndex = {};
 
   /// Serializes the whole state.
   Map<String, Object?> toJson() => {

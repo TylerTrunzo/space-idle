@@ -275,16 +275,23 @@ void main() {
       final s = open();
       final f = s.faction('player')..credits = n(5000);
       stepMegaprojectAuto(s, content, 60);
+      stepMegaprojectCredits(s, content, 60);
       expect(f.credits, n(5000));
       ok(s, SetMegaprojectAutoCommand('player', 'mass_driver', false, n(1200)));
       f.credits = n(5000.5);
       s.time = 60;
-      final got = stepMegaprojectAuto(s, content, 60);
+      // Goods go in before the market, credits after it.
+      expect(stepMegaprojectAuto(s, content, 60), isEmpty);
+      expect(f.credits, n(5000.5));
+      final got = stepMegaprojectCredits(s, content, 60);
       expect(got['player']!['mass_driver'], {'credits': n(3800)});
       expect(f.credits.toDouble(), closeTo(1200.5, 1e-9));
-      // At the reserve, nothing more.
+      // At the reserve, nothing more; and none between minutes.
       s.time = 120;
-      expect(stepMegaprojectAuto(s, content, 60), isEmpty);
+      expect(stepMegaprojectCredits(s, content, 60), isEmpty);
+      f.credits = n(5000);
+      s.time = 181;
+      expect(stepMegaprojectCredits(s, content, 30), isEmpty);
     });
 
     test('starts the stage it pays for, then pays for the next, which '
@@ -299,14 +306,23 @@ void main() {
         if (id != 'credits') s.body('kora').stock[id] = v.mulDouble(10);
       }
       stepMegaprojectAuto(s, content, 60);
+      stepMegaprojectCredits(s, content, 60);
       final stage = megaprojectStageOf(s, 'player', 'mass_driver');
       expect(stage, isNotNull);
+      // The credits go on to the next stage at once, its goods at the next
+      // minute, as goods go in before the market and credits after it.
+      expect(progress(s), {
+        'credits': megaprojectCost(content, driver, 1)['credits'],
+      });
+      s.time = 60;
+      stepMegaprojectAuto(s, content, 60);
       expect(megaprojectStageQueued(s, content, 'player', driver), isTrue);
       expect(progress(s), megaprojectCost(content, driver, 1));
       // Nothing more goes in while the paid stage waits.
       final credits = f.credits;
-      s.time = 60;
+      s.time = 120;
       expect(stepMegaprojectAuto(s, content, 60), isEmpty);
+      expect(stepMegaprojectCredits(s, content, 60), isEmpty);
       expect(f.credits, credits);
       // Once the first is done, the second starts and deliveries go on.
       e.advance(s, stage!.finishAt - s.time + 120);
@@ -339,6 +355,103 @@ void main() {
         expect(p.startedAt, 60, reason: '$from, $step');
         expect(p.finishAt, 60 + megaprojectStageSeconds(driver, 0));
       }
+    });
+
+    test('a stage that ends within a step is done before the next is paid '
+        'for, so the next starts at the same minute at 1 s and 60 s', () {
+      // Level 0 under way, ending at 7230, with level 1's goods on hand
+      // and credits paid in on their own: the minute at 7260 pays for
+      // level 1, which then starts at once, however long the steps.
+      List<(String, double, double)> run(double step) {
+        final s = open(reserve: n(0));
+        s.faction('player').credits = n(1e12);
+        final kora = s.body('kora');
+        for (final MapEntry(key: id, value: v) in megaprojectCost(
+          content,
+          driver,
+          0,
+        ).entries) {
+          if (id != 'credits') kora.stock[id] = v;
+        }
+        s.time = 30;
+        ok(
+          s,
+          const StartMegaprojectStageCommand('player', 'mass_driver', 'kora'),
+        );
+        for (final MapEntry(key: id, value: v) in megaprojectCost(
+          content,
+          driver,
+          1,
+        ).entries) {
+          if (id != 'credits') kora.stock[id] = v;
+        }
+        s.time = 7201;
+        e.advance(s, 119, maxStep: step);
+        return [
+          for (final p in s.projects) (p.targetId, p.startedAt, p.finishAt),
+        ];
+      }
+
+      final live = run(1);
+      expect(live, [
+        ('mass_driver', 7260.0, 7260 + megaprojectStageSeconds(driver, 1)),
+      ]);
+      expect(run(60), live);
+    });
+
+    test('credits held at the end of an hour differ by a few seconds of '
+        'income at most at 1 s and 60 s steps', () {
+      // Credits go in after the market, so a 60 s step pays in the minute
+      // it earned, as 1 s steps do.
+      GameState fed() {
+        final s = open(reserve: n(1000));
+        ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+        ok(s, SetAutoSellCommand('player', 'kora', 'copper_ore', n(0)));
+        s.body('kora').stock['iron_ore'] = n(900);
+        return s;
+      }
+
+      final live = fed();
+      final ticks = fed();
+      e.advance(live, 3600, maxStep: 1);
+      e.advance(ticks, 3600);
+      final income = buildFlowReport(live, content, 'player').creditsPerSec;
+      expect(income.toDouble(), greaterThan(0));
+      expect(
+        ticks.faction('player').credits.toDouble(),
+        closeTo(
+          live.faction('player').credits.toDouble(),
+          income.toDouble() * 5,
+        ),
+      );
+    });
+
+    test('a body with two rules on one good keeps what the lower one '
+        'keeps, as auto-sell does', () {
+      final s = open();
+      final f = s.faction('player');
+      final kora = s.body('kora');
+      kora.stock['steel'] = n(500);
+      f.autoSell
+        ..add(
+          AutoSellRule(
+            bodyId: 'kora',
+            resourceId: 'steel',
+            keepAtLeast: n(300),
+          ),
+        )
+        ..add(
+          AutoSellRule(
+            bodyId: 'kora',
+            resourceId: 'steel',
+            keepAtLeast: n(100),
+          ),
+        );
+      stepMegaprojectAuto(s, content, 60);
+      // Auto-sell sells down to the lower keep (the hold for the Mass
+      // Driver aside); auto-delivery leaves as much.
+      expect(progress(s), {'steel': n(400)});
+      expect(kora.stock['steel'], n(100));
     });
 
     test('delivers nothing to a locked megaproject, and auto-sell sells '
