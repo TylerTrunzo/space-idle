@@ -39,11 +39,38 @@ double marketDepthFor(
       bonusesFor(s, c, factionId).marketDepthMultiplierFor(res.tier);
 }
 
-/// Current price per unit of [resourceId]: base price × saturation.
+/// Current price per unit of [resourceId]: base price × saturation. The
+/// plain market price, what contracts value goods at; a faction's market
+/// sales earn [salePrice].
 BigNum price(GameState s, Content c, String resourceId) => c
     .resources[resourceId]!
     .basePrice
     .mulDouble(s.market.saturation[resourceId] ?? 1);
+
+/// Factor on the credits [factionId]'s market sales of [resourceId] earn:
+/// its [EmpireBonuses.salePriceMultiplierFor] the resource's tier; 1 for
+/// none.
+double saleMultiplierFor(
+  GameState s,
+  Content c,
+  String factionId,
+  String resourceId,
+) => bonusesFor(
+  s,
+  c,
+  factionId,
+).salePriceMultiplierFor(c.resources[resourceId]!.tier);
+
+/// What a unit of [resourceId] earns [factionId] on the market now: the
+/// [price] times its [saleMultiplierFor]. Every reading that values the
+/// faction's sales (income, losses, waste, diversions) uses it, so they
+/// agree with what [sell] and auto-sell pay.
+BigNum salePrice(GameState s, Content c, String factionId, String resourceId) =>
+    price(
+      s,
+      c,
+      resourceId,
+    ).mulDouble(saleMultiplierFor(s, c, factionId, resourceId));
 
 /// Sells up to [amount] of [resourceId] from [bodyId]'s stock for
 /// [factionId], all at once.
@@ -54,7 +81,8 @@ BigNum price(GameState s, Content c, String resourceId) => c
 /// So `n` units take the saturation from `s0` to `s0 × e^(−n / depth)` and
 /// earn `basePrice × depth × (s0 − s1)`; every unit past the floor
 /// earns `basePrice × marketFloor`. One large sale earns what the same
-/// units sold in many small lots would.
+/// units sold in many small lots would. The credits are then multiplied by
+/// the seller's [saleMultiplierFor] the resource.
 ///
 /// Sells only what the body holds. Does no ownership checks; callers
 /// validate first (see `SellCommand`). The ids must exist.
@@ -78,17 +106,20 @@ SaleResult sell(
   final depth = marketDepthFor(s, c, factionId, resourceId);
   // Units that take the saturation from s0 down to the floor.
   final toFloor = s0 <= floor ? 0.0 : depth * math.log(s0 / floor);
-  final BigNum revenue;
+  final BigNum plain;
   final double s1;
   if (sold.toDouble() <= toFloor) {
     s1 = s0 * math.exp(-sold.toDouble() / depth);
-    revenue = res.basePrice.mulDouble(depth * (s0 - s1));
+    plain = res.basePrice.mulDouble(depth * (s0 - s1));
   } else {
     s1 = math.min(s0, floor);
-    revenue =
+    plain =
         res.basePrice.mulDouble(depth * (s0 - s1)) +
         (sold - BigNum.from(toFloor)) * res.basePrice.mulDouble(floor);
   }
+  final revenue = plain.mulDouble(
+    saleMultiplierFor(s, c, factionId, resourceId),
+  );
   _earn(s.faction(factionId), resourceId, revenue);
   body.take(resourceId, sold);
   s.market.saturation[resourceId] = math.max(floor, s1);
@@ -210,7 +241,11 @@ void stepMarket(
     );
     final unitPrice = c.resources[id]!.basePrice.mulDouble(priceShare);
     for (final (f, body, amount) in lots) {
-      _earn(f, id, amount * unitPrice);
+      _earn(
+        f,
+        id,
+        (amount * unitPrice).mulDouble(saleMultiplierFor(s, c, f.id, id)),
+      );
       body.take(id, amount);
     }
     sat[id] = end;

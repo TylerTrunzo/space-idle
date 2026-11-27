@@ -758,6 +758,7 @@ final class ScriptRunner {
           BonusKind.marketDepthPercent => 'market depth ${pct(b.value)}',
           BonusKind.marketDepthMultiplier => 'market depth ${times(b.value)}',
           BonusKind.productionSpeedMultiplier => 'production speed ${times(b.value)}',
+          BonusKind.salePriceMultiplier => 'sale price ${times(b.value)}',
         }}${_tiersText(b.appliesToMinTier ?? 0, b.appliesToMaxTier)}',
     ];
     return 'level $level: ${parts.join(', ')}';

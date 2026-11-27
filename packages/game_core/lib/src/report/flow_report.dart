@@ -992,6 +992,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
                   lostCreditsPerHour: _valuePerHour(
                     s,
                     c,
+                    factionId,
                     _scaled(flow.outputs, 1 - b.lastRunFraction),
                   ),
                 ),
@@ -1020,7 +1021,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     for (final id in c.resources.keys) {
       addNeck(
         _storageFull(c, body, id, cap, produced[id])?._with(
-          lostCreditsPerHour: _valuePerHour(s, c, {
+          lostCreditsPerHour: _valuePerHour(s, c, factionId, {
             id: body.wastedThisStep[id]!,
           }),
         ),
@@ -1048,7 +1049,9 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     // Faction-wide: first in report order.
     bottlenecks.add((
       -1,
-      _noSales._with(lostCreditsPerHour: _valuePerHour(s, c, unsold)),
+      _noSales._with(
+        lostCreditsPerHour: _valuePerHour(s, c, factionId, unsold),
+      ),
     ));
   }
   bottlenecks.sort((x, y) {
@@ -1072,7 +1075,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     for (final m in c.megaprojects.values)
       if (megaprojectGoodsFed(s, s.faction(factionId), m))
         for (final id in m.baseCost.keys)
-          if (id != creditsKey) id: price(s, c, id),
+          if (id != creditsKey) id: salePrice(s, c, factionId, id),
   };
   // What the diversions read of the state, taken now: the report holds no
   // state but its own.
@@ -1084,6 +1087,7 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
         r.resourceId: (
           saturation: s.market.saturation[r.resourceId] ?? 1,
           depth: marketDepthFor(s, c, factionId, r.resourceId),
+          bonus: saleMultiplierFor(s, c, factionId, r.resourceId),
         ),
   };
   SteadyFlows steadyOf() => steady ??= steadyFlows(
@@ -1227,17 +1231,20 @@ const double minDiversionShare = 0.1;
 List<Bottleneck> _diversions(
   Content c,
   SteadyIncome income,
-  Map<String, ({double saturation, double depth})> market,
+  Map<String, ({double saturation, double depth, double bonus})> market,
   double now,
 ) {
   final out = <Bottleneck>[];
   for (final MapEntry(key: m, value: got) in income.deliveredPerSec.entries) {
     for (final MapEntry(key: id, value: taken) in got.entries) {
-      final (:saturation, :depth) = market[id] ?? (saturation: 0.0, depth: 0.0);
+      final (:saturation, :depth, :bonus) =
+          market[id] ?? (saturation: 0.0, depth: 0.0, bonus: 1.0);
       if (id == creditsKey || depth <= 0 || taken <= const BigNum.zero()) {
         continue;
       }
-      final base = c.resources[id]!.basePrice;
+      // What a unit earns the faction at full saturation: its sales are
+      // paid the sale-price bonus too.
+      final base = c.resources[id]!.basePrice.mulDouble(bonus);
       final today = base.mulDouble(saturation);
       final sold = today.isZero
           ? 0.0
@@ -1331,11 +1338,17 @@ List<Bottleneck> _keepBlocks(GameState s, Content c, String factionId) {
 }
 
 /// Credits an hour that [perSec] (resource id to units a second) is worth
-/// at the current market prices of [s].
-BigNum _valuePerHour(GameState s, Content c, Map<String, BigNum> perSec) {
+/// to [factionId] at the current market prices of [s]: what its sales of
+/// them would earn ([salePrice]).
+BigNum _valuePerHour(
+  GameState s,
+  Content c,
+  String factionId,
+  Map<String, BigNum> perSec,
+) {
   var total = const BigNum.zero();
   for (final MapEntry(key: id, value: v) in perSec.entries) {
-    total = total + v * price(s, c, id);
+    total = total + v * salePrice(s, c, factionId, id);
   }
   return total.mulDouble(3600);
 }
@@ -1535,7 +1548,7 @@ BigNum _staffingGain(
           case final d when !d.isZero)
         id: d,
   };
-  return _valuePerHour(s, c, gain).max(const BigNum.zero());
+  return _valuePerHour(s, c, factionId, gain).max(const BigNum.zero());
 }
 
 /// The crew-shortage bottleneck of [factionId], or null when its crew

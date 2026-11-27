@@ -979,6 +979,171 @@ void main() {
       );
     });
 
+    group('sale price multiplier', () {
+      final c = contentWithBonuses([
+        {
+          'kind': 'salePriceMultiplier',
+          'amount': 1.2,
+          'appliesToMinTier': 1,
+          'appliesToMaxTier': 2,
+        },
+      ]);
+      final eng = GameEngine(c);
+
+      GameState at(int level) {
+        final s = eng.newGame(1);
+        s.faction('player')
+          ..megaprojectLevels['boost'] = level
+          ..contracts.clear()
+          ..contractRefillAt.clear()
+          ..contractRefillAt.addAll(List.filled(RulesDef.contractSlots, 1e12));
+        return s;
+      }
+
+      test('multiplies what a sale earns, factor^level, only on its tiers, '
+          'and leaves the market alone', () {
+        for (final level in [0, 1, 3]) {
+          final want = math.pow(1.2, level).toDouble();
+          // Steel is tier 1, iron ore tier 0.
+          for (final (id, factor) in [('steel', want), ('iron_ore', 1.0)]) {
+            final plain = at(0)..body('kora').stock[id] = n(500);
+            final boosted = at(level)..body('kora').stock[id] = n(500);
+            final a = sell(plain, c, 'player', 'kora', id, n(500));
+            final b = sell(boosted, c, 'player', 'kora', id, n(500));
+            expect(b.sold, a.sold);
+            expect(
+              b.revenue.toDouble(),
+              closeTo(a.revenue.toDouble() * factor, 1e-6),
+              reason: '$id at $level',
+            );
+            expect(boosted.market.saturation[id], plain.market.saturation[id]);
+            expect(boosted.faction('player').salesRevenue[id], b.revenue);
+            expect(
+              salePrice(boosted, c, 'player', id).toDouble(),
+              closeTo(price(boosted, c, id).toDouble() * factor, 1e-9),
+            );
+          }
+        }
+        final b = bonusesFor(at(2), c, 'player');
+        expect(
+          [
+            for (var t = 0; t <= ResourceDef.megaprojectTier; t++)
+              b.salePriceMultiplierFor(t),
+          ],
+          [1, closeTo(1.44, 1e-12), closeTo(1.44, 1e-12), 1, 1],
+        );
+      });
+
+      test('auto-sell earns it, and the report\'s credits a second, the '
+          'measured run and the income agree', () {
+        double earned(GameState s) {
+          eng.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+          s.body('kora').stock['iron_ore'] = n(900);
+          eng.advance(s, 600);
+          final before = s.faction('player').salesRevenue['steel']!;
+          eng.advance(s, 600);
+          return (s.faction('player').salesRevenue['steel']! - before)
+                  .toDouble() /
+              600;
+        }
+
+        final plain = at(0);
+        final boosted = at(2);
+        final a = earned(plain);
+        final b = earned(boosted);
+        expect(b, closeTo(a * 1.44, a * 1.44 * 1e-6));
+        // Only steel sells: the report reads what the sales earn.
+        final ra = buildFlowReport(plain, c, 'player').creditsPerSec.toDouble();
+        final rb = buildFlowReport(
+          boosted,
+          c,
+          'player',
+        ).creditsPerSec.toDouble();
+        expect(rb, closeTo(ra * 1.44, ra * 1.44 * 0.01));
+        expect(rb, closeTo(b, b * 0.05));
+      });
+
+      test('the report values what is lost at what sales would earn', () {
+        BigNum? lost(int level) {
+          final s = at(level);
+          final kora = s.body('kora');
+          kora.stock['iron_ore'] = n(900);
+          kora.stock['steel'] = storageCap(s, c, kora);
+          final r = buildFlowReport(s, c, 'player');
+          return r.bottlenecks
+              .firstWhere(
+                (b) =>
+                    b.kind == BottleneckKind.storageFull &&
+                    b.resourceId == 'steel',
+              )
+              .lostCreditsPerHour;
+        }
+
+        final plain = lost(0)!.toDouble();
+        expect(plain, greaterThan(0));
+        expect(lost(2)!.toDouble(), closeTo(plain * 1.44, plain * 1e-9));
+      });
+
+      test('contracts value goods at the plain price', () {
+        ContractState posted(int level) {
+          final s = at(level);
+          expect(
+            price(s, c, 'steel'),
+            c.resources['steel']!.basePrice,
+            reason: 'the market price takes no bonus',
+          );
+          s.faction('player').contractRefillAt
+            ..clear()
+            ..add(30);
+          eng.advance(s, 120);
+          return s.faction('player').contracts.single;
+        }
+
+        // Nothing auto-sold, so no income either way: the same order, paid
+        // the same, with the bonus or without.
+        final k = posted(3);
+        final p = posted(0);
+        expect(
+          (k.resourceId, k.quantity, k.rewardCredits),
+          (p.resourceId, p.quantity, p.rewardCredits),
+        );
+      });
+
+      test('takes a tier range and a factor of at least 1, like the other '
+          'multipliers', () {
+        for (final (bonus, error) in [
+          (
+            {'kind': 'salePriceMultiplier', 'amount': 0.9},
+            'must be >= 1 for a multiplier',
+          ),
+          (
+            {
+              'kind': 'salePriceMultiplier',
+              'amount': 1.1,
+              'appliesToMinTier': 2,
+              'appliesToMaxTier': 1,
+            },
+            'must be <= appliesToMaxTier (1)',
+          ),
+        ]) {
+          final r = Content.fromBundle({
+            ...shippedBundle(),
+            'megaprojects': [
+              stationJson(),
+              {
+                ...stationJson(),
+                'id': 'boost',
+                'name': 'Boost',
+                'bonusesPerLevel': [bonus],
+              },
+            ],
+          });
+          expect(r, isA<ContentInvalid>());
+          expect((r as ContentInvalid).errors.join("\n"), contains(error));
+        }
+      });
+    });
+
     group('compounding multipliers', () {
       final c = contentWithBonuses([
         {'kind': 'marketDepthMultiplier', 'amount': 1.2, 'appliesToMaxTier': 1},

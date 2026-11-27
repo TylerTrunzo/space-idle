@@ -244,7 +244,7 @@ final class GameEngine {
       final v = wasted[id];
       if (v == null) continue;
       totalWasted = totalWasted + v;
-      wastedValue = wastedValue + v * price(s, content, id);
+      wastedValue = wastedValue + v * salePrice(s, content, player.id, id);
     }
     final report = buildFlowReport(s, content, player.id);
     final before = {
@@ -331,7 +331,15 @@ final class GameEngine {
     final at = {for (final (i, b) in out.indexed) b.groupKey: i};
     for (final MapEntry(key: bodyId, value: cut) in wastedAt.entries) {
       for (final MapEntry(key: id, value: (units, since)) in cut.entries) {
-        final lost = (units * price(s, content, id)).mulDouble(3600 / seconds);
+        final lost =
+            (units *
+                    salePrice(
+                      s,
+                      content,
+                      s.factions.firstWhere((f) => f.isPlayer).id,
+                      id,
+                    ))
+                .mulDouble(3600 / seconds);
         if (lost <= const BigNum.zero()) continue;
         final key = bottleneckKey(
           BottleneckKind.storageFull.name,

@@ -20,6 +20,7 @@ final class EmpireBonuses {
     this.marketDepthPercent = 0,
     this.marketDepthFactors = _ones,
     this.productionSpeedFactors = _ones,
+    this.salePriceFactors = _ones,
   });
 
   /// No bonuses, as for a faction with no megaproject levels or a body
@@ -56,6 +57,15 @@ final class EmpireBonuses {
   /// [BonusKind.productionSpeedMultiplier] factors, each at most
   /// [maxMultiplier].
   final List<double> productionSpeedFactors;
+
+  /// Per resource tier, the compounded [BonusKind.salePriceMultiplier]
+  /// factors on what this faction's market sales earn, each at most
+  /// [maxMultiplier].
+  final List<double> salePriceFactors;
+
+  /// Multiplier on the credits this faction's market sales of a resource
+  /// of [tier] earn: its [salePriceFactors].
+  double salePriceMultiplierFor(int tier) => salePriceFactors[tier];
 
   /// Multiplier on a body's storage cap: `1 + storagePercent / 100`.
   double get storageMultiplier => 1 + storagePercent / 100;
@@ -148,6 +158,7 @@ EmpireBonuses _bonusesAt(Content c, Map<String, int> levels) {
   const tiers = ResourceDef.megaprojectTier + 1;
   final depthLogs = List<double>.filled(tiers, 0);
   final speedLogs = List<double>.filled(tiers, 0);
+  final saleLogs = List<double>.filled(tiers, 0);
   for (final m in c.megaprojects.values) {
     final level = levels[m.id] ?? 0;
     if (level == 0) continue;
@@ -175,6 +186,8 @@ EmpireBonuses _bonusesAt(Content c, Map<String, int> levels) {
           compound(depthLogs);
         case BonusKind.productionSpeedMultiplier:
           compound(speedLogs);
+        case BonusKind.salePriceMultiplier:
+          compound(saleLogs);
       }
     }
   }
@@ -186,6 +199,7 @@ EmpireBonuses _bonusesAt(Content c, Map<String, int> levels) {
     marketDepthPercent: depth,
     marketDepthFactors: _factors(depthLogs),
     productionSpeedFactors: _factors(speedLogs),
+    salePriceFactors: _factors(saleLogs),
   );
 }
 

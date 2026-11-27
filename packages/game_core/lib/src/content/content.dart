@@ -725,6 +725,12 @@ enum BonusKind {
   /// faster too. A building's tier is the highest tier of what it makes,
   /// so buildings that make nothing (habitats, warehouses) are untouched.
   productionSpeedMultiplier,
+
+  /// Factor the credits the faction's market sales earn are multiplied by
+  /// per level: `amount^level`, compounding, on goods of the tiers it
+  /// applies to. Saturation, depth and what sells are untouched, and
+  /// contracts value goods at the plain market price.
+  salePriceMultiplier,
 }
 
 /// One permanent bonus a megaproject grants per level.
@@ -758,7 +764,8 @@ final class BonusDef {
   /// an [appliesToMinTier] and an [appliesToMaxTier].
   bool get isMultiplier => switch (kind) {
     BonusKind.marketDepthMultiplier ||
-    BonusKind.productionSpeedMultiplier => true,
+    BonusKind.productionSpeedMultiplier ||
+    BonusKind.salePriceMultiplier => true,
     BonusKind.storagePercent ||
     BonusKind.housingPercent ||
     BonusKind.offlineCapSeconds ||
