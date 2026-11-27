@@ -263,7 +263,7 @@ void main() {
         15 => DeliverContractCommand(
           f,
           pick(contracts()),
-          pick(bodies),
+          pick([null, ...bodies]),
           pick(amounts),
         ),
         16 => SetMegaprojectAutoCommand(

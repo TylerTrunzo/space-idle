@@ -628,10 +628,11 @@ void main() {
         final cmds = bot.decide(e, s, 'player');
         expect(
           cmds.whereType<DeliverContractCommand>().single.toJson(),
+          // One command from every body.
           DeliverContractCommand(
             'player',
             k.id,
-            'kora',
+            null,
             BigNum.from(100),
           ).toJson(),
         );

@@ -147,7 +147,13 @@ final class ScriptRunner {
           for (final MapEntry(key: id, value: v) in m.entries)
             if (!v.isZero) key(id): v,
         };
-        final spent = keyed(o.spent);
+        // A delivery from every body says what each gave.
+        final spent = o is ContractProgress && o.bodyId == null
+            ? {
+                for (final MapEntry(key: b, value: v) in o.fromBodies.entries)
+                  '$b/${o.resourceId}': v,
+              }
+            : keyed(o.spent);
         final gained = keyed(o.gained);
         final recipe = o is Built ? _builtRecipe(o) : null;
         return {
@@ -409,13 +415,13 @@ final class ScriptRunner {
             '${_until(o.arriveAt)}',
       ContractProgress(:final rewardPaid?) =>
         'Delivered ${formatNumber(o.delivered)} '
-            '${c.resources[o.resourceId]!.name} from ${body(o.bodyId)} and '
+            '${c.resources[o.resourceId]!.name} ${_fromText(o)} and '
             'completed contract ${o.contractId}; paid '
             '${formatNumber(rewardPaid)} credits. '
             '${_nextContract(o.nextContractAt, capital: true)}',
       ContractProgress() =>
         'Delivered ${formatNumber(o.delivered)} '
-            '${c.resources[o.resourceId]!.name} from ${body(o.bodyId)} to '
+            '${c.resources[o.resourceId]!.name} ${_fromText(o)} to '
             'contract ${o.contractId} (${_progress(o.totalDelivered, o.quantity)})',
       ContractDiscarded() =>
         'Discarded contract ${o.contractId} for '
@@ -600,6 +606,17 @@ final class ScriptRunner {
       if (d.storageBonus > 0) 'storageBonus': d.storageBonus,
       'canBuildOn': hosts,
     };
+  }
+
+  /// Where a contract delivery's goods came from: "from Kora" for one
+  /// body, "(2K from Kora, 500 from Brine)" for a delivery from every body.
+  String _fromText(ContractProgress o) {
+    if (o.bodyId case final id?) return 'from ${state.body(id).name}';
+    final parts = [
+      for (final MapEntry(key: b, value: v) in o.fromBodies.entries)
+        '${formatNumber(v)} from ${state.body(b).name}',
+    ];
+    return '(${parts.join(', ')})';
   }
 
   /// [n] cargo ships by their display name, such as "2 Cargo Ships".

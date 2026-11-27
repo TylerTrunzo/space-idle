@@ -129,7 +129,13 @@ at least 500 credits, in whole credits; the first contract ever posted has
 no cap and pays at least 7,500 (see `content/README.md`). `{"cmd":"deliverContract","contractId":"c12","bodyId":"kora",
 "amount":"500"}` delivers up to `amount` of the contract's resource from the
 body's stock (clamped to what is held and to what the contract still wants;
-deliveries add up), and pays the reward once the last unit is in.
+deliveries add up), and pays the reward once the last unit is in. Leave out
+`bodyId` (`{"cmd":"deliverContract","contractId":"c12","amount":"1e9"}`) to
+deliver from every body you own in one command, the one holding the most
+first (ties by body id): the reply lists what each gave ("Delivered 3K Steel
+(2K from Kora, 1K from Brine) to contract c12 …", and `spent` by body), and
+it fails only when no body you own holds a whole unit. The bots deliver this
+way, one command per contract.
 `{"cmd":"discardContract","contractId":"c12"}` takes a contract off the board
 with no penalty. Either way the freed slot refills 4 h later, banked after any
 refills already waiting, so a board emptied before a long absence is full

@@ -1676,6 +1676,36 @@ void main() {
       ]);
     });
 
+    test('a delivery with no body takes from every body in one command', () {
+      final r = _runner();
+      r.handle({'cmd': 'advance', 'seconds': 14400 * 2 + 60});
+      final k = r.state.faction('player').contracts.first;
+      final id = k.resourceId;
+      final name = r.engine.content.resources[id]!.name;
+      // Kora holds the most, so it gives first; Brine the rest.
+      final fromKora = k.quantity.mulDouble(0.7).floor();
+      final fromBrine = k.quantity - fromKora;
+      r.state.body('kora').stock[id] = fromKora;
+      r.state.body('brine')
+        ..ownerId = 'player'
+        ..stock[id] = k.quantity.mulDouble(0.5).floor();
+      final out = r.handle({
+        'cmd': 'deliverContract',
+        'contractId': k.id,
+        'amount': k.quantity.toJson(),
+      });
+      expect(out['ok'], isTrue, reason: '$out');
+      expect(
+        out['message'],
+        'Delivered ${formatNumber(k.quantity)} $name '
+        '(${formatNumber(fromKora)} from Kora, ${formatNumber(fromBrine)} '
+        'from Brine) and completed contract ${k.id}; paid '
+        '${formatNumber(k.rewardCredits)} credits. A new contract arrives in '
+        '4h',
+      );
+      expect((out['spent']! as Map).keys, ['kora/$id', 'brine/$id']);
+    });
+
     test('deliver and discard reply with what they did', () {
       final r = _runner();
       r.handle({'cmd': 'advance', 'seconds': 14400 * 2 + 60});
