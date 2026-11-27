@@ -41,9 +41,61 @@ abstract final class MapLayout {
   /// Radius of orbit [orbit]: `orbitBase + orbit × orbitGap`.
   static double orbitRadius(int orbit) => orbitBase + orbit * orbitGap;
 
-  /// Where body [id] on orbit [orbit] sits.
-  static Offset positionFor(String id, int orbit) =>
-      Offset.fromDirection(angleFor(id), orbitRadius(orbit));
+  /// Least gap between two bodies' discs, in map units.
+  static const double minClearance = 0.5;
+
+  /// The golden angle: successive bodies stepped by it never bunch up.
+  static const double _goldenAngle = 2.399963229728653;
+
+  /// Nudge tried when a body would sit too close to one placed before it.
+  static const double _nudge = math.pi / 36;
+
+  /// Where each of [bodies] (one system's, hidden ones included) sits,
+  /// by id, in content order.
+  ///
+  /// Inner orbits first, each body steps on by the golden angle from a
+  /// base hashed from [systemId], so the system fills the circle round
+  /// the star instead of one side. A body that would come within
+  /// [minClearance] of one placed before it is nudged on until clear.
+  /// Deterministic, and placed over every body of the system, so a
+  /// survey that reveals one moves no other.
+  static Map<String, Offset> placeSystem(
+    String systemId,
+    List<BodyState> bodies,
+  ) {
+    final order = [...bodies]..sort((a, b) => a.orbit.compareTo(b.orbit));
+    final placed = <String, Offset>{};
+    final radius = <String, double>{};
+    var angle = angleFor(systemId);
+    for (final b in order) {
+      final r = bodyRadius(b.typeId);
+      var at = Offset.fromDirection(angle, orbitRadius(b.orbit));
+      for (
+        var tries = 0;
+        tries < 72 && _crowded(at, r, placed, radius);
+        tries++
+      ) {
+        angle += _nudge;
+        at = Offset.fromDirection(angle, orbitRadius(b.orbit));
+      }
+      placed[b.id] = at;
+      radius[b.id] = r;
+      angle += _goldenAngle;
+    }
+    return {for (final b in bodies) b.id: placed[b.id]!};
+  }
+
+  static bool _crowded(
+    Offset at,
+    double r,
+    Map<String, Offset> placed,
+    Map<String, double> radius,
+  ) {
+    for (final MapEntry(key: id, value: p) in placed.entries) {
+      if ((p - at).distance < r + radius[id]! + minClearance) return true;
+    }
+    return false;
+  }
 
   /// A body's drawn radius by type: gas giants largest, belts smallest.
   static double bodyRadius(String typeId) => switch (typeId) {
@@ -338,10 +390,16 @@ StarMapScene buildStarMapScene(
     }
   }
 
+  // Placed over the whole system, hidden bodies too, so revealing one
+  // moves nothing.
+  final placed = MapLayout.placeSystem(systemId, [
+    for (final b in s.bodies)
+      if (b.systemId == systemId) b,
+  ]);
   final positions = <String, Offset>{};
   final bodies = <MapBody>[];
   for (final b in visible) {
-    final at = positions[b.id] = MapLayout.positionFor(b.id, b.orbit);
+    final at = positions[b.id] = placed[b.id]!;
     final owned = b.ownerId == playerId;
     final base = BodyPalette.forType(b.typeId);
     final project = projects[b.id];

@@ -47,10 +47,53 @@ void main() {
       expect(MapLayout.orbitRadius(0), closeTo(MapLayout.orbitBase, 1e-12));
     });
 
-    test('a body sits on its orbit at its angle', () {
-      final p = MapLayout.positionFor('kora', 2);
-      expect(p.distance, closeTo(MapLayout.orbitRadius(2), 1e-9));
-      expect(p.direction, closeTo(_wrap(MapLayout.angleFor('kora')), 1e-9));
+    test('each body sits on its orbit, the same on every call', () {
+      final system = state.bodies.where((b) => b.systemId == 'veyra').toList();
+      final first = MapLayout.placeSystem('veyra', system);
+      final again = MapLayout.placeSystem('veyra', system);
+      expect(first.keys, system.map((b) => b.id));
+      for (final b in system) {
+        expect(
+          first[b.id]!.distance,
+          closeTo(MapLayout.orbitRadius(b.orbit), 1e-9),
+        );
+        expect(again[b.id], first[b.id]);
+      }
+    });
+
+    test('no two body discs intersect, hidden bodies included', () {
+      final system = state.bodies.where((b) => b.systemId == 'veyra').toList();
+      final at = MapLayout.placeSystem('veyra', system);
+      for (final (i, a) in system.indexed) {
+        for (final b in system.skip(i + 1)) {
+          final gap =
+              (at[a.id]! - at[b.id]!).distance -
+              MapLayout.bodyRadius(a.typeId) -
+              MapLayout.bodyRadius(b.typeId);
+          expect(
+            gap,
+            greaterThanOrEqualTo(MapLayout.minClearance - 1e-9),
+            reason: '${a.id} and ${b.id}',
+          );
+        }
+      }
+    });
+
+    test('visible bodies spread around the star, not all in one half', () {
+      final bodies = _scene(state).bodies.map((b) => b.position).toList();
+      expect(bodies.any((p) => p.dy < 0), isTrue, reason: 'top half');
+      expect(bodies.any((p) => p.dy > 0), isTrue, reason: 'bottom half');
+      expect(bodies.any((p) => p.dx < 0), isTrue, reason: 'left half');
+      expect(bodies.any((p) => p.dx > 0), isTrue, reason: 'right half');
+    });
+
+    test('revealing a hidden body moves no other body', () {
+      final before = {for (final b in _scene(state).bodies) b.id: b.position};
+      state.body('tessaly').surveyed = true;
+      final after = {for (final b in _scene(state).bodies) b.id: b.position};
+      for (final MapEntry(key: id, value: p) in before.entries) {
+        expect(after[id], p, reason: id);
+      }
     });
   });
 
@@ -180,9 +223,4 @@ void main() {
       expect(_scene(state).hashCode, _scene(state).hashCode);
     });
   });
-}
-
-double _wrap(double a) {
-  final w = a % (2 * math.pi);
-  return w > math.pi ? w - 2 * math.pi : w;
 }
