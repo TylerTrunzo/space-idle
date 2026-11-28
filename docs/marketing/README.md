@@ -14,6 +14,8 @@ Sources: design spec §1–2 (`docs/superpowers/specs/2026-11-26-space-idle-desi
 | [audience.md](audience.md) | Who it's for, where they are, and a launch plan with no budget |
 | [start-here.md](start-here.md) | Step-by-step plan and decisions log |
 | [brand/](brand/README.md) | Icon and logo concepts, palette, wordmark |
+| [website.md](website.md), [site/](site/) | The brightworkgames.com site, and how to publish it |
+| [social/](social/README.md) | Handles, bios, profile pictures and banners |
 
 ## Guardrails (from the spec's anti-goals)
 

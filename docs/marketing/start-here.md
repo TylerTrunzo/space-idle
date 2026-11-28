@@ -89,4 +89,6 @@ The name only needs settling before the first three:
 | 2026-11-28 | First asset: icon and logo concepts | Done: `brand/`. Recommend concept C |
 | 2026-11-28 | App icon direction: **C** (the name's letter drawn as an orbit), redrawn as an **A** for Accrete; A's ringed route goes on the feature graphic | Chosen; final polish and export to do |
 | 2026-11-28 | Domain and email: buy the domain through iCloud+ or Cloudflare; studio email via iCloud+ Custom Email Domain; website on Cloudflare Pages | Owner to do |
+| 2026-11-28 | Domain **brightworkgames.com** bought through iCloud+ | Verification in progress; then create hello@ |
+| 2026-11-28 | Website and privacy policy built (`site/`); social kit ready (`social/`) | Owner to publish on Cloudflare Pages and claim the handles |
 | — | How much time per week the owner gives to marketing | **Open** |
