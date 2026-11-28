@@ -69,6 +69,7 @@ class _GoalStripState extends State<GoalStrip> {
           guideStep: step,
           best: best?.best,
           bestReady: best?.ready ?? true,
+          nextGoal: c.measuredNow().goal,
         );
         final collapsed = guide?.collapsed ?? false;
         // At most a quarter of the screen: past that, at large text on a

@@ -141,17 +141,22 @@ final class GoalStripView {
 ///
 /// No slot is ever empty: each ends in an honest line that there is
 /// nothing there.
+///
+/// [nextGoal] is the core's next goal, handed in: it needs the flow
+/// report's income run, which the controller works out off the tick
+/// (`measuredNow`). Until it is, Long goes straight to its fallbacks.
 GoalStripView goalStripView(
   GameController c, {
   int? guideStep,
   UpgradeAdvice? best,
   bool bestReady = true,
+  NextGoal? nextGoal,
 }) {
   final today = _today(c);
   return GoalStripView(
     now: _now(c, guideStep, best, bestReady),
     today: today.view,
-    long: _long(c, today.milestoneId),
+    long: _long(c, today.milestoneId, nextGoal),
   );
 }
 
@@ -313,11 +318,10 @@ String? _guideBody(GameController c, OnboardingStep step) {
   );
 }
 
-GoalView _long(GameController c, String? todayMilestone) {
+GoalView _long(GameController c, String? todayMilestone, NextGoal? goal) {
   final s = c.state;
   final content = c.content;
   final p = c.playerId;
-  final goal = nextGoal(s, content, p, c.flow);
   switch (goal) {
     case MegaprojectGoal():
       return _stage(
@@ -337,11 +341,13 @@ GoalView _long(GameController c, String? todayMilestone) {
     case _:
       break;
   }
-  // Every megaproject taking deliveries, the nearest done.
+  // Every megaproject taking deliveries that the player funds, as the
+  // core's nextGoal counts them, the nearest done.
   GoalView? stage;
   var nearest = -1.0;
   for (final m in content.megaprojects.values) {
     if (!megaprojectTakesDeliveries(s, content, p, m)) continue;
+    if (megaprojectUnfunded(s, content, p, m)) continue;
     final v = _stage(c, m, null);
     if ((v.progress ?? 0) > nearest) {
       nearest = v.progress ?? 0;
@@ -358,12 +364,39 @@ GoalView _long(GameController c, String? todayMilestone) {
       )
       .firstOrNull;
   if (claimable != null) {
-    final cost = claimCost(s, content, p)[creditsKey] ?? const BigNum.zero();
+    final cost = claimCost(s, content, p);
+    final credits = cost[creditsKey] ?? const BigNum.zero();
+    final kitId = content.rules.outpostKitResource;
+    final kits = cost[kitId] ?? const BigNum.zero();
+    // The kits come from one body, as the claim takes them.
+    var most = const BigNum.zero();
+    for (final b in s.bodies) {
+      if (b.ownerId != p) continue;
+      final held = b.stock[kitId] ?? const BigNum.zero();
+      if (held > most) most = held;
+    }
+    final kitName = content.resources[kitId]?.name ?? kitId;
+    final needsKits = kits > const BigNum.zero();
+    final creditShare = _share(s.faction(p).credits, credits);
     return GoalView(
       slot: GoalSlot.long,
       kind: GoalKind.claim,
-      title: 'Claim ${claimable.name} for ${formatNumber(cost)} credits',
-      progress: _share(s.faction(p).credits, cost),
+      title: needsKits
+          ? 'Claim ${claimable.name} for ${formatNumber(credits)} credits '
+                'and ${formatNumber(kits)} '
+                '${kits == BigNum.from(1) ? kitName : plural(kitName)}'
+          : 'Claim ${claimable.name} for ${formatNumber(credits)} credits',
+      detail: needsKits
+          ? '${plural(kitName)}: '
+                '${formatNumber(most, rounding: NumberRounding.down)} of '
+                '${formatNumber(kits)} on one body'
+          : null,
+      // The smaller share: either can hold the claim back.
+      progress: needsKits
+          ? (creditShare < _share(most, kits)
+                ? creditShare
+                : _share(most, kits))
+          : creditShare,
       action: SelectBodyAction(claimable.id),
     );
   }

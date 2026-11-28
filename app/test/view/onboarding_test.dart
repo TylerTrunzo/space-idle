@@ -222,19 +222,36 @@ void main() {
         x.debugReplaceState(s);
         states[name] = x;
       }
+      final kinds = <String>{};
       for (final MapEntry(key: name, value: x) in states.entries) {
-        final v = goalStripView(x);
+        final goal = nextGoal(x.state, x.content, x.playerId, x.flow);
+        final v = goalStripView(x, nextGoal: goal);
         for (final g in [v.now, v.today, v.long]) {
           expect(g.title, isNotEmpty, reason: '$name ${g.slot}');
         }
-        final goal = nextGoal(x.state, x.content, x.playerId, x.flow);
-        if (goal is MegaprojectGoal) {
-          final m = x.content.megaprojects[goal.megaprojectId]!;
-          expect(
-            v.long.title,
-            startsWith('${m.name} level ${goal.level}'),
-            reason: name,
-          );
+        switch (goal) {
+          case MegaprojectGoal(:final megaprojectId, :final level):
+            kinds.add('megaproject');
+            final m = x.content.megaprojects[megaprojectId]!;
+            expect(
+              v.long.title,
+              startsWith('${m.name} level $level'),
+              reason: name,
+            );
+          case MilestoneGoal(:final milestoneId):
+            kinds.add('milestone');
+            final m = x.content.milestones.firstWhere(
+              (m) => m.id == milestoneId,
+            );
+            if (milestoneGoalText(x.content, m) != v.today.title) {
+              expect(
+                v.long.title,
+                milestoneGoalText(x.content, m),
+                reason: name,
+              );
+            }
+          case null:
+            break;
         }
         // Nothing invites a return or counts days.
         for (final g in [v.now, v.today, v.long]) {
@@ -244,6 +261,96 @@ void main() {
           }
         }
       }
+      // The check meant something: both kinds of goal came up.
+      expect(kinds, {'megaproject', 'milestone'});
+    });
+
+    group('the fallbacks', () {
+      /// The Orbital Station set to auto-deliver with credit auto-pay off
+      /// and nothing paid: the player chose not to fund it.
+      void unfundOrbital() {
+        final f = c.state.faction(_p);
+        f.megaprojectAutoSet.add('orbital_station');
+        f.megaprojectAuto['orbital_station'] = const MegaprojectAuto();
+        f.megaprojectProgress.remove('orbital_station');
+      }
+
+      test("Long never offers a megaproject the core counts unfunded", () {
+        unfundOrbital();
+        final today = goalStripView(c).today;
+        final m = content.milestones.firstWhere(
+          (m) => milestoneGoalText(content, m) == today.title,
+        );
+        final p = milestoneProgress(c.state, content, _p, m);
+        // nextGoal on today's milestone: Long falls back.
+        final goal = MilestoneGoal(
+          milestoneId: m.id,
+          current: p.current,
+          target: p.target,
+          etaSeconds: 60,
+        );
+        final v = goalStripView(c, nextGoal: goal);
+        expect(v.long.kind, isNot(GoalKind.megaproject));
+        expect(v.long.title, isNot(contains('Orbital Station')));
+      });
+
+      test(
+        'Long claims a body, naming its kits, the bar the smaller share',
+        () {
+          unfundOrbital();
+          c.state.body('brine').ownerId = _p;
+          c.state.faction(_p).credits = BigNum.from(1e9);
+          final cost = claimCost(c.state, content, _p);
+          final kits = cost[content.rules.outpostKitResource]!;
+          expect(kits > const BigNum.zero(), isTrue, reason: 'a later claim');
+          c.state.body('brine').stock['outpost_kit'] = kits.mulDouble(0.5);
+          final v = goalStripView(c);
+          expect(v.long.kind, GoalKind.claim);
+          expect(v.long.title, contains('Outpost Kit'));
+          expect(v.long.progress, closeTo(0.5, 1e-9), reason: 'kits, not 100%');
+        },
+      );
+
+      test('Long counts survey signals, then says nothing is left', () {
+        unfundOrbital();
+        for (final b in c.state.bodies) {
+          if (isVisible(c.state, b, _p)) b.ownerId = _p;
+        }
+        final v = goalStripView(c);
+        expect(v.long.kind, GoalKind.survey);
+        expect(v.long.title, 'Survey: 2 signals');
+        for (final b in c.state.bodies) {
+          b
+            ..surveyed = true
+            ..ownerId = _p;
+        }
+        expect(goalStripView(c).long.title, 'Nothing left in this slot');
+      });
+
+      test('Today falls back to a contract, then says so honestly', () {
+        final f = c.state.faction(_p);
+        f.reachedMilestones.addAll(content.milestones.map((m) => m.id));
+        f.contracts.clear();
+        expect(
+          goalStripView(c).today.title,
+          'Every milestone is reached, and no contract is open',
+        );
+        f.contracts.add(
+          ContractState(
+            id: 'k1',
+            templateId: content.contractTemplates.keys.first,
+            resourceId: 'steel',
+            quantity: BigNum.from(80),
+            delivered: BigNum.from(20),
+            rewardCredits: BigNum.from(1000),
+            postedAt: 0,
+          ),
+        );
+        final t = goalStripView(c).today;
+        expect(t.kind, GoalKind.contract);
+        expect(t.title, 'Deliver 80 Steel for 1K credits');
+        expect(t.progress, closeTo(0.25, 1e-9));
+      });
     });
   });
 }
