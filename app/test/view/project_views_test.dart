@@ -357,6 +357,16 @@ void main() {
       expect(station.deliverAll, '1.5K Hull Plate');
     });
 
+    test('the bonus it gives now: none at level 0, then its level\'s', () {
+      final def = content.megaprojects['orbital_station']!;
+      expect(_mp(c, 'orbital_station').currentBonus, isNull);
+      c.state.faction(_p).megaprojectLevels['orbital_station'] = 2;
+      expect(
+        _mp(c, 'orbital_station').currentBonus,
+        megaprojectBonusText(def, 2),
+      );
+    });
+
     test('nothing to deliver from any body: no Deliver all', () {
       expect(_mp(c, 'orbital_station').deliverAll, isNull);
     });

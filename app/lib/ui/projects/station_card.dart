@@ -6,6 +6,7 @@ import 'package:space_idle/ui/blocked_reason.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/planet/command_feedback.dart';
 import 'package:space_idle/ui/planet/spend_confirm.dart';
+import 'package:space_idle/view/messages.dart';
 import 'package:space_idle/view/project_views.dart';
 
 /// A megaproject's card: its level and bonuses, the stage under way with
@@ -56,6 +57,11 @@ class MegaprojectCard extends StatelessWidget {
                 Text(v.name, style: text.titleMedium),
                 Text('level ${v.level}', style: monoText(text.bodyMedium)),
               ],
+            ),
+            Text(
+              key: ValueKey('mp-now-${v.id}'),
+              'Now: ${v.currentBonus ?? 'no bonus yet'}',
+              style: text.bodyMedium,
             ),
             Text(
               'Level ${v.deliveryLevel + 1}: ${v.nextBonus}',
@@ -161,28 +167,59 @@ class MegaprojectCard extends StatelessWidget {
     );
   }
 
-  /// Sends every owned body's goods the stage still owes, one body at a
-  /// time, what is owed worked out again before each.
+  /// Sends the goods the stage still owes from every owned body, one body
+  /// at a time, and reports them in one message.
+  ///
+  /// The debt is taken once, for the stage the card shows, and each
+  /// delivery comes off it: once the stage is paid (it starts, or queues
+  /// behind the one under way) the next stage's cost is never paid into.
   void _deliverAll(BuildContext context, GameController c) {
     final m = c.content.megaprojects[view.id];
     if (m == null) return;
     final one = BigNum.from(1);
+    final level = megaprojectDeliveryLevel(c.state, c.playerId, m);
+    final owed = {
+      for (final MapEntry(key: id, value: v) in megaprojectRemaining(
+        c.state,
+        c.content,
+        c.playerId,
+        m,
+      ).entries)
+        if (id != creditsKey) id: v,
+    };
+    final said = <String>[];
     for (final b in [...c.state.bodies]) {
       if (b.ownerId != c.playerId) continue;
-      final owed = megaprojectRemaining(c.state, c.content, c.playerId, m);
+      if (megaprojectDeliveryLevel(c.state, c.playerId, m) != level) break;
       final amounts = {
         for (final MapEntry(key: id, value: v) in owed.entries)
-          if (id != creditsKey && (b.stock[id] ?? const BigNum.zero()) >= one)
-            id: v,
+          if ((b.stock[id] ?? const BigNum.zero()).floor().min(v) case final n
+              when n >= one)
+            id: n,
       };
       if (amounts.isEmpty) continue;
-      runAndReport(
-        context,
-        c,
-        DeliverToMegaprojectCommand(c.playerId, m.id, b.id, amounts),
-        announce: true,
-      );
+      final cmd = DeliverToMegaprojectCommand(c.playerId, m.id, b.id, amounts);
+      final result = c.run(cmd);
+      switch (result) {
+        case CommandFailed():
+          said.add('From ${b.name}: ${c.lastError ?? 'nothing delivered'}');
+        case CommandOk(:final outcome):
+          if (outcome != null) {
+            said.add(
+              'From ${b.name}: '
+              '${outcomeMessage(c.state, c.content, cmd, outcome)}',
+            );
+          }
+          if (outcome case final MegaprojectDelivered d) {
+            for (final MapEntry(key: id, value: v) in d.delivered.entries) {
+              if (owed[id] case final left?) owed[id] = left - v;
+            }
+            if (d.stageStarted || d.queued) break;
+          }
+      }
+      if (owed.values.every((v) => v < one)) break;
     }
+    if (said.isNotEmpty) showCommandMessage(context, said.join('\n'));
   }
 }
 

@@ -162,6 +162,7 @@ final class MegaprojectView {
     required this.name,
     required this.level,
     required this.deliveryLevel,
+    required this.currentBonus,
     required this.nextBonus,
     required this.runningBonus,
     required this.lines,
@@ -189,6 +190,10 @@ final class MegaprojectView {
   /// The level whose stage deliveries pay for now: [level], or one more
   /// while a stage is under way.
   final int deliveryLevel;
+
+  /// What its bonuses add up to now, at [level]; null at level 0, before
+  /// it gives any.
+  final String? currentBonus;
 
   /// What its bonuses add up to once the stage [lines] are for completes
   /// (level [deliveryLevel] + 1), such as "storage +20%".
@@ -281,6 +286,7 @@ MegaprojectView _megaproject(GameController c, MegaprojectDef m) {
     name: m.name,
     level: level,
     deliveryLevel: at,
+    currentBonus: level <= 0 ? null : megaprojectBonusText(m, level),
     nextBonus: megaprojectBonusText(m, at + 1),
     runningBonus: stage == null ? null : megaprojectBonusText(m, level + 1),
     lines: lines,

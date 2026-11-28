@@ -9,6 +9,7 @@ import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/projects/projects_tab.dart';
 import 'package:space_idle/ui/shell.dart';
+import 'package:space_idle/view/messages.dart';
 
 final Content content = loadEmbeddedContent();
 const _p = 'player';
@@ -249,6 +250,76 @@ void main() {
       expect(
         textOf(tester, _key('mp-queued-orbital_station')),
         contains('queued: starts when this stage finishes'),
+      );
+    });
+
+    testWidgets('Deliver all goods stops once the stage starts: nothing '
+        'spills into the next', (tester) async {
+      final def = content.megaprojects['orbital_station']!;
+      final cost = megaprojectCost(content, def, 0);
+      c.state.faction(_p).credits = cost[creditsKey]! * BigNum.from(2);
+      c.run(
+        DeliverToMegaprojectCommand(_p, 'orbital_station', 'kora', {
+          creditsKey: cost[creditsKey]!,
+        }),
+      );
+      final brine = c.state.body('brine')..ownerId = _p;
+      for (final MapEntry(key: id, value: need) in cost.entries) {
+        if (id == creditsKey) continue;
+        c.state.body('kora').stock[id] = need;
+        brine.stock[id] = BigNum.from(500);
+      }
+      await pump(tester);
+      await tester.tap(_key('mp-all-orbital_station'));
+      await tester.pump();
+      expect(c.state.projects.single.kind, ProjectKind.megaprojectStage);
+      for (final id in cost.keys) {
+        if (id == creditsKey) continue;
+        expect(brine.stock[id], BigNum.from(500), reason: id);
+      }
+      expect(
+        c.state.faction(_p).megaprojectProgress['orbital_station'] ?? {},
+        isEmpty,
+        reason: 'nothing paid toward level 2',
+      );
+    });
+
+    testWidgets('Deliver all goods says what every body gave, in one '
+        'message', (tester) async {
+      c.state.body('brine').ownerId = _p;
+      c.state.body('kora').stock['hull_plate'] = BigNum.from(300);
+      c.state.body('brine').stock['hull_plate'] = BigNum.from(200);
+      await pump(tester);
+      await tester.tap(_key('mp-all-orbital_station'));
+      await tester.pump();
+      expect(c.state.body('kora').stock['hull_plate'], BigNum.zero());
+      expect(c.state.body('brine').stock['hull_plate'], BigNum.zero());
+      final bar = find.byType(SnackBar);
+      expect(bar, findsOneWidget);
+      final said = textOf(tester, bar);
+      expect(said, contains('Kora'));
+      expect(said, contains('Brine'));
+    });
+
+    testWidgets('the card shows the bonus it gives now beside the next', (
+      tester,
+    ) async {
+      final def = content.megaprojects['orbital_station']!;
+      await pump(tester);
+      expect(
+        textOf(tester, _key('mp-now-orbital_station')),
+        contains('Now: no bonus yet'),
+      );
+      c.state.faction(_p).megaprojectLevels['orbital_station'] = 2;
+      c.tickSeconds(1);
+      await tester.pump();
+      expect(
+        textOf(tester, _key('mp-now-orbital_station')),
+        contains('Now: ${megaprojectBonusText(def, 2)}'),
+      );
+      expect(
+        textOf(tester, _key('mp-orbital_station')),
+        contains('Level 3: ${megaprojectBonusText(def, 3)}'),
       );
     });
 

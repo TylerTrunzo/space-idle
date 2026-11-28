@@ -37,6 +37,13 @@ CommandResult runAndReport(
   return result;
 }
 
+/// Shows [text] as the command message on the messenger nearest
+/// [context], replacing the last one, as [runAndReport] does: for a batch
+/// of commands reported together.
+void showCommandMessage(BuildContext context, String text) {
+  if (ScaffoldMessenger.maybeOf(context) case final m?) _show(m, text);
+}
+
 /// The command message last shown on each messenger.
 final Expando<_Message> _last = Expando('command message');
 
