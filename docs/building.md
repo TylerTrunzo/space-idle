@@ -80,6 +80,34 @@ rates on the animated star map there are far below a real phone's. Take its
 timings as a relative check (a new game against a late save, one build
 against the next), not as a device figure.
 
+### The WebAssembly build (not the default yet)
+
+`flutter build web --release --wasm --no-web-resources-cdn` builds the game
+to WebAssembly with the skwasm renderer. Browsers without WasmGC fall back
+to the JavaScript build in the same output.
+
+skwasm draws off the main thread only when the page is cross-origin
+isolated. The server must send these two headers:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+`python3 -m http.server` doesn't send them.
+
+In the smoke test's headless Chromium, with the day-14 save, the frame rate
+was:
+
+| Build | Map | Trade tab |
+|---|---|---|
+| JavaScript (CanvasKit), the default | 26–28 fps | 57 fps |
+| WebAssembly, isolated | 59 fps | 60 fps |
+| WebAssembly, not isolated | 34 fps | 59 fps |
+
+The default stays JavaScript until the WebAssembly build has been checked
+in Safari and on a phone.
+
 ## Build the Android APK
 
 Building the APK needs the Android SDK, which the dev container can't
