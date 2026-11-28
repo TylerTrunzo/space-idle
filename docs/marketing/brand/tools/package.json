@@ -1,0 +1,6 @@
+{
+  "name": "starwright-brand-tools",
+  "private": true,
+  "description": "Regenerates the icon/logo concept SVGs and contact sheet. Marketing tooling only; not game code.",
+  "dependencies": { "@fontsource/space-grotesk": "^5.0.0", "opentype.js": "^2.0.0" }
+}

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<defs>
+  <radialGradient id="bg" cx="35%" cy="25%" r="90%">
+    <stop offset="0" stop-color="#1A2352"/><stop offset="1" stop-color="#0A0F24"/>
+  </radialGradient>
+  <radialGradient id="planet" cx="35%" cy="30%" r="75%">
+    <stop offset="0" stop-color="#7D8CFF"/><stop offset="1" stop-color="#2E3B8F"/>
+  </radialGradient>
+  <radialGradient id="glow" r="50%">
+    <stop offset="0" stop-color="#FFD58A" stop-opacity="1"/>
+    <stop offset=".35" stop-color="#FFB547" stop-opacity=".9"/>
+    <stop offset="1" stop-color="#FFB547" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#4FD1C5"/><stop offset="1" stop-color="#FFB547"/>
+  </linearGradient>
+  <clipPath id="frontC"><rect x="0" y="300" width="512" height="212"/></clipPath></defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+
+<circle cx="80" cy="88" r="3" fill="#E8ECFF" opacity="0.8"/><circle cx="440" cy="110" r="2" fill="#E8ECFF" opacity="0.6"/><circle cx="436" cy="440" r="3" fill="#E8ECFF" opacity="0.7"/><circle cx="72" cy="430" r="2.5" fill="#E8ECFF" opacity="0.5"/><circle cx="120" cy="220" r="1.8" fill="#E8ECFF" opacity="0.5"/>
+<g transform="rotate(-14 256 300)">
+  <ellipse cx="256" cy="300" rx="150" ry="40" fill="none" stroke="#FFB547" stroke-opacity=".45" stroke-width="17"/>
+</g>
+<path d="M146 416 C 176 290, 208 178, 256 132 C 304 178, 336 290, 366 416"
+  fill="none" stroke="url(#sg)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="rotate(-14 256 300)" clip-path="url(#frontC)">
+  <ellipse cx="256" cy="300" rx="150" ry="40" fill="none" stroke="#FFB547" stroke-width="17"/>
+</g>
+<circle cx="256" cy="120" r="40" fill="url(#planet)"/>
+<g transform="rotate(-14 256 300) translate(392 316)"><circle r="46" fill="url(#glow)"/><circle r="17" fill="#FFD58A"/></g>
+</svg>
