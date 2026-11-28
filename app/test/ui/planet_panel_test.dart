@@ -515,6 +515,36 @@ void main() {
     });
   });
 
+  group('rows that move keep what they were asking', () {
+    testWidgets('a confirm open below a demolished row stays with its row', (
+      tester,
+    ) async {
+      await _pump(tester, c, 'kora');
+      await tester.longPress(find.textContaining('Smelter  Lv'));
+      await tester.pump();
+      expect(_key('demolish-b3'), findsOneWidget);
+      // The rows above it go: b3 moves up the list.
+      c.run(const DemolishCommand(_p, 'b1'));
+      await tester.pump();
+      expect(_key('demolish-b3'), findsOneWidget, reason: 'still asking');
+      expect(find.textContaining('Demolish '), findsOneWidget);
+    });
+
+    testWidgets('a habitat\'s capacity, which makes nothing to sell, keeps no '
+        'blank payback line', (tester) async {
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      c.state.body('kora').stock['habitat_module'] = BigNum.from(1);
+      c.run(const BuildCommand(_p, 'kora', 'habitat'));
+      final habitat = c.state.body('kora').buildings.last.id;
+      await _pump(tester, c, 'kora');
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(_key('payback-$habitat-capacity'), findsNothing);
+      expect(_key('payback-b3-capacity'), findsOneWidget, reason: 'crewed');
+    });
+  });
+
   group('switching bodies', () {
     testWidgets('a demolish confirm on Kora does not follow to Brine', (
       tester,

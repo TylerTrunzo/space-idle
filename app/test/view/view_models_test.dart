@@ -341,6 +341,22 @@ void main() {
         expect(paybackText(preview(worth: -2)), 'this level lowers income now');
       });
 
+      test('a gain too small to pay back in time says so, not nothing', () {
+        expect(
+          paybackText(preview(worth: 1e-30)),
+          'gains too little to pay back',
+        );
+      });
+
+      test('a habitat\'s capacity asks for no line; its efficiency does', () {
+        c.state.faction(_p).credits = BigNum.from(1e6);
+        c.state.body('kora').stock['habitat_module'] = BigNum.from(1);
+        c.run(const BuildCommand(_p, 'kora', 'habitat'));
+        final habitat = bodyView(c, 'kora')!.buildings.last;
+        expect(habitat.upgrades[UpgradeTrack.capacity]!.previewable, isFalse);
+        expect(habitat.upgrades[UpgradeTrack.efficiency]!.previewable, isTrue);
+      });
+
       test('none, or one whose gain is not output, shows nothing', () {
         expect(paybackText(null), isNull);
         expect(paybackText(preview()), isNull);

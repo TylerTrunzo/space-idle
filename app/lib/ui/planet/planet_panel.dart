@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/blocked_reason.dart';
 import 'package:space_idle/ui/controller_scope.dart';
+import 'package:space_idle/ui/lazy_list.dart';
 import 'package:space_idle/ui/planet/build_picker.dart';
 import 'package:space_idle/ui/planet/building_row.dart';
 import 'package:space_idle/ui/planet/claim_section.dart';
@@ -49,8 +50,9 @@ class PlanetPanel extends StatelessWidget {
     final c = ControllerScope.of(context);
     final view = bodyView(c, bodyId);
     final text = Theme.of(context).textTheme;
-    // Built lazily: only the rows on screen (and the list's cache extent)
-    // are built, so only their upgrade buttons ask for paybacks.
+    // A lazy list: only the rows on screen (and its cache extent) are
+    // built, so only their payback lines ask for previews; keyed rows keep
+    // their state as rows above them come and go.
     final items = <Widget>[
       _Header(view: view, bodyId: bodyId, onClose: onClose, onTap: onHeaderTap),
       if (view == null)
@@ -78,11 +80,10 @@ class PlanetPanel extends StatelessWidget {
     return Material(
       color: Palette.panel,
       shape: const Border(top: BorderSide(color: Palette.border)),
-      child: ListView.builder(
+      child: LazyList(
         controller: scroll,
         padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 24),
-        itemCount: items.length,
-        itemBuilder: (context, i) => items[i],
+        items: items,
       ),
     );
   }

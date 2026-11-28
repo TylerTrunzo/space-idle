@@ -56,7 +56,9 @@ final class UpgradeButtonView {
   final String? maxedReason;
 
   /// Whether the button shows a payback line ([paybackText]): on the
-  /// player's own body, for a track that can go higher. The line is asked
+  /// player's own body, for a track that can go higher and whose gain is
+  /// output (not a habitat's or warehouse's capacity, which adds housing
+  /// or storage), so a line kept for it always fills. The line is asked
   /// for by the button itself, as it is drawn (the controller's
   /// `previewFor`), so only buttons on screen cost a preview.
   final bool previewable;
@@ -300,7 +302,12 @@ UpgradeButtonView _upgrade(
     cost: formatNumber(cost),
     affordable: ctx.owned && maxed == null && ctx.credits >= cost,
     maxedReason: maxed,
-    previewable: ctx.owned && maxed == null,
+    // A habitat's or a warehouse's capacity adds housing or storage, worth
+    // no output of its own: no payback line for it.
+    previewable:
+        ctx.owned &&
+        maxed == null &&
+        (t != UpgradeTrack.capacity || c.buildings[b.defId]!.crewSlots > 0),
   );
 }
 
@@ -319,5 +326,9 @@ String? paybackText(UpgradePreview? p) => switch (p) {
   UpgradePreview(:final creditsDeltaPerSec)
       when creditsDeltaPerSec.isNegative =>
     'this level lowers income now',
+  // A gain, but too small to pay back in any time worth showing.
+  UpgradePreview(:final creditsDeltaPerSec)
+      when creditsDeltaPerSec > const BigNum.zero() =>
+    'gains too little to pay back',
   _ => null,
 };

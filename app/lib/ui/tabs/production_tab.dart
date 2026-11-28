@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/controller_scope.dart';
+import 'package:space_idle/ui/lazy_list.dart';
 import 'package:space_idle/ui/planet/building_row.dart';
 import 'package:space_idle/ui/shell.dart';
 import 'package:space_idle/view/tabs_view.dart';
@@ -105,11 +106,7 @@ class _ProductionTabState extends State<ProductionTab> {
     ];
     return ColoredBox(
       color: Palette.panel,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: items.length,
-        itemBuilder: (context, i) => items[i],
-      ),
+      child: LazyList(padding: const EdgeInsets.all(16), items: items),
     );
   }
 }

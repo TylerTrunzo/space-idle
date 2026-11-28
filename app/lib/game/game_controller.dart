@@ -189,12 +189,14 @@ class GameController extends ChangeNotifier {
   /// The upgrade preview of [track] on building [buildingId] for the
   /// player ([upgradePreview]), if one is ready: `ready` false until it is.
   ///
-  /// Asking is cheap. One not ready, or older than [adviceRefreshSeconds]
-  /// (each entry by its own age, so they do not all go at once), joins a
-  /// queue that fills a few at a time, [previewBudget] a frame, from one
-  /// copy of the state ([UpgradePreviewer]); [previewsVersion] says when
-  /// more have landed. A successful command, a load or a new game drops
-  /// them all.
+  /// Asking is cheap. One not ready, or older than [adviceRefreshSeconds],
+  /// joins a queue that fills a few at a time, [previewBudget] a frame,
+  /// from one copy of the state ([UpgradePreviewer]); [previewsVersion]
+  /// says when more have landed. An entry's age is its previewer's: those
+  /// worked out from one previewer age together, but an old one keeps
+  /// showing until it is asked for again and redone, and only lines on
+  /// screen ask, so a refresh is spread over fills and never all at once.
+  /// A successful command, a load or a new game drops them all.
   ({bool ready, UpgradePreview? preview}) previewFor(
     String buildingId,
     UpgradeTrack track,
