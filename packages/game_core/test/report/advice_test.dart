@@ -158,6 +158,81 @@ void main() {
     });
   });
 
+  group('upgradePreviews, many levels from one copy', () {
+    /// Every unmaxed level of every building the player owns.
+    List<(String, UpgradeTrack)> levels(GameState x) => [
+      for (final body in x.bodies)
+        if (body.ownerId == _p)
+          for (final b in body.buildings)
+            for (final t in UpgradeTrack.values)
+              if (c.buildings[b.defId]!.upgrades.containsKey(t) &&
+                  upgradeMaxedReason(c, b, t) == null)
+                (b.id, t),
+    ];
+
+    void same(UpgradePreview? a, UpgradePreview? b, String why) {
+      expect(a == null, b == null, reason: why);
+      if (a == null || b == null) return;
+      expect(a.cost, b.cost, reason: why);
+      expect(a.outputDeltaPerSec, b.outputDeltaPerSec, reason: why);
+      expect(a.creditsDeltaPerSec, b.creditsDeltaPerSec, reason: why);
+      expect(a.paybackSeconds, b.paybackSeconds, reason: why);
+      expect(a.limitedElsewhere, b.limitedElsewhere, reason: why);
+    }
+
+    test('match single previews exactly, in any order', () {
+      feedTheSmelter();
+      s.faction(_p).credits = BigNum.from(1e6);
+      applyCommand(s, c, const BuildCommand(_p, 'kora', 'smelter'));
+      engine.advance(s, 5);
+      final all = levels(s);
+      expect(all.length, greaterThan(8));
+      final before = SaveCodec.encode(s);
+      final batch = upgradePreviews(s, c, _p, all);
+      final backwards = upgradePreviews(s, c, _p, all.reversed);
+      expect(SaveCodec.encode(s), before, reason: 'the state is untouched');
+      for (final (i, (id, t)) in all.indexed) {
+        final single = upgradePreview(s, c, _p, id, t);
+        same(batch[i], single, '$id ${t.name}');
+        same(backwards[all.length - 1 - i], single, '$id ${t.name}, backwards');
+      }
+    });
+
+    test('a previewer keeps the moment it was made', () {
+      feedTheSmelter();
+      final previewer = UpgradePreviewer(s, c, _p);
+      final then = upgradePreview(s, c, _p, 'b3', UpgradeTrack.speed);
+      engine.advance(s, 120);
+      applyCommand(s, c, const AssignCrewCommand(_p, 'b2', 0));
+      same(previewer.preview('b3', UpgradeTrack.speed), then, 'b3 speed');
+    });
+  });
+
+  group('upgradePreview edges', () {
+    test('a level that loses worth is not "limited elsewhere"', () {
+      // Efficiency on a smelter whose ore is worth more than its steel:
+      // the level saves ore, so it can only gain; make the steel worth
+      // nothing and speed costs ore for steel no one values.
+      feedTheSmelter();
+      s.market.saturation['steel'] = 0;
+      final p = upgradePreview(s, c, _p, 'b3', UpgradeTrack.speed)!;
+      expect(p.creditsDeltaPerSec.isNegative, isTrue);
+      expect(p.paybackSeconds, isNull);
+      expect(p.limitedElsewhere, isFalse);
+    });
+
+    test('a payback past 1e15 s reads as none, never Infinity', () {
+      feedTheSmelter();
+      building('b3').levels[UpgradeTrack.efficiency] = 0;
+      building('b1').levels[UpgradeTrack.speed] = SaveCodec.maxLevel - 1;
+      final p = upgradePreview(s, c, _p, 'b1', UpgradeTrack.speed)!;
+      expect(p.cost.toDouble(), greaterThan(1e30));
+      expect(p.creditsDeltaPerSec > const BigNum.zero(), isTrue);
+      expect(p.paybackSeconds, isNull);
+      expect(p.limitedElsewhere, isFalse);
+    });
+  });
+
   group('bestUpgrades', () {
     test('affordable levels, soonest payback first, at most the limit', () {
       s.faction(_p).credits = BigNum.from(5000);
@@ -295,6 +370,114 @@ void main() {
       expect(f.demand, demand);
       expect(f.secondsUntilShortage, isNull);
       expect(f.creditsPerExtraCrew >= const BigNum.zero(), isTrue);
+    });
+
+    test('one more crew is worth what re-crewing an emptied mine gains', () {
+      expect(
+        applyCommand(s, c, const AssignCrewCommand(_p, 'b2', 0)),
+        isA<CommandOk>(),
+      );
+      engine.advance(s, 5);
+      final f = crewForecast(s, c, _p);
+      // The copper mine, crewed again, on the same state.
+      final again = s.copy();
+      expect(
+        applyCommand(again, c, const AssignCrewCommand(_p, 'b2', 1)),
+        isA<CommandOk>(),
+      );
+      final before = buildFlowReport(s, c, _p);
+      final after = buildFlowReport(again, c, _p);
+      var gain = const BigNum.zero();
+      for (final id in c.resources.keys) {
+        gain =
+            gain +
+            (after.steadySurplusPerSec(id) - before.steadySurplusPerSec(id)) *
+                salePrice(s, c, _p, id);
+      }
+      expect(gain.toDouble(), greaterThan(0));
+      expect(f.creditsPerExtraCrew.toDouble(), closeTo(gain.toDouble(), 1e-9));
+    });
+
+    test('over-assigned, one more crew is worth the relief, no more', () {
+      // Two crew assigned, one housed: every building at half.
+      s.faction(_p).baseCrew = 2;
+      expect(
+        applyCommand(s, c, const AssignCrewCommand(_p, 'b2', 0)),
+        isA<CommandOk>(),
+      );
+      s.faction(_p).baseCrew = 1;
+      expect(crewTotals(s, c, _p).overAssigned, greaterThan(0));
+      final f = crewForecast(s, c, _p);
+      // It can staff nothing new (no crew is free): it houses one more of
+      // those assigned. Not the copper mine's ore on top.
+      final housed = s.copy()..faction(_p).baseCrew += 1;
+      final a = buildFlowReport(s, c, _p);
+      final b = buildFlowReport(housed, c, _p);
+      var relief = const BigNum.zero();
+      for (final id in c.resources.keys) {
+        relief =
+            relief +
+            (b.steadySurplusPerSec(id) - a.steadySurplusPerSec(id)) *
+                salePrice(s, c, _p, id);
+      }
+      expect(relief.toDouble(), greaterThan(0));
+      expect(
+        f.creditsPerExtraCrew.toDouble(),
+        closeTo(relief.toDouble(), 1e-9),
+      );
+    });
+
+    group('a habitat running dry', () {
+      /// A habitat on Kora, its life support stocked for about [seconds],
+      /// housing crew the faction needs: base crew 2, three assigned.
+      void habitat({required double seconds}) {
+        final kora = s.body('kora');
+        s.faction(_p).credits = BigNum.from(1e6);
+        kora.stock['habitat_module'] = BigNum.from(1);
+        expect(
+          applyCommand(s, c, const BuildCommand(_p, 'kora', 'habitat')),
+          isA<CommandOk>(),
+        );
+        // One of each a cycle of 10 s: 0.1 a second.
+        for (final id in ['food', 'water', 'oxygen']) {
+          kora.stock[id] = BigNum.from(seconds * 0.1);
+        }
+        engine.advance(s, 1);
+        s.faction(_p).baseCrew = 2;
+        expect(crewTotals(s, c, _p).overAssigned, 0);
+      }
+
+      /// Seconds of 1 s ticks until the faction is first over-assigned.
+      double firstShortage(GameState x) {
+        for (var t = 1; t <= 3600; t++) {
+          engine.advance(x, 1);
+          if (crewTotals(x, c, _p).overAssigned > 0) return t.toDouble();
+        }
+        fail('no shortage within an hour');
+      }
+
+      test('its time to a shortage matches a 1 s run, within 2 s', () {
+        habitat(seconds: 300);
+        final f = crewForecast(s, c, _p);
+        expect(f.secondsUntilShortage, isNotNull);
+        final real = firstShortage(s.copy());
+        expect(f.secondsUntilShortage, closeTo(real, 2));
+      });
+
+      test('the tick its input runs out, the shortage is now', () {
+        habitat(seconds: 300);
+        // The habitat has just run full and its food is gone: housing
+        // holds this tick, and the report's next step runs the habitat dry.
+        s.body('kora').stock['food'] = const BigNum.zero();
+        final hab = s
+            .body('kora')
+            .buildings
+            .firstWhere((b) => b.defId == 'habitat');
+        expect(hab.lastRunFraction, 1);
+        expect(crewTotals(s, c, _p).overAssigned, 0);
+        expect(crewForecast(s, c, _p).secondsUntilShortage, 0);
+        expect(firstShortage(s.copy()), lessThanOrEqualTo(2));
+      });
     });
 
     test('already over-assigned: the shortage is now', () {

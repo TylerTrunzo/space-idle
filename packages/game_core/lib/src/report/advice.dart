@@ -16,10 +16,11 @@ import 'flow_report.dart';
 // changes nothing. An upgrade's effect is never re-derived here: the real
 // command runs on a copy, and the two flow reports are compared.
 
-/// Credits key in costs.
-const String _credits = 'credits';
-
 const BigNum _zero = BigNum.zero();
+
+/// Paybacks past this many seconds (some 30 million years) read as none:
+/// a gain that small is no gain, and the division stays finite.
+const double maxPaybackSeconds = 1e15;
 
 /// What one more level of an upgrade track would bring ([upgradePreview]).
 final class UpgradePreview {
@@ -47,15 +48,17 @@ final class UpgradePreview {
   final BigNum creditsDeltaPerSec;
 
   /// Seconds the gain takes to pay back [cost]: `cost ÷
-  /// creditsDeltaPerSec`; null when it gains nothing.
+  /// creditsDeltaPerSec`, worked out in [BigNum]; null when it gains
+  /// nothing, or so little it would take over [maxPaybackSeconds].
   final double? paybackSeconds;
 
   /// Whether it gains nothing because something else holds the building
   /// back with every flow steady: an input, its crew, or the faction's
   /// housing. Set when a speed or efficiency level, or a crewed building's
-  /// capacity level, leaves the steady surplus no higher; never for a
-  /// habitat's or warehouse's capacity level, whose housing or storage
-  /// makes nothing to sell of its own.
+  /// capacity level, leaves the steady surplus's worth exactly where it
+  /// was; never for a habitat's or warehouse's capacity level, whose
+  /// housing or storage makes nothing to sell of its own, and never for a
+  /// level that loses worth ([creditsDeltaPerSec] negative).
   final bool limitedElsewhere;
 }
 
@@ -71,8 +74,8 @@ final class UpgradePreview {
 /// for anything but the credits: a maxed track, a building the faction
 /// does not own, a track its type lacks.
 ///
-/// It builds a flow report for the copy, and one for [s] when [before] is
-/// not given, so a caller previewing many levels passes one [before].
+/// It is [UpgradePreviewer] for one level; to preview many, use that, or
+/// [upgradePreviews], which copy [s] once.
 UpgradePreview? upgradePreview(
   GameState s,
   Content c,
@@ -80,42 +83,129 @@ UpgradePreview? upgradePreview(
   String buildingId,
   UpgradeTrack track, {
   FlowReport? before,
+}) => UpgradePreviewer(
+  s,
+  c,
+  factionId,
+  before: before,
+).preview(buildingId, track);
+
+/// [UpgradePreviewer.preview] of every level in [levels] (building id and
+/// track), in order, from one copy of [s] and one report of it.
+List<UpgradePreview?> upgradePreviews(
+  GameState s,
+  Content c,
+  String factionId,
+  Iterable<(String, UpgradeTrack)> levels, {
+  FlowReport? before,
 }) {
-  final found = _building(s, buildingId);
-  if (found == null) return null;
-  final (_, b) = found;
-  final def = c.buildings[b.defId]!;
-  if (!def.upgrades.containsKey(track)) return null;
-  final cost = upgradeCost(c, b, track)[_credits] ?? _zero;
-  final copy = s.copy();
-  final f = copy.faction(factionId);
-  f.credits = f.credits + cost;
-  final r = applyCommand(copy, c, UpgradeCommand(factionId, buildingId, track));
-  if (r is! CommandOk) return null;
-  final base = before ?? buildFlowReport(s, c, factionId);
-  final after = buildFlowReport(copy, c, factionId);
+  final previewer = UpgradePreviewer(s, c, factionId, before: before);
+  return [for (final (id, t) in levels) previewer.preview(id, t)];
+}
+
+/// Previews many upgrade levels of one state, each as [upgradePreview]
+/// does, for about one flow report each.
+///
+/// It copies the state once, when made, with the steady surplus of
+/// [before] (the report of that state, built when not given); each
+/// [preview] runs the level's command on that copy, reports it, and puts
+/// back what the command changed (the faction's credits, and the
+/// building's level, crew and awaiting-crew flag) before the next. So it
+/// stays the state it was made from, whatever the state it was made from
+/// does next: [s] can tick on, and the previews stay those of the moment
+/// it was made.
+final class UpgradePreviewer {
+  /// Makes a previewer of [s] for [factionId].
+  UpgradePreviewer(GameState s, this._c, this._factionId, {FlowReport? before})
+    : _work = s.copy(),
+      _base = _surplusOf(before ?? buildFlowReport(s, _c, _factionId), _c);
+
+  final Content _c;
+  final String _factionId;
+
+  /// The copy the levels are tried on, put back after each.
+  final GameState _work;
+
+  /// Resource id to the steady surplus of the state as it was made.
+  final Map<String, BigNum> _base;
+
+  /// What one more level of [track] on [buildingId] would bring; see
+  /// [upgradePreview].
+  UpgradePreview? preview(String buildingId, UpgradeTrack track) {
+    final found = _building(_work, buildingId);
+    if (found == null) return null;
+    final (_, b) = found;
+    final def = _c.buildings[b.defId]!;
+    if (!def.upgrades.containsKey(track)) return null;
+    final cost = upgradeCost(_c, b, track)[creditsKey] ?? _zero;
+    final f = _work.faction(_factionId);
+    final credits = f.credits;
+    final level = b.levels[track]!;
+    final crew = b.crew;
+    final awaiting = b.awaitingCrew;
+    f.credits = credits + cost;
+    try {
+      final r = applyCommand(
+        _work,
+        _c,
+        UpgradeCommand(_factionId, buildingId, track),
+      );
+      if (r is! CommandOk) return null;
+      final after = _surplusOf(buildFlowReport(_work, _c, _factionId), _c);
+      final (:delta, :worth) = _worthOf(_work, _c, _factionId, _base, after);
+      final gains = worth > _zero;
+      // Speed and efficiency always raise what the building could make
+      // or save; a crewed building's capacity level adds a crew slot.
+      // When the surplus's worth does not move, something else holds it:
+      // an input, the crew, the housing. A habitat's or warehouse's
+      // capacity adds housing or storage, worth no output of its own.
+      final raisesOutput = track != UpgradeTrack.capacity || def.crewSlots > 0;
+      return UpgradePreview(
+        cost: cost,
+        outputDeltaPerSec: delta,
+        creditsDeltaPerSec: worth,
+        paybackSeconds: gains ? _payback(cost, worth) : null,
+        limitedElsewhere: worth.isZero && raisesOutput,
+      );
+    } finally {
+      f.credits = credits;
+      b.levels[track] = level;
+      b.crew = crew;
+      b.awaitingCrew = awaiting;
+    }
+  }
+}
+
+/// [cost] ÷ [worth] seconds, in [BigNum] so a late game's figures never
+/// overflow; null past [maxPaybackSeconds].
+double? _payback(BigNum cost, BigNum worth) {
+  final t = (cost / worth).toDouble();
+  return t.isFinite && t <= maxPaybackSeconds ? t : null;
+}
+
+/// Resource id to [r]'s steady surplus, every resource of [c].
+Map<String, BigNum> _surplusOf(FlowReport r, Content c) => {
+  for (final id in c.resources.keys) id: r.steadySurplusPerSec(id),
+};
+
+/// The change from [before] to [after] (steady surpluses), zero changes
+/// left out, and its worth at [factionId]'s sale prices in [s].
+({Map<String, BigNum> delta, BigNum worth}) _worthOf(
+  GameState s,
+  Content c,
+  String factionId,
+  Map<String, BigNum> before,
+  Map<String, BigNum> after,
+) {
   final delta = <String, BigNum>{};
   var worth = _zero;
   for (final id in c.resources.keys) {
-    final d = after.steadySurplusPerSec(id) - base.steadySurplusPerSec(id);
+    final d = (after[id] ?? _zero) - (before[id] ?? _zero);
     if (d.isZero) continue;
     delta[id] = d;
     worth = worth + d * salePrice(s, c, factionId, id);
   }
-  final gains = worth > _zero;
-  // Speed and efficiency always raise what the building could make or
-  // save; a crewed building's capacity level adds a crew slot. When the
-  // steady surplus does not rise, something else holds it: an input, the
-  // crew, the housing. A habitat's or warehouse's capacity adds housing
-  // or storage, worth no output of its own.
-  final raisesOutput = track != UpgradeTrack.capacity || def.crewSlots > 0;
-  return UpgradePreview(
-    cost: cost,
-    outputDeltaPerSec: delta,
-    creditsDeltaPerSec: worth,
-    paybackSeconds: gains ? cost.toDouble() / worth.toDouble() : null,
-    limitedElsewhere: !gains && raisesOutput,
-  );
+  return (delta: delta, worth: worth);
 }
 
 /// One upgrade worth buying ([bestUpgrades]).
@@ -150,7 +240,7 @@ final class UpgradeAdvice {
 ///
 /// It is advice beside `BuyUpgradesCommand`, which buys the cheapest
 /// levels; this ranks by what they bring. It builds a flow report per
-/// candidate level.
+/// candidate level, on one copy of [s] ([UpgradePreviewer]).
 List<UpgradeAdvice> bestUpgrades(
   GameState s,
   Content c,
@@ -159,7 +249,7 @@ List<UpgradeAdvice> bestUpgrades(
 }) {
   if (limit <= 0) return const [];
   final credits = s.faction(factionId).credits;
-  final before = buildFlowReport(s, c, factionId);
+  final previewer = UpgradePreviewer(s, c, factionId);
   final found = <UpgradeAdvice>[];
   for (final body in s.bodies) {
     if (body.ownerId != factionId) continue;
@@ -168,8 +258,8 @@ List<UpgradeAdvice> bestUpgrades(
       for (final t in UpgradeTrack.values) {
         if (!def.upgrades.containsKey(t)) continue;
         if (upgradeMaxedReason(c, b, t) != null) continue;
-        if ((upgradeCost(c, b, t)[_credits] ?? _zero) > credits) continue;
-        final p = upgradePreview(s, c, factionId, b.id, t, before: before);
+        if ((upgradeCost(c, b, t)[creditsKey] ?? _zero) > credits) continue;
+        final p = previewer.preview(b.id, t);
         if (p == null || p.paybackSeconds == null) continue;
         found.add(
           UpgradeAdvice(
@@ -302,7 +392,7 @@ BuildBlock? _block(
     return BuildBlock(BuildBlockKind.noDeposit, resourceId: deposit);
   }
   for (final MapEntry(key: id, value: need) in def.buildCost.entries) {
-    final have = id == _credits ? f.credits : body.stock[id] ?? _zero;
+    final have = id == creditsKey ? f.credits : body.stock[id] ?? _zero;
     if (have < need) {
       return BuildBlock(
         BuildBlockKind.short,
@@ -332,21 +422,40 @@ final class CrewForecast {
   /// summed.
   final int demand;
 
-  /// Seconds until its housing falls below the crew assigned: 0 when it
-  /// already has; the soonest a habitat's life-support input runs dry, if
-  /// housing without that habitat would fall short; null while it holds.
+  /// Seconds until its housing falls below the crew assigned, or null
+  /// while it holds:
+  ///
+  /// - 0 when it already has, or will on the next tick: a habitat whose
+  ///   next step (the flow report's) runs below its last one, and whose
+  ///   lost housing would leave too few, as when a life-support input has
+  ///   just run out;
+  /// - else the soonest a habitat's life-support input, falling, runs out
+  ///   at its rate now, if losing that habitat's housing would leave too
+  ///   few.
+  ///
+  /// The second case takes a habitat that runs dry to lose all its
+  /// housing: the engine then runs it at what the input's inflow supports,
+  /// so it can warn of a shortage a partial fall would not quite cause. It
+  /// errs early, never late.
   final double? secondsUntilShortage;
 
   /// What one more crew is worth a second at most, in credits at sale
-  /// prices: the best of putting it on each building with room for it,
-  /// each tried on a copy with one more base crew; zero when no building
-  /// has room or none gains.
+  /// prices.
+  ///
+  /// While the faction's housing falls short of its assigned crew, a
+  /// further crew can work nowhere new (there is no free crew to assign):
+  /// it houses one already assigned, and is worth what relieving the
+  /// shortage that much brings. Otherwise it is the best of putting it on
+  /// each building with room for it, each against the same state with
+  /// that crew housed but not assigned, so no building is credited with
+  /// anything but its own gain. Zero when none gains.
   final BigNum creditsPerExtraCrew;
 }
 
 /// [factionId]'s crew forecast: housing, demand, how long until housing
 /// falls short, and the best a further crew would bring. It builds a flow
-/// report for [s] and one per building with room for a crew.
+/// report for [s], one with a crew more housed, and one per building with
+/// room for a crew.
 CrewForecast crewForecast(GameState s, Content c, String factionId) {
   final totals = crewTotals(s, c, factionId);
   final report = buildFlowReport(s, c, factionId);
@@ -364,7 +473,7 @@ CrewForecast crewForecast(GameState s, Content c, String factionId) {
     housing: totals.supported,
     demand: demand,
     secondsUntilShortage: _untilShortage(s, c, factionId, totals, report),
-    creditsPerExtraCrew: _bestExtraCrew(s, c, factionId, roomy, report),
+    creditsPerExtraCrew: _bestExtraCrew(s, c, factionId, totals, roomy),
   );
 }
 
@@ -377,21 +486,27 @@ double? _untilShortage(
 ) {
   if (totals.overAssigned > 0) return 0;
   final housingBonus = bonusesFor(s, c, factionId).housingMultiplier;
+  // Housing that would leave too few for the crew assigned if lost.
+  bool tooFewWithout(double lost) =>
+      totals.supported - lost.ceil() < totals.assigned;
   double? soonest;
   for (final body in s.bodies) {
     if (body.ownerId != factionId) continue;
-    final net = report.bodies
-        .where((f) => f.bodyId == body.id)
-        .firstOrNull
-        ?.netPerSec;
+    final flow = report.bodies.where((f) => f.bodyId == body.id).firstOrNull;
+    final next = {
+      for (final st in flow?.buildings ?? const <BuildingStatus>[])
+        st.buildingId: st.runFraction,
+    };
     for (final b in body.buildings) {
       final def = c.buildings[b.defId]!;
       if (def.kind != BuildingKind.habitat) continue;
-      final houses =
-          habitatHousing(c.rules, def, b) * b.lastRunFraction * housingBonus;
-      if (totals.supported - houses.ceil() >= totals.assigned) continue;
+      final full = habitatHousing(c.rules, def, b) * housingBonus;
+      // The next tick: the report's sample step is what it runs.
+      final drop = b.lastRunFraction - (next[b.id] ?? b.lastRunFraction);
+      if (drop > 1e-9 && tooFewWithout(full * drop)) return 0;
+      if (!tooFewWithout(full * b.lastRunFraction)) continue;
       for (final id in def.inputs.keys) {
-        final falling = net?[id] ?? _zero;
+        final falling = flow?.netPerSec[id] ?? _zero;
         if (!falling.isNegative) continue;
         final left = (body.stock[id] ?? _zero).toDouble();
         final t = math.max(0.0, left / -falling.toDouble());
@@ -406,27 +521,33 @@ BigNum _bestExtraCrew(
   GameState s,
   Content c,
   String factionId,
+  CrewTotals totals,
   List<String> roomy,
-  FlowReport before,
 ) {
+  final short = totals.overAssigned > 0;
+  if (!short && roomy.isEmpty) return _zero;
+  // The same state with one more crew housed and none assigned.
+  final housed = s.copy();
+  housed.faction(factionId).baseCrew += 1;
+  final before = _surplusOf(buildFlowReport(housed, c, factionId), c);
+  if (short) {
+    // It can only house a crew already assigned: worth the relief.
+    final now = _surplusOf(buildFlowReport(s, c, factionId), c);
+    final (delta: _, :worth) = _worthOf(s, c, factionId, now, before);
+    return worth > _zero ? worth : _zero;
+  }
   var best = _zero;
   for (final id in roomy) {
-    final (_, b) = _building(s, id)!;
-    final copy = s.copy();
-    copy.faction(factionId).baseCrew += 1;
+    final (_, b) = _building(housed, id)!;
+    final copy = housed.copy();
     final r = applyCommand(
       copy,
       c,
       AssignCrewCommand(factionId, id, b.crew + 1),
     );
     if (r is! CommandOk) continue;
-    final after = buildFlowReport(copy, c, factionId);
-    var worth = _zero;
-    for (final res in c.resources.keys) {
-      final d =
-          after.steadySurplusPerSec(res) - before.steadySurplusPerSec(res);
-      if (!d.isZero) worth = worth + d * salePrice(s, c, factionId, res);
-    }
+    final after = _surplusOf(buildFlowReport(copy, c, factionId), c);
+    final (delta: _, :worth) = _worthOf(s, c, factionId, before, after);
     if (worth > best) best = worth;
   }
   return best;
