@@ -65,8 +65,5 @@ Builds on spec §11 and §13.4.
 
 ## Open items **[Check]**
 
-- **Hardcore versus the offline cap (owner to decide).** §6.7 fast-forwards at most 12 h (up to 48 h with
-  upgrades). In hardcore, does the rest of the galaxy keep acting past that cap while your production stops? That
-  would be very harsh; the other option is that the whole world pauses at the cap, yours and theirs alike. See 03.
 - Hardcore mode needs a line in §2's anti-goals when promoted: "except in opt-in hardcore mode."
 - Settings must be stored per world (not per player) for later shared galaxies (spec §5.4).
