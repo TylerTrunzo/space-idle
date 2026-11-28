@@ -32,6 +32,34 @@ void main() {
 
   group('Guide fixes', () {
     test(
+      'an import starts the guide over: no "Done" from the old game',
+      () async {
+        final c = controller();
+        final g = Guide(controller: c, store: MemorySettingsStore());
+        await g.load();
+        final shown = g.step!;
+        // A save in which the step shown is long done.
+        final other = controller();
+        sellSteel(other);
+        expect(
+          onboardingSteps[shown].done(other.state, content, _p),
+          isTrue,
+          reason: 'the imported game has done the step shown',
+        );
+        final done = <String?>[];
+        g.lastDone.addListener(() => done.add(g.lastDone.value));
+        final before = c.gamesStarted;
+        expect(
+          await c.importSave(SaveCodec.encode(other.state)),
+          isA<Imported>(),
+        );
+        expect(done, isEmpty, reason: 'the import did not do the step');
+        expect(c.gamesStarted, before + 1);
+        expect(g.step, onboardingReached(other.state, content, _p, 0));
+      },
+    );
+
+    test(
       '"Done" names the step shown: one Smelter build, two passed',
       () async {
         final c = controller();

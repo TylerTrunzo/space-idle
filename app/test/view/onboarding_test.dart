@@ -275,6 +275,54 @@ void main() {
         f.megaprojectProgress.remove('orbital_station');
       }
 
+      /// A milestone other than Today's, with its live progress.
+      (MilestoneDef, MilestoneProgress) notToday() {
+        final today = goalStripView(c).today.title;
+        final m = content.milestones.firstWhere(
+          (m) => milestoneGoalText(content, m) != today,
+        );
+        return (m, milestoneProgress(c.state, content, _p, m));
+      }
+
+      test('Long drops a measured milestone the live state has reached', () {
+        final (m, p) = notToday();
+        final goal = MilestoneGoal(
+          milestoneId: m.id,
+          current: p.current,
+          target: p.target,
+          etaSeconds: 60,
+        );
+        expect(
+          goalStripView(c, nextGoal: goal).long.title,
+          milestoneGoalText(content, m),
+          reason: 'while unreached it shows',
+        );
+        // Reached since the measurement, a game minute old at most.
+        c.state.faction(_p).reachedMilestones.add(m.id);
+        final v = goalStripView(c, nextGoal: goal);
+        expect(v.long.title, isNot(milestoneGoalText(content, m)));
+        expect(v.long.title, isNotEmpty);
+      });
+
+      test("Long's milestone bar is the live milestoneProgress", () {
+        final (m, p) = notToday();
+        final live = (p.current.toDouble() / p.target.toDouble()).clamp(
+          0.0,
+          1.0,
+        );
+        // Measured a while ago, at half way.
+        final stale = MilestoneGoal(
+          milestoneId: m.id,
+          current: p.target * BigNum.from(0.5),
+          target: p.target,
+          etaSeconds: 60,
+        );
+        expect(live, isNot(closeTo(0.5, 1e-9)), reason: 'a real difference');
+        final v = goalStripView(c, nextGoal: stale);
+        expect(v.long.title, milestoneGoalText(content, m));
+        expect(v.long.progress, closeTo(live, 1e-9));
+      });
+
       test("Long never offers a megaproject the core counts unfunded", () {
         unfundOrbital();
         final today = goalStripView(c).today;

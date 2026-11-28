@@ -144,7 +144,11 @@ final class GoalStripView {
 ///
 /// [nextGoal] is the core's next goal, handed in: it needs the flow
 /// report's income run, which the controller works out off the tick
-/// (`measuredNow`). Until it is, Long goes straight to its fallbacks.
+/// (`measuredNow`). Until it is, Long goes straight to its fallbacks, so
+/// just after a launch, command or load Long can show a fallback for a
+/// frame and then switch to the measured goal once the fill lands. That
+/// one-frame change is accepted: holding Long blank until then would be
+/// worse, and its fallbacks are true goals too.
 GoalStripView goalStripView(
   GameController c, {
   int? guideStep,
@@ -329,14 +333,21 @@ GoalView _long(GameController c, String? todayMilestone, NextGoal? goal) {
         content.megaprojects[goal.megaprojectId]!,
         goal.etaSeconds,
       );
-    case MilestoneGoal(:final milestoneId) when milestoneId != todayMilestone:
+    case MilestoneGoal(:final milestoneId)
+        when milestoneId != todayMilestone &&
+            !s.faction(p).reachedMilestones.contains(milestoneId):
+      // The measured goal can be a game minute old: one reached or met
+      // since then is passed over, and the bar is the live progress, as
+      // Today's is. Only the ETA is the measurement's.
       final m = content.milestones.firstWhere((x) => x.id == milestoneId);
+      final live = milestoneProgress(s, content, p, m);
+      if (live.met) break;
       return GoalView(
         slot: GoalSlot.long,
         kind: GoalKind.milestone,
         title: milestoneGoalText(content, m),
         detail: _eta(goal.etaSeconds),
-        progress: _share(goal.current, goal.target),
+        progress: _share(live.current, live.target),
       );
     case _:
       break;

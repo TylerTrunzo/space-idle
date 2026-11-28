@@ -319,8 +319,10 @@ class GameController extends ChangeNotifier {
   _measured;
   bool _measureWanted = false;
 
-  /// New games started this session ([newGame]), for what keeps a place
-  /// in a game (the guide) to start over.
+  /// Games started this session by [newGame] or a successful
+  /// [importSave], for what keeps a place in a game (the guide) to start
+  /// over. A load at launch is not counted: it is the game the place is
+  /// for.
   int gamesStarted = 0;
 
   /// Income runs worked out so far, for tests: none may be in a tick.
@@ -555,7 +557,6 @@ class GameController extends ChangeNotifier {
   /// Waits for a pending [start] first, as [importSave] does.
   Future<void> newGame() async {
     await _startFinished();
-    gamesStarted++;
     _replace(engine.newGame(_nextSeed()));
     await save();
   }
@@ -629,7 +630,10 @@ class GameController extends ChangeNotifier {
     _notify();
   }
 
+  /// Puts another game in place of this one (a new game or an import).
   void _replace(GameState state) {
+    // Before the notify below, so a listener sees the change of game.
+    gamesStarted++;
     _state = state;
     _dropReports();
     _dropGame();
