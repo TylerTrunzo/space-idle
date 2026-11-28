@@ -331,6 +331,27 @@ void main() {
       expect(find.textContaining('First Claim'), findsNothing);
     });
 
+    testWidgets('two reached under the same sheet are both named once it '
+        'closes', (tester) async {
+      await boot(tester);
+      final c = _controllerIn(tester);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      c.state.body('brine').ownerId = _p;
+      c.tickSeconds(1);
+      await tester.pump();
+      c.state.body('cinder').ownerId = _p;
+      c.tickSeconds(1);
+      await tester.pump();
+      await tester.tapAt(const Offset(400, 20));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      final said = textOf(tester, _key('milestone-banner'));
+      expect(said, contains('First Claim'));
+      expect(said, contains('Second Claim'));
+    });
+
     testWidgets('an import does not announce what it already has', (
       tester,
     ) async {

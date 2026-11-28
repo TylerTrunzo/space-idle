@@ -45,8 +45,9 @@ class _MilestoneBannerState extends State<MilestoneBanner> {
   bool _still = false;
   Timer? _hide;
 
-  /// A banner raised under a dialog or sheet, waiting for it to close.
-  String? _waiting;
+  /// Milestones reached under a dialog or sheet, in the order reached,
+  /// waiting for it to close: one banner names them all.
+  final List<String> _waiting = [];
 
   @override
   void didChangeDependencies() {
@@ -58,9 +59,10 @@ class _MilestoneBannerState extends State<MilestoneBanner> {
       return;
     }
     _check(c);
-    if (_waiting case final w? when _inFront) {
-      _waiting = null;
-      _raise(w);
+    if (_waiting.isNotEmpty && _inFront) {
+      final names = [..._waiting];
+      _waiting.clear();
+      _raise(_textFor(names));
     }
   }
 
@@ -74,7 +76,7 @@ class _MilestoneBannerState extends State<MilestoneBanner> {
     _state = c.state;
     // What the old game reached is not shown over the new one.
     _hide?.cancel();
-    _waiting = null;
+    _waiting.clear();
     _text = null;
     _shown = false;
   }
@@ -112,16 +114,18 @@ class _MilestoneBannerState extends State<MilestoneBanner> {
     ];
     _seen = {...now};
     if (fresh.isEmpty) return;
-    final text = fresh.length == 1
-        ? 'Milestone reached: ${fresh.single}'
-        : 'Milestones reached: ${fresh.join(', ')}';
     if (_inFront) {
-      _raise(text);
+      _raise(_textFor(fresh));
     } else {
       // Under a dialog or sheet its time would run out unseen.
-      _waiting = text;
+      _waiting.addAll(fresh);
     }
   }
+
+  /// "Milestone reached: First Claim", or "Milestones reached: A, B".
+  static String _textFor(List<String> names) => names.length == 1
+      ? 'Milestone reached: ${names.single}'
+      : 'Milestones reached: ${names.join(', ')}';
 
   @override
   void dispose() {
