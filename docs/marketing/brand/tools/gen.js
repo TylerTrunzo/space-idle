@@ -1,4 +1,4 @@
-// Generates Starwright icon concepts + outlined wordmarks as standalone SVGs.
+// Generates Accrete icon concepts + outlined wordmarks as standalone SVGs.
 const fs = require('fs');
 const path = require('path');
 const opentype = require('opentype.js');
@@ -81,20 +81,28 @@ ${stars([[70, 80, 3, .8], [448, 96, 2.5, .6], [440, 440, 3, .7], [80, 430, 2, .5
   <circle r="46" fill="url(#glow)"/><circle r="18" fill="${C.amberHi}"/>
 </g>`);
 
-// C — S Orbit: the S monogram drawn as an orbit path between two worlds, a ship on the curve.
+// C — A Orbit: the A monogram drawn as an orbit arch, its crossbar a tilted orbit with a cargo ship;
+// a small world accreting at the apex.
 const iconC = wrap(`
   <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="${C.teal}"/><stop offset="1" stop-color="${C.amber}"/>
-  </linearGradient>`, `
-${stars([[80, 88, 3, .8], [440, 120, 2, .6], [430, 430, 3, .7], [96, 440, 2.5, .5], [250, 60, 1.8, .5]])}
-<path d="M352 152 C 320 96, 168 96, 164 182 C 160 262, 352 250, 348 330 C 344 416, 192 416, 160 360"
-  fill="none" stroke="url(#sg)" stroke-width="40" stroke-linecap="round"/>
-<circle cx="370" cy="132" r="44" fill="url(#planet)"/>
-<g transform="translate(160 360)"><circle r="54" fill="url(#glow)"/><circle r="20" fill="${C.amberHi}"/></g>`);
+  </linearGradient>
+  <clipPath id="frontC"><rect x="0" y="300" width="512" height="212"/></clipPath>`, `
+${stars([[80, 88, 3, .8], [440, 110, 2, .6], [436, 440, 3, .7], [72, 430, 2.5, .5], [120, 220, 1.8, .5]])}
+<g transform="rotate(-14 256 300)">
+  <ellipse cx="256" cy="300" rx="150" ry="40" fill="none" stroke="${C.amber}" stroke-opacity=".45" stroke-width="17"/>
+</g>
+<path d="M146 416 C 176 290, 208 178, 256 132 C 304 178, 336 290, 366 416"
+  fill="none" stroke="url(#sg)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="rotate(-14 256 300)" clip-path="url(#frontC)">
+  <ellipse cx="256" cy="300" rx="150" ry="40" fill="none" stroke="${C.amber}" stroke-width="17"/>
+</g>
+<circle cx="256" cy="120" r="40" fill="url(#planet)"/>
+<g transform="rotate(-14 256 300) translate(392 316)"><circle r="46" fill="url(#glow)"/><circle r="17" fill="${C.amberHi}"/></g>`);
 
 fs.writeFileSync(path.join(OUT, 'icon-a-ringed-route.svg'), iconA);
 fs.writeFileSync(path.join(OUT, 'icon-b-gear-world.svg'), iconB);
-fs.writeFileSync(path.join(OUT, 'icon-c-s-orbit.svg'), iconC);
+fs.writeFileSync(path.join(OUT, 'icon-c-a-orbit.svg'), iconC);
 
 // Wordmark, outlined to paths so it renders identically everywhere.
 const font = opentype.parse(fs.readFileSync(require.resolve('@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff')).buffer);
@@ -116,7 +124,7 @@ function wordPath(text, size, tracking) {
   }
   return { d: parts.join(''), w: x - tracking };
 }
-const wm = wordPath('STARWRIGHT', 96, 10);
+const wm = wordPath('ACCRETE', 96, 10);
 for (const [name, fill] of [['wordmark-dark-on-light', C.ink], ['wordmark-light-on-dark', C.paper]]) {
   fs.writeFileSync(path.join(OUT, `${name}.svg`),
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Math.ceil(wm.w)} 96" width="${Math.ceil(wm.w)}" height="96"><path d="${wm.d}" fill="${fill}"/></svg>\n`);

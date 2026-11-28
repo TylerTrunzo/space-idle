@@ -61,7 +61,7 @@ unit is still owed, or "+0.59 credits".
 
 1. A planet with a ring made of a conveyor or cargo route (says "space industry" at a glance)
 2. A gear whose teeth are small planets
-3. The letter mark (S for Starwright) as an orbit path with one bright cargo ship on it
+3. The letter mark (A for Accrete) as an orbit path with one bright cargo ship on it. **Chosen**, see `brand/`
 
 Test the icon at 48 px next to other idle games' icons. Most use busy cartoon faces, so a clean icon with one idea
 stands out.

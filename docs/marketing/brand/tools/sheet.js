@@ -9,7 +9,7 @@ const uri = (f) => 'data:image/svg+xml;base64,' + fs.readFileSync(path.join(DIR,
 const icons = [
   ['A · Ringed Route', 'icon-a-ringed-route.svg'],
   ['B · Gear World', 'icon-b-gear-world.svg'],
-  ['C · S Orbit', 'icon-c-s-orbit.svg'],
+  ['C · A Orbit (chosen)', 'icon-c-a-orbit.svg'],
 ];
 const wmL = uri('wordmark-light-on-dark.svg');
 const wmD = uri('wordmark-dark-on-light.svg');
@@ -37,7 +37,7 @@ h2{margin:0 0 16px;font-size:24px}
 .dark{background:#0A0F24}.light{background:#F5F3EE;border:1px solid #ddd}
 .li{width:72px;height:72px;border-radius:20%}.wm{height:40px}
 </style></head><body>
-<h1>Starwright: icon and logo concepts</h1>
+<h1>Accrete: icon and logo concepts</h1>
 <p>Each row shows 256 px, 96 px and 48 px with a rounded mask, 48 px with a circle mask, then a horizontal lockup on dark and on light.</p>
 ${icons.map(row).join('')}
 </body></html>`;

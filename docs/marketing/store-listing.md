@@ -5,7 +5,7 @@ them in Play Console before submitting; Google changes them occasionally.
 
 ## Title
 
-`Starwright: Idle Space Empire` (29 characters)
+`Accrete: Idle Space Factory` (27 characters)
 
 Play's metadata policy doesn't allow promotional or ranking words in the title, such as "free", "no ads", "best",
 "#1" or "new", and doesn't allow emoji or all caps. Keep the "no ads" message in the descriptions.
@@ -26,7 +26,7 @@ build.
 ```
 Build a space empire that never resets.
 
-Starwright is an idle game about industry. Every planet holds only some
+Accrete is an idle game about industry. Every planet holds only some
 resources, so you mine what's there, refine it through tier after tier of
 production, and ship it between worlds to build something bigger. Your empire
 grows outward across the star map, over days and weeks, and it keeps working
@@ -103,4 +103,4 @@ Every listing claim has to be true in the build you submit. Recheck this table o
 - **Ads declaration:** "No, my app does not contain ads."
 - **Privacy policy URL:** still required. A one-page "we collect nothing; saves stay on your device" policy, hosted on
   the game's site or GitHub Pages, is enough.
-- **Contact email:** use a dedicated address for the game, not a personal inbox.
+- **Contact email:** use a dedicated address for the game, not a personal inbox. Plan: an iCloud+ custom-domain address such as hello@brightworkgames.com.

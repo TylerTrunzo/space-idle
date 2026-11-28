@@ -1,15 +1,15 @@
-# Starwright brand: first concepts
+# Accrete brand: first concepts
 
 *2026-11-28. These are drafts to choose from, not final art.*
 
 ![contact sheet](concepts/contact-sheet.png)
 
-## Chosen: **C · S Orbit** as the app icon (owner, 2026-11-28)
+## Chosen: **C · A Orbit** as the app icon (owner, 2026-11-28)
 
 - **It reads at 48 px.** That's the size people actually see in search results and on the home screen. A and B blur
   into "a planet" at that size.
-- **It's ownable.** An S traced as an orbit path between two worlds ties the name, the routes and the slow build into
-  one mark. A ringed planet (A) is the most common space-game icon there is.
+- **It's ownable.** The A is drawn as an orbit arch with a small world accreting at its peak, and its crossbar is a
+  tilted cargo orbit with one ship. That puts the name, the routes and the slow build into one mark. A ringed planet (A) is the most common space-game icon there is.
 - **B reads like a Settings app.** I'd drop it.
 
 Don't throw A away: the ringed cargo route is good on the **feature graphic** (1024×500), where there's room for the
@@ -17,7 +17,7 @@ star map.
 
 ## The wordmark
 
-STARWRIGHT in **Space Grotesk Bold**, letter-spaced. The font is open source (SIL Open Font License), so it's free for
+ACCRETE in **Space Grotesk Bold**, letter-spaced. The font is open source (SIL Open Font License), so it's free for
 commercial use and can be bundled. The SVGs are converted to outlines, so they render the same everywhere without
 the font installed.
 

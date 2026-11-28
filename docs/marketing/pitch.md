@@ -1,6 +1,6 @@
 # Pitch
 
-Written with the shortlist name **Starwright**. Swap in the final name.
+Game name: **Accrete** (chosen 2026-11-28). Studio: **Brightwork Games**.
 
 ## Taglines
 
@@ -15,12 +15,12 @@ Use #5 in community posts, but never in the Play title (see store-listing.md).
 
 ## One-liner
 
-> Starwright is an idle space game about building production chains across planets that each hold only some
+> Accrete is an idle space game about building production chains across planets that each hold only some
 > resources. It never resets, and there are no ads or purchases.
 
 ## Elevator pitch (30 seconds)
 
-> Most idle games make you wipe your progress to keep growing. Starwright doesn't. You build an empire across a star
+> Most idle games make you wipe your progress to keep growing. Accrete doesn't. You build an empire across a star
 > map where every planet has different deposits, so you mine, refine and ship goods between worlds through tier
 > after tier of production. The fun is in the ratios: which building to upgrade, where to put your crew, which route is
 > the bottleneck. Check in for a few minutes a few times a day and there's always something worth doing, and while
@@ -31,7 +31,7 @@ Use #5 in community posts, but never in the Play title (see store-listing.md).
 
 ## About blurb (press kit, itch.io page, Reddit "about")
 
-> Starwright is a solo-developed idle and incremental game for Android and the web. It's built for people who
+> Accrete is a solo-developed idle and incremental game for Android and the web. It's built for people who
 > enjoy idle games in short check-ins and like production chains in strategy games. Growth is permanent: there's no
 > prestige reset. Big milestones bring a victory moment and play continues. The game is free, with no ads, no in-app
 > purchases and no premium currency. That isn't a hook: making money isn't a goal.
