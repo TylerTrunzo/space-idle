@@ -180,6 +180,43 @@ String routeLimitText(RouteLimit limit) => switch (limit) {
   RouteLimit.stopLevel => 'its stop level',
 };
 
+/// How a route stands and its sentence, from whether it is [paused]
+/// (`routePaused`) and its [throughput] (`routeThroughput`).
+///
+/// A paused route is stopped at its stop level. One that could carry
+/// nothing now is waiting, on what its binding limit names: its source's
+/// stock, room at its destination, or, for a stop-level route not paused
+/// yet, the cargo other routes have on its way, which already fills the
+/// stop level they share. Otherwise it is moving.
+({RouteStatus status, String text}) routeStatusOf({
+  required bool paused,
+  required RouteThroughput throughput,
+  required String fromName,
+  required String toName,
+  required String resourceName,
+}) {
+  if (paused) {
+    return (
+      status: RouteStatus.stopped,
+      text: 'Stopped: $toName holds its stop level',
+    );
+  }
+  if (throughput.perSec > 0) {
+    return (status: RouteStatus.moving, text: 'Moving');
+  }
+  return (
+    status: RouteStatus.waiting,
+    text: switch (throughput.binding) {
+      RouteLimit.sourceStock => 'Waiting for $resourceName at $fromName',
+      RouteLimit.destinationRoom => 'Waiting for room at $toName',
+      RouteLimit.stopLevel =>
+        "Waiting: cargo on its way fills $toName's stop level",
+      // The core keeps a rate above zero and at least one ship.
+      RouteLimit.rate || RouteLimit.ships => 'Waiting',
+    },
+  );
+}
+
 /// A route on a body's panel.
 @immutable
 final class RouteView {
@@ -374,10 +411,8 @@ BodyView? bodyView(GameController c, String bodyId) {
     for (final st in bodyFlow?.buildings ?? const <BuildingStatus>[])
       st.buildingId: st,
   };
-  // Worked out once, and only for a body with routes.
-  Map<String, RouteThroughput>? tp;
-  Map<String, RouteThroughput> throughputs() =>
-      tp ??= routeThroughputs(s, content);
+  // The controller works them out once per state, for every panel.
+  Map<String, RouteThroughput> throughputs() => c.throughputs;
   return BodyView(
     id: body.id,
     name: body.name,
@@ -521,20 +556,13 @@ RouteView _route(
   final to = s.body(r.toBodyId);
   final res = c.content.resources[r.resourceId]!.name;
   final t = throughputs[r.id] ?? (perSec: 0.0, binding: RouteLimit.rate);
-  final RouteStatus status;
-  final String statusText;
-  if (routePaused(s, c.content, r)) {
-    status = RouteStatus.stopped;
-    statusText = 'Stopped: ${to.name} holds its stop level';
-  } else if (t.perSec <= 0) {
-    status = RouteStatus.waiting;
-    statusText = t.binding == RouteLimit.destinationRoom
-        ? 'Waiting for room at ${to.name}'
-        : 'Waiting for $res at ${from.name}';
-  } else {
-    status = RouteStatus.moving;
-    statusText = 'Moving';
-  }
+  final (:status, text: statusText) = routeStatusOf(
+    paused: routePaused(s, c.content, r),
+    throughput: t,
+    fromName: from.name,
+    toName: to.name,
+    resourceName: res,
+  );
   final stop = r.stopAtDestination;
   return RouteView(
     id: r.id,

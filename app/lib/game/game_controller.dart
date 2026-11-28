@@ -122,6 +122,7 @@ class GameController extends ChangeNotifier {
 
   double _sinceAutosave = 0;
   FlowReport? _flow;
+  Map<String, RouteThroughput>? _throughputs;
   String? _lastError;
   String? _brokenSaveText;
   final List<OfflineSummary> _pendingAwaySummaries = [];
@@ -134,6 +135,19 @@ class GameController extends ChangeNotifier {
   /// The player's flow report for the current state, rebuilt lazily after
   /// every tick, command or load.
   FlowReport get flow => _flow ??= buildFlowReport(_state, content, playerId);
+
+  /// Every route's throughput and the limit that binds it
+  /// ([routeThroughputs]) for the current state: worked out lazily once
+  /// after every tick, command or load, like [flow], however many panels
+  /// read it.
+  Map<String, RouteThroughput> get throughputs =>
+      _throughputs ??= routeThroughputs(_state, content);
+
+  /// Drops the reports worked out from the state, after it changed.
+  void _dropReports() {
+    _flow = null;
+    _throughputs = null;
+  }
 
   /// Id of the player's faction.
   String get playerId => _state.factions.firstWhere((f) => f.isPlayer).id;
@@ -216,7 +230,7 @@ class GameController extends ChangeNotifier {
         return LoadFailed(text, reason);
       case _Good(:final state, :final savedAt):
         _state = state;
-        _flow = null;
+        _dropReports();
         _syncedAt = savedAt ?? _clock.now();
         _canWrite = true;
         _catchUp();
@@ -233,7 +247,7 @@ class GameController extends ChangeNotifier {
     switch (result) {
       case CommandOk():
         _lastError = null;
-        _flow = null;
+        _dropReports();
       case CommandFailed(:final message):
         _lastError = message;
     }
@@ -246,7 +260,7 @@ class GameController extends ChangeNotifier {
   void tickSeconds(double seconds) {
     if (!seconds.isFinite || seconds <= 0) return;
     engine.advance(_state, seconds);
-    _flow = null;
+    _dropReports();
     _sinceAutosave += seconds;
     if (_sinceAutosave >= autosaveSeconds) _autosave();
     _notify();
@@ -356,7 +370,7 @@ class GameController extends ChangeNotifier {
     _syncedAt = now;
     if (away <= 0) return null;
     final summary = engine.catchUpOffline(_state, away);
-    _flow = null;
+    _dropReports();
     if (away < awaySummarySeconds) return null;
     _pendingAwaySummaries.add(summary);
     return summary;
@@ -364,7 +378,7 @@ class GameController extends ChangeNotifier {
 
   void _replace(GameState state) {
     _state = state;
-    _flow = null;
+    _dropReports();
     _syncedAt = _clock.now();
     _canWrite = true;
     _brokenSaveText = null;

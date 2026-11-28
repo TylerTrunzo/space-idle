@@ -173,6 +173,58 @@ void main() {
       expect(v.stop, isNull);
     });
 
+    group('routeStatusOf says what a route waits on', () {
+      ({RouteStatus status, String text}) of(
+        RouteLimit binding, {
+        double perSec = 0,
+        bool paused = false,
+      }) => routeStatusOf(
+        paused: paused,
+        throughput: (perSec: perSec, binding: binding),
+        fromName: 'Kora',
+        toName: 'Brine',
+        resourceName: 'Iron Ore',
+      );
+
+      test('paused: stopped at the stop level', () {
+        final s = of(RouteLimit.stopLevel, paused: true);
+        expect(s.status, RouteStatus.stopped);
+        expect(s.text, 'Stopped: Brine holds its stop level');
+      });
+
+      test('nothing at the source', () {
+        final s = of(RouteLimit.sourceStock);
+        expect(s.status, RouteStatus.waiting);
+        expect(s.text, 'Waiting for Iron Ore at Kora');
+      });
+
+      test('no room at the destination', () {
+        final s = of(RouteLimit.destinationRoom);
+        expect(s.status, RouteStatus.waiting);
+        expect(s.text, 'Waiting for room at Brine');
+      });
+
+      test("other routes' cargo fills the stop level, not paused yet", () {
+        final s = of(RouteLimit.stopLevel);
+        expect(s.status, RouteStatus.waiting);
+        expect(s.text, "Waiting: cargo on its way fills Brine's stop level");
+      });
+
+      test('carrying anything is moving', () {
+        expect(of(RouteLimit.rate, perSec: 0.5).status, RouteStatus.moving);
+        expect(of(RouteLimit.rate, perSec: 0.5).text, 'Moving');
+      });
+    });
+
+    test('a route to a body no longer owned waits for room there', () {
+      route();
+      c.state.body('brine').ownerId = null;
+      c.tickSeconds(1);
+      final v = bodyView(c, 'kora')!.routesOut.single;
+      expect(v.status, RouteStatus.waiting);
+      expect(v.statusText, 'Waiting for room at Brine');
+    });
+
     test('a running route is moving', () {
       route();
       c.tickSeconds(1);

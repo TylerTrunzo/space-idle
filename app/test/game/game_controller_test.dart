@@ -442,6 +442,31 @@ void main() {
       expect(identical(c.flow, before), isFalse);
       expect(c.playerId, 'player');
     });
+
+    test('route throughputs: once per state, rebuilt after a tick', () async {
+      final c = _controller(store, clock);
+      await c.start();
+      c.state.body('brine').ownerId = 'player';
+      c.run(
+        CreateRouteCommand(
+          'player',
+          'kora',
+          'brine',
+          'iron_ore',
+          BigNum.from(1),
+          1,
+        ),
+      );
+      final first = c.throughputs;
+      expect(identical(c.throughputs, first), isTrue, reason: 'cached');
+      expect(first.keys, [c.state.routes.single.id]);
+      expect(
+        first.values.single.perSec,
+        routeThroughputs(c.state, content).values.single.perSec,
+      );
+      c.tickSeconds(1);
+      expect(identical(c.throughputs, first), isFalse, reason: 'a new state');
+    });
   });
 
   test('a claim started before closing completes during catch-up '
