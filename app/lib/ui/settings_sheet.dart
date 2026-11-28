@@ -49,6 +49,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
   /// While a load or new game runs, so it is not started twice.
   bool _busy = false;
 
+  /// Set when a load or new game went through but its save didn't.
+  String? _saveFailed;
+
   @override
   void dispose() {
     _paste.dispose();
@@ -76,18 +79,23 @@ class _SettingsSheetState extends State<SettingsSheet> {
     setState(() {
       _busy = true;
       _confirmLoad = false;
+      _saveFailed = null;
     });
-    final result = await c.importSave(_paste.text.trim());
+    ImportResult? result;
+    try {
+      result = await c.importSave(_paste.text.trim());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
     if (!mounted) return;
     switch (result) {
-      case Imported():
+      case Imported(saved: true):
         navigator.pop();
         messenger?.showSnackBar(const SnackBar(content: Text('Save loaded')));
+      case Imported(saved: false):
+        setState(() => _saveFailed = _unsaved('The save is loaded'));
       case ImportFailed(:final reason):
-        setState(() {
-          _busy = false;
-          _loadError = "Couldn't load that save: $reason";
-        });
+        setState(() => _loadError = "Couldn't load that save: $reason");
     }
   }
 
@@ -97,14 +105,28 @@ class _SettingsSheetState extends State<SettingsSheet> {
     setState(() {
       _busy = true;
       _confirmNew = false;
+      _saveFailed = null;
     });
-    await c.newGame();
+    var saved = false;
+    try {
+      saved = await c.newGame();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
     if (!mounted) return;
+    if (!saved) {
+      setState(() => _saveFailed = _unsaved('The new game has started'));
+      return;
+    }
     navigator.pop();
     messenger?.showSnackBar(
       const SnackBar(content: Text('Started a new game')),
     );
   }
+
+  static String _unsaved(String what) =>
+      "$what, but it couldn't be saved yet. It's playing, and saving will "
+      'try again.';
 
   @override
   Widget build(BuildContext context) {
@@ -260,6 +282,23 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     ),
                     const SizedBox(width: 6),
                     Expanded(child: Text(e)),
+                  ],
+                ),
+              ),
+            if (_saveFailed case final why?)
+              Padding(
+                key: const ValueKey('settings-save-failed'),
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.save_outlined,
+                      size: 18,
+                      color: Palette.amber,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(why)),
                   ],
                 ),
               ),

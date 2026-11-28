@@ -18,13 +18,12 @@ const _home = 'kora';
 const _affordable = BuildCommand('player', _home, 'smelter');
 const _tooDear = BuildCommand('player', _home, 'fusion_refinery');
 
-GameController _controller(MemorySaveStore store, FakeClock clock) =>
-    GameController(
-      content: content,
-      store: store,
-      clock: clock,
-      newGameSeed: 7,
-    );
+GameController _controller(SaveStore store, FakeClock clock) => GameController(
+  content: content,
+  store: store,
+  clock: clock,
+  newGameSeed: 7,
+);
 
 /// The save text inside the envelope [store] holds.
 String _storedSave(MemorySaveStore store) =>
@@ -810,6 +809,45 @@ void main() {
       );
       expect(SaveCodec.encode(c.state), before);
       expect(store.writes, writes);
+    });
+
+    test('an import whose write fails still replaces the game, says so, '
+        'and throws nothing', () async {
+      final failing = _FailingWriteStore()..failWrites = false;
+      final c = _controller(failing, clock);
+      await c.start();
+      failing.failWrites = true;
+      final good = GameEngine(content).newGame(3)
+        ..faction('player').credits = BigNum.from(4321);
+      final reported = <FlutterErrorDetails>[];
+      final old = FlutterError.onError;
+      FlutterError.onError = reported.add;
+      addTearDown(() => FlutterError.onError = old);
+      final result = await c.importSave(SaveCodec.encode(good));
+      expect(result, isA<Imported>().having((r) => r.saved, 'saved', isFalse));
+      expect(c.state.faction('player').credits, BigNum.from(4321));
+      expect(reported, hasLength(1));
+      failing.failWrites = false;
+      final ok = await c.importSave(SaveCodec.encode(good));
+      expect(ok, isA<Imported>().having((r) => r.saved, 'saved', isTrue));
+    });
+
+    test('a new game whose write fails still starts, says so, and throws '
+        'nothing', () async {
+      final failing = _FailingWriteStore()..failWrites = false;
+      final c = _controller(failing, clock);
+      await c.start();
+      c.state.faction('player').credits = BigNum.from(99999);
+      failing.failWrites = true;
+      final reported = <FlutterErrorDetails>[];
+      final old = FlutterError.onError;
+      FlutterError.onError = reported.add;
+      addTearDown(() => FlutterError.onError = old);
+      expect(await c.newGame(), isFalse);
+      expect(c.state.faction('player').credits, isNot(BigNum.from(99999)));
+      expect(reported, hasLength(1));
+      failing.failWrites = false;
+      expect(await c.newGame(), isTrue);
     });
 
     test('a successful import unlocks saving after a failed load', () async {

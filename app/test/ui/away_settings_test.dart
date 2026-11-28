@@ -345,6 +345,61 @@ void main() {
       expect(find.text('Save loaded'), findsOneWidget);
     });
 
+    testWidgets('a load whose write fails still loads, frees the sheet and '
+        'says the save is pending', (tester) async {
+      final store = _WriteFails(saved(newGame()));
+      await boot(tester, store: store);
+      store.fail = true;
+      final other = newGame()..faction(_p).credits = BigNum.from(12345);
+      await open(tester);
+      await tester.enterText(
+        _key('settings-load-field'),
+        SaveCodec.encode(other),
+      );
+      await tester.tap(_key('settings-load'));
+      await tester.pump();
+      await tester.tap(_key('settings-load-confirm'));
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isA<StateError>(), reason: 'reported');
+      expect(
+        _controllerIn(tester).state.faction(_p).credits,
+        BigNum.from(12345),
+      );
+      expect(
+        textOf(tester, _key('settings-save-failed')),
+        contains("couldn't be saved yet"),
+      );
+      final load = tester.widget<ButtonStyleButton>(_key('settings-load'));
+      expect(load.onPressed, isNotNull, reason: 'not stuck busy');
+    });
+
+    testWidgets('a new game whose write fails still starts and says so', (
+      tester,
+    ) async {
+      final store = _WriteFails(saved(newGame()));
+      await boot(tester, store: store);
+      _controllerIn(tester).state.faction(_p).credits = BigNum.from(99999);
+      store.fail = true;
+      await open(tester);
+      await tester.tap(_key('settings-new-game'));
+      await tester.pump();
+      await tester.tap(_key('settings-new-game-confirm'));
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isA<StateError>(), reason: 'reported');
+      expect(
+        _controllerIn(tester).state.faction(_p).credits,
+        isNot(BigNum.from(99999)),
+      );
+      expect(
+        textOf(tester, _key('settings-save-failed')),
+        contains("couldn't be saved yet"),
+      );
+      final again = tester.widget<ButtonStyleButton>(_key('settings-new-game'));
+      expect(again.onPressed, isNotNull, reason: 'not stuck busy');
+    });
+
     testWidgets('Load save of garbage shows why, and changes nothing', (
       tester,
     ) async {
@@ -461,4 +516,21 @@ String textOf(WidgetTester tester, Finder f) {
       )
       .map((t) => t.text.toPlainText());
   return [...texts, ...rich].join(' | ');
+}
+
+/// A slot holding [text] whose writes throw while [fail] is set.
+final class _WriteFails implements SaveStore {
+  _WriteFails(this.text);
+
+  String? text;
+  bool fail = false;
+
+  @override
+  Future<String?> read() async => text;
+
+  @override
+  Future<void> write(String t) async {
+    if (fail) throw StateError('storage full');
+    text = t;
+  }
 }

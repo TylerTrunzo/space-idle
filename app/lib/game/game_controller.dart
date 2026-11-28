@@ -46,10 +46,15 @@ sealed class ImportResult {
   const ImportResult();
 }
 
-/// The imported game replaced the current one and was saved.
+/// The imported game replaced the current one; [saved] says whether its
+/// first write went through (a failed one is reported, and the next
+/// save tries again).
 final class Imported extends ImportResult {
   /// Creates the result.
-  const Imported();
+  const Imported({this.saved = true});
+
+  /// Whether the imported game was written to the save slot.
+  final bool saved;
 }
 
 /// The text was not a save this build can run; nothing changed.
@@ -441,12 +446,14 @@ class GameController extends ChangeNotifier {
 
   /// [save] where the game in memory is already current ([start],
   /// [resume]): a failed write is reported and play goes on; the next save
-  /// retries.
-  Future<void> _saveOrReport(String doing) async {
+  /// retries. True when the write went through.
+  Future<bool> _saveOrReport(String doing) async {
     try {
       await save();
+      return true;
     } catch (e, st) {
       _reportError(e, st, doing);
+      return false;
     }
   }
 
@@ -548,17 +555,23 @@ class GameController extends ChangeNotifier {
         return ImportFailed(reason);
       case _Good(:final state):
         _replace(state);
-        await save();
-        return const Imported();
+        // The game is replaced either way; a failed write is reported and
+        // the next save tries again.
+        return Imported(
+          saved: await _saveOrReport('while saving an imported game'),
+        );
     }
   }
 
   /// Replaces the game with a new one and saves it, also over a broken save.
   /// Waits for a pending [start] first, as [importSave] does.
-  Future<void> newGame() async {
+  ///
+  /// Never throws: a failed write is reported and the new game plays on,
+  /// the next save trying again. True when the write went through.
+  Future<bool> newGame() async {
     await _startFinished();
     _replace(engine.newGame(_nextSeed()));
-    await save();
+    return _saveOrReport('while saving a new game');
   }
 
   /// Starts the live 1 s timer; each fire ticks the wall time since the

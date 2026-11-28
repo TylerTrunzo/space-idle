@@ -131,13 +131,8 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
   /// the new game plays on in memory: the next save tries again.
   Future<void> _newGame() async {
     final c = _controller;
-    var saved = true;
-    try {
-      await c.newGame();
-    } catch (e, st) {
-      _report(e, st, 'while saving a new game');
-      saved = false;
-    }
+    // A failed write is reported by the controller; the game plays on.
+    final saved = await c.newGame();
     // Retry may have replaced the controller while the write was pending:
     // this new game is no longer the one on screen.
     if (!mounted || c != _controller) return;
