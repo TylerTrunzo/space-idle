@@ -821,6 +821,53 @@ void main() {
   });
 
   group('catchUpOffline', () {
+    group('pays a stage at the minute 1 s steps do, wherever it starts', () {
+      /// A new game an hour in, Kora's steel auto-sold, whose Orbital
+      /// Station, fed credits on their own with no reserve, owes only the
+      /// credits Kora's sales earn in 50 s; at [offset] seconds past a
+      /// whole minute, its credits spent.
+      GameState owing50s(double offset) {
+        final s = engine.newGame(1);
+        final f = s.faction('player')..contractRefillAt.clear();
+        engine.apply(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+        engine.apply(
+          s,
+          const SetMegaprojectAutoCommand(
+            'player',
+            'orbital_station',
+            credits: true,
+          ),
+        );
+        engine.advance(s, 3600 + offset, maxStep: 1);
+        final income = buildFlowReport(s, c, 'player').creditsPerSec;
+        expect(income > n(0), isTrue);
+        final station = c.megaprojects['orbital_station']!;
+        final cost = megaprojectCost(c, station, 0);
+        f
+          ..credits = n(0)
+          ..autoPayReserve = n(0)
+          ..megaprojectProgress['orbital_station'] = {
+            ...cost,
+            'credits': cost['credits']! - income.mulDouble(50),
+          };
+        return s;
+      }
+
+      double finishOf(GameState s) => s.projects
+          .singleWhere((p) => p.kind == ProjectKind.megaprojectStage)
+          .finishAt;
+
+      for (final offset in [0.0, 17.0]) {
+        test('${offset.round()} s past a minute', () {
+          final away = owing50s(offset);
+          final live = away.copy();
+          engine.catchUpOffline(away, 600);
+          engine.advance(live, 600, maxStep: 1);
+          expect(finishOf(away), finishOf(live));
+        });
+      }
+    });
+
     test('a contract hold over a 6 h catch-up matches 1 s steps', () {
       final s = engine.newGame(1);
       final f = s.faction('player')..contractRefillAt.clear();

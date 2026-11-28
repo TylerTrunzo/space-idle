@@ -200,6 +200,8 @@ final class ScriptRunner {
     'megaprojectId': ?n.megaprojectId,
     'shareOfSales': ?n.shareOfSales,
     if (n.heldByKeep case final v?) 'heldByKeep': _num(v),
+    'contractId': ?n.contractId,
+    if (n.heldForContract case final v?) 'heldForContract': _num(v),
     'routeId': ?n.routeId,
     'binding': ?n.binding?.name,
     if (n.routePerSec case final v?) 'routePerSec': _num(BigNum.from(v)),
@@ -215,8 +217,10 @@ final class ScriptRunner {
   /// What [n] says to the player: the engine's message for one building or
   /// store; for a group of buildings ([Bottleneck.count] above 1), "17
   /// Station Docks on Cinder are running at 40%: not enough Hull Plate";
-  /// for the megaproject kinds, what is taken or held back, in numbers; for
-  /// a route-limited shortage, the route's limit and what raises it.
+  /// for the megaproject kinds, what is taken or held back, in numbers
+  /// ("Contract #c205 holds 104K Survey Drones the Orbital Station
+  /// needs"); for a route-limited shortage, the route's limit and what
+  /// raises it.
   ///
   /// Public so the bot session's bottleneck log reads as the CLI does
   /// (`runBotSession`), and for tests.
@@ -239,6 +243,12 @@ final class ScriptRunner {
             '${res(n.resourceId!)}, but ${state.body(n.bodyId!).name} '
             'keeps ${formatNumber(n.heldByKeep!)} of it back for its '
             'auto-sell keepAtLeast$keep';
+      case BottleneckKind.contractBlocksDelivery:
+        final held = n.heldForContract!;
+        final what = res(n.resourceId!);
+        return 'Contract #${n.contractId} holds ${formatNumber(held)} '
+            '${held == BigNum.from(1) ? what : plural(what)} the '
+            '${_megaprojectName(n.megaprojectId!)} needs';
       case BottleneckKind.storageFull when n.fromAbsence:
         return '${state.body(n.bodyId!).name} storage filled up with '
             '${res(n.resourceId!)} while you were away: output was wasted';

@@ -50,7 +50,10 @@ import 'production.dart';
 /// is exempt from the cap and pays at least `firstContractMinReward`.
 ///
 /// When nothing qualifies, the refill stays due and is used once something
-/// does. Whether a resource is made at all, and on the board, is
+/// does. Nor does a contract ask for a good that a megaproject the faction
+/// feeds goods on its own still owes now ([megaprojectFedNeeds]): it is a
+/// side job and never holds back what a stage being fed needs. Whether a
+/// resource is made at all, and on the board, is
 /// remembered per faction, for as long as the resources it has made
 /// (`lifetimeProduced > 0`) and those on its board stay the same, so a
 /// refill left waiting through a long catch-up costs one cheap comparison
@@ -78,16 +81,17 @@ void stepContracts(GameState s, Content c, double now) {
         f.contractRefillAt.first <= now) {
       final key = _EligibilityKey.of(c, f);
       if (_nothingEligible[f]?.matches(key) ?? false) break;
-      final candidates = _candidates(c, f);
-      if (candidates.isEmpty) {
+      final all = _candidates(c, f);
+      if (all.isEmpty) {
         _nothingEligible[f] = key;
         break;
       }
-      if (report == null &&
-          (!_dueNowOrOnMinute(s, f, now) ||
-              !_couldQualify(s, c, f, candidates))) {
-        break;
-      }
+      if (report == null && !_dueNowOrOnMinute(s, f, now)) break;
+      // Left out after the key is remembered: what the megaprojects owe
+      // changes without the key.
+      final candidates = _notOwed(s, c, f, all);
+      if (candidates.isEmpty) break;
+      if (report == null && !_couldQualify(s, c, f, candidates)) break;
       final made = report ??= buildFlowReport(s, c, f.id);
       final steady = [
         for (final (t, ids) in candidates)
@@ -404,7 +408,8 @@ const int _fallbackGoods = 3;
 
 /// Of [steady], each template with the resources [f] makes fast enough
 /// for it, those worth an order: whose achievable quantity ([_ceiling] at
-/// their steady gross rate in [report]) sells, at the current price, for
+/// their steady gross rate in [report]) sells, at what [f]'s sales of it
+/// earn now ([salePrice]: the market price with its sale-price bonus), for
 /// at least the template's `quantityIncomeSecondsMin` of [income]. So a
 /// contract can always ask for goods worth 10 minutes of play; a cheap
 /// bulk good late in the game, of which the faction can store only
@@ -477,6 +482,29 @@ BigNum twoSignificantFigures(BigNum v) {
   // The mantissa is in [1, 10), so tenths of it are the second figure.
   final figures = (v.mantissa * 10).round();
   return BigNum.parse('${figures}e${v.exponent - 1}');
+}
+
+/// [candidates] without the goods a megaproject [f] feeds on its own
+/// still owes ([megaprojectFedNeeds]), templates left with none left out:
+/// a contract is a side job and never competes with a stage the player is
+/// feeding.
+List<(ContractTemplateDef, List<String>)> _notOwed(
+  GameState s,
+  Content c,
+  FactionState f,
+  List<(ContractTemplateDef, List<String>)> candidates,
+) {
+  final owed = megaprojectFedNeeds(s, c, f);
+  if (owed.isEmpty) return candidates;
+  return [
+    for (final (t, ids) in candidates)
+      if ([
+            for (final id in ids)
+              if (!owed.containsKey(id)) id,
+          ]
+          case final kept when kept.isNotEmpty)
+        (t, kept),
+  ];
 }
 
 /// Each template, in content order, with the resources a contract from it

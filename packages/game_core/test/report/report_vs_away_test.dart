@@ -58,4 +58,35 @@ void main() {
       );
     });
   }
+
+  // The casual bot's states at the 144 h and 180 h check-ins, seed 1,
+  // played on the shipped content at bab81a2 (before contracts left the
+  // goods of a fed megaproject alone). The Orbital Station is fed survey
+  // drones near ready and a contract for drones holds every one. With the
+  // board cleared, the report's short run once handed those drones to the
+  // station, which then never happened in play, and read 52% and 58% low.
+  for (final hours in [144, 180]) {
+    test('with a contract holding a fed megaproject\'s goods, credits a '
+        'second at $hours h are within 8% of what 2.5 h away earns', () {
+      final c = shippedContent();
+      final s =
+          (SaveCodec.decode(
+                    File(
+                      'test/fixtures/casual_s1_${hours}h.json',
+                    ).readAsStringSync(),
+                    c,
+                  )
+                  as SaveOk)
+              .state;
+      final shown = buildFlowReport(s, c, 'player').creditsPerSec.toDouble();
+      final away = GameEngine(c).catchUpOffline(s, 9000, capSeconds: 9000);
+      final earned = away.creditsEarned.toDouble() / 9000;
+      expect(earned, greaterThan(0));
+      expect(
+        shown,
+        closeTo(earned, earned * 0.08),
+        reason: '$shown vs $earned',
+      );
+    });
+  }
 }

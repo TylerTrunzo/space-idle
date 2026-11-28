@@ -170,12 +170,18 @@ SaleResult sell(
 /// to resource id to units, a missing entry meaning nothing. The flow
 /// report uses it to sell only what a step makes (see `buildFlowReport`).
 /// [cache], when given, is the step's [StepCache]; one is made otherwise.
+/// [contractHolds], when given, is what each faction's rules hold back for
+/// its open contracts instead, faction id to body id to resource id to
+/// units (a missing entry meaning nothing): the report's short run holds
+/// only what was held when it began ([contractStockHolds]), as play does
+/// once a hold is full.
 void stepMarket(
   GameState s,
   Content c,
   double dt, {
   Map<String, Map<String, BigNum>>? limits,
   StepCache? cache,
+  Map<String, Map<String, Map<String, BigNum>>>? contractHolds,
 }) {
   final k = cache ?? StepCache(s, c);
   final horizon = math.max(dt, c.rules.shipmentMergeSeconds);
@@ -185,8 +191,10 @@ void stepMarket(
   final queued = <String, Map<String, BigNum>>{};
   for (final f in s.factions) {
     if (f.autoSell.isEmpty) continue;
-    final holds = _contractHolds(s, k, f);
-    final fed = _megaprojectHolds(s, c, f);
+    final holds = contractHolds == null
+        ? _contractHolds(s, k, f)
+        : contractHolds[f.id] ?? const <String, Map<String, BigNum>>{};
+    final fed = megaprojectFedNeeds(s, c, f);
     for (final rule in f.autoSell) {
       final body = s.body(rule.bodyId);
       if (body.ownerId != f.id) continue;
@@ -301,7 +309,7 @@ AutoSellKeep autoSellKeep(
             _zero;
   final fed = f == null
       ? _zero
-      : _megaprojectHolds(s, c, f)[rule.resourceId] ?? _zero;
+      : megaprojectFedNeeds(s, c, f)[rule.resourceId] ?? _zero;
   return _keep(
     storageCap(s, c, body),
     rule.keepAtLeast,
@@ -359,12 +367,14 @@ Map<String, BigNum> _contractNeeds(FactionState f) {
 /// room each has left below its storage cap, for what comes in. Each holds
 /// at most its cap. So an order larger than one store, which contracts may
 /// ask for (they are sized by all of a faction's stores together), can be
-/// filled from several. Written in body order of the fullest first.
+/// filled from several. Written in body order of the fullest first. With
+/// [withRoom] false, only the first part: what each holds now.
 Map<String, Map<String, BigNum>> _contractHolds(
   GameState s,
   StepCache cache,
-  FactionState f,
-) {
+  FactionState f, {
+  bool withRoom = true,
+}) {
   if (f.contracts.isEmpty) return const {};
   final need = _contractNeeds(f);
   // Resource id to the bodies with a rule on it, in rule order.
@@ -391,7 +401,7 @@ Map<String, Map<String, BigNum>> _contractHolds(
     // First the goods each body has, so none of what is owed sells; then
     // what is still owed as room each has left below its cap, for what
     // comes in.
-    for (final room in [false, true]) {
+    for (final room in [false, if (withRoom) true]) {
       for (final body in fullest) {
         if (left <= _zero) break;
         final stock = (body.stock[id] ?? _zero).max(_zero);
@@ -411,6 +421,18 @@ Map<String, Map<String, BigNum>> _contractHolds(
   }
   return holds;
 }
+
+/// Body id to resource id to what [f]'s auto-sell rules hold back now for
+/// its open contracts of the goods the bodies already hold: the stock part
+/// of what [stepMarket] holds (the need less what bodies with no rule on
+/// it hold, the fullest first), without the room kept for what comes in.
+/// So a run that holds only this ([stepMarket]'s `contractHolds`) sells
+/// what is made from then on, as play does once every hold is full.
+Map<String, Map<String, BigNum>> contractStockHolds(
+  GameState s,
+  Content c,
+  FactionState f,
+) => _contractHolds(s, StepCache(s, c), f, withRoom: false);
 
 /// Sorts [bodies] by what they hold of [id], most first, keeping their
 /// order on a tie.
@@ -433,8 +455,13 @@ void _byStockDescending(List<BodyState> bodies, String id) {
 /// one's [megaprojectRemaining] while it takes deliveries
 /// ([megaprojectTakesDeliveries]), in content order. Auto-sell holds it
 /// back on every body with a rule on it, so what is made between the
-/// minutes auto-delivery runs is there for it, however short the steps.
-Map<String, BigNum> _megaprojectHolds(GameState s, Content c, FactionState f) {
+/// minutes auto-delivery runs is there for it, however short the steps;
+/// and no contract is posted for it (`stepContracts`).
+Map<String, BigNum> megaprojectFedNeeds(
+  GameState s,
+  Content c,
+  FactionState f,
+) {
   if (f.megaprojectAuto.isEmpty) return const {};
   final hold = <String, BigNum>{};
   for (final m in c.megaprojects.values) {
@@ -520,6 +547,22 @@ final class DeliveryKeeps {
     if (free < _one) return _zero;
     final kept = free - spare(body, resourceId).max(_zero);
     return kept < _one ? _zero : kept;
+  }
+
+  /// Whole units of [resourceId] [body] could hand over if the faction's
+  /// open contracts held none of it: [spare] with no contract hold, never
+  /// below zero.
+  BigNum spareWithoutContracts(BodyState body, String resourceId) {
+    final held = body.stock[resourceId] ?? _zero;
+    final keep = _keep(
+      _cache.cap(body),
+      _keepAtLeast[body.id]?[resourceId] ?? _zero,
+      _cache.use(body, _horizon),
+      resourceId,
+      _zero,
+      _zero,
+    ).keeps;
+    return (held - keep).floor().max(_zero);
   }
 
   BigNum _hold(BodyState body, String id) =>
