@@ -836,11 +836,13 @@ Map<String, Map<String, BigNum>> _cargoSupply(
 /// `runCaps`), and a report a few seconds before a lot lands reads as one
 /// a few seconds after.
 ///
-/// Nor at more than a full step of play gives them, played on a copy of
-/// [s] whose stores hold a full step of that supply: play shares an input
-/// out by recipe depth, shallow first ([stepProduction]), so a deeper
-/// building can get none of a short input another building on its body
-/// uses first, whatever its part of the store's use.
+/// That share is then replaced by what a full step of play gives them,
+/// played on a copy of [s] whose stores hold a full step of that supply:
+/// play shares an input out by recipe depth, shallow first
+/// ([stepProduction]), so a deeper building can get none of a short input
+/// another building on its body uses first, whatever its part of the
+/// store's use, and the shallower one more than its part. Any other
+/// building fed by cargo runs at no more than it ran in that step.
 Map<String, RunCap> _fullStepCaps(
   GameState s,
   Content c,
@@ -852,6 +854,8 @@ Map<String, RunCap> _fullStepCaps(
   final eff = crewEff ?? crewEfficiency(s, c, factionId);
   final bonuses = bonusesFor(s, c, factionId);
   final caps = <String, RunCap>{};
+  // Store keys (body/resource) its supply cannot keep up with.
+  final short = <String>{};
   for (final MapEntry(key: id, value: got) in supply.entries) {
     final body = s.body(id);
     final use = <String, BigNum>{};
@@ -879,6 +883,9 @@ Map<String, RunCap> _fullStepCaps(
             res: math.max(0, r),
     };
     if (share.isEmpty) continue;
+    for (final res in share.keys) {
+      short.add('$id/$res');
+    }
     for (final b in body.buildings) {
       if (!runsRecipe(c.buildings[b.defId]!)) continue;
       RunCap? cap;
@@ -894,38 +901,128 @@ Map<String, RunCap> _fullStepCaps(
   if (caps.isEmpty) return caps;
   // That share assumes every building of a store gets its part; play
   // runs the shallower recipes first ([stepProduction]), which can take a
-  // short input before the deeper ones see any. So a full step of play is
-  // run on a copy, its stores holding a full step of their supply, and no
-  // building fed by cargo runs faster than it ran there.
+  // short input before the deeper ones see any, and so get more than their
+  // part. So full steps of play are run on a copy, its stores getting
+  // their supply as lots ([_lotSchedule]). A building on a short store runs
+  // at its mean run fraction over those steps, above its part or below;
+  // any other building fed by cargo runs no faster than that.
+  final (lots, steps) = _lotSchedule(s, factionId, supply, short);
   final step = s.copy()..shipments.clear();
   for (final MapEntry(key: id, value: got) in supply.entries) {
     final stock = step.body(id).stock;
-    for (final MapEntry(key: res, value: v) in got.entries) {
-      stock[res] = v.mulDouble(_fullStepSeconds);
+    for (final res in got.keys) {
+      stock[res] = const BigNum.zero();
     }
   }
-  stepProduction(
-    step,
-    c,
-    _fullStepSeconds,
-    crewEfficiencyOf: crewEff == null ? const {} : {factionId: crewEff},
-  );
-  for (final MapEntry(key: id, value: got) in supply.entries) {
-    for (final b in step.body(id).buildings) {
-      final def = c.buildings[b.defId]!;
-      if (!runsRecipe(def) || !def.inputs.keys.any(got.containsKey)) continue;
-      final limit = b.lastLimitReason;
-      if (limit == null || !limit.startsWith('input:')) continue;
-      final now = caps[b.id];
-      if (now == null || b.lastRunFraction < now.fraction) {
-        caps[b.id] = (
-          fraction: b.lastRunFraction,
-          inputId: limit.substring('input:'.length),
-        );
+  final ran = <String, double>{};
+  final held = <String, String>{};
+  for (var t = 0; t < steps; t++) {
+    for (final (id, res, lot, at) in lots) {
+      if (!at.contains(t)) continue;
+      final stock = step.body(id).stock;
+      stock[res] = (stock[res] ?? const BigNum.zero()) + lot;
+    }
+    stepProduction(
+      step,
+      c,
+      _fullStepSeconds,
+      crewEfficiencyOf: crewEff == null ? const {} : {factionId: crewEff},
+    );
+    for (final MapEntry(key: id, value: got) in supply.entries) {
+      for (final b in step.body(id).buildings) {
+        final def = c.buildings[b.defId]!;
+        if (!runsRecipe(def) || !def.inputs.keys.any(got.containsKey)) {
+          continue;
+        }
+        ran[b.id] = (ran[b.id] ?? 0) + b.lastRunFraction / steps;
+        final limit = b.lastLimitReason;
+        if (limit != null && limit.startsWith('input:')) {
+          held[b.id] = limit.substring('input:'.length);
+        }
       }
     }
   }
+  for (final MapEntry(key: id, value: fraction) in ran.entries) {
+    final input = held[id];
+    final now = caps[id];
+    if (now != null) {
+      // On a short store: the steps' run fraction, whichever way it moves
+      // the share, held back by the input that held it there.
+      caps[id] = (fraction: fraction, inputId: input ?? now.inputId);
+    } else if (input != null && fraction < 1) {
+      caps[id] = (fraction: fraction, inputId: input);
+    }
+  }
   return caps;
+}
+
+/// Most full steps [_fullStepCaps] plays: a store whose lots land less
+/// often is given lots of this many steps' supply.
+const int _maxLotSteps = 10;
+
+/// How [_fullStepCaps]'s copy gets each store's [supply] ([_cargoSupply]):
+/// the steps it plays, and per store the lot that lands and the steps it
+/// lands at (from 0), so the steps get exactly a full step of the supply
+/// each, all told.
+///
+/// A store gets a full step of its supply each step, in one step when
+/// every store does, unless it is [short] (a store key, `body/resource`,
+/// whose supply cannot keep up with its use) and its largest lot (in
+/// flight on a route of [factionId]'s, or the stock it holds, since
+/// nothing is on its way to a store a lot just filled) is bigger than
+/// that. Such a store lands one lot every so many steps ([_maxLotSteps] at
+/// most): a real 60 s tick as a lot lands runs the shallow consumers on a
+/// minute of their use and leaves the deeper ones the rest, and the steps
+/// between run on what is left, where one step of the average supply
+/// would give the shallow ones all of it. A store that keeps up runs its
+/// buildings as fast either way, so it is not worth the steps.
+(List<(String, String, BigNum, Set<int>)>, int) _lotSchedule(
+  GameState s,
+  String factionId,
+  Map<String, Map<String, BigNum>> supply,
+  Set<String> short,
+) {
+  final largest = <String, BigNum>{};
+  final routes = {for (final r in s.routes) r.id: r};
+  for (final sh in s.shipments) {
+    if (sh.ownerId != factionId || routes[sh.routeId]?.ownerId != factionId) {
+      continue;
+    }
+    final key = '${sh.toBodyId}/${sh.resourceId}';
+    if (largest[key] case final v? when v >= sh.amount) continue;
+    largest[key] = sh.amount;
+  }
+  // Store to the full steps between its lots, 1 for a steady one.
+  final every = <(String, String, BigNum), double>{};
+  var steps = 1;
+  for (final MapEntry(key: id, value: got) in supply.entries) {
+    for (final MapEntry(key: res, value: v) in got.entries) {
+      final perStep = v.mulDouble(_fullStepSeconds);
+      if (perStep <= const BigNum.zero()) continue;
+      // The lot that landed last is what the store holds, as nothing can
+      // be on its way to a store a lot just filled.
+      final held = s.body(id).stock[res] ?? const BigNum.zero();
+      final lot = (largest['$id/$res'] ?? const BigNum.zero()).max(held);
+      final gap = !short.contains('$id/$res') || lot <= perStep
+          ? 1.0
+          : (lot / perStep).toDouble().clamp(1.0, _maxLotSteps.toDouble());
+      every[(id, res, perStep)] = gap;
+      steps = math.max(steps, gap.ceil());
+    }
+  }
+  return (
+    [
+      for (final MapEntry(key: (id, res, perStep), value: gap) in every.entries)
+        if (math.max(1, (steps / gap).round()) case final n)
+          (
+            id,
+            res,
+            perStep.mulDouble(steps / n),
+            {for (var j = 0; j < n; j++) (j * steps / n).floor()},
+          ),
+    ],
+    steps,
+  );
 }
 
 /// Reports [factionId]'s per-second flows and bottlenecks.
