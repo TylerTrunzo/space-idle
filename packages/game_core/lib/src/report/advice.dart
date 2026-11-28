@@ -248,36 +248,100 @@ List<UpgradeAdvice> bestUpgrades(
   int limit = 3,
 }) {
   if (limit <= 0) return const [];
+  final search = BestUpgradeSearch(s, c, factionId);
+  while (!search.step()) {}
+  return search.result(limit: limit);
+}
+
+/// One level [bestUpgrades] weighs: a track of a building on a body.
+typedef UpgradeCandidate = ({
+  String bodyId,
+  String buildingId,
+  UpgradeTrack track,
+});
+
+/// The levels [bestUpgrades] weighs for [factionId]: every track of every
+/// building on its bodies that is not maxed ([upgradeMaxedReason]) and
+/// costs no more than its credits, in body, building and track order.
+List<UpgradeCandidate> upgradeCandidates(
+  GameState s,
+  Content c,
+  String factionId,
+) {
   final credits = s.faction(factionId).credits;
-  final previewer = UpgradePreviewer(s, c, factionId);
-  final found = <UpgradeAdvice>[];
-  for (final body in s.bodies) {
-    if (body.ownerId != factionId) continue;
-    for (final b in body.buildings) {
-      final def = c.buildings[b.defId]!;
-      for (final t in UpgradeTrack.values) {
-        if (!def.upgrades.containsKey(t)) continue;
-        if (upgradeMaxedReason(c, b, t) != null) continue;
-        if ((upgradeCost(c, b, t)[creditsKey] ?? _zero) > credits) continue;
-        final p = previewer.preview(b.id, t);
-        if (p == null || p.paybackSeconds == null) continue;
-        found.add(
-          UpgradeAdvice(
-            bodyId: body.id,
-            buildingId: b.id,
-            track: t,
-            preview: p,
-          ),
-        );
-      }
+  return [
+    for (final body in s.bodies)
+      if (body.ownerId == factionId)
+        for (final b in body.buildings)
+          for (final t in UpgradeTrack.values)
+            if (c.buildings[b.defId]!.upgrades.containsKey(t) &&
+                upgradeMaxedReason(c, b, t) == null &&
+                (upgradeCost(c, b, t)[creditsKey] ?? _zero) <= credits)
+              (bodyId: body.id, buildingId: b.id, track: t),
+  ];
+}
+
+/// [bestUpgrades] a level at a time, for a caller that spreads the work
+/// over frames: each [step] previews one candidate ([upgradeCandidates]).
+///
+/// Nothing is worked out when it is made: the first [step] copies the
+/// state as it is then ([UpgradePreviewer]) and lists the candidates from
+/// it, so the search is of that moment, however [s] goes on after.
+final class BestUpgradeSearch {
+  /// Makes a search of [s] for [factionId]; [before], when given, is the
+  /// flow report of [s] as the first [step] will find it.
+  BestUpgradeSearch(this._s, this._c, this._factionId, {FlowReport? before})
+    : _before = before;
+
+  final GameState _s;
+  final Content _c;
+  final String _factionId;
+  final FlowReport? _before;
+  UpgradePreviewer? _previewer;
+  List<UpgradeCandidate>? _candidates;
+  int _next = 0;
+  final List<UpgradeAdvice> _found = [];
+
+  /// The game time of the state searched; null before the first [step].
+  double? at;
+
+  /// Whether every candidate has been previewed.
+  bool get done => _candidates != null && _next >= _candidates!.length;
+
+  /// Previews the next candidate (the first call also copies the state
+  /// and lists them); true once none is left.
+  bool step() {
+    final candidates = _candidates ??= () {
+      at = _s.time;
+      _previewer = UpgradePreviewer(_s, _c, _factionId, before: _before);
+      return upgradeCandidates(_s, _c, _factionId);
+    }();
+    if (_next >= candidates.length) return true;
+    final (:bodyId, :buildingId, :track) = candidates[_next++];
+    final p = _previewer!.preview(buildingId, track);
+    if (p != null && p.paybackSeconds != null) {
+      _found.add(
+        UpgradeAdvice(
+          bodyId: bodyId,
+          buildingId: buildingId,
+          track: track,
+          preview: p,
+        ),
+      );
     }
+    return _next >= candidates.length;
   }
-  // A stable merge sort keeps the order they were found in on a tie.
-  _stableSort(
-    found,
-    (x, y) => x.preview.paybackSeconds!.compareTo(y.preview.paybackSeconds!),
-  );
-  return found.take(limit).toList();
+
+  /// The [limit] found so far that pay back soonest, soonest first, ties
+  /// in candidate order: once [done], [bestUpgrades]' answer.
+  List<UpgradeAdvice> result({int limit = 3}) {
+    final sorted = List.of(_found);
+    _stableSort(
+      sorted,
+      (x, y) => x.preview.paybackSeconds!.compareTo(y.preview.paybackSeconds!),
+    );
+    return sorted.take(limit).toList();
+  }
 }
 
 /// Building type ids whose output includes [resourceId]: extractors that

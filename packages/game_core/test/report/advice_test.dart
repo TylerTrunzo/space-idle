@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:game_core/game_core.dart';
 import 'package:test/test.dart';
 
@@ -230,6 +232,121 @@ void main() {
       expect(p.creditsDeltaPerSec > const BigNum.zero(), isTrue);
       expect(p.paybackSeconds, isNull);
       expect(p.limitedElsewhere, isFalse);
+    });
+  });
+
+  group('BestUpgradeSearch, a level a step', () {
+    /// The soonest paybacks by brute force: every candidate previewed on
+    /// its own, soonest first, ties in candidate order.
+    List<(String, UpgradeTrack, double)> brute(GameState x, Content k) {
+      final all = <(String, UpgradeTrack, double)>[];
+      for (final (bodyId: _, :buildingId, :track) in upgradeCandidates(
+        x,
+        k,
+        _p,
+      )) {
+        final t = upgradePreview(x, k, _p, buildingId, track)?.paybackSeconds;
+        if (t != null) all.add((buildingId, track, t));
+      }
+      final order = {for (final (i, e) in all.indexed) e: i};
+      all.sort((a, b) {
+        final by = a.$3.compareTo(b.$3);
+        return by != 0 ? by : order[a]!.compareTo(order[b]!);
+      });
+      return all;
+    }
+
+    test('nothing is worked out until the first step', () {
+      final search = BestUpgradeSearch(s, c, _p);
+      expect(search.at, isNull);
+      expect(search.done, isFalse);
+      search.step();
+      expect(search.at, s.time);
+    });
+
+    test('it is bestUpgrades, and brute force, on the fixtures', () {
+      final k = fixtureContent();
+      for (final name in [
+        'balanced_day14_fed',
+        'review_balanced_day14',
+        'optimizer_r4_spree_26h',
+      ]) {
+        final x =
+            (SaveCodec.decode(
+                      File('test/fixtures/$name.json').readAsStringSync(),
+                      k,
+                    )
+                    as SaveOk)
+                .state;
+        final search = BestUpgradeSearch(x, k, _p);
+        var steps = 0;
+        while (!search.step()) {
+          steps++;
+        }
+        expect(steps + 1, upgradeCandidates(x, k, _p).length, reason: name);
+        final got = search.result(limit: 3);
+        final want = bestUpgrades(x, k, _p, limit: 3);
+        expect(
+          got.map((a) => (a.buildingId, a.track, a.preview.paybackSeconds)),
+          want.map((a) => (a.buildingId, a.track, a.preview.paybackSeconds)),
+          reason: name,
+        );
+        expect(
+          got.map((a) => (a.buildingId, a.track, a.preview.paybackSeconds)),
+          brute(x, k).take(3),
+          reason: '$name, brute force',
+        );
+      }
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test(
+      'a search keeps the moment of its first step as the state goes on',
+      () {
+        feedTheSmelter();
+        s.faction(_p).credits = BigNum.from(5000);
+        final then = s.copy();
+        final search = BestUpgradeSearch(s, c, _p)..step();
+        engine.advance(s, 120);
+        applyCommand(s, c, const AssignCrewCommand(_p, 'b2', 0));
+        while (!search.step()) {}
+        final want = bestUpgrades(then, c, _p, limit: 1).single;
+        final got = search.result(limit: 1).single;
+        expect((got.buildingId, got.track), (want.buildingId, want.track));
+        expect(got.preview.paybackSeconds, want.preview.paybackSeconds);
+      },
+    );
+
+    test('candidates: unmaxed, affordable, in order', () {
+      s.faction(_p).credits = BigNum.from(100);
+      final all = upgradeCandidates(s, c, _p);
+      for (final (:bodyId, :buildingId, :track) in all) {
+        final b = building(buildingId);
+        expect(upgradeMaxedReason(c, b, track), isNull);
+        expect(
+          upgradeCost(c, b, track)['credits']! <= BigNum.from(100),
+          isTrue,
+        );
+        expect(bodyId, 'kora');
+      }
+      expect(all, isNotEmpty);
+      s.faction(_p).credits = const BigNum.zero();
+      expect(upgradeCandidates(s, c, _p), isEmpty);
+    });
+  });
+
+  group('megaprojectUnfunded', () {
+    test('auto-delivery set with credit auto-pay off, nothing paid', () {
+      final m = c.megaprojects['mass_driver']!;
+      final f = s.faction(_p);
+      expect(megaprojectUnfunded(s, c, _p, m), isFalse, reason: 'never set');
+      f.megaprojectAutoSet.add(m.id);
+      f.megaprojectAuto[m.id] = const MegaprojectAuto();
+      expect(megaprojectUnfunded(s, c, _p, m), isTrue);
+      f.megaprojectAuto[m.id] = const MegaprojectAuto(credits: true);
+      expect(megaprojectUnfunded(s, c, _p, m), isFalse, reason: 'auto-pay');
+      f.megaprojectAuto[m.id] = const MegaprojectAuto();
+      f.megaprojectProgress[m.id] = {'credits': BigNum.from(10)};
+      expect(megaprojectUnfunded(s, c, _p, m), isFalse, reason: 'paid some');
     });
   });
 

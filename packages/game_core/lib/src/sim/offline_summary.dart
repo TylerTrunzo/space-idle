@@ -282,7 +282,7 @@ NextGoal? nextGoal(
     report,
   ).entries) {
     final m = c.megaprojects[id]!;
-    if (_unfunded(f, c, s, factionId, m)) continue;
+    if (megaprojectUnfunded(s, c, factionId, m)) continue;
     final goal = MegaprojectGoal(
       megaprojectId: id,
       level: megaprojectDeliveryLevel(s, factionId, m) + 1,
@@ -298,18 +298,20 @@ NextGoal? nextGoal(
   return _sooner(stage.etaSeconds, milestone.etaSeconds) ? stage : milestone;
 }
 
-/// Whether [m]'s stage [f] pays for still owes credits that [f] chose not
-/// to pay: it set [m]'s auto-delivery ([FactionState.megaprojectAutoSet])
-/// with credit auto-pay off, and has paid it no credits since the stage
-/// opened. [nextGoal] leaves such a megaproject out. One whose auto-pay was
-/// never set is no choice: a new player still sees its first stage.
-bool _unfunded(
-  FactionState f,
-  Content c,
+/// Whether [m]'s stage [factionId] pays for still owes credits that it
+/// chose not to pay: it set [m]'s auto-delivery
+/// ([FactionState.megaprojectAutoSet]) with credit auto-pay off, and has
+/// paid it no credits since the stage opened. [nextGoal] leaves such a
+/// megaproject out, and so should anything that offers a goal beside it.
+/// One whose auto-pay was never set is no choice: a new player still sees
+/// its first stage.
+bool megaprojectUnfunded(
   GameState s,
+  Content c,
   String factionId,
   MegaprojectDef m,
 ) {
+  final f = s.faction(factionId);
   if (!f.megaprojectAutoSet.contains(m.id)) return false;
   if (f.megaprojectAuto[m.id]?.credits ?? false) return false;
   if (!megaprojectRemaining(s, c, factionId, m).containsKey(creditsKey)) {
