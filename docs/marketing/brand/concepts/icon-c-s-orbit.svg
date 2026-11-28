@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<defs>
+  <radialGradient id="bg" cx="35%" cy="25%" r="90%">
+    <stop offset="0" stop-color="#1A2352"/><stop offset="1" stop-color="#0A0F24"/>
+  </radialGradient>
+  <radialGradient id="planet" cx="35%" cy="30%" r="75%">
+    <stop offset="0" stop-color="#7D8CFF"/><stop offset="1" stop-color="#2E3B8F"/>
+  </radialGradient>
+  <radialGradient id="glow" r="50%">
+    <stop offset="0" stop-color="#FFD58A" stop-opacity="1"/>
+    <stop offset=".35" stop-color="#FFB547" stop-opacity=".9"/>
+    <stop offset="1" stop-color="#FFB547" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#4FD1C5"/><stop offset="1" stop-color="#FFB547"/>
+  </linearGradient></defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+
+<circle cx="80" cy="88" r="3" fill="#E8ECFF" opacity="0.8"/><circle cx="440" cy="120" r="2" fill="#E8ECFF" opacity="0.6"/><circle cx="430" cy="430" r="3" fill="#E8ECFF" opacity="0.7"/><circle cx="96" cy="440" r="2.5" fill="#E8ECFF" opacity="0.5"/><circle cx="250" cy="60" r="1.8" fill="#E8ECFF" opacity="0.5"/>
+<path d="M352 152 C 320 96, 168 96, 164 182 C 160 262, 352 250, 348 330 C 344 416, 192 416, 160 360"
+  fill="none" stroke="url(#sg)" stroke-width="40" stroke-linecap="round"/>
+<circle cx="370" cy="132" r="44" fill="url(#planet)"/>
+<g transform="translate(160 360)"><circle r="54" fill="url(#glow)"/><circle r="20" fill="#FFD58A"/></g>
+</svg>

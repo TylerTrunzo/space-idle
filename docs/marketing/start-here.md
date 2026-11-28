@@ -84,6 +84,8 @@ The name only needs settling before the first three:
 | Date | Decision | Status |
 |---|---|---|
 | 2026-11-28 | Marketing docs started; Claude acts as marketing lead | Done |
-| — | Game name | **Open:** recommend Starwright |
-| — | Public developer name (your name or a studio name) | **Open** |
+| 2026-11-28 | Game name: **Starwright** | Chosen; owner still to run the checks in `names.md` |
+| 2026-11-28 | Public developer name: a studio name, not the owner's own | Chosen; **which studio name is open** |
+| 2026-11-28 | First asset: icon and logo concepts | Done: `brand/`. Recommend concept C (S Orbit) |
+| — | Final icon | **Open** |
 | — | How much time per week the owner gives to marketing | **Open** |

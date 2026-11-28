@@ -12,6 +12,8 @@ Sources: design spec §1–2 (`docs/superpowers/specs/2026-11-26-space-idle-desi
 | [store-listing.md](store-listing.md) | Google Play title, short and full description, a claims check, and listing settings |
 | [screenshots.md](screenshots.md) | Shot list, captions, feature graphic, icon, and how to capture shots |
 | [audience.md](audience.md) | Who it's for, where they are, and a launch plan with no budget |
+| [start-here.md](start-here.md) | Step-by-step plan and decisions log |
+| [brand/](brand/README.md) | Icon and logo concepts, palette, wordmark |
 
 ## Guardrails (from the spec's anti-goals)
 
