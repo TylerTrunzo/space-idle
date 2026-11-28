@@ -1,7 +1,7 @@
 <!-- Generated: dart run game_sim:game_sim bot --bot balanced --hours 720 --seed 1 --format md -->
 # Balance report: balanced bot
 
-Seed 1, 720.0 h, 120 check-ins. Final credits: 32.5B. Rejected commands: 0.
+Seed 1, 720.0 h, 120 check-ins. Final credits: 27B. Rejected commands: 0.
 
 ## Milestones
 
@@ -66,9 +66,9 @@ Seed 1, 720.0 h, 120 check-ins. Final credits: 32.5B. Rejected commands: 0.
 | Three Hundred Billion | credits_300b | 180.0 | 30 |
 | Freight Without Wings | driver_15 | 252.0 | 42 |
 | Trillionaire | credits_1t | 270.0 | 45 |
-| Harbor of Stars | station_15 | 324.0 | 54 |
+| Harbor of Stars | station_15 | 312.0 | 52 |
 | Three Trillion | credits_3t | 420.0 | 70 |
-| Ten Trillion | credits_10t | 714.0 | 119 |
+| Ten Trillion | credits_10t | 702.0 | 117 |
 | Thirty Trillion | credits_30t | not reached | |
 
 ## Income by day
@@ -79,38 +79,38 @@ Seed 1, 720.0 h, 120 check-ins. Final credits: 32.5B. Rejected commands: 0.
 | 2 | 3.55B | hull_plate 40%, circuit 31%, copper_wire 4%, fuel 4% |
 | 3 | 6.39B | hull_plate 39%, circuit 35%, copper_wire 3%, silicon_wafer 3% |
 | 4 | 13.2B | hull_plate 37%, circuit 34%, fuel 4%, copper_wire 3% |
-| 5 | 41.7B | hull_plate 39%, circuit 30%, fuel 5%, copper_wire 4% |
-| 6 | 76.3B | hull_plate 44%, circuit 25%, fuel 5%, copper_wire 4% |
-| 7 | 107B | hull_plate 47%, circuit 23%, fuel 5%, copper_wire 4% |
-| 8 | 131B | hull_plate 47%, circuit 22%, fuel 5%, copper_wire 4% |
-| 9 | 164B | hull_plate 50%, circuit 21%, fuel 4%, copper_wire 4% |
-| 10 | 178B | hull_plate 51%, circuit 22%, copper_wire 4%, fuel 4% |
-| 11 | 238B | hull_plate 49%, circuit 22%, copper_wire 4%, fuel 4% |
-| 12 | 250B | hull_plate 49%, circuit 23%, copper_wire 4%, steel 4% |
-| 13 | 265B | hull_plate 47%, circuit 26%, copper_wire 4%, steel 4% |
-| 14 | 322B | hull_plate 47%, circuit 26%, copper_wire 4%, steel 4% |
-| 15 | 339B | hull_plate 47%, circuit 26%, copper_wire 4%, steel 4% |
-| 16 | 341B | hull_plate 47%, circuit 25%, copper_wire 4%, fuel 4% |
-| 17 | 345B | hull_plate 48%, circuit 26%, copper_wire 4%, fuel 4% |
-| 18 | 391B | hull_plate 46%, circuit 25%, copper_wire 4%, steel 4% |
-| 19 | 460B | hull_plate 47%, circuit 23%, steel 4%, copper_wire 4% |
-| 20 | 465B | hull_plate 47%, circuit 23%, steel 4%, copper_wire 4% |
-| 21 | 468B | hull_plate 46%, circuit 23%, steel 4%, copper_wire 4% |
-| 22 | 470B | hull_plate 46%, circuit 23%, steel 4%, copper_wire 4% |
-| 23 | 465B | hull_plate 47%, circuit 23%, steel 4%, copper_wire 4% |
-| 24 | 496B | hull_plate 46%, circuit 25%, steel 4%, fuel 4% |
-| 25 | 623B | hull_plate 45%, circuit 24%, steel 4%, fuel 4% |
-| 26 | 627B | hull_plate 45%, circuit 24%, steel 4%, fuel 4% |
-| 27 | 629B | hull_plate 45%, circuit 24%, steel 4%, fuel 4% |
-| 28 | 628B | hull_plate 45%, circuit 24%, steel 4%, fuel 4% |
-| 29 | 635B | hull_plate 45%, circuit 25%, steel 4%, fuel 4% |
-| 30 | 649B | hull_plate 44%, circuit 27%, steel 4%, fuel 4% |
+| 5 | 41.7B | hull_plate 38%, circuit 30%, fuel 5%, copper_wire 4% |
+| 6 | 74.9B | hull_plate 42%, circuit 26%, fuel 5%, water 4% |
+| 7 | 105B | hull_plate 48%, circuit 22%, fuel 5%, copper_wire 4% |
+| 8 | 131B | hull_plate 47%, circuit 21%, fuel 5%, water 4% |
+| 9 | 161B | hull_plate 50%, circuit 20%, water 5%, fuel 4% |
+| 10 | 180B | hull_plate 50%, circuit 21%, copper_wire 5%, water 4% |
+| 11 | 227B | hull_plate 50%, circuit 22%, copper_wire 4%, silicon_wafer 4% |
+| 12 | 238B | hull_plate 49%, circuit 22%, copper_wire 4%, silicon_wafer 4% |
+| 13 | 261B | hull_plate 48%, circuit 21%, silicon_wafer 4%, copper_wire 4% |
+| 14 | 311B | hull_plate 48%, circuit 20%, copper_wire 4%, silicon_wafer 4% |
+| 15 | 325B | hull_plate 48%, circuit 21%, copper_wire 4%, silicon_wafer 4% |
+| 16 | 326B | hull_plate 49%, circuit 21%, copper_wire 4%, silicon_wafer 4% |
+| 17 | 365B | hull_plate 49%, circuit 23%, copper_wire 4%, silicon_wafer 4% |
+| 18 | 440B | hull_plate 46%, circuit 27%, copper_wire 4%, silicon_wafer 4% |
+| 19 | 463B | hull_plate 45%, circuit 27%, copper_wire 4%, silicon_wafer 4% |
+| 20 | 478B | hull_plate 45%, circuit 27%, copper_wire 4%, silicon_wafer 4% |
+| 21 | 479B | hull_plate 45%, circuit 27%, copper_wire 4%, water 4% |
+| 22 | 473B | hull_plate 46%, circuit 28%, copper_wire 4%, water 4% |
+| 23 | 559B | hull_plate 46%, circuit 27%, copper_wire 4%, water 4% |
+| 24 | 597B | hull_plate 45%, circuit 28%, copper_wire 4%, water 4% |
+| 25 | 633B | hull_plate 45%, circuit 27%, copper_wire 4%, fuel 4% |
+| 26 | 645B | hull_plate 44%, circuit 28%, copper_wire 4%, fuel 4% |
+| 27 | 659B | hull_plate 44%, circuit 29%, copper_wire 4%, fuel 4% |
+| 28 | 665B | hull_plate 43%, circuit 29%, copper_wire 4%, fuel 4% |
+| 29 | 663B | hull_plate 44%, circuit 29%, copper_wire 4%, water 4% |
+| 30 | 655B | hull_plate 45%, circuit 30%, copper_wire 4%, water 4% |
 
 ## Days
 
 Days with something new (a milestone, project completion, contract or body) in the first 21: 21 of 21; the worst 7 days in a row had 7.
 
-Days with a milestone or project in the first 21: 21; worst 7 days: 7.
+Days with a milestone or project in the first 21: 18; worst 7 days: 5.
 
 Earned is market sales plus contract rewards; the tier shares are of market sales only.
 
@@ -120,32 +120,32 @@ Earned is market sales plus contract rewards; the tier shares are of market sale
 | 2 | 28 | 12 | 10 | 8 | 4 | 0 | 0 | 233M | 3.78B | 29% | 71% | 0% |
 | 3 | 30 | 8 | 17 | 13 | 5 | 0 | 0 | 629M | 7.02B | 26% | 74% | 0% |
 | 4 | 38 | 12 | 23 | 16 | 7 | 5 | 5 | 531M | 13.8B | 24% | 74% | 3% |
-| 5 | 29 | 4 | 24 | 17 | 7 | 9 | 10 | 118M | 41.8B | 27% | 70% | 3% |
-| 6 | 16 | 2 | 13 | 18 | 7 | 11 | 11 | 513M | 76.8B | 29% | 70% | 1% |
-| 7 | 8 | 1 | 7 | 18 | 7 | 12 | 12 | 0 | 107B | 28% | 71% | 1% |
-| 8 | 13 | 1 | 9 | 21 | 7 | 13 | 13 | 4.62B | 135B | 29% | 70% | 1% |
-| 9 | 4 | 0 | 2 | 23 | 7 | 13 | 14 | 7.32B | 171B | 28% | 71% | 1% |
-| 10 | 4 | 0 | 1 | 26 | 7 | 13 | 14 | 9.62B | 188B | 25% | 74% | 1% |
-| 11 | 11 | 1 | 9 | 27 | 7 | 14 | 15 | 4.03B | 242B | 27% | 72% | 1% |
-| 12 | 1 | 1 | 0 | 27 | 7 | 14 | 15 | 0 | 250B | 27% | 72% | 1% |
-| 13 | 4 | 0 | 4 | 27 | 7 | 14 | 16 | 0 | 265B | 26% | 74% | 0% |
-| 14 | 9 | 1 | 4 | 31 | 7 | 15 | 16 | 22.2B | 344B | 26% | 73% | 1% |
-| 15 | 1 | 0 | 1 | 31 | 7 | 15 | 16 | 0 | 339B | 25% | 73% | 1% |
-| 16 | 3 | 0 | 3 | 31 | 7 | 15 | 16 | 0 | 341B | 26% | 73% | 1% |
-| 17 | 3 | 0 | 2 | 32 | 7 | 15 | 16 | 6.54B | 352B | 26% | 74% | 0% |
-| 18 | 9 | 1 | 5 | 35 | 7 | 16 | 17 | 24.3B | 416B | 27% | 72% | 1% |
-| 19 | 2 | 0 | 1 | 36 | 7 | 16 | 17 | 7.73B | 467B | 27% | 71% | 2% |
-| 20 | 2 | 0 | 1 | 37 | 7 | 16 | 17 | 8.68B | 473B | 28% | 70% | 2% |
-| 21 | 3 | 0 | 1 | 39 | 7 | 16 | 17 | 19.2B | 488B | 28% | 70% | 2% |
-| 22 | 1 | 0 | 0 | 40 | 7 | 16 | 17 | 10.6B | 481B | 28% | 70% | 2% |
-| 23 | 5 | 0 | 0 | 45 | 7 | 16 | 17 | 53.1B | 518B | 28% | 71% | 1% |
-| 24 | 8 | 0 | 5 | 48 | 7 | 17 | 17 | 42.2B | 538B | 28% | 71% | 2% |
-| 25 | 4 | 0 | 2 | 50 | 7 | 17 | 18 | 25.5B | 649B | 27% | 69% | 3% |
-| 26 | 4 | 0 | 3 | 51 | 7 | 17 | 18 | 14.2B | 641B | 27% | 70% | 3% |
-| 27 | 2 | 0 | 0 | 53 | 7 | 17 | 18 | 25B | 654B | 27% | 70% | 3% |
-| 28 | 3 | 0 | 1 | 55 | 7 | 17 | 18 | 25.3B | 653B | 27% | 70% | 3% |
-| 29 | 1 | 0 | 0 | 56 | 7 | 17 | 18 | 14.3B | 649B | 27% | 70% | 3% |
-| 30 | 3 | 1 | 1 | 57 | 7 | 17 | 18 | 14.3B | 663B | 26% | 71% | 3% |
+| 5 | 26 | 4 | 21 | 17 | 7 | 9 | 10 | 118M | 41.9B | 28% | 70% | 3% |
+| 6 | 20 | 2 | 17 | 18 | 7 | 11 | 11 | 513M | 75.4B | 29% | 69% | 2% |
+| 7 | 8 | 1 | 7 | 18 | 7 | 12 | 12 | 0.01 | 105B | 27% | 71% | 2% |
+| 8 | 12 | 1 | 8 | 21 | 7 | 13 | 13 | 4.36B | 135B | 30% | 69% | 1% |
+| 9 | 4 | 0 | 3 | 22 | 7 | 13 | 14 | 3.45B | 164B | 28% | 71% | 1% |
+| 10 | 4 | 0 | 0 | 26 | 7 | 13 | 14 | 13.2B | 193B | 27% | 72% | 1% |
+| 11 | 10 | 1 | 8 | 27 | 7 | 14 | 15 | 4.2B | 231B | 26% | 73% | 2% |
+| 12 | 2 | 1 | 0 | 28 | 7 | 14 | 15 | 5.17B | 243B | 27% | 72% | 1% |
+| 13 | 6 | 1 | 3 | 30 | 7 | 15 | 15 | 8.05B | 269B | 29% | 70% | 2% |
+| 14 | 10 | 0 | 8 | 32 | 7 | 15 | 16 | 12.8B | 324B | 28% | 69% | 3% |
+| 15 | 3 | 0 | 1 | 34 | 7 | 15 | 16 | 12.9B | 338B | 27% | 70% | 3% |
+| 16 | 1 | 0 | 0 | 35 | 7 | 15 | 16 | 7.27B | 333B | 28% | 70% | 2% |
+| 17 | 4 | 0 | 1 | 38 | 7 | 16 | 16 | 21.5B | 386B | 26% | 73% | 2% |
+| 18 | 2 | 1 | 1 | 38 | 7 | 16 | 16 | 0 | 440B | 25% | 73% | 2% |
+| 19 | 9 | 0 | 6 | 41 | 7 | 16 | 17 | 24.9B | 488B | 25% | 73% | 2% |
+| 20 | 1 | 0 | 0 | 42 | 7 | 16 | 17 | 10.7B | 489B | 25% | 72% | 2% |
+| 21 | 5 | 0 | 1 | 46 | 7 | 16 | 17 | 40.4B | 519B | 26% | 73% | 1% |
+| 22 | 4 | 0 | 1 | 49 | 7 | 16 | 17 | 32.5B | 505B | 25% | 75% | 0% |
+| 23 | 3 | 0 | 2 | 50 | 7 | 17 | 17 | 10.8B | 570B | 24% | 74% | 2% |
+| 24 | 3 | 0 | 2 | 51 | 7 | 17 | 17 | 12.7B | 609B | 25% | 73% | 2% |
+| 25 | 5 | 0 | 4 | 52 | 7 | 17 | 18 | 10.7B | 644B | 26% | 72% | 2% |
+| 26 | 3 | 0 | 0 | 55 | 7 | 17 | 18 | 37.8B | 683B | 26% | 72% | 2% |
+| 27 | 1 | 0 | 0 | 56 | 7 | 17 | 18 | 14.3B | 674B | 26% | 73% | 2% |
+| 28 | 1 | 0 | 0 | 57 | 7 | 17 | 18 | 14.4B | 679B | 26% | 73% | 2% |
+| 29 | 0 | 0 | 0 | 57 | 7 | 17 | 18 | 0 | 663B | 25% | 73% | 2% |
+| 30 | 3 | 1 | 0 | 59 | 7 | 17 | 18 | 29.4B | 684B | 25% | 75% | 0% |
 
 ## Timeline
 
@@ -232,17 +232,17 @@ Claims, surveys, extra slots, megaproject stages and contracts, as seen; milesto
 - 108.0 h (day 5): Extra build slot on Dusk Cairn
 - 108.0 h (day 5): Orbital Station level 8
 - 108.0 h (day 5): Mass Driver level 8
+- 114.0 h (day 5): Extra build slot on Cinder
 - 114.0 h (day 5): Extra build slot on Tessaly
 - 114.0 h (day 5): Extra build slot on Dusk Cairn
 - 114.0 h (day 5): Orbital Station level 9
 - 114.0 h (day 5): Mass Driver level 9
-- 120.0 h (day 5): Extra build slot on Cinder
-- 120.0 h (day 5): Extra build slot on Kora
-- 120.0 h (day 5): Extra build slot on Hollow Reach
-- 120.0 h (day 5): Extra build slot on Vastmere
 - 120.0 h (day 5): Extra build slot on Tessaly
 - 120.0 h (day 5): Extra build slot on Dusk Cairn
 - 120.0 h (day 5): Mass Driver level 10
+- 126.0 h (day 6): Extra build slot on Kora
+- 126.0 h (day 6): Extra build slot on Hollow Reach
+- 126.0 h (day 6): Extra build slot on Vastmere
 - 126.0 h (day 6): Extra build slot on Brine
 - 126.0 h (day 6): Extra build slot on Tessaly
 - 126.0 h (day 6): Extra build slot on Dusk Cairn
@@ -256,108 +256,105 @@ Claims, surveys, extra slots, megaproject stages and contracts, as seen; milesto
 - 138.0 h (day 6): Contract 18 completed
 - 144.0 h (day 6): Extra build slot on Cinder
 - 144.0 h (day 6): Extra build slot on Kora
+- 144.0 h (day 6): Extra build slot on Hollow Reach
 - 144.0 h (day 6): Extra build slot on Dusk Cairn
-- 150.0 h (day 7): Extra build slot on Hollow Reach
 - 150.0 h (day 7): Extra build slot on Vastmere
 - 150.0 h (day 7): Extra build slot on Brine
 - 150.0 h (day 7): Extra build slot on Tessaly
 - 150.0 h (day 7): Extra build slot on Dusk Cairn
 - 150.0 h (day 7): Mass Driver level 12
 - 156.0 h (day 7): Orbital Station level 12
-- 174.0 h (day 8): Extra build slot on Cinder
-- 174.0 h (day 8): Mass Driver level 13
+- 168.0 h (day 7): Extra build slot on Cinder
 - 180.0 h (day 8): Extra build slot on Kora
 - 180.0 h (day 8): Extra build slot on Hollow Reach
 - 180.0 h (day 8): Extra build slot on Vastmere
 - 180.0 h (day 8): Extra build slot on Brine
-- 180.0 h (day 8): Extra build slot on Dusk Cairn
+- 180.0 h (day 8): Mass Driver level 13
 - 180.0 h (day 8): Contract 19 completed
+- 186.0 h (day 8): Extra build slot on Tessaly
+- 186.0 h (day 8): Extra build slot on Dusk Cairn
 - 186.0 h (day 8): Contract 20 completed
 - 186.0 h (day 8): Contract 21 completed
-- 192.0 h (day 8): Extra build slot on Cinder
 - 192.0 h (day 8): Orbital Station level 13
 - 198.0 h (day 9): Contract 22 completed
-- 204.0 h (day 9): Extra build slot on Tessaly
+- 204.0 h (day 9): Extra build slot on Cinder
+- 204.0 h (day 9): Extra build slot on Kora
 - 210.0 h (day 9): Mass Driver level 14
-- 210.0 h (day 9): Contract 23 completed
+- 216.0 h (day 10): Contract 23 completed
 - 216.0 h (day 10): Contract 24 completed
-- 222.0 h (day 10): Contract 25 completed
-- 228.0 h (day 10): Contract 26 completed
-- 240.0 h (day 10): Extra build slot on Kora
-- 240.0 h (day 11): Contract 27 completed
-- 246.0 h (day 11): Extra build slot on Cinder
+- 228.0 h (day 10): Contract 25 completed
+- 234.0 h (day 10): Contract 26 completed
 - 246.0 h (day 11): Extra build slot on Hollow Reach
 - 246.0 h (day 11): Extra build slot on Vastmere
-- 246.0 h (day 11): Extra build slot on Brine
-- 246.0 h (day 11): Extra build slot on Dusk Cairn
 - 246.0 h (day 11): Orbital Station level 14
+- 246.0 h (day 11): Contract 27 completed
 - 252.0 h (day 11): Mass Driver level 15
+- 258.0 h (day 11): Extra build slot on Cinder
+- 258.0 h (day 11): Extra build slot on Brine
 - 258.0 h (day 11): Extra build slot on Tessaly
-- 264.0 h (day 11): Extra build slot on Kora
-- 300.0 h (day 13): Extra build slot on Hollow Reach
-- 300.0 h (day 13): Extra build slot on Brine
-- 312.0 h (day 13): Extra build slot on Vastmere
-- 312.0 h (day 13): Mass Driver level 16
-- 312.0 h (day 14): Contract 28 completed
-- 312.0 h (day 14): Contract 29 completed
-- 318.0 h (day 14): Extra build slot on Tessaly
-- 318.0 h (day 14): Extra build slot on Dusk Cairn
-- 324.0 h (day 14): Orbital Station level 15
-- 324.0 h (day 14): Contract 30 completed
-- 330.0 h (day 14): Extra build slot on Cinder
-- 330.1 h (day 14): Contract 31 completed
-- 342.0 h (day 15): Extra build slot on Cinder
-- 366.0 h (day 16): Extra build slot on Cinder
-- 378.0 h (day 16): Extra build slot on Cinder
-- 384.0 h (day 16): Extra build slot on Kora
-- 402.0 h (day 17): Extra build slot on Hollow Reach
-- 402.0 h (day 17): Contract 32 completed
-- 408.0 h (day 17): Extra build slot on Brine
-- 408.0 h (day 18): Contract 33 completed
-- 408.0 h (day 18): Contract 34 completed
-- 414.0 h (day 18): Extra build slot on Vastmere
-- 414.0 h (day 18): Extra build slot on Tessaly
-- 414.0 h (day 18): Mass Driver level 17
-- 420.0 h (day 18): Extra build slot on Dusk Cairn
-- 420.0 h (day 18): Contract 35 completed
-- 432.0 h (day 18): Orbital Station level 16
-- 432.0 h (day 19): Contract 36 completed
-- 444.0 h (day 19): Extra build slot on Cinder
-- 462.0 h (day 20): Extra build slot on Cinder
-- 462.0 h (day 20): Contract 37 completed
-- 498.0 h (day 21): Contract 38 completed
-- 498.0 h (day 21): Contract 39 completed
-- 504.0 h (day 21): Extra build slot on Cinder
-- 516.0 h (day 22): Contract 40 completed
-- 528.0 h (day 23): Contract 41 completed
-- 528.0 h (day 23): Contract 42 completed
-- 534.0 h (day 23): Contract 43 completed
-- 540.0 h (day 23): Contract 44 completed
-- 546.0 h (day 23): Contract 45 completed
-- 552.0 h (day 24): Contract 46 completed
-- 558.0 h (day 24): Contract 47 completed
-- 564.0 h (day 24): Extra build slot on Kora
-- 564.0 h (day 24): Contract 48 completed
+- 258.0 h (day 11): Extra build slot on Dusk Cairn
+- 282.0 h (day 12): Contract 28 completed
+- 300.0 h (day 13): Contract 29 completed
+- 300.0 h (day 13): Contract 30 completed
+- 312.0 h (day 13): Extra build slot on Cinder
+- 312.0 h (day 13): Extra build slot on Kora
+- 312.0 h (day 13): Orbital Station level 15
+- 324.0 h (day 14): Extra build slot on Cinder
+- 324.0 h (day 14): Extra build slot on Hollow Reach
+- 324.0 h (day 14): Extra build slot on Vastmere
+- 324.0 h (day 14): Mass Driver level 16
+- 324.0 h (day 14): Contract 31 completed
+- 330.0 h (day 14): Contract 32 completed
+- 336.0 h (day 14): Extra build slot on Cinder
+- 336.0 h (day 14): Extra build slot on Brine
+- 336.0 h (day 14): Extra build slot on Tessaly
+- 336.0 h (day 14): Extra build slot on Dusk Cairn
+- 336.0 h (day 15): Contract 33 completed
+- 342.0 h (day 15): Contract 34 completed
+- 354.0 h (day 15): Extra build slot on Cinder
+- 378.0 h (day 16): Contract 35 completed
+- 384.0 h (day 17): Contract 36 completed
+- 390.0 h (day 17): Contract 37 completed
+- 390.0 h (day 17): Contract 38 completed
+- 402.0 h (day 17): Orbital Station level 16
+- 420.0 h (day 18): Extra build slot on Kora
+- 432.0 h (day 19): Contract 39 completed
+- 438.0 h (day 19): Extra build slot on Hollow Reach
+- 438.0 h (day 19): Contract 40 completed
+- 444.0 h (day 19): Extra build slot on Vastmere
+- 444.0 h (day 19): Extra build slot on Brine
+- 444.0 h (day 19): Mass Driver level 17
+- 450.0 h (day 19): Contract 41 completed
+- 456.0 h (day 19): Extra build slot on Tessaly
+- 456.0 h (day 19): Extra build slot on Dusk Cairn
+- 456.0 h (day 20): Contract 42 completed
+- 480.0 h (day 21): Contract 43 completed
+- 486.0 h (day 21): Contract 44 completed
+- 486.0 h (day 21): Contract 45 completed
+- 492.0 h (day 21): Extra build slot on Kora
+- 498.0 h (day 21): Contract 46 completed
+- 504.0 h (day 22): Contract 47 completed
+- 516.0 h (day 22): Extra build slot on Vastmere
+- 516.0 h (day 22): Contract 48 completed
+- 522.0 h (day 22): Contract 49 completed
+- 534.0 h (day 23): Orbital Station level 17
+- 534.0 h (day 23): Contract 50 completed
+- 552.0 h (day 23): Extra build slot on Kora
+- 570.0 h (day 24): Contract 51 completed
 - 576.0 h (day 24): Extra build slot on Hollow Reach
-- 576.0 h (day 24): Extra build slot on Vastmere
 - 576.0 h (day 24): Extra build slot on Brine
-- 576.0 h (day 24): Orbital Station level 17
-- 576.0 h (day 25): Contract 49 completed
-- 582.0 h (day 25): Extra build slot on Vastmere
+- 576.0 h (day 25): Contract 52 completed
+- 582.0 h (day 25): Extra build slot on Cinder
 - 582.0 h (day 25): Mass Driver level 18
-- 594.0 h (day 25): Contract 50 completed
-- 612.0 h (day 26): Extra build slot on Vastmere
-- 612.0 h (day 26): Extra build slot on Tessaly
-- 612.0 h (day 26): Contract 51 completed
-- 624.0 h (day 26): Extra build slot on Dusk Cairn
-- 636.0 h (day 27): Contract 52 completed
-- 636.0 h (day 27): Contract 53 completed
-- 648.0 h (day 28): Contract 54 completed
-- 666.0 h (day 28): Contract 55 completed
-- 672.0 h (day 28): Extra build slot on Vastmere
-- 672.0 h (day 29): Contract 56 completed
-- 702.0 h (day 30): Extra build slot on Vastmere
-- 702.0 h (day 30): Contract 57 completed
+- 594.0 h (day 25): Extra build slot on Tessaly
+- 600.0 h (day 25): Extra build slot on Dusk Cairn
+- 606.0 h (day 26): Contract 53 completed
+- 606.0 h (day 26): Contract 54 completed
+- 618.0 h (day 26): Contract 55 completed
+- 624.0 h (day 27): Contract 56 completed
+- 654.0 h (day 28): Contract 57 completed
+- 696.0 h (day 30): Contract 58 completed
+- 708.0 h (day 30): Contract 59 completed
 
 ## Dead zones
 
@@ -371,33 +368,32 @@ None.
 
 | Resource | Stock |
 |---|---:|
-| iron_ore | 99.9K |
-| copper_ore | 31.9K |
-| silicon | 58.5K |
-| water_ice | 64.8K |
-| nickel | 11.8K |
-| ammonia | 64.8K |
-| hydrogen | 68.3K |
-| helium_3 | 13K |
-| sulfur | 10.8K |
-| rare_earths | 12.1K |
-| steel | 16.2K |
-| copper_wire | 54K |
-| silicon_wafer | 19.5K |
-| water | 107K |
-| oxygen | 68.3K |
-| fuel | 18.5K |
-| fertilizer | 66.6K |
-| food | 16.2K |
-| circuit | 23.6K |
-| hull_plate | 33.3K |
-| magnet | 23.8K |
-| reactor_core | 10.8K |
-| habitat_module | 2.97K |
-| cargo_ship | 2.21K |
+| iron_ore | 107K |
+| copper_ore | 29.7K |
+| silicon | 38.1K |
+| nickel | 13.3K |
+| ammonia | 71.4K |
+| hydrogen | 71.3K |
+| helium_3 | 9.76K |
+| sulfur | 8.64K |
+| rare_earths | 11.5K |
+| steel | 13.1K |
+| copper_wire | 12.4K |
+| silicon_wafer | 12.4K |
+| water | 76K |
+| oxygen | 71.3K |
+| fuel | 19.4K |
+| fertilizer | 75.9K |
+| food | 17.9K |
+| circuit | 18K |
+| hull_plate | 37.1K |
+| magnet | 18.1K |
+| reactor_core | 8.64K |
+| habitat_module | 3.11K |
+| cargo_ship | 3.11K |
 | outpost_kit | 4K |
-| station_segment | 30.8K |
-| survey_drone | 11.9K |
+| station_segment | 0.91 |
+| survey_drone | 3.7K |
 
 ## Bottleneck log
 
@@ -418,104 +414,104 @@ None.
 - #16 96.0h: Tessaly storage is full of Steel: output is being wasted
 - #17 102.0h: Dusk Cairn storage is full of Food: output is being wasted
 - #18 108.0h: Smelter on Tessaly is running at 0%: not enough Iron Ore
-- #19 114.0h: Plate Press on Tessaly is running at 3%: not enough Steel
-- #20 120.0h: Plate Press on Tessaly is running at 4%: not enough Steel
-- #21 126.0h: Plate Press on Tessaly is running at 4%: not enough Steel
-- #22 132.0h: Plate Press on Tessaly is running at 5%: not enough Steel
-- #23 138.0h: Plate Press on Dusk Cairn is running at 5%: Steel into Dusk Cairn is limited by Dusk Cairn's storage (16.6/s); a Depot raises it
-- #24 144.0h: Magnet Works on Hollow Reach is running at 5%: Rare Earths into Hollow Reach is limited by Hollow Reach's storage (30.3/s); a Depot raises it
-- #25 150.0h: Magnet Works on Hollow Reach is running at 5%: Rare Earths into Hollow Reach is limited by Hollow Reach's storage (30.3/s); a Depot raises it
-- #26 156.0h: Plate Press on Dusk Cairn is running at 4%: Steel into Dusk Cairn is limited by Dusk Cairn's storage (19.3/s); a Depot raises it
-- #27 162.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (47.7/s); a Depot raises it
-- #28 168.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (47.7/s); a Depot raises it
-- #29 174.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (47.7/s); a Depot raises it
-- #30 180.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (51.3/s); a Depot raises it
-- #31 186.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (51.3/s); a Depot raises it
-- #32 192.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (53.7/s); a Depot raises it
-- #33 198.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (57.5/s); a Depot raises it
-- #34 204.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #35 210.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (57.5/s); a Depot raises it
-- #36 216.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (57.5/s); a Depot raises it
-- #37 222.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #38 228.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #39 234.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #40 240.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #41 246.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #42 252.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #43 258.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #44 264.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #45 270.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #46 276.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #47 282.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #48 288.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #49 294.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #50 300.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #51 306.0h: Tessaly storage is full of Silicon Wafer: output is being wasted
-- #52 312.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (64/s); a Depot raises it
-- #53 318.0h: Vastmere storage is full of Silicon Wafer: output is being wasted
-- #54 324.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #55 330.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (66.7/s); a Depot raises it
-- #56 336.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #57 342.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (70.8/s); a Depot raises it
-- #58 348.0h: Smelter on Vastmere is running at 0%: not enough Iron Ore
-- #59 354.0h: Plate Press on Cinder is running at 1%: Steel into Cinder is limited by Cinder's storage (75/s); a Depot raises it
-- #60 360.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #61 366.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #62 372.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #63 378.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #64 384.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #65 390.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #66 396.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #67 402.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #68 408.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #69 414.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #70 420.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (26/s); a Depot raises it
-- #71 426.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (27.1/s); a Depot raises it
-- #72 432.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #73 438.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #74 444.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #75 450.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #76 456.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #77 462.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #78 468.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #79 474.0h: Wafer Fab on Cinder is running at 0%: not enough Silicon
-- #80 480.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #81 486.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #82 492.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #83 498.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #84 504.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #85 510.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #86 516.0h: Wafer Fab on Cinder is running at 0%: not enough Silicon
-- #87 522.0h: Smelter on Dusk Cairn is running at 1%: Iron Ore into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #88 528.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #89 534.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #90 540.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #91 546.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #92 552.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #93 558.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #94 564.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #95 570.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (28.2/s); a Depot raises it
-- #96 576.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #97 582.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #98 588.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #99 594.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #100 600.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #101 606.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #102 612.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #103 618.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #104 624.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #105 630.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #106 636.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #107 642.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #108 648.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #109 654.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #110 660.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #111 666.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #112 672.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #113 678.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #114 684.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #115 690.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #116 696.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #117 702.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #118 708.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
-- #119 714.0h: Wafer Fab on Dusk Cairn is running at 1%: Silicon into Dusk Cairn is limited by Dusk Cairn's storage (29.3/s); a Depot raises it
+- #19 114.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (17.7/s); a Depot raises it
+- #20 120.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (17.7/s); a Depot raises it
+- #21 126.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (20/s); a Depot raises it
+- #22 132.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (20/s); a Depot raises it
+- #23 138.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (22.4/s); a Depot raises it
+- #24 144.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (23.8/s); a Depot raises it
+- #25 150.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (25.2/s); a Depot raises it
+- #26 156.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (27.9/s); a Depot raises it
+- #27 162.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (27.9/s); a Depot raises it
+- #28 168.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (27.9/s); a Depot raises it
+- #29 174.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (27.9/s); a Depot raises it
+- #30 180.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (27.9/s); a Depot raises it
+- #31 186.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (27.9/s); a Depot raises it
+- #32 192.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #33 198.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #34 204.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #35 210.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #36 216.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #37 222.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #38 228.0h: Wire Mill on Vastmere is running at 0%: not enough Copper Ore
+- #39 234.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #40 240.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (30.7/s); a Depot raises it
+- #41 246.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (32/s); a Depot raises it
+- #42 252.0h: Wafer Fab on Brine is running at 0%: not enough Silicon
+- #43 258.0h: Wafer Fab on Brine is running at 0%: not enough Silicon
+- #44 264.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (33.6/s); a Depot raises it
+- #45 270.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (33.6/s); a Depot raises it
+- #46 276.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (33.6/s); a Depot raises it
+- #47 282.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (33.6/s); a Depot raises it
+- #48 288.0h: Smelter on Cinder is running at 0%: not enough Iron Ore
+- #49 294.0h: Smelter on Cinder is running at 0%: not enough Iron Ore
+- #50 300.0h: Wire Mill on Vastmere is running at 0%: not enough Copper Ore
+- #51 306.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (33.6/s); a Depot raises it
+- #52 312.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (35/s); a Depot raises it
+- #53 318.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (35/s); a Depot raises it
+- #54 324.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (35/s); a Depot raises it
+- #55 330.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (35/s); a Depot raises it
+- #56 336.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (35/s); a Depot raises it
+- #57 342.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (36.7/s); a Depot raises it
+- #58 348.0h: Smelter on Cinder is running at 0%: not enough Iron Ore
+- #59 354.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (36.7/s); a Depot raises it
+- #60 360.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (36.7/s); a Depot raises it
+- #61 366.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (36.7/s); a Depot raises it
+- #62 372.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (36.7/s); a Depot raises it
+- #63 378.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (36.7/s); a Depot raises it
+- #64 384.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (36.7/s); a Depot raises it
+- #65 390.0h: Smelter on Cinder is running at 0%: not enough Iron Ore
+- #66 396.0h: Smelter on Cinder is running at 0%: not enough Iron Ore
+- #67 402.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #68 408.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #69 414.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #70 420.0h: Smelter on Cinder is running at 0%: not enough Iron Ore
+- #71 426.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #72 432.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #73 438.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #74 444.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #75 450.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #76 456.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (38.1/s); a Depot raises it
+- #77 462.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #78 468.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #79 474.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #80 480.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #81 486.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #82 492.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #83 498.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #84 504.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #85 510.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #86 516.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #87 522.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #88 528.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (39.9/s); a Depot raises it
+- #89 534.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #90 540.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #91 546.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #92 552.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #93 558.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #94 564.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #95 570.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #96 576.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #97 582.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #98 588.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #99 594.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #100 600.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (41.4/s); a Depot raises it
+- #101 606.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #102 612.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #103 618.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #104 624.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #105 630.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #106 636.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #107 642.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #108 648.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #109 654.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #110 660.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #111 666.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #112 672.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #113 678.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #114 684.0h: Wafer Fab on Brine is running at 0%: not enough Silicon
+- #115 690.0h: Wafer Fab on Brine is running at 0%: not enough Silicon
+- #116 696.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #117 702.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #118 708.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
+- #119 714.0h: Hydroponic Farm on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by Dusk Cairn's storage (43.2/s); a Depot raises it
