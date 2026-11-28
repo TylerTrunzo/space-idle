@@ -1604,8 +1604,11 @@ void main() {
         // also has a ceiling far above any healthy run, for a runner so
         // slow that the multiple says nothing. Desktop JIT at the end of
         // stage 1.6: the synthetic 24 h in 0.45-0.65 s, the 48 h here in
-        // about 1.8 s (3-4x; 6x allowed; before the stage 1.6 fixes it
-        // was about 7x); a first read of credits a second about 11 ms
+        // about 1.8 s (3-4x then; before the stage 1.6 fixes it was about
+        // 7x). Since stage 1.7's report-accuracy fixes the 48 h runs 4.6-5.8x
+        // the synthetic run on a desktop and 6.4-6.9x on GitHub's runners,
+        // so 8x is allowed: still well under a real regression, which
+        // shows as 10x or more. A first read of credits a second about 11 ms
         // quiet, 17-21 ms on a busy machine (a tenth of the synthetic run
         // allowed, for the median of three reads), a second read of the
         // same state about 1 ms.
@@ -1655,7 +1658,7 @@ void main() {
             'synthetic 24 h ${base ~/ 1000} ms, day-14 48 h '
             '${catchUp ~/ 1000} ms, credits a second ${first ~/ 1000} ms '
             'first, ${second ~/ 1000} ms again';
-        expect(catchUp, lessThan(base * 6), reason: seen);
+        expect(catchUp, lessThan(base * 8), reason: seen);
         expect(catchUp, lessThan(30e6), reason: seen);
         expect(first, lessThan(base ~/ 10), reason: seen);
         expect(first, lessThan(500e3), reason: seen);
