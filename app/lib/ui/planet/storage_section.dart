@@ -60,9 +60,23 @@ class _StorageRow extends StatefulWidget {
 }
 
 class _StorageRowState extends State<_StorageRow> {
-  /// The open Sell chooser's options, worked out when it opened; null
-  /// while it is closed.
+  /// The open Sell chooser's options, worked out when it opened and again
+  /// whenever the stock shown changes; null while it is closed.
   List<SellOption>? _options;
+
+  @override
+  void didUpdateWidget(_StorageRow old) {
+    super.didUpdateWidget(old);
+    // A steady store costs nothing a tick; one that moves is priced
+    // again, so the chooser never shows figures from when it opened.
+    if (_options != null && old.row.amount != widget.row.amount) {
+      _options = sellOptions(
+        ControllerScope.of(context),
+        widget.bodyId,
+        widget.row.id,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +124,16 @@ class _StorageRowState extends State<_StorageRow> {
                 ],
               ),
             ),
-          Text('Sells for ${r.price} credits each', style: muted),
+          Text.rich(
+            TextSpan(
+              style: muted,
+              children: [
+                const TextSpan(text: 'Sells for '),
+                TextSpan(text: r.price, style: monoText(muted)),
+                const TextSpan(text: ' credits each'),
+              ],
+            ),
+          ),
           Wrap(
             spacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -125,18 +148,29 @@ class _StorageRowState extends State<_StorageRow> {
                     : null,
                 child: const Text('Sell'),
               ),
+              // The switch and its words are one control, named for the
+              // resource, so a screen reader moving between rows hears
+              // which; tapping the words toggles it too.
               MergeSemantics(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Switch(
-                      key: ValueKey('autosell-${r.id}'),
-                      value: r.autoSell,
-                      onChanged: (on) =>
-                          setRule(on ? StorageSection.defaultKeep : null),
+                child: Semantics(
+                  label: 'Auto-sell ${r.name}',
+                  child: InkWell(
+                    onTap: () =>
+                        setRule(r.autoSell ? null : StorageSection.defaultKeep),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Switch(
+                          key: ValueKey('autosell-${r.id}'),
+                          value: r.autoSell,
+                          onChanged: (on) =>
+                              setRule(on ? StorageSection.defaultKeep : null),
+                        ),
+                        const ExcludeSemantics(child: Text('Auto-sell')),
+                        const SizedBox(width: 8),
+                      ],
                     ),
-                    const Text('Auto-sell'),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -184,6 +218,7 @@ class _StorageRowState extends State<_StorageRow> {
   Widget _chooser(BuildContext context, List<SellOption> options) {
     final r = widget.row;
     final c = ControllerScope.of(context);
+    final style = Theme.of(context).textTheme.labelLarge;
     void close() => setState(() => _options = null);
     return Padding(
       padding: const EdgeInsets.only(top: 4),
@@ -199,15 +234,27 @@ class _StorageRowState extends State<_StorageRow> {
               ),
               onPressed: () {
                 close();
+                // All is all there is at the tap, not when it opened.
+                final amount = o.label == 'All'
+                    ? c.state.body(widget.bodyId).stock[r.id] ?? o.amount
+                    : o.amount;
                 runAndReport(
                   context,
                   c,
-                  SellCommand(c.playerId, widget.bodyId, r.id, o.amount),
+                  SellCommand(c.playerId, widget.bodyId, r.id, amount),
                   announce: true,
                 );
               },
-              child: Text(
-                '${o.label}: ${o.amountText} for ${o.revenue} credits',
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: '${o.label}: '),
+                    TextSpan(text: o.amountText, style: monoText(style)),
+                    const TextSpan(text: ' for '),
+                    TextSpan(text: o.revenue, style: monoText(style)),
+                    const TextSpan(text: ' credits'),
+                  ],
+                ),
               ),
             ),
           TextButton(onPressed: close, child: const Text('Cancel')),

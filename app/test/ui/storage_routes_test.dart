@@ -70,6 +70,12 @@ Future<void> _newRoute(WidgetTester tester, String rate) async {
   await tester.pump();
 }
 
+/// The keys of the selected keep chips.
+List<String> _selected(WidgetTester tester) => [
+  for (final chip in tester.widgetList<ChoiceChip>(find.byType(ChoiceChip)))
+    if (chip.selected) (chip.key! as ValueKey<String>).value,
+];
+
 /// The spans under [of] whose text contains [figure] and that are set in
 /// the monospace face.
 List<TextSpan> _monoSpans(WidgetTester tester, Finder of, String figure) => [
@@ -162,14 +168,82 @@ void main() {
       await tester.tap(_key('autosell-steel'));
       await tester.pump();
       expect(_rule(c, 'kora', 'steel')?.keepAtLeast, BigNum.from(100));
+      expect(_selected(tester), ['keep-steel-100']);
 
       await tester.tap(_key('keep-steel-1000'));
       await tester.pump();
       expect(_rule(c, 'kora', 'steel')?.keepAtLeast, BigNum.from(1000));
+      expect(_selected(tester), ['keep-steel-1000']);
 
       await tester.tap(_key('autosell-steel'));
       await tester.pump();
       expect(_rule(c, 'kora', 'steel'), isNull);
+    });
+
+    testWidgets('the switch is named for its resource; its words toggle it', (
+      tester,
+    ) async {
+      c.state.body('kora').stock['steel'] = BigNum.from(400);
+      c.tickSeconds(1);
+      await _pump(tester, c, 'kora');
+      expect(find.bySemanticsLabel(RegExp('^Auto-sell Steel')), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: _key('storage-steel'),
+          matching: find.text('Auto-sell'),
+        ),
+      );
+      await tester.pump();
+      expect(_rule(c, 'kora', 'steel'), isNotNull);
+    });
+
+    testWidgets('an open chooser follows the stock; All sells what is there', (
+      tester,
+    ) async {
+      c.state.body('kora').stock['steel'] = BigNum.from(400);
+      c.tickSeconds(1);
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('sell-steel'));
+      await tester.pump();
+      // More comes in while it is open.
+      c.state.body('kora').stock['steel'] = BigNum.from(800);
+      c.tickSeconds(0.01);
+      await tester.pump();
+      final all = sellOptions(c, 'kora', 'steel').last;
+      expect(
+        find.descendant(
+          of: _key('sell-steel-all'),
+          matching: find.textContaining(
+            '${all.amountText} for ${all.revenue} credits',
+          ),
+        ),
+        findsOneWidget,
+      );
+      // More again, with no rebuild: All still sells all of it.
+      c.state.body('kora').stock['steel'] = BigNum.from(900);
+      await tester.tap(_key('sell-steel-all'));
+      await tester.pump();
+      expect(_stock(c, 'kora', 'steel'), const BigNum.zero());
+    });
+
+    testWidgets('prices and revenues are in the monospace face', (
+      tester,
+    ) async {
+      c.state.body('kora').stock['steel'] = BigNum.from(400);
+      c.tickSeconds(1);
+      await _pump(tester, c, 'kora');
+      final row = bodyView(
+        c,
+        'kora',
+      )!.storage.firstWhere((r) => r.id == 'steel');
+      expect(_monoSpans(tester, _key('storage-steel'), row.price), isNotEmpty);
+      await tester.tap(_key('sell-steel'));
+      await tester.pump();
+      final all = sellOptions(c, 'kora', 'steel').last;
+      expect(
+        _monoSpans(tester, _key('sell-steel-all'), all.revenue),
+        isNotEmpty,
+      );
     });
 
     testWidgets('a row says what auto-sell holds back', (tester) async {
@@ -415,6 +489,39 @@ void main() {
   });
 
   group('fits (Review Focus 4)', () {
+    testWidgets('1e40 of a stock and its chooser at 360x640 and 2x text', (
+      tester,
+    ) async {
+      c.state.body('kora').stock['steel'] = BigNum.parse('1e40');
+      c.tickSeconds(1);
+      await _pump(tester, c, 'kora', size: const Size(360, 640), textScale: 2);
+      final list = find
+          .descendant(
+            of: find.byType(PlanetPanel),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        _key('sell-steel'),
+        200,
+        scrollable: list,
+      );
+      await tester.ensureVisible(_key('sell-steel'));
+      await tester.pump();
+      await tester.tap(_key('sell-steel'));
+      await tester.pump();
+      await tester.ensureVisible(_key('sell-steel-all'));
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: _key('sell-steel-all'),
+          matching: find.textContaining('1e40'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('storage and routes at 360x640 and 2x text', (tester) async {
       c.state.body('brine').ownerId = _p;
       c.state.body('kora').stock['steel'] = BigNum.from(400);
