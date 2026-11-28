@@ -70,6 +70,28 @@ Future<void> _newRoute(WidgetTester tester, String rate) async {
   await tester.pump();
 }
 
+/// The spans under [of] whose text contains [figure] and that are set in
+/// the monospace face.
+List<TextSpan> _monoSpans(WidgetTester tester, Finder of, String figure) => [
+  for (final t in tester.widgetList<RichText>(
+    find.descendant(of: of, matching: find.byType(RichText)),
+  ))
+    ..._spans(t.text).where(
+      (s) =>
+          (s.text ?? '').contains(figure) &&
+          s.style?.fontFamily == monoFontFamily,
+    ),
+];
+
+List<TextSpan> _spans(InlineSpan root) {
+  final out = <TextSpan>[];
+  root.visitChildren((s) {
+    if (s is TextSpan) out.add(s);
+    return true;
+  });
+  return out;
+}
+
 void main() {
   late GameController c;
   setUp(() => c = _controller());
@@ -254,26 +276,117 @@ void main() {
       );
     });
 
-    testWidgets('the stop level is set and taken off', (tester) async {
+    testWidgets('a route\'s rate and ships are changed on its card', (
+      tester,
+    ) async {
+      c.run(
+        CreateRouteCommand(_p, 'kora', 'brine', 'iron_ore', BigNum.from(1), 1),
+      );
+      final r = c.state.routes.single;
+      final ships = _stock(c, 'kora', _ship);
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('route-edit-${r.id}'));
+      await tester.pump();
+      // The fields start at the route's own figures.
+      expect(
+        tester.widget<TextField>(_key('rate-field-${r.id}')).controller!.text,
+        '1',
+      );
+      await tester.enterText(_key('rate-field-${r.id}'), '3');
+      await tester.tap(_key('ships-${r.id}-add'));
+      await tester.pump();
+      await tester.tap(_key('route-save-${r.id}'));
+      await tester.pump();
+      final now = c.state.routes.single;
+      expect(now.ratePerSecond, BigNum.from(3));
+      expect(now.cargoShips, 2);
+      expect(_stock(c, 'kora', _ship), ships - BigNum.from(1));
+      expect(_key('route-save-${r.id}'), findsNothing, reason: 'closed');
+      expect(find.textContaining('3/s set · 2 ships'), findsOneWidget);
+    });
+
+    testWidgets('the stop level is set and taken off on the card', (
+      tester,
+    ) async {
       c.run(
         CreateRouteCommand(_p, 'kora', 'brine', 'iron_ore', BigNum.from(1), 1),
       );
       final r = c.state.routes.single;
       await _pump(tester, c, 'kora');
       expect(find.textContaining('Never stops'), findsOneWidget);
-      await tester.tap(_key('stop-edit-${r.id}'));
+      await tester.tap(_key('route-edit-${r.id}'));
       await tester.pump();
-      await tester.enterText(_key('stop-field-${r.id}'), '50');
-      await tester.tap(_key('stop-set-${r.id}'));
+      await tester.enterText(_key('stop-field-${r.id}'), '750');
+      await tester.tap(_key('route-save-${r.id}'));
       await tester.pump();
-      expect(c.state.routes.single.stopAtDestination, BigNum.from(50));
-      expect(find.textContaining('Stops when Brine holds 50'), findsOneWidget);
+      expect(c.state.routes.single.stopAtDestination, BigNum.from(750));
+      expect(find.textContaining('Stops when Brine holds 750'), findsOneWidget);
 
-      await tester.tap(_key('stop-edit-${r.id}'));
+      // It reopens at its level, and an empty field takes it off.
+      await tester.tap(_key('route-edit-${r.id}'));
       await tester.pump();
-      await tester.tap(_key('stop-clear-${r.id}'));
+      expect(
+        tester.widget<TextField>(_key('stop-field-${r.id}')).controller!.text,
+        '750',
+      );
+      await tester.enterText(_key('stop-field-${r.id}'), '');
+      await tester.tap(_key('route-save-${r.id}'));
       await tester.pump();
       expect(c.state.routes.single.stopAtDestination, isNull);
+    });
+
+    testWidgets('an edit the core refuses says why on the card', (
+      tester,
+    ) async {
+      c.run(
+        CreateRouteCommand(_p, 'kora', 'brine', 'iron_ore', BigNum.from(1), 1),
+      );
+      final r = c.state.routes.single;
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('route-edit-${r.id}'));
+      await tester.pump();
+      await tester.enterText(_key('rate-field-${r.id}'), '0');
+      await tester.tap(_key('route-save-${r.id}'));
+      await tester.pump();
+      expect(c.state.routes.single.ratePerSecond, BigNum.from(1));
+      expect(
+        find.descendant(
+          of: _key('route-${r.id}'),
+          matching: find.text(c.lastError!),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('with no cargo ships here, the forms say so and wait', (
+      tester,
+    ) async {
+      c.state.body('kora').stock[_ship] = const BigNum.zero();
+      await _pump(tester, c, 'kora');
+      await tester.tap(_key('new-route'));
+      await tester.pump();
+      expect(find.text('No cargo ships here'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(_key('route-create')).onPressed,
+        isNull,
+      );
+      await tester.tap(_key('move-ships'));
+      await tester.pump();
+      expect(find.text('No cargo ships here'), findsOneWidget);
+      expect(tester.widget<FilledButton>(_key('move-send')).onPressed, isNull);
+    });
+
+    testWidgets('route figures are in the monospace face', (tester) async {
+      c.run(
+        CreateRouteCommand(_p, 'kora', 'brine', 'iron_ore', BigNum.from(1), 1),
+      );
+      c.tickSeconds(1);
+      await _pump(tester, c, 'kora');
+      final v = bodyView(c, 'kora')!.routesOut.single;
+      expect(
+        _monoSpans(tester, _key('route-${v.id}'), v.throughput),
+        isNotEmpty,
+      );
     });
 
     testWidgets('Move ships sends cargo ships to another body', (tester) async {
@@ -343,10 +456,10 @@ void main() {
       await tester.pump();
       await show('move-send');
       final r = c.state.routes.single;
-      await show('stop-edit-${r.id}');
-      await tester.tap(_key('stop-edit-${r.id}'));
+      await show('route-edit-${r.id}');
+      await tester.tap(_key('route-edit-${r.id}'));
       await tester.pump();
-      await show('stop-set-${r.id}');
+      await show('route-save-${r.id}');
       await tester.drag(find.byType(PlanetPanel), const Offset(0, -4000));
       await tester.pump();
       expect(tester.takeException(), isNull);

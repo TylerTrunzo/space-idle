@@ -238,6 +238,8 @@ final class RouteView {
     required this.statusText,
     required this.stop,
     required this.stopValue,
+    required this.rateValue,
+    required this.spareShips,
   });
 
   /// Route id.
@@ -289,6 +291,12 @@ final class RouteView {
 
   /// Its stop level; null for none.
   final BigNum? stopValue;
+
+  /// Its set rate, units a second.
+  final BigNum rateValue;
+
+  /// Whole cargo ships in its source's stock, which an edit can add.
+  final int spareShips;
 }
 
 /// What claiming an unowned body takes.
@@ -581,6 +589,8 @@ RouteView _route(
     statusText: statusText,
     stop: stop == null ? null : formatNumber(stop),
     stopValue: stop,
+    rateValue: r.ratePerSecond,
+    spareShips: _wholeShips(c, from),
   );
 }
 
@@ -622,4 +632,13 @@ ClaimView _claim(GameController c, BodyState body) {
     blockedReason: blocked,
     running: running == null ? null : projectView(c, running),
   );
+}
+
+/// Whole cargo ships in [body]'s stock.
+int _wholeShips(GameController c, BodyState body) {
+  final n =
+      (body.stock[c.content.rules.cargoShipResource] ?? const BigNum.zero())
+          .floor()
+          .toDouble();
+  return n.isFinite && n > 0 ? n.round() : 0;
 }

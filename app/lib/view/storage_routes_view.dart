@@ -117,3 +117,13 @@ RouteFormView routeForm(GameController c, String bodyId) {
     ships: ships.isFinite && ships > 0 ? ships.round() : 0,
   );
 }
+
+/// [v] as a plain number a text field can read back: `1500`, `0.5`,
+/// `1e+40`, never the display form (`1.5K`) that would not parse.
+String editableNumber(BigNum v) {
+  final d = v.toDouble();
+  if (d == d.truncateToDouble() && d.abs() < 1e15) {
+    return d.toInt().toString();
+  }
+  return d.toString();
+}

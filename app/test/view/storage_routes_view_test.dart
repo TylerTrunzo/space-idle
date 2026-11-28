@@ -225,6 +225,20 @@ void main() {
       expect(v.statusText, 'Waiting for room at Brine');
     });
 
+    test('a route carries its rate and the spare ships at its source', () {
+      route(rate: 2.5);
+      final v = bodyView(c, 'kora')!.routesOut.single;
+      expect(v.rateValue, BigNum.from(2.5));
+      final left = c.state.body('kora').stock[content.rules.cargoShipResource]!;
+      expect(v.spareShips, left.toDouble().floor());
+    });
+
+    test('editableNumber writes a figure a field can read back', () {
+      expect(editableNumber(BigNum.from(1500)), '1500');
+      expect(editableNumber(BigNum.from(0.5)), '0.5');
+      expect(double.parse(editableNumber(BigNum.parse('1e40'))), 1e40);
+    });
+
     test('a running route is moving', () {
       route();
       c.tickSeconds(1);
