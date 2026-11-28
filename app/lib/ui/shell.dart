@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/ui/away_dialog.dart';
 import 'package:space_idle/ui/controller_scope.dart';
+import 'package:space_idle/ui/goals/goal_strip.dart';
 import 'package:space_idle/ui/map/star_map.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/settings_sheet.dart';
@@ -172,6 +173,7 @@ class _ShellState extends State<Shell> {
         body: Column(
           children: [
             TopBar(onSettings: () => showSettingsSheet(context)),
+            const GoalStrip(),
             Expanded(
               child: IndexedStack(
                 index: _tab.index,

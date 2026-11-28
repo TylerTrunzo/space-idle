@@ -4,10 +4,13 @@ import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/game/clock.dart';
 import 'package:space_idle/game/content_source.dart';
 import 'package:space_idle/game/game_controller.dart';
+import 'package:space_idle/game/guide.dart';
 import 'package:space_idle/game/save_store.dart';
+import 'package:space_idle/game/settings_store.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/broken_save_screen.dart';
 import 'package:space_idle/ui/controller_scope.dart';
+import 'package:space_idle/ui/goals/guide_scope.dart';
 import 'package:space_idle/ui/shell.dart';
 
 /// The app: one [GameController] for the session, its save loaded at
@@ -18,10 +21,15 @@ import 'package:space_idle/ui/shell.dart';
 class SpaceIdleApp extends StatefulWidget {
   /// Creates the app; [store] defaults to the device's shared preferences
   /// and [clock] to the system clock.
-  const SpaceIdleApp({super.key, this.store, this.clock});
+  const SpaceIdleApp({super.key, this.store, this.clock, this.settings});
 
   /// Where the save lives.
   final SaveStore? store;
+
+  /// Where the app's own settings live (the guide's place, the goal
+  /// strip's fold): the device's shared preferences by default, or memory
+  /// when a [store] is given and no settings are, as tests do.
+  final SettingsStore? settings;
 
   /// The wall clock offline catch-up measures with.
   final Clock? clock;
@@ -35,6 +43,10 @@ class SpaceIdleApp extends StatefulWidget {
 
 class _SpaceIdleAppState extends State<SpaceIdleApp> {
   late GameController _controller;
+  late Guide _guide;
+  late final SettingsStore _settings =
+      widget.settings ??
+      (widget.store == null ? PrefsSettingsStore() : MemorySettingsStore());
   late final AppLifecycleListener _lifecycle;
   final GlobalKey<ScaffoldMessengerState> _messenger = GlobalKey();
 
@@ -45,6 +57,7 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
   void initState() {
     super.initState();
     _controller = _newController();
+    _guide = Guide(controller: _controller, store: _settings);
     _lifecycle = AppLifecycleListener(
       onHide: _toBackground,
       onPause: _toBackground,
@@ -62,7 +75,9 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
 
   Future<void> _start() async {
     final c = _controller;
+    final guide = _guide;
     final result = await c.start();
+    await guide.load();
     // Retry may have replaced the controller while this one was reading.
     if (!mounted || c != _controller) return;
     setState(() => _started = result);
@@ -143,10 +158,13 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
   /// Reads the store again with a fresh controller, after a read failed.
   void _retry() {
     final old = _controller;
+    final oldGuide = _guide;
     setState(() {
       _controller = _newController();
+      _guide = Guide(controller: _controller, store: _settings);
       _started = null;
     });
+    oldGuide.dispose();
     old.dispose();
     unawaited(_start());
   }
@@ -164,6 +182,7 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
   @override
   void dispose() {
     _lifecycle.dispose();
+    _guide.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -172,22 +191,25 @@ class _SpaceIdleAppState extends State<SpaceIdleApp> {
   Widget build(BuildContext context) {
     return ControllerScope(
       controller: _controller,
-      child: MaterialApp(
-        title: 'Space Idle',
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
-        scaffoldMessengerKey: _messenger,
-        home: switch (_started) {
-          null => const _Loading(),
-          LoadFailed(:final reason) => BrokenSaveScreen(
-            brokenText: _controller.brokenSaveText,
-            reason: reason,
-            onNewGame: _newGame,
-            // Only a store that could not be read is worth reading again.
-            onRetry: _controller.brokenSaveText == null ? _retry : null,
-          ),
-          StartedNew() || Loaded() => const Shell(),
-        },
+      child: GuideScope(
+        guide: _guide,
+        child: MaterialApp(
+          title: 'Space Idle',
+          debugShowCheckedModeBanner: false,
+          theme: buildTheme(),
+          scaffoldMessengerKey: _messenger,
+          home: switch (_started) {
+            null => const _Loading(),
+            LoadFailed(:final reason) => BrokenSaveScreen(
+              brokenText: _controller.brokenSaveText,
+              reason: reason,
+              onNewGame: _newGame,
+              // Only a store that could not be read is worth reading again.
+              onRetry: _controller.brokenSaveText == null ? _retry : null,
+            ),
+            StartedNew() || Loaded() => const Shell(),
+          },
+        ),
       ),
     );
   }
