@@ -70,13 +70,16 @@ typedef SteadyIncome = ({
 /// the same ratio, and all of them together are never more than the
 /// credits earned.
 ///
-/// Neither counts the faction's open contracts: what auto-sell holds back
-/// for them fills once and then sells as before, so holding it is not
-/// lost income; and an order just posted must not lower the income that
-/// sizes the next one's reward. Both copies' boards are cleared for it.
-/// Auto-delivery still runs in the measured run, so while a contract is
-/// open, goods it would have held back can go to megaprojects there: what
-/// is delivered of that good a second can read a little high.
+/// Neither counts what auto-sell holds back for the faction's open
+/// contracts as lost: a hold fills once and then sells as before, and an
+/// order just posted must not lower the income that sizes the next one's
+/// reward. The steady sales are made with [market]'s board cleared. The
+/// measured run keeps the board, so auto-delivery leaves what contracts
+/// still need, as in play, but auto-sell holds back for them only what it
+/// held when the run began ([measuredSaleRevenue]). So a contract that
+/// holds goods a fed megaproject owes keeps them from it in the run as it
+/// does in play, and no stage is fed, or starts being fed, that play would
+/// not feed.
 ///
 /// [s] is a copy of the state to work from, played forward here; its
 /// buildings, routes and stock must be the state's, though a second's
@@ -86,7 +89,7 @@ typedef SteadyIncome = ({
 /// made; it is changed too.
 ///
 /// The last few results are kept, by what the work reads ([s]'s saved
-/// form with its board cleared, [market]'s saturation and crew
+/// form, its board included, [market]'s saturation and crew
 /// efficiency) and [factionId]: reading the income of a state again, as
 /// the away summary, the report and a bot's or the app's next look at it
 /// may, costs an encoding of the state instead of the run.
@@ -97,8 +100,6 @@ SteadyIncome saleRevenuePerSec(
   required SteadyFlows Function() steady,
   required GameState market,
 }) {
-  s.faction(factionId).contracts.clear();
-  market.faction(factionId).contracts.clear();
   // [market] is a copy of the same state as [s], with no command between,
   // so of it the work reads only what its own sample step moved: the
   // saturation its sales start from and the crew efficiency its keeps use.
@@ -125,7 +126,7 @@ final _incomes = Expando<List<(String, SteadyIncome)>>('incomes');
 /// Results [_incomes] keeps per content.
 const int _incomesKept = 4;
 
-/// [saleRevenuePerSec], worked out; the boards are already cleared.
+/// [saleRevenuePerSec], worked out; it clears [market]'s board.
 SteadyIncome _saleRevenuePerSec(
   GameState s,
   Content c,
@@ -148,6 +149,7 @@ SteadyIncome _saleRevenuePerSec(
   // stand by its end, and if what they take changed, both copies start
   // from there instead: what the run sees is then what the hours after it
   // see.
+  // Both runs keep the open contracts, as play does ([measuredSaleRevenue]).
   SteadyIncome? played;
   if (_feedsGoods(s.faction(factionId))) {
     final dry = s.copy();
@@ -160,6 +162,7 @@ SteadyIncome _saleRevenuePerSec(
       }
     }
   }
+  market.faction(factionId).contracts.clear();
   // The steady sales are valued at the prices the market settles at over
   // the next hours: right after an upgrade spree it has not yet caught up
   // with the new volume, and today's prices would overstate what the next
@@ -228,8 +231,20 @@ SteadyIncome _saleRevenuePerSec(
 /// above a reserve, so those count as handed over only as they are
 /// earned.
 ///
+/// The faction's open contracts stay on its board, as in play: auto-delivery
+/// leaves what they still need, so goods a contract holds never go to a
+/// megaproject here that play would not feed. But auto-sell holds back for
+/// them only what it held when the run began ([contractStockHolds]): a hold
+/// fills once and then sells as before, so it is not lost income, and an
+/// order just posted does not lower the income that sizes the next one's
+/// reward. Nor does stock a hold kept back sell all at once.
+///
 /// [s] is played forward; pass a copy.
 SteadyIncome measuredSaleRevenue(GameState s, Content c, String factionId) {
+  final held = {
+    for (final f in s.factions)
+      if (f.contracts.isNotEmpty) f.id: contractStockHolds(s, c, f),
+  };
   BigNum sales() {
     var total = const BigNum.zero();
     for (final v in s.faction(factionId).salesRevenue.values) {
@@ -251,7 +266,7 @@ SteadyIncome measuredSaleRevenue(GameState s, Content c, String factionId) {
       final cache = StepCache(s, c);
       sendCargo(s, c, _stepSeconds, cache: cache);
       final goods = stepMegaprojectAuto(s, c, _stepSeconds, cache: cache);
-      stepMarket(s, c, _stepSeconds, cache: cache);
+      stepMarket(s, c, _stepSeconds, cache: cache, contractHolds: held);
       final credits = stepMegaprojectCredits(s, c, _stepSeconds);
       if (measure) {
         addDeliveries(delivered, goods[factionId] ?? const {});
