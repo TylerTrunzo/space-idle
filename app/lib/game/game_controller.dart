@@ -243,9 +243,46 @@ class GameController extends ChangeNotifier {
       previewsWorkedOut++;
       landed = true;
     }
+    // Then the best-upgrade search, a level at a time, in what is left.
+    while (_search != null && clock.elapsed < previewBudget) {
+      final search = _search!;
+      if (search.step()) {
+        _best = (best: search.best, at: search.at, epoch: search.epoch);
+        _search = null;
+        landed = true;
+      }
+    }
     if (landed) previewsVersion.value++;
-    if (_wanted.isNotEmpty) _askForFill();
+    if (_wanted.isNotEmpty || _search != null) _askForFill();
   }
+
+  ({UpgradeAdvice? best, double at, int epoch})? _best;
+  _BestSearch? _search;
+
+  /// The affordable upgrade that pays back soonest for the player (as the
+  /// core's `bestUpgrades` ranks them), if a search is done: `ready` false
+  /// until the first is.
+  ///
+  /// The search previews every candidate level, a flow report each (some
+  /// 930 ms in all on a day-14 empire), so it runs in the fills, a level
+  /// at a time within [previewBudget], never in a frame. A command, or
+  /// [adviceRefreshSeconds] of game time, starts a new one; the previous
+  /// answer shows until it ends. A load or a new game drops it.
+  ({bool ready, UpgradeAdvice? best}) bestUpgradeNow() {
+    final have = _best;
+    if ((have == null ||
+            have.epoch != _adviceEpoch ||
+            _state.time - have.at >= adviceRefreshSeconds) &&
+        _search == null) {
+      _search = _BestSearch(_state, content, playerId, flow, _adviceEpoch);
+      _askForFill();
+    }
+    return (ready: have != null, best: have?.best);
+  }
+
+  /// Counts the commands and loads: a best-upgrade answer of an earlier
+  /// count is of an older state.
+  int _adviceEpoch = 0;
 
   /// Fills after the frame being drawn, asking for another frame, so each
   /// frame does one fill.
@@ -265,6 +302,10 @@ class GameController extends ChangeNotifier {
       _wanted.clear();
       _previewer = null;
       _previewerAt = double.negativeInfinity;
+      // A search under way is of the old state; its answer, if any, shows
+      // until a new search ends.
+      _search = null;
+      _adviceEpoch++;
     }
   }
 
@@ -496,6 +537,15 @@ class GameController extends ChangeNotifier {
     return summary;
   }
 
+  /// Plays [state] from now on, as a load does but writing nothing: for
+  /// tests that start from a saved fixture.
+  @visibleForTesting
+  void debugReplaceState(GameState state) {
+    _state = state;
+    _dropReports();
+    _notify();
+  }
+
   void _replace(GameState state) {
     _state = state;
     _dropReports();
@@ -590,4 +640,62 @@ final class _Good extends _Decoded {
 final class _Bad extends _Decoded {
   const _Bad(this.reason);
   final String reason;
+}
+
+/// A best-upgrade search, run a level at a time ([GameController
+/// .bestUpgradeNow]): the candidates `bestUpgrades` takes (every unmaxed,
+/// affordable level of the faction's buildings, in body, building and
+/// track order), each previewed on one [UpgradePreviewer], the soonest
+/// payback kept (the first on a tie).
+final class _BestSearch {
+  _BestSearch(
+    GameState s,
+    Content c,
+    String factionId,
+    FlowReport flow,
+    this.epoch,
+  ) : at = s.time,
+      _previewer = UpgradePreviewer(s, c, factionId, before: flow),
+      _candidates = [
+        for (final body in s.bodies)
+          if (body.ownerId == factionId)
+            for (final b in body.buildings)
+              for (final t in UpgradeTrack.values)
+                if (c.buildings[b.defId]!.upgrades.containsKey(t) &&
+                    upgradeMaxedReason(c, b, t) == null &&
+                    (upgradeCost(c, b, t)[creditsKey] ?? const BigNum.zero()) <=
+                        s.faction(factionId).credits)
+                  (body.id, b.id, t),
+      ];
+
+  /// The game time of the state it searches.
+  final double at;
+
+  /// The controller's advice epoch it was started in.
+  final int epoch;
+  final UpgradePreviewer _previewer;
+  final List<(String, String, UpgradeTrack)> _candidates;
+  int _next = 0;
+
+  /// The best so far.
+  UpgradeAdvice? best;
+
+  /// Previews the next candidate; true once none is left.
+  bool step() {
+    if (_next >= _candidates.length) return true;
+    final (body, building, track) = _candidates[_next++];
+    final p = _previewer.preview(building, track);
+    final t = p?.paybackSeconds;
+    if (p != null &&
+        t != null &&
+        (best == null || t < best!.preview.paybackSeconds!)) {
+      best = UpgradeAdvice(
+        bodyId: body,
+        buildingId: building,
+        track: track,
+        preview: p,
+      );
+    }
+    return _next >= _candidates.length;
+  }
 }
