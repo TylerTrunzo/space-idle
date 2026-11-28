@@ -31,7 +31,9 @@ Use #5 in community posts, but never in the Play title (see store-listing.md).
 
 ## About blurb (press kit, itch.io page, Reddit "about")
 
-> Accrete is a solo-developed idle and incremental game for Android and the web. It's built for people who
+*How the game is made (owner-steered, AI-built) is covered by the disclosure decision in `strategy.md` §6.*
+
+> Accrete is an idle and incremental game for Android and the web, made by Brightwork Games. It's built for people who
 > enjoy idle games in short check-ins and like production chains in strategy games. Growth is permanent: there's no
 > prestige reset. Big milestones bring a victory moment and play continues. The game is free, with no ads, no in-app
 > purchases and no premium currency. That isn't a hook: making money isn't a goal.

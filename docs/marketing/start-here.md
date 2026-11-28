@@ -91,4 +91,7 @@ The name only needs settling before the first three:
 | 2026-11-28 | Domain and email: buy the domain through iCloud+ or Cloudflare; studio email via iCloud+ Custom Email Domain; website on Cloudflare Pages | Owner to do |
 | 2026-11-28 | Domain **brightworkgames.com** bought through iCloud+; **hello@brightworkgames.com** created | Done |
 | 2026-11-28 | Website and privacy policy built (`site/`); social kit ready (`social/`) | Owner to publish on Cloudflare Pages and claim the handles |
+| 2026-11-28 | Strategy written (`strategy.md`): no paid ads until the retention gate is met; then a $150–200 test of Google App campaigns in low-cost English-speaking markets, plus Reddit | Proposed |
+| — | Whether to disclose publicly that the game is built with AI (`strategy.md` §6) | **Open: recommend yes, proactively** |
+| — | Monthly marketing budget once the gate is met | **Open** |
 | — | How much time per week the owner gives to marketing | **Open** |

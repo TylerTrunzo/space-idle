@@ -13,6 +13,8 @@ Sources: design spec §1–2 (`docs/superpowers/specs/2026-11-26-space-idle-desi
 | [screenshots.md](screenshots.md) | Shot list, captions, feature graphic, icon, and how to capture shots |
 | [audience.md](audience.md) | Who it's for, where they are, and a launch plan with no budget |
 | [start-here.md](start-here.md) | Step-by-step plan and decisions log |
+| [strategy.md](strategy.md) | Marketing strategy: retention gate, free channels, paid-ad test plan and budget tiers, PR risk, metrics |
+| [ads.md](ads.md) | Ready-to-use Google App campaign and Reddit ad copy |
 | [brand/](brand/README.md) | Icon and logo concepts, palette, wordmark |
 | [website.md](website.md), [site/](site/) | The brightworkgames.com site, and how to publish it |
 | [social/](social/README.md) | Handles, bios, profile pictures and banners |
