@@ -1,0 +1,3 @@
+{"cmd":"setAutoSell","bodyId":"kora","resourceId":"steel","keepAtLeast":"0"}
+{"cmd":"advance","seconds":400}
+{"cmd":"state"}
