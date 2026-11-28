@@ -9,7 +9,8 @@ numbers below come from 21-day runs of the same bots (greedy: 14 days).
 15 commands a check-in, no buy-max), bots paying megaproject credits by hand, the stage 1.7 task 3
 content. "After" is task 4's bots and content, after its fix round and the controller's rulings,
 and after the final fix wave (the whole-branch review's I1 and I2, below): its numbers are those at
-commit 413452e. "Task 4" in the table is the after column before that wave (commit 20c18c6).
+commit 16837a2, after the report stopped reading cargo-fed buildings above what play gives them
+(ruling 1 on the final fix wave). "Task 4" in the table is the after column before that wave (commit 20c18c6).
 The pacing targets are `docs/playtests/2026-11-27-round4-findings.md` §4, which moved the casual
 targets to a casual bot that taps buy-max each check-in. Stage 1.5's "Orbital Station level 3
 around day 14-21" belonged to the old casual bot; §4's targets supersede it (the buy-max casual
@@ -47,25 +48,24 @@ reaches level 3 on day 4-5).
 | Target | Before | Task 4 | After | Met |
 |---|---|---|---|---|
 | Casual: station level 1 on days 3-5 | day 6 / 7 / 6 (132, 162, 138 h) | day 4 / 4 / 5 (90, 90, 108 h) | day 4 / 4 / 5 (90, 90, 108 h) | yes |
-| Casual: a milestone or project on ≥ 5 of every 7 days (worst week) | 6 / 7 / 6 | 7 / 7 / 7 | 5 / **3** / 6 | **no on seed 2** |
-| Casual: no gap > 3 days with neither megaproject levelling, through day 21 (longest run of days without, from station level 1) | 2 / 2 / 3 | 3 / 3 / 3 | 3 / 3 / 3 | yes |
-| Casual: day 21 ≥ 1.5× day 14 (three-day averages: days 19-21 over days 12-14) | 2.73× / 3.05× / 4.78× | 1.61× / 1.65× / 1.69× | **1.46×** / 1.50× / 1.64× | **no on seed 1** |
-| Balanced: +20% from day 7 to day 14 (three-day averages: days 12-14 over days 5-7) | 3.62× / 3.35× / 4.11× | 3.95× / 3.51× / 3.11× | 3.81× / 3.67× / 3.53× | yes |
-| Balanced: +10% from day 14 to day 21 (three-day averages: days 19-21 over days 12-14) | 1.12× / 1.21× / 1.10× | 1.83× / 1.75× / 1.59× | 1.66× / 1.72× / 1.77× | yes |
-| Balanced: a station level at least every 4 days through day 21 (longest run of days without one; §4 said 3, the controller ruled 4) | 12 / 13 / 10 | 4 / 3 / 5 | 3 / 4 / 4 | yes |
-| Contracts ≤ 15% of earnings on days 1 / 7 / 14, casual | 12.7-0.0-9.3 / 6.3-0.0-7.9 / 6.0-9.6-3.1% | 0.6-4.4-2.9 / 0.4-2.7-2.1 / 0.7-0.0-4.4% | 0.6-1.8-6.7 / 0.4-2.0-5.0 / 0.7-0.0-5.3% | yes |
-| Same, balanced | 0.0-0.0-0.0 / 1.5-4.3-6.2 / 1.4-1.5-4.6% | 0.0-0.0-5.1 / 1.3-0.0-3.5 / 1.4-4.4-7.6% | 0.0-0.0-6.4 / 1.3-0.0-2.2 / 1.4-0.0-7.1% | yes |
+| Casual: a milestone or project on ≥ 5 of every 7 days (worst week) | 6 / 7 / 6 | 7 / 7 / 7 | 5 / 7 / 6 | yes |
+| Casual: no gap > 3 days with neither megaproject levelling, through day 21 (longest run of days without, from station level 1) | 2 / 2 / 3 | 3 / 3 / 3 | 3 / 2 / 3 | yes |
+| Casual: day 21 ≥ 1.5× day 14 (three-day averages: days 19-21 over days 12-14) | 2.73× / 3.05× / 4.78× | 1.61× / 1.65× / 1.69× | 1.88× / 2.04× / 1.64× | yes |
+| Balanced: +20% from day 7 to day 14 (three-day averages: days 12-14 over days 5-7) | 3.62× / 3.35× / 4.11× | 3.95× / 3.51× / 3.11× | 3.75× / 3.63× / 3.53× | yes |
+| Balanced: +10% from day 14 to day 21 (three-day averages: days 19-21 over days 12-14) | 1.12× / 1.21× / 1.10× | 1.83× / 1.75× / 1.59× | 1.79× / 1.66× / 1.77× | yes |
+| Balanced: a station level at least every 4 days through day 21 (longest run of days without one; §4 said 3, the controller ruled 4) | 12 / 13 / 10 | 4 / 3 / 5 | 4 / 4 / 4 | yes |
+| Contracts ≤ 15% of earnings on days 1 / 7 / 14, casual | 12.7-0.0-9.3 / 6.3-0.0-7.9 / 6.0-9.6-3.1% | 0.6-4.4-2.9 / 0.4-2.7-2.1 / 0.7-0.0-4.4% | 0.6-3.6-5.4 / 0.4-3.3-1.6 / 0.7-0.0-5.3% | yes |
+| Same, balanced | 0.0-0.0-0.0 / 1.5-4.3-6.2 / 1.4-1.5-4.6% | 0.0-0.0-5.1 / 1.3-0.0-3.5 / 1.4-4.4-7.6% | 0.0-0.0-4.0 / 1.3-1.7-4.6 / 1.4-0.0-7.1% | yes |
 | Same, greedy | 12.3-11.2-10.6 / 9.9-12.8-12.0 / 9.0-9.5-10.7% | unchanged | unchanged | yes |
 | No reward above 1 h of income, first excepted | | at posting, against the income basis the engine caps by: always (game_core `test/sim/contract_reward_cap_test.dart`, about 100 contracts on seeds 1-6 and four mid-game states) | the same test passes | yes |
 | Mass Driver: a level raises balanced income ≥ 3% on days 5-14 | +4.5-5.0% | +4.86-5.00% (days 5, 7, 14) | day 14, seed 1, checked by the balance target tests | yes |
 
-**Two misses after the final fix wave** (for a ruling). Casual seed 1's income ratio is 1.46×: seed 1
-is the seed the balance target tests play, so `balance_targets_casual_test.dart` fails. Casual seed
-2's worst week has a milestone or project on 3 days (days 15-21: one Mass Driver level, no
-milestone). Played commit by commit, the honest income reading alone (I2) took the seed-1 and
-seed-2 ratios to 1.39× and 1.33×; leaving owed goods out of contracts took them to 1.32× and
-1.34× and seed 2's worst week to 4; the bots' one-day discard brought the ratios back to 1.46× and
-1.50×. Not tuned. The balanced bot's seed 3, the known miss of task 4, now goes 4 days.
+**What the final fix wave moved.** Every target passes on seeds 1-3. On the way, before the report's
+cargo-fed fix, casual seed 1's ratio was 1.46× and seed 2's worst week 3: the honest income
+reading alone (I2) took the seed-1 and seed-2 ratios to 1.39× and 1.33×, as the bots' auto-pay
+reserve, also the casual bot's buy-max allowance, is an hour of it. Once the report showed
+Vastmere's starved Drone Works at 0% instead of 30%, the casual bot fixed the magnet supply on
+seeds 1 and 2 (seed 3 played the same as before). Task 4's balanced seed-3 miss is gone too.
 
 **Income ratios on three-day averages** (controller ruling 4 on task 4). A day's earnings swing by
 5-20% from the next with when a megaproject level lands (casual seed 1, days 12-21: 140, 171, 184,
@@ -80,9 +80,11 @@ from day 16, still on day 21). After the final fix wave it goes 4 (ruling 3 allo
 14-day casual session and a 10-day balanced one (seed 1), credits a second against what the next
 2.5 h away earn: before the final fix wave, casual read +11.1% at 12 h and +14.9% at 252 h (and
 -52% and -58% at 144 h and 180 h, the contract case above); the balanced bot's worst was -9.8% at
-96 h. After it, casual reads +10.5% at 192 h and +14.4% at 324 h, every other check-in within 8%
-(144 h and 180 h within 1%); balanced -8.3% at 84 h and -10.2% at 96 h. Not root-caused; possibly
-the 15-minute window.
+96 h. After it, casual reads +19.3% at 192 h, -10.8% at 216 h, +8.1% at 240 h and +18.4% at 300 h,
+every other check-in within 8% (144 h and 180 h within 1% on the old states); balanced -8.3% at 84 h
+and -10.2% at 96 h. The bots play differently now, so these are other states: read on the 192 h
+and 300 h states, the code before the report's cargo-fed fix gives the same figures. Not
+root-caused; possibly the 15-minute window.
 
 **The income basis swings.** A contract's reward is capped at 1 h of its income basis at posting:
 the larger of credits a second and the sale value of what is made beyond what is used. The second
@@ -148,26 +150,28 @@ throughout, for the buy-max casual as for the balanced bot.
 
 ## Later days
 
-Seed 1 balanced: income 488B on day 21, 663B on day 30 (task 4: 496B and 687B); station 16 → 17
+Seed 1 balanced: income 519B on day 21, 684B on day 30 (task 4: 496B and 687B); station 16 → 17
 and Mass Driver 17 → 18 between day 21 and 30. The balanced bot still levels both past day 30.
 
-**Casual seed 1's station at level 13.** Income 247B on day 21 and 458B on day 30 (task 4: 270B
-and 330B). Its station reaches level 13 on day 12 and stays there to day 23, then reaches 14 on day
-24 and 15 on day 28 (task 4: level 13 from day 13 to day 30). Task 4 read it as "likely a segment
-wall"; it was not, and two causes held it:
+**Casual seed 1's station.** Income 354B on day 21 and 431B on day 30 (task 4: 270B and 330B). Its
+station reaches level 13 on day 12, 14 on day 15 and 15 on day 18, then stays at 15 to day 30, while
+the Mass Driver goes on (17 → 19). Task 4's run held it at level 13 from day 13 to day 30; task 4
+read that as "likely a segment wall". It was not; two causes held it:
 
-- **A contract held the station's drones.** In task 4's run, an order posted at 316 h for 290,000
-  survey drones held every drone on the bodies while the station, fed near ready, owed only drones
-  (327K): from 336 h to 624 h it got none, and no bottleneck said why (the whole-branch review's
-  I1). Now a contract never asks for a good a fed megaproject owes, and the bots discard one posted
-  earlier that holds such goods after a day: here, c168 (190K drones, posted at 270 h, before
-  feeding started at 318 h) was discarded at about 343 h.
-- **Drones are made at about 0.2 a second from day 14 to day 23** (both runs). Vastmere's two
-  Drone Works run at 0%, short of magnets: one route, r64 from Hollow Reach, brings Vastmere 40
-  magnets a second (its 4 cargo ships), and Vastmere's Reactor Works use them first. The report
-  names it ("4 buildings on Vastmere are running as low as 30%: Magnet into Vastmere is limited by
-  route r64's 4 Cargo Ships (40/s); assign more ships"). But its one-second sample reads the
-  group at 30% and 16 drones made a second, against 0% and 0.2 a second in play, and the casual bot
-  fixes the worst three bottlenecks a check-in, which read 0-2%. Drones flow from about 560 h, and
-  the station levels on day 24. For playtest round 5, and for the report's sampling of cargo-fed
-  buildings.
+- **A contract held the station's drones.** An order posted at 316 h for 290,000 survey drones held
+  every drone on the bodies while the station, fed near ready, owed only drones (327K): from 336 h
+  to 624 h it got none, and no bottleneck said why (the whole-branch review's I1). Now a contract
+  never asks for a good a fed megaproject owes, and the bots discard one posted earlier that holds
+  such goods after a day.
+- **Vastmere's Drone Works were starved of magnets.** One route, r64 from Hollow Reach, brings
+  Vastmere 40 magnets a second (its 4 cargo ships), and Vastmere's Reactor Works, a shallower
+  recipe, use them first: the Drone Works ran at 0% and drones came at about 0.2 a second. The
+  report's one-second sample read them at 30% and 16 drones a second, so the casual bot, fixing the
+  worst three bottlenecks, never reached them. The report now runs a cargo-fed building no faster
+  than a full step of play does; the casual bot then fixes the supply, and the station levels on
+  days 15 and 18.
+
+From day 18 its stage 16 waits on station segments: the station owes 6.5M of them and Vastmere's
+Station Docks run at 0%, short of magnets again, with the report now saying so ("4 buildings on
+Vastmere are running as low as 0%: not enough Magnet"). The casual bot, on 15 commands a check-in,
+has not fixed it by day 30. Context for playtest round 5; after day 21, so no §4 target reads it.
