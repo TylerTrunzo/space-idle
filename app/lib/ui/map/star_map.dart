@@ -1,4 +1,5 @@
-import 'package:flutter/scheduler.dart';
+import 'dart:async';
+
 import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/game/game_controller.dart';
@@ -15,6 +16,11 @@ import 'package:space_idle/ui/map/star_map_scene.dart';
 /// curves and shipments glide along them between the 1 s game ticks. Tap a
 /// body to [onSelect] it, or the "?" signal marker to [onSignalTap] its
 /// system. Pinch to zoom from 0.5× to 3×.
+///
+/// Shipments move at most [motionFps] times a second, from a timer rather
+/// than a ticker: a ticker asks for a frame at every display refresh, and on
+/// the web every frame redraws the whole screen. The eye needs no more for
+/// a dot gliding along a route.
 ///
 /// Read-only: it changes nothing in the game.
 class StarMap extends StatefulWidget {
@@ -44,6 +50,9 @@ class StarMap extends StatefulWidget {
   /// selected body keeps its label.
   static const double compactHeight = 200;
 
+  /// How many times a second shipments move between game ticks.
+  static const int motionFps = 30;
+
   /// How many scenes any star map has built, for tests: a hidden map must
   /// not build one on a tick.
   @visibleForTesting
@@ -53,13 +62,16 @@ class StarMap extends StatefulWidget {
   State<StarMap> createState() => _StarMapState();
 }
 
-class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
+class _StarMapState extends State<StarMap> {
   static const double _minScale = 0.5;
   static const double _maxScale = 3;
 
   final MapMotion _motion = MapMotion();
   final TransformationController _zoom = TransformationController();
-  late final Ticker _ticker;
+
+  /// Moves the shipments [StarMap.motionFps] times a second while any are
+  /// in flight, the map shows and motion is allowed; null otherwise.
+  Timer? _motionTimer;
 
   /// The scene drawn, rebuilt when the game notifies, and the game time
   /// it was built at.
@@ -75,14 +87,13 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   bool _visible = true;
   bool _stale = false;
 
-  /// Ticker time of the latest frame, and of the latest game tick.
-  Duration _frameAt = Duration.zero;
-  Duration _tickAt = Duration.zero;
+  /// Motion steps since the latest game tick: the timer's clock, so a
+  /// test's fake time drives it as the real one does.
+  int _steps = 0;
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker(_onFrame);
     _scene = _buildScene();
     _sceneTime = widget.controller.state.time;
     widget.controller.addListener(_onGameChanged);
@@ -97,7 +108,7 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
       _stale = false;
       _refresh();
     }
-    _syncTicker();
+    _syncMotion();
   }
 
   @override
@@ -113,7 +124,7 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     widget.controller.removeListener(_onGameChanged);
-    _ticker.dispose();
+    _motionTimer?.cancel();
     _motion.dispose();
     _zoom.dispose();
     super.dispose();
@@ -148,28 +159,33 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
     final time = widget.controller.state.time;
     if (time != _sceneTime) {
       _sceneTime = time;
-      _tickAt = _frameAt;
+      _steps = 0;
+      _motion.update(sinceTick: 0);
     }
-    _syncTicker();
+    _syncMotion();
   }
 
-  void _onFrame(Duration elapsed) {
-    _frameAt = elapsed;
-    final since =
-        (elapsed - _tickAt).inMicroseconds / Duration.microsecondsPerSecond;
-    _motion.update(sinceTick: since.clamp(0.0, 1.0));
+  void _step(Timer _) {
+    _steps++;
+    _motion.update(sinceTick: (_steps / StarMap.motionFps).clamp(0.0, 1.0));
   }
 
-  /// Runs the ticker only while shipments are in flight and motion is
-  /// allowed: nothing else on the map moves.
-  void _syncTicker() {
-    final animate = _animationsAllowed && _scene.shipments.isNotEmpty;
-    if (animate && !_ticker.isActive) {
-      _frameAt = Duration.zero;
-      _tickAt = Duration.zero;
-      _ticker.start();
-    } else if (!animate && _ticker.isActive) {
-      _ticker.stop();
+  /// Runs the motion timer only while shipments are in flight, the map
+  /// shows and motion is allowed: nothing else on the map moves.
+  void _syncMotion() {
+    final animate =
+        _animationsAllowed && _visible && _scene.shipments.isNotEmpty;
+    if (animate && _motionTimer == null) {
+      _motionTimer = Timer.periodic(
+        Duration(
+          microseconds: Duration.microsecondsPerSecond ~/ StarMap.motionFps,
+        ),
+        _step,
+      );
+    } else if (!animate && _motionTimer != null) {
+      _motionTimer!.cancel();
+      _motionTimer = null;
+      _steps = 0;
       _motion.update(sinceTick: 0);
     }
   }
@@ -195,7 +211,7 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final c = widget.controller;
     final scene = _scene;
-    final animate = _ticker.isActive;
+    final animate = _motionTimer != null;
 
     return ColoredBox(
       color: Palette.background,

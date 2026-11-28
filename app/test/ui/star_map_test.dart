@@ -144,8 +144,32 @@ void main() {
     await tester.pumpWidget(_app(c));
     await tester.pump(const Duration(milliseconds: 500));
     expect(tester.takeException(), isNull);
-    // Shipments move between ticks: the ticker keeps frames coming.
-    expect(tester.binding.hasScheduledFrame, isTrue);
+    // Shipments move between ticks: the motion timer keeps them going.
+    final before = _shipmentProgress(tester);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_shipmentProgress(tester), greaterThan(before));
+  });
+
+  testWidgets('shipments move at most 30 times a second', (tester) async {
+    final c = _controller();
+    addRouteAndShipment(c.state, departIn: -25, tripSeconds: 100);
+    c.tickSeconds(1);
+    await tester.pumpWidget(_app(c));
+    final paint = tester.widget<CustomPaint>(
+      find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is MapMotionPainter,
+      ),
+    );
+    final motion = (paint.painter! as MapMotionPainter).motion;
+    var moves = 0;
+    void count() => moves++;
+    motion.addListener(count);
+    addTearDown(() => motion.removeListener(count));
+    // A second of 60 Hz frames.
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(microseconds: 16667));
+    }
+    expect(moves, inInclusiveRange(25, StarMap.motionFps + 1));
   });
 
   testWidgets('a command between ticks does not pull a shipment back', (
@@ -213,17 +237,22 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
-  testWidgets('turning animations off while running stops the ticker', (
+  testWidgets('turning animations off while running stops the motion', (
     tester,
   ) async {
     final c = _controller();
     addRouteAndShipment(c.state, departIn: -25, tripSeconds: 100);
     await tester.pumpWidget(_app(c));
     await tester.pump(const Duration(milliseconds: 100));
-    expect(tester.binding.hasScheduledFrame, isTrue);
+    final moving = _shipmentProgress(tester);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_shipmentProgress(tester), greaterThan(moving));
 
     await tester.pumpWidget(_app(c, disableAnimations: true));
     await tester.pump(const Duration(milliseconds: 100));
+    final still = _shipmentProgress(tester);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(_shipmentProgress(tester), still);
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
