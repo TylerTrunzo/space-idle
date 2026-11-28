@@ -188,7 +188,8 @@ final class SeenBottleneck {
   /// Body it is on; null for a faction-wide crew shortage.
   final String? bodyId;
 
-  /// Building held back; null for a crew shortage or a full store.
+  /// Building held back, or for a `contractBlocksDelivery` the contract
+  /// holding the good; null for a crew shortage or a full store.
   final String? buildingId;
 
   /// Input short of, or resource being wasted; null otherwise.

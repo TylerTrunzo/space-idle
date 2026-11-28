@@ -138,6 +138,16 @@ enum BottleneckKind {
   /// rule's `keepAtLeast` ([Bottleneck.heldByKeep]).
   keepBlocksDelivery,
 
+  /// A megaproject fed goods on its own still owes a good, and an open
+  /// contract holds some of it on the faction's bodies, which auto-delivery
+  /// leaves there for the contract ([Bottleneck.contractId],
+  /// [Bottleneck.heldForContract]). New orders never ask for such a good,
+  /// so this is one posted before feeding started. A kind of its own, not a
+  /// cause of [keepBlocksDelivery]: it is faction-wide (no body), names a
+  /// contract the player can deliver or discard rather than a rule to
+  /// change, and is tracked over time by that contract.
+  contractBlocksDelivery,
+
   /// A building is short of one of its inputs ([BottleneckKind.input]),
   /// the store it draws from is fed by a route, and that route is held
   /// back by something other than what its source has to send
@@ -170,6 +180,8 @@ final class Bottleneck {
     this.routeId,
     this.binding,
     this.routePerSec,
+    this.contractId,
+    this.heldForContract,
   });
 
   /// What holds it back.
@@ -177,8 +189,9 @@ final class Bottleneck {
 
   /// Body the building or store is on, or that holds the good for
   /// [BottleneckKind.keepBlocksDelivery]; null for
-  /// [BottleneckKind.crewShortage], [BottleneckKind.noSales] and
-  /// [BottleneckKind.megaprojectDiversion], which are faction-wide.
+  /// [BottleneckKind.crewShortage], [BottleneckKind.noSales],
+  /// [BottleneckKind.megaprojectDiversion] and
+  /// [BottleneckKind.contractBlocksDelivery], which are faction-wide.
   final String? bodyId;
 
   /// The held-back building; null for the kinds about no one building, and
@@ -188,7 +201,8 @@ final class Bottleneck {
   /// The input a building is short of ([BottleneckKind.input]), the
   /// resource being wasted ([BottleneckKind.storageFull]), or the good a
   /// megaproject takes or is kept from ([BottleneckKind.megaprojectDiversion],
-  /// [BottleneckKind.keepBlocksDelivery]); otherwise null.
+  /// [BottleneckKind.keepBlocksDelivery],
+  /// [BottleneckKind.contractBlocksDelivery]); otherwise null.
   final String? resourceId;
 
   /// Buildings it stands for, at least 1: more than one once
@@ -202,7 +216,8 @@ final class Bottleneck {
 
   /// The megaproject that takes the good
   /// ([BottleneckKind.megaprojectDiversion]) or is kept from it
-  /// ([BottleneckKind.keepBlocksDelivery]); otherwise null.
+  /// ([BottleneckKind.keepBlocksDelivery],
+  /// [BottleneckKind.contractBlocksDelivery]); otherwise null.
   final String? megaprojectId;
 
   /// For [BottleneckKind.megaprojectDiversion], the share of what would
@@ -215,6 +230,15 @@ final class Bottleneck {
   /// that auto-delivery would hand over, up to what is owed, but for the
   /// rule's `keepAtLeast`; otherwise null.
   final BigNum? heldByKeep;
+
+  /// For [BottleneckKind.contractBlocksDelivery], the open contract that
+  /// holds the good; otherwise null.
+  final String? contractId;
+
+  /// For [BottleneckKind.contractBlocksDelivery], the whole units on the
+  /// faction's bodies, summed, that auto-delivery would hand over, up to
+  /// what is owed, but for [contractId]; otherwise null.
+  final BigNum? heldForContract;
 
   /// For [BottleneckKind.routeLimited], the route into the store that
   /// holds it back; otherwise null.
@@ -235,15 +259,17 @@ final class Bottleneck {
   /// own output of the resource that it kept (0 when only arriving cargo
   /// was wasted, or in an away summary when only the absence wasted it);
   /// for [BottleneckKind.megaprojectDiversion] the share that still sells,
-  /// `1 − shareOfSales`; 0 for [BottleneckKind.noSales] and
-  /// [BottleneckKind.keepBlocksDelivery].
+  /// `1 − shareOfSales`; 0 for [BottleneckKind.noSales],
+  /// [BottleneckKind.keepBlocksDelivery] and
+  /// [BottleneckKind.contractBlocksDelivery].
   final double runFraction;
 
   /// Plain-English description using display names, such as
   /// "Smelter on Kora is running at 50%: not enough Iron Ore", for the
   /// kinds of stage 1.6 and before; empty for
   /// [BottleneckKind.megaprojectDiversion],
-  /// [BottleneckKind.keepBlocksDelivery] and a [fromAbsence] entry, whose
+  /// [BottleneckKind.keepBlocksDelivery],
+  /// [BottleneckKind.contractBlocksDelivery] and a [fromAbsence] entry, whose
   /// text a display builds from the typed fields. (Stage 2 builds every
   /// kind's text from them.)
   final String message;
@@ -306,14 +332,24 @@ final class Bottleneck {
       _ => null,
     },
     routePerSec: (j['routePerSec'] as num?)?.toDouble(),
+    contractId: j['contractId'] as String?,
+    heldForContract: switch (j['heldForContract']) {
+      final String v => BigNum.fromJson(v),
+      _ => null,
+    },
   );
 
   /// [kind], [bodyId], [buildingId] and [resourceId] as one key, as in
   /// [SeenBottleneck.key]; a [BottleneckKind.routeLimited] keys as the
   /// input shortage it is, so it keeps the time it was first seen however
-  /// its route reads.
-  String get key =>
-      bottleneckKey(_trackedKind.name, bodyId, buildingId, resourceId);
+  /// its route reads. A [BottleneckKind.contractBlocksDelivery] keys by its
+  /// contract where a building would be, so it is tracked per contract.
+  String get key => bottleneckKey(
+    _trackedKind.name,
+    bodyId,
+    kind == BottleneckKind.contractBlocksDelivery ? contractId : buildingId,
+    resourceId,
+  );
 
   /// [kind] as it is tracked over time: [BottleneckKind.input] for a
   /// [BottleneckKind.routeLimited].
@@ -346,6 +382,8 @@ final class Bottleneck {
     'routeId': ?routeId,
     'binding': ?binding?.name,
     'routePerSec': ?routePerSec,
+    'contractId': ?contractId,
+    'heldForContract': ?heldForContract?.toJson(),
   };
 
   /// This bottleneck with [firstSeenAt] and [lostCreditsPerHour] replaced
@@ -369,6 +407,8 @@ final class Bottleneck {
         routeId: routeId,
         binding: binding,
         routePerSec: routePerSec,
+        contractId: contractId,
+        heldForContract: heldForContract,
       );
 
   /// This [BottleneckKind.input] as the [BottleneckKind.routeLimited] that
@@ -458,6 +498,8 @@ Bottleneck _merge(List<Bottleneck> members) {
     routeId: first.routeId,
     binding: first.binding,
     routePerSec: first.routePerSec,
+    contractId: first.contractId,
+    heldForContract: first.heldForContract,
   );
 }
 
@@ -479,10 +521,12 @@ final class FlowReport {
     required List<Bottleneck> bottlenecks,
     Map<String, BigNum> prices = const {},
     List<Bottleneck> keepBlocks = const [],
+    List<Bottleneck> contractBlocks = const [],
     List<Bottleneck> Function(SteadyIncome income)? diversions,
   }) : _income = income,
        _steady = steady,
        _keepBlocks = List.unmodifiable(keepBlocks),
+       contractBlocks = List.unmodifiable(contractBlocks),
        _diversions = diversions,
        _prices = Map.unmodifiable(prices),
        bodies = List.unmodifiable(bodies),
@@ -523,8 +567,8 @@ final class FlowReport {
   /// is what the faction keeps a second. So the two are not to be added;
   /// the app can show "income 78/s, 60/s of it to projects". Goods are
   /// what goes in instead of being sold, at no cost to [creditsPerSec].
-  /// While a contract is open, its good can read a little high: the run
-  /// clears the board, so goods the contract would hold back go in.
+  /// The run keeps the open contracts, so goods a contract still needs do
+  /// not go in, as in play.
   Map<String, Map<String, BigNum>> get autoDeliveredPerSec =>
       _measured.deliveredPerSec;
 
@@ -578,22 +622,32 @@ final class FlowReport {
 
   final List<Bottleneck> _keepBlocks;
 
+  /// The open contracts that hold goods a megaproject the faction feeds on
+  /// its own still owes ([BottleneckKind.contractBlocksDelivery]): for each
+  /// such megaproject, in content order, each good it owes in cost order
+  /// that a contract holds. Also in [groupedBottlenecks]; read here, it
+  /// costs no short run of play.
+  final List<Bottleneck> contractBlocks;
+
   final List<Bottleneck> Function(SteadyIncome income)? _diversions;
 
   /// [bottlenecks] grouped by cause ([groupBottlenecks]), in their order,
   /// then the goods a keep holds back from a megaproject that still owes
   /// them ([BottleneckKind.keepBlocksDelivery]), megaprojects in content
-  /// order, then the goods auto-delivery takes from sales
+  /// order, then those a contract holds back ([contractBlocks]), then the
+  /// goods auto-delivery takes from sales
   /// ([BottleneckKind.megaprojectDiversion]), as [autoDeliveredPerSec]
   /// lists them.
   ///
   /// The diversions come from the same short run of play as
-  /// [creditsPerSec], so the first read of this works that out too. The
-  /// megaproject kinds are not tracked over time: their
+  /// [creditsPerSec], so the first read of this works that out too. Of the
+  /// megaproject kinds, only [BottleneckKind.contractBlocksDelivery] is
+  /// tracked over time (by its contract); the others'
   /// [Bottleneck.firstSeenAt] is the report's own time.
   late final List<Bottleneck> groupedBottlenecks = [
     ...groupBottlenecks(bottlenecks),
     ..._keepBlocks,
+    ...contractBlocks,
     ...?_diversions?.call(_measured),
   ];
 
@@ -1104,6 +1158,10 @@ FlowReport buildFlowReport(GameState s, Content c, String factionId) {
     empireNet: _diff(c, _holdings(copy, factionId), holdingsBefore),
     prices: prices,
     keepBlocks: _keepBlocks(s, c, factionId),
+    contractBlocks: [
+      for (final b in _contractBlocks(s, c, factionId))
+        b.copyWith(firstSeenAt: since[b.key] ?? s.time),
+    ],
     diversions: (income) => _diversions(c, income, market, now),
     income: () {
       final v = saleRevenuePerSec(
@@ -1341,6 +1399,90 @@ List<Bottleneck> _keepBlocks(GameState s, Content c, String factionId) {
   ];
 }
 
+/// The [BottleneckKind.contractBlocksDelivery]s of [factionId] in [s],
+/// each first seen at `s.time`: for each megaproject it feeds goods on its
+/// own that takes deliveries, in content order, each good it still owes,
+/// in cost order, that an open contract asks for, where the contract
+/// keeps at least a whole unit of what is owed from it: what the
+/// faction's bodies could hand over without the contracts' holds
+/// ([DeliveryKeeps.spareWithoutContracts]), up to what is owed, less what
+/// they can hand over ([DeliveryKeeps.spare]), up to it too. A good is on
+/// the board at most once, so one contract holds it. The same test as
+/// [noteBottlenecks] tracks it by.
+List<Bottleneck> _contractBlocks(GameState s, Content c, String factionId) {
+  final f = s.faction(factionId);
+  if (f.contracts.isEmpty || f.megaprojectAuto.isEmpty) return const [];
+  final asked = {for (final k in f.contracts) k.resourceId: k};
+  // Cheap first, as the engine asks every tick: does a megaproject set to
+  // take goods cost any good on the board at all?
+  if (!c.megaprojects.values.any(
+    (m) =>
+        (f.megaprojectAuto[m.id]?.goods ?? GoodsFeedMode.off) !=
+            GoodsFeedMode.off &&
+        m.baseCost.keys.any(asked.containsKey),
+  )) {
+    return const [];
+  }
+  final owing = [
+    for (final m in c.megaprojects.values)
+      if (megaprojectGoodsFed(s, f, m) &&
+          megaprojectTakesDeliveries(s, c, factionId, m))
+        for (final MapEntry(key: id, value: need) in megaprojectRemaining(
+          s,
+          c,
+          factionId,
+          m,
+        ).entries)
+          if (asked[id] case final k?) (m, k, need),
+  ];
+  if (owing.isEmpty) return const [];
+  final goods = {for (final (_, k, _) in owing) k.resourceId}.toList();
+  final keeps = autoDeliveryKeeps(
+    s,
+    StepCache(s, c),
+    f,
+    goods,
+    _fullStepSeconds,
+  );
+  final owned = [
+    for (final b in s.bodies)
+      if (b.ownerId == factionId) b,
+  ];
+  // Of each good, what the bodies can hand over, and what they could
+  // without the contracts' holds.
+  final spare = {
+    for (final id in goods)
+      id: owned.fold(
+        const BigNum.zero(),
+        (t, b) => t + keeps.spare(b, id).max(const BigNum.zero()),
+      ),
+  };
+  final without = {
+    for (final id in goods)
+      id: owned.fold(
+        const BigNum.zero(),
+        (t, b) => t + keeps.spareWithoutContracts(b, id),
+      ),
+  };
+  final one = BigNum.from(1);
+  return [
+    for (final (m, k, need) in owing)
+      if (without[k.resourceId]!.min(need) - spare[k.resourceId]!.min(need)
+          case final v when v >= one)
+        Bottleneck(
+          kind: BottleneckKind.contractBlocksDelivery,
+          bodyId: null,
+          buildingId: null,
+          resourceId: k.resourceId,
+          megaprojectId: m.id,
+          contractId: k.id,
+          heldForContract: v,
+          runFraction: 0,
+          firstSeenAt: s.time,
+        ),
+  ];
+}
+
 /// Credits an hour that [perSec] (resource id to units a second) is worth
 /// to [factionId] at the current market prices of [s]: what its sales of
 /// them would earn ([salePrice]).
@@ -1363,7 +1505,9 @@ BigNum _valuePerHour(
 ///
 /// Reads what the tick left in [s], as the report does: each building's
 /// [BuildingState.lastLimitReason], each full store that wasted output
-/// ([BodyState.wastedThisStep]), and a crew efficiency below 1. The engine
+/// ([BodyState.wastedThisStep]), a crew efficiency below 1, and each open
+/// contract holding goods a megaproject fed on its own owes
+/// ([BottleneckKind.contractBlocksDelivery], keyed by the contract). The engine
 /// calls it at the end of every tick with the tick's start time.
 void noteBottlenecks(GameState s, Content c, double at) {
   for (final f in s.factions) {
@@ -1399,6 +1543,14 @@ void noteBottlenecks(GameState s, Content c, double at) {
     );
     if (unsold.isNotEmpty) {
       see(BottleneckKind.noSales.name, null, null, null);
+    }
+    // One record per contract, though more than one megaproject may owe
+    // its good.
+    final blocked = <String>{};
+    for (final b in _contractBlocks(s, c, f.id)) {
+      if (blocked.add(b.contractId!)) {
+        see(b.kind.name, null, b.contractId, b.resourceId);
+      }
     }
     for (final body in s.bodies) {
       if (body.ownerId != f.id) continue;

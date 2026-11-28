@@ -1223,13 +1223,23 @@ void main() {
         f.contracts.clear();
         final r = buildFlowReport(s, content, 'player');
         final income = incomeBasis(s, content, 'player', r);
-        // Every good an order may ask for: priced, made, and made fast
-        // enough for its template.
+        // The goods the megaprojects it feeds still owe, which no order
+        // asks for.
+        final owed = {
+          for (final m in content.megaprojects.values)
+            if (megaprojectGoodsFed(s, f, m) &&
+                megaprojectTakesDeliveries(s, content, 'player', m))
+              ...megaprojectRemaining(s, content, 'player', m).keys,
+        };
+        expect(owed, isNotEmpty, reason: 'the station is fed');
+        // Every other good an order may ask for: priced, made, and made
+        // fast enough for its template.
         final worth = <String, BigNum>{
           for (final t in content.contractTemplates.values)
             for (final res in content.resources.values)
               if (res.tier >= t.minTier &&
                   res.tier <= t.maxTier &&
+                  !owed.contains(res.id) &&
                   !res.basePrice.isZero &&
                   (f.lifetimeProduced[res.id] ?? const BigNum.zero()) >
                       const BigNum.zero() &&

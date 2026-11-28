@@ -1624,6 +1624,51 @@ void main() {
     expect((held['heldByKeep']! as Map)['display'], '469');
   });
 
+  test('the report names a contract that holds what a fed megaproject '
+      'needs', () {
+    // Final review I1: a contract for survey drones held every drone the
+    // Orbital Station was fed for, for days, and nothing said why.
+    final r = _runner();
+    final c = r.engine.content;
+    final station = c.megaprojects['orbital_station']!;
+    final f = r.state.faction('player')
+      ..contractRefillAt.clear()
+      ..megaprojectProgress['orbital_station'] = {
+        'reactor_core':
+            megaprojectCost(c, station, 0)['reactor_core']! - BigNum.from(469),
+      };
+    final k = ContractState(
+      id: r.state.newId('c'),
+      templateId: c.contractTemplates.keys.first,
+      resourceId: 'reactor_core',
+      quantity: BigNum.from(500),
+      rewardCredits: BigNum.from(1000),
+      postedAt: 0,
+    );
+    f.contracts.add(k);
+    r.state.body('kora').stock['reactor_core'] = BigNum.from(600);
+    expect(
+      r.handle({
+        'cmd': 'setMegaprojectAuto',
+        'megaprojectId': 'orbital_station',
+        'goods': true,
+        'credits': false,
+      })['ok'],
+      isTrue,
+    );
+    final out = r.handle({'cmd': 'report'});
+    final held = (out['bottlenecks']! as List)
+        .cast<Map<String, Object?>>()
+        .singleWhere((n) => n['kind'] == 'contractBlocksDelivery');
+    // 600 held, 500 of them for the order: 100 spare of the 469 owed.
+    expect(
+      held['message'],
+      'Contract #${k.id} holds 369 Reactor Cores the Orbital Station needs',
+    );
+    expect(held['contractId'], k.id);
+    expect((held['heldForContract']! as Map)['display'], '369');
+  });
+
   test('away marks bottlenecks that were there before it as ongoing', () {
     final r = _runner();
     r.handle({'cmd': 'assignCrew', 'buildingId': 'b1', 'crew': 0});
