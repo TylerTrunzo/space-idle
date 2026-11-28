@@ -343,7 +343,8 @@ void main() {
   });
 
   group('spends over half the credits take a second tap', () {
-    BigNum half(BigNum price) => price.mulDouble(1.5);
+    // Credits of which [price] is two thirds: over half, affordable.
+    BigNum oneAndAHalfTimes(BigNum price) => price.mulDouble(1.5);
 
     testWidgets('Upgrade', (tester) async {
       c.state.faction(_p).credits = BigNum.from(100); // 75 of 100
@@ -370,7 +371,7 @@ void main() {
 
     testWidgets('Claim', (tester) async {
       final price = claimCost(c.state, content, _p)[creditsKey]!;
-      c.state.faction(_p).credits = half(price);
+      c.state.faction(_p).credits = oneAndAHalfTimes(price);
       await _pump(tester, c, 'cinder');
       await tester.tap(_key('claim'));
       await tester.pump();
@@ -381,9 +382,42 @@ void main() {
       expect(projectOn(c.state, ProjectKind.claim, 'cinder'), isNotNull);
     });
 
+    testWidgets('a new kit source takes the Claim back to one tap', (
+      tester,
+    ) async {
+      for (final id in ['brine', 'hollow_reach']) {
+        c.state.body(id).ownerId = _p;
+        c.state.body(id).stock['outpost_kit'] = BigNum.from(50);
+      }
+      final price = claimCost(c.state, content, _p)[creditsKey]!;
+      c.state.faction(_p).credits = oneAndAHalfTimes(price);
+      await _pump(tester, c, 'cinder');
+      await tester.tap(_key('claim'));
+      await tester.pump();
+      // The confirm names the source it would take the kits from.
+      expect(find.textContaining('kits from Hollow Reach'), findsOneWidget);
+
+      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Brine').last);
+      await tester.pumpAndSettle();
+      expect(_key('confirm-claim'), findsNothing, reason: 'asked for Hollow');
+
+      await tester.tap(_key('claim'));
+      await tester.pump();
+      expect(find.textContaining('kits from Brine'), findsOneWidget);
+      await tester.tap(_key('confirm-claim'));
+      await tester.pump();
+      expect(
+        c.state.body('brine').stock['outpost_kit']!.toDouble(),
+        lessThan(50),
+      );
+      expect(c.state.body('hollow_reach').stock['outpost_kit']!.toDouble(), 50);
+    });
+
     testWidgets('Expand slots', (tester) async {
       final price = slotCost(content, c.state.body('kora'))[creditsKey]!;
-      c.state.faction(_p).credits = half(price);
+      c.state.faction(_p).credits = oneAndAHalfTimes(price);
       await _pump(tester, c, 'kora');
       await tester.tap(_key('expand-slots'));
       await tester.pump();
@@ -395,7 +429,7 @@ void main() {
 
     testWidgets('Build', (tester) async {
       final price = content.buildings['mine']!.buildCost[creditsKey]!;
-      c.state.faction(_p).credits = half(price);
+      c.state.faction(_p).credits = oneAndAHalfTimes(price);
       await _pump(tester, c, 'kora');
       final before = c.state.body('kora').buildings.length;
       await tester.tap(find.text('Build'));
@@ -453,7 +487,8 @@ void main() {
               body: StatefulBuilder(
                 builder: (context, s) {
                   set = s;
-                  return PlanetPanel(bodyId: body);
+                  // Keyed as the shell keys it.
+                  return PlanetPanel(key: ValueKey(body), bodyId: body);
                 },
               ),
             ),

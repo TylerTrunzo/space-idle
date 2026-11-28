@@ -228,6 +228,33 @@ void main() {
     );
   });
 
+  testWidgets('on a phone, switching bodies drops a pending confirm', (
+    tester,
+  ) async {
+    await _boot(tester, size: const Size(412, 915));
+    final scope = tester.element(find.byType(TopBar));
+    final c = ControllerScope.of(scope);
+    c.state.body('brine').ownerId = 'player';
+    final price = slotCost(c.content, c.state.body('kora'))[creditsKey]!;
+    c.state.faction('player').credits = price.mulDouble(1.5);
+    c.tickSeconds(1);
+    ShellScope.of(scope).selectBody('kora');
+    await tester.pump();
+    expect(find.byKey(Shell.sheetKey), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('expand-slots')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('confirm-expand-slots')), findsOneWidget);
+
+    ShellScope.of(scope).selectBody('brine');
+    await tester.pump();
+    expect(find.text('Brine'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('confirm-expand-slots')),
+      findsNothing,
+      reason: "Kora's slot, not Brine's",
+    );
+  });
+
   testWidgets('the signal marker says surveys come with the Projects tab', (
     tester,
   ) async {

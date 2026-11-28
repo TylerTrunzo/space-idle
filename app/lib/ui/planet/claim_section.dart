@@ -102,6 +102,10 @@ class _ClaimSectionState extends State<ClaimSection> {
         ),
       const SizedBox(height: 8),
       SpendConfirm(
+        // One per kit source: picking another drops a confirm asked for
+        // with the old one, so Confirm never takes kits from a body the
+        // menu no longer shows.
+        key: ValueKey('claim-from-$source'),
         id: 'claim',
         builder: (context, ask) => FilledButton.icon(
           key: const ValueKey('claim'),
@@ -111,7 +115,10 @@ class _ClaimSectionState extends State<ClaimSection> {
               ? () => ask(
                   Spend(
                     price: claim.price,
-                    what: 'to claim ${widget.view.name}',
+                    what: kits > 0
+                        ? 'to claim ${widget.view.name}, '
+                              'kits from ${name(source)}'
+                        : 'to claim ${widget.view.name}',
                     run: () => runAndReport(
                       context,
                       c,
