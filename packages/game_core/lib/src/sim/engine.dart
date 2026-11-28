@@ -129,7 +129,12 @@ final class GameEngine {
   }
 
   /// Moves [s] forward by [seconds] in ticks of [maxStep] seconds, the last
-  /// tick taking the remainder.
+  /// tick taking the remainder. From a time off the whole game minute, with
+  /// the next minute nearer than [maxStep], the first tick ends on that
+  /// minute: so 60 s ticks end on the minutes auto-delivery, credit
+  /// auto-pay and contract checks run at ([autoDeliverySeconds]), as 1 s
+  /// ticks do, and a catch-up started at any second pays and starts a
+  /// stage when short steps would.
   ///
   /// Zero [seconds] does nothing. Throws [ArgumentError] if [seconds] is
   /// negative or not finite, or [maxStep] is not above zero and finite.
@@ -153,14 +158,26 @@ final class GameEngine {
     if (!maxStep.isFinite || maxStep <= 0) {
       throw ArgumentError.value(maxStep, 'maxStep', 'must be finite and > 0');
     }
+    var left = seconds;
+    // Up to the next whole minute first, when a full step would pass it.
+    final minute =
+        ((s.time / autoDeliverySeconds).floor() + 1) * autoDeliverySeconds;
+    final toMinute = minute - s.time;
+    if (toMinute < autoDeliverySeconds &&
+        toMinute < maxStep &&
+        toMinute < left) {
+      final fed = _tick(s, toMinute);
+      afterTick?.call(fed);
+      left -= toMinute;
+    }
     // Counting whole steps (rather than subtracting maxStep from a running
     // total) keeps float error from adding a sliver of a step at the end.
-    final whole = (seconds / maxStep).floor();
+    final whole = (left / maxStep).floor();
     for (var i = 0; i < whole; i++) {
       final fed = _tick(s, maxStep);
       afterTick?.call(fed);
     }
-    final rest = seconds - whole * maxStep;
+    final rest = left - whole * maxStep;
     if (rest > maxStep * 1e-9) {
       final fed = _tick(s, rest);
       afterTick?.call(fed);
