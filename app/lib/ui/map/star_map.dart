@@ -105,7 +105,13 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
 
   StarMapScene _buildScene() {
     final c = widget.controller;
-    return buildStarMapScene(c.state, c.content, c.playerId, c.flow);
+    return buildStarMapScene(
+      c.state,
+      c.content,
+      c.playerId,
+      c.flow,
+      grouped: c.measuredNow().grouped,
+    );
   }
 
   void _onGameChanged() => setState(_refresh);

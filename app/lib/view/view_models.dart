@@ -40,8 +40,10 @@ final class TopBarView {
   final List<NamedValue> pinned;
 }
 
-/// The top bar from [c]'s state.
-TopBarView topBar(GameController c) {
+/// The top bar from [c]'s state, with [income] the controller's measured
+/// income a second (`measuredNow`, worked out off the tick); "…/s" until
+/// it is.
+TopBarView topBar(GameController c, {BigNum? income}) {
   final s = c.state;
   final f = s.faction(c.playerId);
   final crew = crewTotals(s, c.content, c.playerId);
@@ -64,7 +66,7 @@ TopBarView topBar(GameController c) {
   });
   return TopBarView(
     credits: formatNumber(f.credits),
-    creditsRate: formatRate(c.flow.creditsPerSec),
+    creditsRate: income == null ? '…/s' : formatRate(income),
     crewFree: crew.free,
     crewTotal: crew.supported,
     pinned: [

@@ -1,5 +1,6 @@
 import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:space_idle/game/game_controller.dart';
 import 'package:space_idle/theme.dart';
 import 'package:space_idle/ui/blocked_reason.dart';
 import 'package:space_idle/ui/controller_scope.dart';
@@ -33,7 +34,15 @@ class _TopBarState extends State<TopBar> {
   @override
   Widget build(BuildContext context) {
     final c = ControllerScope.of(context);
-    final view = topBar(c);
+    return ValueListenableBuilder<int>(
+      // The income lands from a fill: rebuild when it does.
+      valueListenable: c.previewsVersion,
+      builder: (context, _, _) => _bar(context, c),
+    );
+  }
+
+  Widget _bar(BuildContext context, GameController c) {
+    final view = topBar(c, income: c.measuredNow().income);
     return Material(
       color: Palette.panel,
       child: SafeArea(

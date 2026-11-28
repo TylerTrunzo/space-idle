@@ -228,6 +228,20 @@ class GameController extends ChangeNotifier {
     if (_disposed) return;
     final clock = Stopwatch()..start();
     var landed = false;
+    if (_measureWanted) {
+      // The income's short run of play: one piece of work, its own fill.
+      _measureWanted = false;
+      final report = flow;
+      incomeRunsWorkedOut++;
+      _measured = (
+        income: report.creditsPerSec,
+        goal: nextGoal(_state, content, playerId, report),
+        grouped: report.groupedBottlenecks,
+        at: _state.time,
+        epoch: _adviceEpoch,
+      );
+      landed = true;
+    }
     while (_wanted.isNotEmpty && clock.elapsed < previewBudget) {
       final key = _wanted.first;
       _wanted.remove(key);
@@ -245,9 +259,13 @@ class GameController extends ChangeNotifier {
     }
     // Then the best-upgrade search, a level at a time, in what is left.
     while (_search != null && clock.elapsed < previewBudget) {
-      final search = _search!;
+      final (:search, :epoch) = _search!;
       if (search.step()) {
-        _best = (best: search.best, at: search.at, epoch: search.epoch);
+        _best = (
+          best: search.result(limit: 1).firstOrNull,
+          at: search.at!,
+          epoch: epoch,
+        );
         _search = null;
         landed = true;
       }
@@ -257,7 +275,9 @@ class GameController extends ChangeNotifier {
   }
 
   ({UpgradeAdvice? best, double at, int epoch})? _best;
-  _BestSearch? _search;
+
+  /// The core's stepwise search under way, and the epoch it began in.
+  ({BestUpgradeSearch search, int epoch})? _search;
 
   /// The affordable upgrade that pays back soonest for the player (as the
   /// core's `bestUpgrades` ranks them), if a search is done: `ready` false
@@ -274,7 +294,12 @@ class GameController extends ChangeNotifier {
             have.epoch != _adviceEpoch ||
             _state.time - have.at >= adviceRefreshSeconds) &&
         _search == null) {
-      _search = _BestSearch(_state, content, playerId, flow, _adviceEpoch);
+      // Nothing is worked out here: the search copies the state at its
+      // first step, in a fill.
+      _search = (
+        search: BestUpgradeSearch(_state, content, playerId),
+        epoch: _adviceEpoch,
+      );
       _askForFill();
     }
     return (ready: have != null, best: have?.best);
@@ -283,6 +308,61 @@ class GameController extends ChangeNotifier {
   /// Counts the commands and loads: a best-upgrade answer of an earlier
   /// count is of an older state.
   int _adviceEpoch = 0;
+
+  ({
+    BigNum income,
+    NextGoal? goal,
+    List<Bottleneck> grouped,
+    double at,
+    int epoch,
+  })?
+  _measured;
+  bool _measureWanted = false;
+
+  /// New games started this session ([newGame]), for what keeps a place
+  /// in a game (the guide) to start over.
+  int gamesStarted = 0;
+
+  /// Income runs worked out so far, for tests: none may be in a tick.
+  @visibleForTesting
+  int incomeRunsWorkedOut = 0;
+
+  /// What needs the flow report's short run of play: the income a second
+  /// (`FlowReport.creditsPerSec`), the core's next goal, and the grouped
+  /// bottlenecks (megaproject diversions and holds among them); `ready`
+  /// false until the first is worked out.
+  ///
+  /// The run costs tens of milliseconds on a late empire, so it is worked
+  /// out in a fill after a frame, never in a tick or the frame of a
+  /// command, and kept until a command or [adviceRefreshSeconds] of game
+  /// time, the figures before showing until the new ones land. A load or a
+  /// new game drops them.
+  ({bool ready, BigNum? income, NextGoal? goal, List<Bottleneck>? grouped})
+  measuredNow() {
+    final have = _measured;
+    if ((have == null ||
+            have.epoch != _adviceEpoch ||
+            _state.time - have.at >= adviceRefreshSeconds) &&
+        !_measureWanted) {
+      _measureWanted = true;
+      _askForFill();
+    }
+    return (
+      ready: have != null,
+      income: have?.income,
+      goal: have?.goal,
+      grouped: have?.grouped,
+    );
+  }
+
+  /// Drops what was worked out for the game before a load, an import or
+  /// a new game, which a command keeps showing until it is redone.
+  void _dropGame() {
+    _best = null;
+    _search = null;
+    _measured = null;
+    _measureWanted = false;
+  }
 
   /// Fills after the frame being drawn, asking for another frame, so each
   /// frame does one fill.
@@ -391,6 +471,7 @@ class GameController extends ChangeNotifier {
       case _Good(:final state, :final savedAt):
         _state = state;
         _dropReports();
+        _dropGame();
         _syncedAt = savedAt ?? _clock.now();
         _canWrite = true;
         _catchUp();
@@ -474,6 +555,7 @@ class GameController extends ChangeNotifier {
   /// Waits for a pending [start] first, as [importSave] does.
   Future<void> newGame() async {
     await _startFinished();
+    gamesStarted++;
     _replace(engine.newGame(_nextSeed()));
     await save();
   }
@@ -543,12 +625,14 @@ class GameController extends ChangeNotifier {
   void debugReplaceState(GameState state) {
     _state = state;
     _dropReports();
+    _dropGame();
     _notify();
   }
 
   void _replace(GameState state) {
     _state = state;
     _dropReports();
+    _dropGame();
     _syncedAt = _clock.now();
     _canWrite = true;
     _brokenSaveText = null;
@@ -640,62 +724,4 @@ final class _Good extends _Decoded {
 final class _Bad extends _Decoded {
   const _Bad(this.reason);
   final String reason;
-}
-
-/// A best-upgrade search, run a level at a time ([GameController
-/// .bestUpgradeNow]): the candidates `bestUpgrades` takes (every unmaxed,
-/// affordable level of the faction's buildings, in body, building and
-/// track order), each previewed on one [UpgradePreviewer], the soonest
-/// payback kept (the first on a tie).
-final class _BestSearch {
-  _BestSearch(
-    GameState s,
-    Content c,
-    String factionId,
-    FlowReport flow,
-    this.epoch,
-  ) : at = s.time,
-      _previewer = UpgradePreviewer(s, c, factionId, before: flow),
-      _candidates = [
-        for (final body in s.bodies)
-          if (body.ownerId == factionId)
-            for (final b in body.buildings)
-              for (final t in UpgradeTrack.values)
-                if (c.buildings[b.defId]!.upgrades.containsKey(t) &&
-                    upgradeMaxedReason(c, b, t) == null &&
-                    (upgradeCost(c, b, t)[creditsKey] ?? const BigNum.zero()) <=
-                        s.faction(factionId).credits)
-                  (body.id, b.id, t),
-      ];
-
-  /// The game time of the state it searches.
-  final double at;
-
-  /// The controller's advice epoch it was started in.
-  final int epoch;
-  final UpgradePreviewer _previewer;
-  final List<(String, String, UpgradeTrack)> _candidates;
-  int _next = 0;
-
-  /// The best so far.
-  UpgradeAdvice? best;
-
-  /// Previews the next candidate; true once none is left.
-  bool step() {
-    if (_next >= _candidates.length) return true;
-    final (body, building, track) = _candidates[_next++];
-    final p = _previewer.preview(building, track);
-    final t = p?.paybackSeconds;
-    if (p != null &&
-        t != null &&
-        (best == null || t < best!.preview.paybackSeconds!)) {
-      best = UpgradeAdvice(
-        bodyId: body,
-        buildingId: building,
-        track: track,
-        preview: p,
-      );
-    }
-    return _next >= _candidates.length;
-  }
 }

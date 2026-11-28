@@ -26,10 +26,12 @@ void main() {
 
   group('topBar', () {
     test('shows the starting credits, income and crew', () {
-      final top = topBar(c);
+      final income = c.flow.creditsPerSec;
+      final top = topBar(c, income: income);
       expect(top.credits, formatNumber(c.state.faction(_p).credits));
       expect(top.credits, '250');
-      expect(top.creditsRate, formatRate(c.flow.creditsPerSec));
+      expect(top.creditsRate, formatRate(income));
+      expect(topBar(c).creditsRate, '…/s', reason: 'until it is measured');
       final crew = crewTotals(c.state, content, _p);
       expect(top.crewFree, crew.free);
       expect(top.crewTotal, crew.supported);

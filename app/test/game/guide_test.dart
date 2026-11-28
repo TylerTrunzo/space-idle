@@ -93,6 +93,86 @@ void main() {
     });
   });
 
+  group('advice from another game', () {
+    void fillAll() {
+      while (fills.isNotEmpty) {
+        fills.removeAt(0)();
+      }
+    }
+
+    test('a new game drops the best upgrade and the measured income', () async {
+      final c = controller();
+      await c.start();
+      c.state.faction(_p).credits = BigNum.from(5000);
+      c.bestUpgradeNow();
+      c.measuredNow();
+      fillAll();
+      expect(c.bestUpgradeNow().ready, isTrue);
+      expect(c.measuredNow().ready, isTrue);
+      fills.clear();
+      await c.newGame();
+      expect(c.bestUpgradeNow().ready, isFalse, reason: 'not the old game');
+      expect(c.measuredNow().ready, isFalse);
+    });
+
+    test('so does a state replaced for a test', () {
+      final c = controller();
+      c.state.faction(_p).credits = BigNum.from(5000);
+      c.bestUpgradeNow();
+      fillAll();
+      c.debugReplaceState(newGameState(content, 3));
+      expect(c.bestUpgradeNow().ready, isFalse);
+    });
+  });
+
+  group('measuredNow: the income off the tick', () {
+    void fillAll() {
+      while (fills.isNotEmpty) {
+        fills.removeAt(0)();
+      }
+    }
+
+    test('worked out in a fill, kept across ticks, redone after a command', () {
+      final c = controller();
+      expect(c.measuredNow().ready, isFalse);
+      expect(fills, hasLength(1));
+      fillAll();
+      final first = c.measuredNow();
+      expect(first.ready, isTrue);
+      expect(first.income, buildFlowReport(c.state, content, _p).creditsPerSec);
+      c.tickSeconds(1);
+      expect(identical(c.measuredNow().income, first.income), isTrue);
+      expect(fills, isEmpty, reason: 'a tick keeps it');
+      c.run(SetAutoSellCommand(_p, 'kora', 'steel', const BigNum.zero()));
+      final during = c.measuredNow();
+      expect(during.ready, isTrue, reason: 'the old figure shows meanwhile');
+      expect(fills, isNotEmpty);
+      fillAll();
+      expect(identical(c.measuredNow().income, first.income), isFalse);
+    });
+
+    test('a game minute old, it is redone', () {
+      final c = controller();
+      c.measuredNow();
+      fillAll();
+      c.tickSeconds(GameController.adviceRefreshSeconds);
+      c.measuredNow();
+      expect(fills, isNotEmpty);
+    });
+
+    test('a tick reads no income', () {
+      final c = controller();
+      c.measuredNow();
+      fillAll();
+      final before = c.incomeRunsWorkedOut;
+      for (var i = 0; i < 5; i++) {
+        c.tickSeconds(1);
+        c.measuredNow();
+      }
+      expect(c.incomeRunsWorkedOut, before);
+    });
+  });
+
   group('bestUpgradeNow', () {
     void fillAll() {
       while (fills.isNotEmpty) {

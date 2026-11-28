@@ -146,9 +146,24 @@ void main() {
       };
       expect(badged, isNotEmpty, reason: 'fixture should hold a body back');
 
-      final scene = buildStarMapScene(state, content, 'player', flow);
+      final scene = buildStarMapScene(
+        state,
+        content,
+        'player',
+        flow,
+        grouped: flow.groupedBottlenecks,
+      );
       for (final b in scene.bodies) {
         expect(b.bottleneck, badged.contains(b.id), reason: b.id);
+      }
+      // Until the grouped ones are measured, the report's own.
+      final plain = {
+        for (final b in flow.bottlenecks)
+          if (b.bodyId != null) b.bodyId!,
+      };
+      final early = buildStarMapScene(state, content, 'player', flow);
+      for (final b in early.bodies) {
+        expect(b.bottleneck, plain.contains(b.id), reason: b.id);
       }
     });
 

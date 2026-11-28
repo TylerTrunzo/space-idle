@@ -382,8 +382,9 @@ StarMapScene buildStarMapScene(
   GameState s,
   Content c,
   String playerId,
-  FlowReport flow,
-) {
+  FlowReport flow, {
+  List<Bottleneck>? grouped,
+}) {
   final homeId = c.galaxy.factions
       .firstWhere((f) => f.id == playerId)
       .homeBodyId;
@@ -392,7 +393,10 @@ StarMapScene buildStarMapScene(
     for (final b in s.bodies)
       if (b.systemId == systemId && isVisible(s, b, playerId)) b,
   ];
-  final badged = {for (final b in flow.groupedBottlenecks) ?b.bodyId};
+  // The grouped bottlenecks (holds and diversions among them) need the
+  // report's income run, so they come measured, off the tick; until they
+  // do, the report's own bottlenecks.
+  final badged = {for (final b in grouped ?? flow.bottlenecks) ?b.bodyId};
   // Soonest to finish first, so a body shows its nearest project.
   final projects = <String, ProjectState>{};
   for (final p in runningProjects(s, playerId)) {
