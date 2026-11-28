@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:game_core/game_core.dart';
 import 'package:game_sim/src/balance_report.dart';
@@ -746,6 +747,50 @@ void main() {
           bot.decide(e, near, 'player').whereType<DiscardContractCommand>(),
           isEmpty,
         );
+      });
+    }
+
+    for (final bot in [BalancedBot(), CasualBot()]) {
+      test('the ${bot.name} bot discards a contract that has held a fed '
+          "megaproject's goods for more than a day, and keeps one that has "
+          'not yet', () {
+        // Final review I1: the casual bot's seed-1 state at 144 h (saved
+        // for game_core's tests), where contract c122 for 26,000 survey
+        // drones holds every drone the Orbital Station is fed for. It can
+        // be filled within a day, so only how long it has held them
+        // discards it.
+        final e = _engine();
+        GameState since(double secondsAgo) {
+          final s =
+              (SaveCodec.decode(
+                        File(
+                          '../game_core/test/fixtures/casual_s1_144h.json',
+                        ).readAsStringSync(),
+                        e.content,
+                      )
+                      as SaveOk)
+                  .state;
+          s
+              .faction('player')
+              .seenBottlenecks
+              .add(
+                SeenBottleneck(
+                  kind: BottleneckKind.contractBlocksDelivery.name,
+                  buildingId: 'c122',
+                  resourceId: 'survey_drone',
+                  firstSeenAt: s.time - secondsAgo,
+                ),
+              );
+          return s;
+        }
+
+        List<String> discarded(GameState s) => [
+          for (final cmd
+              in bot.decide(e, s, 'player').whereType<DiscardContractCommand>())
+            cmd.contractId,
+        ];
+        expect(discarded(since(86400 + 3600)), contains('c122'));
+        expect(discarded(since(3600)), isNot(contains('c122')));
       });
     }
 

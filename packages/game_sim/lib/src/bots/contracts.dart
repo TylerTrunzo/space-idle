@@ -17,9 +17,20 @@ extension _Contracts on _View {
   /// contract or a body's store of it is nearly full; null if neither is
   /// wanted. The engine takes from the fullest bodies first. Contracts come
   /// before megaproject stages, which would otherwise take every unit of a
-  /// good they share.
+  /// good they share. But with a flow report, a contract that has held
+  /// goods a megaproject fed on its own still owes for more than
+  /// [_blockedForSeconds] ([FlowReport.contractBlocks]) is discarded: a
+  /// side job never stalls a stage the faction is feeding.
   Command? workContracts() {
     for (final k in faction.contracts) {
+      if (report?.contractBlocks.any(
+            (n) =>
+                n.contractId == k.id &&
+                s.time - n.firstSeenAt > _blockedForSeconds,
+          ) ??
+          false) {
+        return DiscardContractCommand(factionId, k.id);
+      }
       final id = k.resourceId;
       if (!made(id) && owned.every((b) => stock(b, id).isZero)) {
         return DiscardContractCommand(factionId, k.id);
@@ -65,3 +76,8 @@ extension _Contracts on _View {
 /// contract at today's net production ([_Contracts.workContracts]); a
 /// longer one is discarded: about a day.
 const double _fillWithinSeconds = 86400;
+
+/// Game seconds after which the balanced and casual bots discard a
+/// contract that holds goods a megaproject they feed still owes
+/// ([_Contracts.workContracts]): a day.
+const double _blockedForSeconds = 86400;
