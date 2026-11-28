@@ -93,6 +93,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
         navigator.pop();
         messenger?.showSnackBar(const SnackBar(content: Text('Save loaded')));
       case Imported(saved: false):
+        // It went in: clear the paste so a second Load can't import it
+        // again over newer play.
+        _paste.clear();
         setState(() => _saveFailed = _unsaved('The save is loaded'));
       case ImportFailed(:final reason):
         setState(() => _loadError = "Couldn't load that save: $reason");

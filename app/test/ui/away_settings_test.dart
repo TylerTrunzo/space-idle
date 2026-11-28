@@ -483,6 +483,10 @@ void main() {
       );
       final load = tester.widget<ButtonStyleButton>(_key('settings-load'));
       expect(load.onPressed, isNotNull, reason: 'not stuck busy');
+      // The save went in: a second Load must not import it again over
+      // newer play.
+      final field = tester.widget<TextField>(_key('settings-load-field'));
+      expect(field.controller?.text, isEmpty);
     });
 
     testWidgets('a new game whose write fails still starts and says so', (
