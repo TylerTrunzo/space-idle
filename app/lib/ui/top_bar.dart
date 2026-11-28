@@ -22,6 +22,9 @@ class TopBar extends StatefulWidget {
   /// Opens the settings sheet.
   final VoidCallback onSettings;
 
+  /// The most of the screen's height the bar takes; past it, it scrolls.
+  static const double maxShare = 0.3;
+
   @override
   State<TopBar> createState() => _TopBarState();
 }
@@ -47,62 +50,73 @@ class _TopBarState extends State<TopBar> {
       color: Palette.panel,
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsetsDirectional.only(start: 16, end: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        // At most [maxShare] of the screen: at large text on a small phone,
+        // with three goods pinned, the figures wrap onto many lines, and
+        // past that they scroll so the tab below keeps its room.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * TopBar.maxShare,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsetsDirectional.only(start: 16, end: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Wrap(
-                        spacing: 16,
-                        runSpacing: 4,
-                        children: [
-                          _Figure(
-                            icon: Icons.paid_outlined,
-                            value: view.credits,
-                            detail: view.creditsRate,
-                            semantics:
-                                'Credits ${view.credits}, ${view.creditsRate}',
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Wrap(
+                            spacing: 16,
+                            runSpacing: 4,
+                            children: [
+                              _Figure(
+                                icon: Icons.paid_outlined,
+                                value: view.credits,
+                                detail: view.creditsRate,
+                                semantics:
+                                    'Credits ${view.credits}, ${view.creditsRate}',
+                              ),
+                              _Figure(
+                                icon: Icons.groups_outlined,
+                                value: '${view.crewFree}/${view.crewTotal}',
+                                detail: 'crew',
+                                semantics:
+                                    'Crew: ${view.crewFree} free of '
+                                    '${view.crewTotal}',
+                              ),
+                              for (final p in view.pinned)
+                                _Figure(
+                                  icon: Icons.inventory_2_outlined,
+                                  label: p.name,
+                                  value: p.value,
+                                  semantics: '${p.name}: ${p.value}',
+                                ),
+                            ],
                           ),
-                          _Figure(
-                            icon: Icons.groups_outlined,
-                            value: '${view.crewFree}/${view.crewTotal}',
-                            detail: 'crew',
-                            semantics:
-                                'Crew: ${view.crewFree} free of '
-                                '${view.crewTotal}',
-                          ),
-                          for (final p in view.pinned)
-                            _Figure(
-                              icon: Icons.inventory_2_outlined,
-                              label: p.name,
-                              value: p.value,
-                              semantics: '${p.name}: ${p.value}',
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
+                      IconButton(
+                        key: const ValueKey('buy-max'),
+                        icon: const Icon(Icons.trending_up),
+                        tooltip: 'Buy max',
+                        // The preview copies the state: only on a tap.
+                        onPressed: () =>
+                            setState(() => _buyMax = buyMaxView(c)),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_outlined),
+                        tooltip: 'Settings',
+                        onPressed: widget.onSettings,
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    key: const ValueKey('buy-max'),
-                    icon: const Icon(Icons.trending_up),
-                    tooltip: 'Buy max',
-                    // The preview copies the state: only on a tap.
-                    onPressed: () => setState(() => _buyMax = buyMaxView(c)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.settings_outlined),
-                    tooltip: 'Settings',
-                    onPressed: widget.onSettings,
-                  ),
+                  if (_buyMax case final v?) _buyMaxRow(context, v),
                 ],
               ),
-              if (_buyMax case final v?) _buyMaxRow(context, v),
-            ],
+            ),
           ),
         ),
       ),

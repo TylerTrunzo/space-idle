@@ -4,6 +4,7 @@ import 'package:space_idle/ui/away_dialog.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/goals/goal_strip.dart';
 import 'package:space_idle/ui/map/star_map.dart';
+import 'package:space_idle/ui/milestone_banner.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/projects/projects_tab.dart';
 import 'package:space_idle/ui/settings_sheet.dart';
@@ -21,6 +22,7 @@ class ShellScope extends InheritedWidget {
     required this.selectBody,
     required this.clearSelection,
     this.showOnMap,
+    this.showProjects,
     required super.child,
   });
 
@@ -37,8 +39,16 @@ class ShellScope extends InheritedWidget {
   /// scope has no tabs to switch ([openOnMap] then only selects).
   final void Function(String id)? showOnMap;
 
+  /// Switches to the Projects tab at a row ([ProjectsAnchor]) with id
+  /// [id]; null where the scope has no tabs.
+  final void Function(ProjectsAnchor anchor, String id)? showProjects;
+
   /// Opens body [id]'s panel on the Map tab, from another tab.
   void openOnMap(String id) => (showOnMap ?? selectBody)(id);
+
+  /// Shows the Projects tab's [anchor] row for [id], where there is one.
+  void openProjects(ProjectsAnchor anchor, String id) =>
+      showProjects?.call(anchor, id);
 
   /// The scope above [context].
   static ShellScope of(BuildContext context) {
@@ -92,9 +102,9 @@ class _ShellState extends State<Shell> {
   _Tab _tab = _Tab.map;
   String? _selected;
 
-  /// The Survey row the Projects tab shows, from the star map's signal
-  /// marker; its serial counts the taps.
-  SurveyFocus? _surveyFocus;
+  /// The row the Projects tab shows, from the star map's signal marker or
+  /// the away summary; its serial counts the requests.
+  ProjectsFocus? _projectsFocus;
 
   /// Whether the phone sheet covers the whole map.
   bool _mapCovered = false;
@@ -145,9 +155,16 @@ class _ShellState extends State<Shell> {
 
   /// A tap on a system's signal marker: the Projects tab, at that
   /// system's Survey row.
-  void _onSignal(String systemId) => setState(() {
+  void _onSignal(String systemId) =>
+      _showProjects(ProjectsAnchor.survey, systemId);
+
+  void _showProjects(ProjectsAnchor anchor, String id) => setState(() {
     _tab = _Tab.projects;
-    _surveyFocus = SurveyFocus(systemId, (_surveyFocus?.serial ?? 0) + 1);
+    _projectsFocus = ProjectsFocus(
+      anchor,
+      id,
+      (_projectsFocus?.serial ?? 0) + 1,
+    );
   });
 
   void _onCovered(bool covered) {
@@ -169,6 +186,7 @@ class _ShellState extends State<Shell> {
         _select(id);
         setState(() => _tab = _Tab.map);
       },
+      showProjects: _showProjects,
       // Back closes the selected body's panel before it leaves the app.
       child: PopScope(
         canPop: _selected == null,
@@ -188,13 +206,15 @@ class _ShellState extends State<Shell> {
             TopBar(onSettings: () => showSettingsSheet(context)),
             const GoalStrip(),
             Expanded(
-              child: IndexedStack(
-                index: _tab.index,
-                children: [
-                  for (final t in _Tab.values)
-                    // Only the shown tab's animations run.
-                    TickerMode(enabled: t == _tab, child: _tabBody(t)),
-                ],
+              child: MilestoneBanner(
+                child: IndexedStack(
+                  index: _tab.index,
+                  children: [
+                    for (final t in _Tab.values)
+                      // Only the shown tab's animations run.
+                      TickerMode(enabled: t == _tab, child: _tabBody(t)),
+                  ],
+                ),
               ),
             ),
           ],
@@ -227,7 +247,7 @@ class _ShellState extends State<Shell> {
     _Tab.trade => TradeTab(key: ValueKey('tab-${t.label}')),
     _Tab.projects => ProjectsTab(
       key: ValueKey('tab-${t.label}'),
-      focus: _surveyFocus,
+      focus: _projectsFocus,
     ),
   };
 }

@@ -14,28 +14,52 @@ import 'package:space_idle/ui/projects/station_card.dart';
 import 'package:space_idle/ui/shell.dart';
 import 'package:space_idle/view/project_views.dart';
 
-/// A request to show one system's Survey row, as a tap on the star map's
-/// signal marker makes: [serial] tells one tap from the next on the same
-/// system.
+/// A row of the Projects tab to show: a system's Survey row, a
+/// megaproject's card or a contract's card.
+enum ProjectsAnchor {
+  /// A system's Survey row.
+  survey,
+
+  /// A megaproject's card.
+  megaproject,
+
+  /// A contract's card.
+  contract,
+}
+
+/// A request to show one row of the Projects tab, as a tap on the star
+/// map's signal marker or a Go on the away summary makes: [serial] tells
+/// one request from the next for the same row.
 @immutable
-final class SurveyFocus {
+final class ProjectsFocus {
   /// Creates a request.
-  const SurveyFocus(this.systemId, this.serial);
+  const ProjectsFocus(this.anchor, this.id, this.serial);
 
-  /// The system whose signal was tapped.
-  final String systemId;
+  /// What kind of row.
+  final ProjectsAnchor anchor;
 
-  /// Counts the requests, so a second tap scrolls to the row again.
+  /// The system, megaproject or contract.
+  final String id;
+
+  /// Counts the requests, so a second one scrolls to the row again.
   final int serial;
+
+  /// The row's scroll anchor name.
+  String get anchorName => switch (anchor) {
+    ProjectsAnchor.survey => 'survey-$id',
+    ProjectsAnchor.megaproject => 'mp-$id',
+    ProjectsAnchor.contract => 'contract-$id',
+  };
 
   @override
   bool operator ==(Object other) =>
-      other is SurveyFocus &&
-      other.systemId == systemId &&
+      other is ProjectsFocus &&
+      other.anchor == anchor &&
+      other.id == id &&
       other.serial == serial;
 
   @override
-  int get hashCode => Object.hash(systemId, serial);
+  int get hashCode => Object.hash(anchor, id, serial);
 }
 
 /// The Projects tab: every project under way with its countdown, a Survey
@@ -47,8 +71,9 @@ class ProjectsTab extends StatefulWidget {
   /// Creates the tab.
   const ProjectsTab({super.key, this.focus});
 
-  /// The Survey row to show, from the star map's signal marker.
-  final SurveyFocus? focus;
+  /// The row to show, from the star map's signal marker (a Survey row,
+  /// which is marked) or the away summary.
+  final ProjectsFocus? focus;
 
   @override
   State<ProjectsTab> createState() => ProjectsTabState();
@@ -104,14 +129,21 @@ class ProjectsTabState extends State<ProjectsTab> {
   void _focus() {
     final f = widget.focus;
     if (f == null) return;
-    _focused = f.systemId;
-    _unmark?.cancel();
-    _unmark = Timer(markFor, _clearMark);
+    if (f.anchor == ProjectsAnchor.survey) {
+      _focused = f.id;
+      _unmark?.cancel();
+      _unmark = Timer(markFor, _clearMark);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final c = ControllerScope.of(context);
-      final has = surveyViews(c).any((s) => s.systemId == f.systemId);
-      unawaited(_reveal(_anchor(has ? 'survey-${f.systemId}' : 'survey')));
+      final name = switch (f.anchor) {
+        ProjectsAnchor.survey
+            when !surveyViews(c).any((s) => s.systemId == f.id) =>
+          'survey',
+        _ => f.anchorName,
+      };
+      unawaited(_reveal(_anchor(name)));
     });
   }
 
@@ -192,10 +224,13 @@ class ProjectsTabState extends State<ProjectsTab> {
         ),
       heading('Megaprojects', 'h-megaprojects'),
       for (final m in megaprojectViews(c))
-        MegaprojectCard(
-          key: ValueKey('mp-${m.id}'),
-          view: m,
-          onGoToContract: (id) => unawaited(_reveal(_anchor('contract-$id'))),
+        KeyedSubtree(
+          key: anchor('mp-${m.id}'),
+          child: MegaprojectCard(
+            key: ValueKey('mp-${m.id}'),
+            view: m,
+            onGoToContract: (id) => unawaited(_reveal(_anchor('contract-$id'))),
+          ),
         ),
       heading('Contracts', 'h-contracts'),
       if (contracts.isEmpty)

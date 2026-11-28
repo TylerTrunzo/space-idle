@@ -536,7 +536,9 @@ void main() {
     await pump(
       tester,
       size: const Size(400, 700),
-      tab: const ProjectsTab(focus: SurveyFocus('veyra', 1)),
+      tab: const ProjectsTab(
+        focus: ProjectsFocus(ProjectsAnchor.survey, 'veyra', 1),
+      ),
     );
     await tester.pump();
     expect(_key('survey-focus-veyra'), findsOneWidget);
@@ -549,7 +551,9 @@ void main() {
     await pump(
       tester,
       size: const Size(400, 700),
-      tab: const ProjectsTab(focus: SurveyFocus('veyra', 1)),
+      tab: const ProjectsTab(
+        focus: ProjectsFocus(ProjectsAnchor.survey, 'veyra', 1),
+      ),
     );
     await tester.pump();
     expect(_key('survey-focus-veyra'), findsOneWidget);
@@ -566,12 +570,12 @@ void main() {
     }
     await pump(tester);
     final state = tester.state<ProjectsTabState>(find.byType(ProjectsTab));
-    // Five contracts and the one Survey row.
-    expect(state.anchorCount, 6);
+    // Five contracts, the one Survey row and the two megaproject cards.
+    expect(state.anchorCount, 8);
     c.state.faction(_p).contracts.clear();
     c.tickSeconds(1);
     await tester.pump();
-    expect(state.anchorCount, 1);
+    expect(state.anchorCount, 3);
   });
 
   testWidgets('a long press on Deliver is announced on the button itself', (
