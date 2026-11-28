@@ -24,6 +24,10 @@ While you were away (9h)
  📈 Your income +6% · 3 upgrades finished
 ```
 
+**Fit with the spec:** §6.7's "while you were away" summary already lists production gains, faction events, war
+events and the top bottlenecks. This grows it into a news digest; it doesn't replace it. Openings use §7's
+diplomatic actions and §6.5's faction trade.
+
 ## Openings **[Claude, owner liked]**
 
 Each news item can come with an opening: a choice you act on from the digest or the map.

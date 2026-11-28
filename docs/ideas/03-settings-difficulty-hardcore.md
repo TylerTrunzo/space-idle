@@ -51,6 +51,12 @@ War
   - standing orders ("if attacked, pull back to Kessa");
   - allies who agree to defend you, so diplomacy works as insurance.
 - **It previews the later persistent shared galaxies.**
+- **[Check, owner to decide] The offline cap.** §6.7 fast-forwards at most 12 h (up to 48 h with upgrades). Two
+  options:
+  - **The whole galaxy stops at the cap,** yours and theirs alike. Hardcore removes the loss caps but a long trip
+    away doesn't count against you. Claude's pick.
+  - **Factions keep acting past the cap while your production stops.** Truly persistent, but away for a week means
+    a week of enemy action with no income to defend with.
 
 ## Home planet **[Owner: always kept; details Claude, owner liked]**
 

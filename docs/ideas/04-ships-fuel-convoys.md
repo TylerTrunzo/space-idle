@@ -23,10 +23,13 @@ Builds on spec §13 (ship designs from a hull plus modules, every part a produce
 
 ## Fuel **[Claude, owner liked]**
 
-**[Check]** Fuel against spec §6 (economy) and §7, which weren't read. Not checked yet: that needs the owner's clear OK.
+**Fit with the spec:** §6.2 already lists **fuel cells** as a refined product, and §6.1 has the raw inputs
+(hydrogen, deuterium, methane, helium-3, water ice). Ship fuel can simply be fuel cells **[Claude's call]**, so this
+idea gives an existing item a big new use rather than adding one. §6.4 routes already have ship capacity and travel
+time; fuel adds one input per trip. §6.4's blockades and raids on routes are unchanged.
 
-- **It's a produced good,** refined from gas or ice: a new chain to manage, and a steady sink for saturated tiers
-  (round 4).
+- **It's a produced good** (fuel cells, refined from gas or ice): a chain to manage, and a steady sink for
+  saturated tiers (round 4).
 - **Each trip burns fuel by mass and engine.** A bigger engine is faster but thirstier.
 - **Tank size sets range,** so explorers need big tanks or a fuel depot on the way.
 - **In war, supply matters:** cut a fleet's fuel and it stalls (see 06).

@@ -3,9 +3,9 @@
 *Brainstorm with the owner, 2026-11-28. These are ideas, not spec. Nothing here changes the design spec or the
 stage branches until the owner promotes it.*
 
-Read for this brainstorm: spec §1, §2, §8, §11, §13 and the round 4 playtest findings
-(`docs/playtests/2026-11-27-round4-findings.md` on the stage branches). **Not read:** §6 (economy) and §7 (factions
-and diplomacy), so ideas here may overlap or clash with them. Check before building.
+Read for this brainstorm: spec §1, §2, §6, §7, §8, §11, §13 and the round 4 playtest findings
+(`docs/playtests/2026-11-27-round4-findings.md` on the stage branches). §6 and §7 were read after the first draft;
+the ideas fit them with no real conflicts (see each file's "Fit with the spec" notes).
 
 Legend:
 - **[Owner]**: the owner's own words or decision in the brainstorm.
@@ -65,7 +65,8 @@ Builds on spec §11 and §13.4.
 
 ## Open items **[Check]**
 
-- Fuel versus §6 (economy) and §7. Not checked yet: that needs the owner's clear OK to read past the agreed sections.
-- Faction ideas (02) versus §7, which wasn't read.
+- **Hardcore versus the offline cap (owner to decide).** §6.7 fast-forwards at most 12 h (up to 48 h with
+  upgrades). In hardcore, does the rest of the galaxy keep acting past that cap while your production stops? That
+  would be very harsh; the other option is that the whole world pauses at the cap, yours and theirs alike. See 03.
 - Hardcore mode needs a line in §2's anti-goals when promoted: "except in opt-in hardcore mode."
 - Settings must be stored per world (not per player) for later shared galaxies (spec §5.4).

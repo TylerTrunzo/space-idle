@@ -1,6 +1,20 @@
 # Factions and diplomacy
 
-**[Check]** Spec §7 (factions and diplomacy) was not read for this brainstorm. Reconcile before building.
+## Fit with spec §7
+
+§7 already has 4–6 factions with personalities (trader collective, militarist dominion, isolationist league,
+expansionist empire), real AI economies, a **relation** and a **tension** score between every pair of factions
+(AIs included), the diplomatic actions (trade deal, non-aggression pact, alliance, tribute, war, peace), tension
+drivers (borders, competing claims, broken deals, build-ups, personality) and a Factions tab. The ideas below add to
+it; nothing replaces it. **[Claude's call]** on how they join up:
+
+- **The memory list explains the scores.** Each entry moves relation, tension or both, so the Factions tab can show
+  *why* the bars are where they are.
+- **Relation stages are bands of §7's relation score.** Tension is what pushes a faction down the stages toward war.
+- **Personality examples below use §7's four types.** "Merchant" means the trader collective.
+- **§7's alliance (mutual defense)** is the ally who defends you in hardcore (03).
+- **§6.6's peaceful routes to planets** (buying claims, diplomatic cession) are what the "sells off a planet"
+  opening (01) uses.
 
 ## What the owner wants **[Owner]**
 
