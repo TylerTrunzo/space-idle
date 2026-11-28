@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/ui/away_dialog.dart';
 import 'package:space_idle/ui/controller_scope.dart';
@@ -80,12 +81,49 @@ class _ShellState extends State<Shell> {
   /// Whether the phone sheet covers the whole map.
   bool _mapCovered = false;
 
-  void _select(String id) => setState(() => _selected = id);
+  /// How much of the map tab the phone sheet covers, 0 to 1, as it drags;
+  /// the map fits the area above it.
+  final ValueNotifier<double> _sheetExtent = ValueNotifier(
+    _MapTab.initialExtent,
+  );
+
+  /// The phone sheet, so a tap on its header can open or shrink it.
+  final DraggableScrollableController _sheet = DraggableScrollableController();
+
+  @override
+  void dispose() {
+    _sheetExtent.dispose();
+    _sheet.dispose();
+    super.dispose();
+  }
+
+  void _select(String id) => setState(() {
+    // A sheet that opens starts at its first size.
+    if (_selected == null) _sheetExtent.value = _MapTab.initialExtent;
+    _selected = id;
+  });
 
   void _clear() => setState(() {
     _selected = null;
     _mapCovered = false;
+    _sheetExtent.value = _MapTab.initialExtent;
   });
+
+  /// Opens the phone sheet to full, or a full one back to its first size:
+  /// for a mouse or a tap, where a swipe is not to hand.
+  void _toggleSheet() {
+    if (!_sheet.isAttached) return;
+    final to = _sheet.size >= _MapTab.fullExtent ? _MapTab.initialExtent : 1.0;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _sheet.jumpTo(to);
+    } else {
+      _sheet.animateTo(
+        to,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
 
   void _onCovered(bool covered) {
     if (covered != _mapCovered) setState(() => _mapCovered = covered);
@@ -149,6 +187,9 @@ class _ShellState extends State<Shell> {
       onSelect: _select,
       covered: _mapCovered,
       onCovered: _onCovered,
+      sheetExtent: _sheetExtent,
+      sheet: _sheet,
+      onHeaderTap: _toggleSheet,
     ),
     // Tasks 7 and 8 fill these.
     _Tab.production || _Tab.crew || _Tab.trade => Center(
@@ -164,10 +205,32 @@ class _MapTab extends StatelessWidget {
     required this.onSelect,
     required this.covered,
     required this.onCovered,
+    required this.sheetExtent,
+    required this.sheet,
+    required this.onHeaderTap,
   });
 
   /// Extent from which the sheet counts as covering the map.
-  static const double _fullExtent = 0.99;
+  static const double _coverExtent = 0.99;
+
+  /// The sheet's size when it opens.
+  static const double initialExtent = 0.45;
+
+  /// From this size a header tap shrinks the sheet back.
+  static const double fullExtent = 0.9;
+
+  /// The most of the tab the map gives up to the sheet: past it the map
+  /// stops shrinking, and the sheet covers the rest of it anyway.
+  static const double _mostShrink = 0.8;
+
+  /// How much of the tab the sheet covers now.
+  final ValueNotifier<double> sheetExtent;
+
+  /// The sheet's controller.
+  final DraggableScrollableController sheet;
+
+  /// A tap on the sheet's header.
+  final VoidCallback onHeaderTap;
 
   final String? selectedId;
   final void Function(String id) onSelect;
@@ -209,32 +272,56 @@ class _MapTab extends StatelessWidget {
         ],
       );
     }
-    return Stack(
-      children: [
-        Positioned.fill(
-          // Nothing of the map shows under a full sheet: no need to animate.
-          child: TickerMode(enabled: !covered, child: map),
-        ),
-        if (id != null)
-          NotificationListener<DraggableScrollableNotification>(
-            onNotification: (n) {
-              onCovered(n.extent >= _fullExtent);
-              return false;
-            },
-            child: DraggableScrollableSheet(
-              key: Shell.sheetKey,
-              initialChildSize: 0.45,
-              minChildSize: 0.2,
-              maxChildSize: 1,
-              builder: (context, scroll) => PlanetPanel(
-                key: ValueKey(id),
-                bodyId: id,
-                scroll: scroll,
-                onClose: ShellScope.of(context).clearSelection,
-              ),
+    return LayoutBuilder(
+      builder: (context, box) => Stack(
+        children: [
+          // The map fits the area above the sheet, so the selected body
+          // and its system stay in view while the sheet is open; only this
+          // rebuilds as the sheet drags.
+          ValueListenableBuilder<double>(
+            valueListenable: sheetExtent,
+            // Nothing of the map shows under a full sheet: no need to
+            // animate.
+            child: TickerMode(enabled: !covered, child: map),
+            builder: (context, extent, child) => Positioned(
+              left: 0,
+              top: 0,
+              right: 0,
+              bottom: id == null
+                  ? 0
+                  : box.maxHeight * extent.clamp(0.0, _mostShrink),
+              child: child!,
             ),
           ),
-      ],
+          if (id != null)
+            NotificationListener<DraggableScrollableNotification>(
+              onNotification: (n) {
+                onCovered(n.extent >= _coverExtent);
+                sheetExtent.value = n.extent;
+                return false;
+              },
+              child: DraggableScrollableSheet(
+                key: Shell.sheetKey,
+                controller: sheet,
+                initialChildSize: initialExtent,
+                minChildSize: 0.2,
+                maxChildSize: 1,
+                // A mouse drags it too, on the web and desktops.
+                builder: (context, scroll) => ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+                  child: PlanetPanel(
+                    key: ValueKey(id),
+                    bodyId: id,
+                    scroll: scroll,
+                    onClose: ShellScope.of(context).clearSelection,
+                    onHeaderTap: onHeaderTap,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -99,6 +99,14 @@ void main() {
         matching: find.byType(IconButton),
       );
       expect(tester.getSize(target).shortestSide, greaterThanOrEqualTo(48));
+      // An icon that reads as buying more, not as collapse.
+      expect(
+        find.descendant(
+          of: key('buy-max'),
+          matching: find.byIcon(Icons.trending_up),
+        ),
+        findsOneWidget,
+      );
       // Nothing is previewed until it is tapped.
       expect(find.textContaining('levels'), findsNothing);
     });

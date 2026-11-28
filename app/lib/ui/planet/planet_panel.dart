@@ -28,6 +28,7 @@ class PlanetPanel extends StatelessWidget {
     required this.bodyId,
     this.scroll,
     this.onClose,
+    this.onHeaderTap,
   });
 
   /// The body shown.
@@ -38,6 +39,10 @@ class PlanetPanel extends StatelessWidget {
 
   /// Closes the panel; null hides the close button.
   final VoidCallback? onClose;
+
+  /// A tap on the header (the phone sheet opens or shrinks); null for
+  /// none.
+  final VoidCallback? onHeaderTap;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +56,12 @@ class PlanetPanel extends StatelessWidget {
         controller: scroll,
         padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 24),
         children: [
-          _Header(view: view, bodyId: bodyId, onClose: onClose),
+          _Header(
+            view: view,
+            bodyId: bodyId,
+            onClose: onClose,
+            onTap: onHeaderTap,
+          ),
           if (view == null)
             Text(
               'Nothing is known about this body yet.',
@@ -84,11 +94,17 @@ class PlanetPanel extends StatelessWidget {
 
 /// The body's name, type and slots, and the close button.
 class _Header extends StatelessWidget {
-  const _Header({required this.view, required this.bodyId, this.onClose});
+  const _Header({
+    required this.view,
+    required this.bodyId,
+    this.onClose,
+    this.onTap,
+  });
 
   final BodyView? view;
   final String bodyId;
   final VoidCallback? onClose;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +115,21 @@ class _Header extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text(v?.name ?? bodyId, style: text.titleLarge)),
+            Expanded(
+              child: InkWell(
+                onTap: onTap,
+                child: Semantics(
+                  onTapHint: onTap == null ? null : 'show more or less',
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(v?.name ?? bodyId, style: text.titleLarge),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             if (onClose case final close?)
               IconButton(
                 icon: const Icon(Icons.close),

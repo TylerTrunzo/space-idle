@@ -80,7 +80,7 @@ class _TopBarState extends State<TopBar> {
                   ),
                   IconButton(
                     key: const ValueKey('buy-max'),
-                    icon: const Icon(Icons.keyboard_double_arrow_up),
+                    icon: const Icon(Icons.trending_up),
                     tooltip: 'Buy max',
                     // The preview copies the state: only on a tap.
                     onPressed: () => setState(() => _buyMax = buyMaxView(c)),

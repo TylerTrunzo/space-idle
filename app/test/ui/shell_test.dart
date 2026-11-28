@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
@@ -6,6 +7,7 @@ import 'package:space_idle/game/clock.dart';
 import 'package:space_idle/game/save_store.dart';
 import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/map/star_map.dart';
+import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/shell.dart';
 import 'package:space_idle/ui/top_bar.dart';
 
@@ -253,6 +255,64 @@ void main() {
       findsNothing,
       reason: "Kora's slot, not Brine's",
     );
+  });
+
+  group('the phone sheet', () {
+    Future<void> openKora(WidgetTester tester) async {
+      await _boot(tester, size: const Size(412, 915));
+      ShellScope.of(tester.element(find.byType(TopBar))).selectBody('kora');
+      await tester.pump();
+      await tester.pump();
+    }
+
+    double sheetTop(WidgetTester tester) =>
+        tester.getTopLeft(find.byType(PlanetPanel)).dy;
+
+    testWidgets('the selected body stays in view above it', (tester) async {
+      await openKora(tester);
+      final map = tester.getRect(find.byType(Shell));
+      final top = tester.getTopLeft(find.byType(StarMap)).dy;
+      final visible = Rect.fromLTRB(map.left, top, map.right, sheetTop(tester));
+      final kora = tester.getRect(find.bySemanticsLabel('Kora, owned'));
+      expect(visible.height, greaterThan(100));
+      expect(
+        visible.contains(kora.topLeft) && visible.contains(kora.bottomRight),
+        isTrue,
+        reason: 'Kora at $kora, the map shows $visible',
+      );
+    });
+
+    testWidgets('it drags with a mouse', (tester) async {
+      await openKora(tester);
+      final before = sheetTop(tester);
+      await tester.drag(
+        find.byType(PlanetPanel),
+        const Offset(0, -250),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump();
+      expect(sheetTop(tester), lessThan(before - 100));
+    });
+
+    testWidgets('a tap on its header toggles it full and back', (tester) async {
+      await openKora(tester);
+      final half = sheetTop(tester);
+      final name = find.descendant(
+        of: find.byType(PlanetPanel),
+        matching: find.text('Kora'),
+      );
+      await tester.tap(name);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final full = sheetTop(tester);
+      expect(full, lessThan(half - 200));
+      await tester.tap(name);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(sheetTop(tester), closeTo(half, 1));
+    });
   });
 
   testWidgets('the signal marker says surveys come with the Projects tab', (
