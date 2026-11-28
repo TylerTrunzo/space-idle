@@ -835,6 +835,12 @@ Map<String, Map<String, BigNum>> _cargoSupply(
 /// sample step's buildings run at no more than this ([stepProduction]'s
 /// `runCaps`), and a report a few seconds before a lot lands reads as one
 /// a few seconds after.
+///
+/// Nor at more than a full step of play gives them, played on a copy of
+/// [s] whose stores hold a full step of that supply: play shares an input
+/// out by recipe depth, shallow first ([stepProduction]), so a deeper
+/// building can get none of a short input another building on its body
+/// uses first, whatever its part of the store's use.
 Map<String, RunCap> _fullStepCaps(
   GameState s,
   Content c,
@@ -883,6 +889,40 @@ Map<String, RunCap> _fullStepCaps(
         }
       }
       if (cap != null) caps[b.id] = cap;
+    }
+  }
+  if (caps.isEmpty) return caps;
+  // That share assumes every building of a store gets its part; play
+  // runs the shallower recipes first ([stepProduction]), which can take a
+  // short input before the deeper ones see any. So a full step of play is
+  // run on a copy, its stores holding a full step of their supply, and no
+  // building fed by cargo runs faster than it ran there.
+  final step = s.copy()..shipments.clear();
+  for (final MapEntry(key: id, value: got) in supply.entries) {
+    final stock = step.body(id).stock;
+    for (final MapEntry(key: res, value: v) in got.entries) {
+      stock[res] = v.mulDouble(_fullStepSeconds);
+    }
+  }
+  stepProduction(
+    step,
+    c,
+    _fullStepSeconds,
+    crewEfficiencyOf: crewEff == null ? const {} : {factionId: crewEff},
+  );
+  for (final MapEntry(key: id, value: got) in supply.entries) {
+    for (final b in step.body(id).buildings) {
+      final def = c.buildings[b.defId]!;
+      if (!runsRecipe(def) || !def.inputs.keys.any(got.containsKey)) continue;
+      final limit = b.lastLimitReason;
+      if (limit == null || !limit.startsWith('input:')) continue;
+      final now = caps[b.id];
+      if (now == null || b.lastRunFraction < now.fraction) {
+        caps[b.id] = (
+          fraction: b.lastRunFraction,
+          inputId: limit.substring('input:'.length),
+        );
+      }
     }
   }
   return caps;
