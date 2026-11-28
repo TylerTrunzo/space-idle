@@ -294,6 +294,36 @@ void main() {
       expect(sheetTop(tester), lessThan(before - 100));
     });
 
+    testWidgets('a sheet pulled high leaves a small map with no labels '
+        'on each other', (tester) async {
+      await openKora(tester);
+      await tester.drag(find.byType(PlanetPanel), const Offset(0, -500));
+      await tester.pump();
+      final map = tester.getRect(find.byType(StarMap));
+      expect(map.height, lessThan(200));
+      final labels = [
+        for (final e
+            in find
+                .byWidgetPredicate(
+                  (w) =>
+                      w.key is ValueKey<String> &&
+                      (w.key! as ValueKey<String>).value.startsWith('label-'),
+                )
+                .evaluate())
+          (
+            (e.widget.key! as ValueKey<String>).value,
+            tester.getRect(find.byWidget(e.widget)),
+          ),
+      ];
+      for (final (i, (a, ra)) in labels.indexed) {
+        for (final (b, rb) in labels.skip(i + 1)) {
+          expect(ra.overlaps(rb), isFalse, reason: '$a over $b');
+        }
+      }
+      // The selected body keeps its name.
+      expect(labels.map((l) => l.$1), contains('label-kora'));
+    });
+
     testWidgets('a tap on its header toggles it full and back', (tester) async {
       await openKora(tester);
       final half = sheetTop(tester);

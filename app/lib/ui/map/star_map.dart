@@ -39,6 +39,11 @@ class StarMap extends StatefulWidget {
   /// The body drawn as selected.
   final String? selectedId;
 
+  /// Below this height (a phone sheet pulled high) the system is drawn
+  /// too small for every name to fit clear of the others: only the
+  /// selected body keeps its label.
+  static const double compactHeight = 200;
+
   @override
   State<StarMap> createState() => _StarMapState();
 }
@@ -223,7 +228,9 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   for (final (i, b) in scene.bodies.indexed) ...[
-                    _BodyLabel(body: b, rect: labels[i]),
+                    if (size.height >= StarMap.compactHeight ||
+                        b.id == widget.selectedId)
+                      _BodyLabel(body: b, rect: labels[i]),
                     _BodyNode(
                       body: b,
                       transform: t,
