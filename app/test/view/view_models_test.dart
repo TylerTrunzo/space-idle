@@ -109,8 +109,8 @@ void main() {
       expect(speed.label, 'Speed');
       expect(speed.cost, '75');
       expect(speed.affordable, isTrue);
-      // All the ore its one mine makes is used: a faster smelter has none.
-      expect(speed.payback, 'no gain now: its inputs or crew hold it');
+      // Its payback line is asked for by the button as it is drawn.
+      expect(speed.previewable, isTrue);
       expect(smelter.upgrades[UpgradeTrack.capacity]!.cost, '450');
       expect(smelter.upgrades[UpgradeTrack.capacity]!.affordable, isFalse);
     });
@@ -310,43 +310,48 @@ void main() {
       expect(row.upgrades.values.map((u) => u.affordable), everyElement(false));
     });
 
-    group('upgrade paybacks, from the core upgradePreview', () {
-      UpgradeButtonView button(String id, UpgradeTrack t) => bodyView(
-        c,
-        'kora',
-      )!.buildings.firstWhere((b) => b.id == id).upgrades[t]!;
+    group('paybackText', () {
+      UpgradePreview preview({
+        double? payback,
+        bool limited = false,
+        num worth = 0,
+      }) => UpgradePreview(
+        cost: BigNum.from(75),
+        outputDeltaPerSec: const {},
+        creditsDeltaPerSec: BigNum.from(worth),
+        paybackSeconds: payback,
+        limitedElsewhere: limited,
+      );
 
-      test('a level that gains shows how soon it pays back', () {
-        final p = c.upgradePreviewFor('b1', UpgradeTrack.speed)!;
-        expect(p.paybackSeconds, isNotNull);
+      test('a level that gains says how soon it pays back', () {
         expect(
-          button('b1', UpgradeTrack.speed).payback,
-          'pays back in ${formatDuration(p.paybackSeconds!)}',
+          paybackText(preview(payback: 480, worth: 1)),
+          'pays back in ${formatDuration(480)}',
         );
       });
 
-      test('a level held by its inputs says it gains nothing', () {
-        // The new game's smelter works all the ore its one mine makes.
+      test('a level held by its inputs or crew says so', () {
         expect(
-          c.upgradePreviewFor('b3', UpgradeTrack.speed)!.limitedElsewhere,
-          isTrue,
-        );
-        expect(
-          button('b3', UpgradeTrack.speed).payback,
+          paybackText(preview(limited: true)),
           'no gain now: its inputs or crew hold it',
         );
       });
 
-      test('a capacity level follows its preview too', () {
-        final p = c.upgradePreviewFor('b3', UpgradeTrack.capacity);
-        final shown = button('b3', UpgradeTrack.capacity).payback;
-        if (p?.paybackSeconds case final s?) {
-          expect(shown, 'pays back in ${formatDuration(s)}');
-        } else if (p?.limitedElsewhere ?? false) {
-          expect(shown, startsWith('no gain now'));
-        } else {
-          expect(shown, isNull);
-        }
+      test('a level that loses worth says it lowers income', () {
+        expect(paybackText(preview(worth: -2)), 'this level lowers income now');
+      });
+
+      test('none, or one whose gain is not output, shows nothing', () {
+        expect(paybackText(null), isNull);
+        expect(paybackText(preview()), isNull);
+      });
+
+      test('only the player\'s unmaxed tracks ask for one', () {
+        final smelter = _row(bodyView(c, 'kora')!, 'Smelter');
+        expect(
+          smelter.upgrades.values.map((u) => u.previewable),
+          everyElement(isTrue),
+        );
       });
     });
 

@@ -49,44 +49,40 @@ class PlanetPanel extends StatelessWidget {
     final c = ControllerScope.of(context);
     final view = bodyView(c, bodyId);
     final text = Theme.of(context).textTheme;
+    // Built lazily: only the rows on screen (and the list's cache extent)
+    // are built, so only their upgrade buttons ask for paybacks.
+    final items = <Widget>[
+      _Header(view: view, bodyId: bodyId, onClose: onClose, onTap: onHeaderTap),
+      if (view == null)
+        Text('Nothing is known about this body yet.', style: text.bodyMedium)
+      else if (view.owned) ...[
+        if (expandSlotsView(c, view.id) case final slots?)
+          _ExpandSlots(view: slots, bodyId: view.id, bodyName: view.name),
+        const Divider(color: Palette.border),
+        // Keyed by building, so a pending confirm stays with its own.
+        for (final b in view.buildings)
+          BuildingRow(key: ValueKey(b.id), view: b),
+        const SizedBox(height: 8),
+        const Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: BuildPicker(),
+        ),
+        const SizedBox(height: 16),
+        const Divider(color: Palette.border),
+        StorageSection(view: view),
+        const Divider(color: Palette.border),
+        RoutesSection(view: view),
+      ] else
+        ClaimSection(view: view),
+    ];
     return Material(
       color: Palette.panel,
       shape: const Border(top: BorderSide(color: Palette.border)),
-      child: ListView(
+      child: ListView.builder(
         controller: scroll,
         padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 24),
-        children: [
-          _Header(
-            view: view,
-            bodyId: bodyId,
-            onClose: onClose,
-            onTap: onHeaderTap,
-          ),
-          if (view == null)
-            Text(
-              'Nothing is known about this body yet.',
-              style: text.bodyMedium,
-            )
-          else if (view.owned) ...[
-            if (expandSlotsView(c, view.id) case final slots?)
-              _ExpandSlots(view: slots, bodyId: view.id, bodyName: view.name),
-            const Divider(color: Palette.border),
-            // Keyed by building, so a pending confirm stays with its own.
-            for (final b in view.buildings)
-              BuildingRow(key: ValueKey(b.id), view: b),
-            const SizedBox(height: 8),
-            const Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: BuildPicker(),
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: Palette.border),
-            StorageSection(view: view),
-            const Divider(color: Palette.border),
-            RoutesSection(view: view),
-          ] else
-            ClaimSection(view: view),
-        ],
+        itemCount: items.length,
+        itemBuilder: (context, i) => items[i],
       ),
     );
   }

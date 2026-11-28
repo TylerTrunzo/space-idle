@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:game_core/game_core.dart';
 import 'package:space_idle/game/clock.dart';
 import 'package:space_idle/game/save_store.dart';
@@ -78,10 +79,22 @@ class GameController extends ChangeNotifier {
     required SaveStore store,
     required Clock clock,
     int? newGameSeed,
-  }) : this._(GameEngine(content), store, clock, newGameSeed);
+    void Function(VoidCallback fill)? scheduleFill,
+  }) : this._(
+         GameEngine(content),
+         store,
+         clock,
+         newGameSeed,
+         scheduleFill ?? _afterFrame,
+       );
 
-  GameController._(this.engine, this._store, this._clock, this._seed)
-    : content = engine.content,
+  GameController._(
+    this.engine,
+    this._store,
+    this._clock,
+    this._seed,
+    this._scheduleFill,
+  ) : content = engine.content,
       _syncedAt = _clock.now(),
       _state = engine.newGame(_seedFrom(_seed, _clock));
 
@@ -143,37 +156,96 @@ class GameController extends ChangeNotifier {
   Map<String, RouteThroughput> get throughputs =>
       _throughputs ??= routeThroughputs(_state, content);
 
-  /// Game seconds an upgrade preview is kept for while only ticks pass:
+  /// Game seconds an upgrade preview is good for while only ticks pass:
   /// the steady rates it compares barely move between commands, and the
-  /// prices it values them at drift slowly.
+  /// prices it values them at drift slowly. An older one still shows while
+  /// a fresh one is worked out.
   static const double adviceRefreshSeconds = 60;
 
-  final Map<(String, UpgradeTrack), UpgradePreview?> _previews = {};
-  double _previewsAt = double.negativeInfinity;
+  /// Time each fill of the preview cache may take, a frame at a time, so
+  /// no frame waits on more than a couple of flow reports.
+  static const Duration previewBudget = Duration(milliseconds: 6);
 
-  /// What one more level of [track] on building [buildingId] would bring
-  /// the player ([upgradePreview]), null when it can't be had.
+  /// Bumped each time previews land, for the payback lines to rebuild on;
+  /// nothing else listens.
+  final ValueNotifier<int> previewsVersion = ValueNotifier(0);
+
+  /// Building id and track to the preview and the game time of the state
+  /// it was worked out from.
+  final Map<(String, UpgradeTrack), ({UpgradePreview? preview, double at})>
+  _previews = {};
+
+  /// Levels asked for and not yet worked out, oldest first.
+  final LinkedHashSet<(String, UpgradeTrack)> _wanted = LinkedHashSet();
+
+  /// The previewer the cache is filled from: one copy of the state and
+  /// one report of it, remade once it is [adviceRefreshSeconds] old.
+  UpgradePreviewer? _previewer;
+  double _previewerAt = double.negativeInfinity;
+
+  bool _fillScheduled = false;
+  final void Function(VoidCallback fill) _scheduleFill;
+
+  /// The upgrade preview of [track] on building [buildingId] for the
+  /// player ([upgradePreview]), if one is ready: `ready` false until it is.
   ///
-  /// Each is worked out lazily, the first time it is asked for, against
-  /// [flow], and kept until a command, a load, or [adviceRefreshSeconds]
-  /// of game time: never per button per tick, since each builds a flow
-  /// report.
-  UpgradePreview? upgradePreviewFor(String buildingId, UpgradeTrack track) {
-    if (_state.time - _previewsAt >= adviceRefreshSeconds) {
-      _previews.clear();
-      _previewsAt = _state.time;
+  /// Asking is cheap. One not ready, or older than [adviceRefreshSeconds]
+  /// (each entry by its own age, so they do not all go at once), joins a
+  /// queue that fills a few at a time, [previewBudget] a frame, from one
+  /// copy of the state ([UpgradePreviewer]); [previewsVersion] says when
+  /// more have landed. A successful command, a load or a new game drops
+  /// them all.
+  ({bool ready, UpgradePreview? preview}) previewFor(
+    String buildingId,
+    UpgradeTrack track,
+  ) {
+    final key = (buildingId, track);
+    final have = _previews[key];
+    if (have == null || _state.time - have.at >= adviceRefreshSeconds) {
+      if (_wanted.add(key)) _askForFill();
     }
-    return _previews.putIfAbsent(
-      (buildingId, track),
-      () => upgradePreview(
-        _state,
-        content,
-        playerId,
-        buildingId,
-        track,
-        before: flow,
-      ),
-    );
+    return have == null
+        ? (ready: false, preview: null)
+        : (ready: true, preview: have.preview);
+  }
+
+  void _askForFill() {
+    if (_fillScheduled || _disposed) return;
+    _fillScheduled = true;
+    _scheduleFill(_fill);
+  }
+
+  /// Works out queued previews for up to [previewBudget], then asks for
+  /// another fill if any are left.
+  void _fill() {
+    _fillScheduled = false;
+    if (_disposed) return;
+    final clock = Stopwatch()..start();
+    var landed = false;
+    while (_wanted.isNotEmpty && clock.elapsed < previewBudget) {
+      final key = _wanted.first;
+      _wanted.remove(key);
+      if (_previewer == null ||
+          _state.time - _previewerAt >= adviceRefreshSeconds) {
+        _previewer = UpgradePreviewer(_state, content, playerId, before: flow);
+        _previewerAt = _state.time;
+      }
+      _previews[key] = (
+        preview: _previewer!.preview(key.$1, key.$2),
+        at: _previewerAt,
+      );
+      landed = true;
+    }
+    if (landed) previewsVersion.value++;
+    if (_wanted.isNotEmpty) _askForFill();
+  }
+
+  /// Fills after the frame being drawn, asking for another frame, so each
+  /// frame does one fill.
+  static void _afterFrame(VoidCallback fill) {
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) => fill())
+      ..ensureVisualUpdate();
   }
 
   /// Drops the reports worked out from the state, after it changed; and,
@@ -183,7 +255,9 @@ class GameController extends ChangeNotifier {
     _throughputs = null;
     if (!ticked) {
       _previews.clear();
-      _previewsAt = double.negativeInfinity;
+      _wanted.clear();
+      _previewer = null;
+      _previewerAt = double.negativeInfinity;
     }
   }
 
@@ -378,6 +452,7 @@ class GameController extends ChangeNotifier {
   void dispose() {
     stopTimer();
     _disposed = true;
+    previewsVersion.dispose();
     super.dispose();
   }
 

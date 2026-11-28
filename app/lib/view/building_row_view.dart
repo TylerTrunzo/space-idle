@@ -38,7 +38,7 @@ final class UpgradeButtonView {
     required this.cost,
     required this.affordable,
     this.maxedReason,
-    this.payback,
+    this.previewable = false,
   });
 
   /// "Speed", "Efficiency" or "Capacity".
@@ -55,9 +55,11 @@ final class UpgradeButtonView {
   /// such as "its inputs are at the 25% floor"); null while it can.
   final String? maxedReason;
 
-  /// How soon it pays for itself, such as "8m"; null until the core's
-  /// upgrade advice (stage 2 Task 0) fills it in.
-  final String? payback;
+  /// Whether the button shows a payback line ([paybackText]): on the
+  /// player's own body, for a track that can go higher. The line is asked
+  /// for by the button itself, as it is drawn (the controller's
+  /// `previewFor`), so only buttons on screen cost a preview.
+  final bool previewable;
 }
 
 /// A building's row in the Mission Control panel.
@@ -144,7 +146,6 @@ final class RowContext {
     required this.freeCrew,
     required this.bottlenecks,
     this.crewShort,
-    this.preview,
   });
 
   /// [playerId]'s context for the rows of [body], from [s] and its flow
@@ -154,9 +155,8 @@ final class RowContext {
     Content c,
     String playerId,
     BodyState body,
-    List<Bottleneck> bottlenecks, {
-    UpgradePreview? Function(String buildingId, UpgradeTrack track)? preview,
-  }) => RowContext(
+    List<Bottleneck> bottlenecks,
+  ) => RowContext(
     owned: body.ownerId == playerId,
     credits: s.faction(playerId).credits,
     freeCrew: availableCrew(s, c, playerId),
@@ -164,7 +164,6 @@ final class RowContext {
     crewShort: bottlenecks.any((n) => n.kind == BottleneckKind.crewShortage)
         ? crewShortText(s, c, playerId)
         : null,
-    preview: preview,
   );
 
   /// Whether the player owns the body: on anyone else's, its rows offer
@@ -185,11 +184,6 @@ final class RowContext {
   /// bottleneck names it; else null. The shortage names no building, so
   /// the per-building lookup misses it.
   final String? crewShort;
-
-  /// What one more level of a track would bring (the core's
-  /// `upgradePreview`, cached by the controller); null for no paybacks.
-  final UpgradePreview? Function(String buildingId, UpgradeTrack track)?
-  preview;
 }
 
 /// The row of building [b], from [status] (its line in the flow report;
@@ -306,15 +300,14 @@ UpgradeButtonView _upgrade(
     cost: formatNumber(cost),
     affordable: ctx.owned && maxed == null && ctx.credits >= cost,
     maxedReason: maxed,
-    payback: ctx.owned && maxed == null
-        ? paybackText(ctx.preview?.call(b.id, t))
-        : null,
+    previewable: ctx.owned && maxed == null,
   );
 }
 
-/// An upgrade button's payback line from preview [p]: "pays back in 8m",
-/// or, when the level gains nothing because something else holds the
-/// building, "no gain now: its inputs or crew hold it"; null otherwise
+/// An upgrade button's payback line from preview [p]: "pays back in 8m";
+/// "no gain now: its inputs or crew hold it" when something else holds
+/// the building; "this level lowers income now" when it loses worth (a
+/// faster recipe using inputs worth more than it adds); null otherwise
 /// (no preview, or a level whose gain is not output, such as a
 /// warehouse's storage).
 String? paybackText(UpgradePreview? p) => switch (p) {
@@ -323,5 +316,8 @@ String? paybackText(UpgradePreview? p) => switch (p) {
     'pays back in ${formatDuration(s)}',
   UpgradePreview(limitedElsewhere: true) =>
     'no gain now: its inputs or crew hold it',
+  UpgradePreview(:final creditsDeltaPerSec)
+      when creditsDeltaPerSec.isNegative =>
+    'this level lowers income now',
   _ => null,
 };

@@ -328,13 +328,23 @@ class _Upgrades extends StatelessWidget {
                           ],
                         ),
                         Text('${u.cost} credits', style: mono),
-                        if (u.payback case final p?) Text(p, style: mono),
                       ],
                     ),
                   ),
             ],
           ),
         ),
+        // Each track's payback on a line of its own, kept while it is
+        // worked out, so a button never changes size as it lands.
+        for (final MapEntry(key: t, value: u) in view.upgrades.entries)
+          if (u.previewable)
+            _Payback(
+              key: ValueKey('payback-${view.id}-${t.name}'),
+              buildingId: view.id,
+              track: t,
+              label: u.label,
+              style: mono,
+            ),
         for (final (_, label, why) in maxed)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -345,6 +355,38 @@ class _Upgrades extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// An upgrade track's payback line ([paybackText]), "Speed: pays back in
+/// 8m", asked for as it is drawn: the controller fills previews a few a
+/// frame, so the line stays blank (its height kept) until this one is
+/// ready, and rebuilds alone when previews land.
+class _Payback extends StatelessWidget {
+  const _Payback({
+    super.key,
+    required this.buildingId,
+    required this.track,
+    required this.label,
+    required this.style,
+  });
+
+  final String buildingId;
+  final UpgradeTrack track;
+  final String label;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ControllerScope.of(context);
+    return ValueListenableBuilder<int>(
+      valueListenable: c.previewsVersion,
+      builder: (context, _, _) {
+        final (:ready, :preview) = c.previewFor(buildingId, track);
+        final text = ready ? paybackText(preview) : null;
+        return Text(text == null ? ' ' : '$label: $text', style: style);
+      },
     );
   }
 }

@@ -238,26 +238,63 @@ void main() {
       expect(_level(c, 'b3', UpgradeTrack.speed), 10);
     });
 
-    testWidgets('an upgrade button shows its payback', (tester) async {
+    testWidgets('an upgrade fills in its payback line in place', (
+      tester,
+    ) async {
       await _pump(tester, c, 'kora');
-      // The iron mine's speed level gains ore: it pays back.
-      final p = c.upgradePreviewFor('b1', UpgradeTrack.speed)!;
+      final line = _key('payback-b1-speed');
+      final row = find.byKey(const ValueKey('b1'));
+      final button = tester.getSize(_key('upgrade-b1-speed'));
+      final height = tester.getSize(row).height;
+      // A few previews a frame: within a second of frames it is there.
+      for (var i = 0; i < 60; i++) {
+        if (find
+            .descendant(of: line, matching: find.textContaining('pays back'))
+            .evaluate()
+            .isNotEmpty) {
+          break;
+        }
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final p = c.previewFor('b1', UpgradeTrack.speed);
+      expect(p.ready, isTrue);
       expect(
         find.descendant(
-          of: _key('upgrade-b1-speed'),
+          of: line,
           matching: find.text(
-            'pays back in ${formatDuration(p.paybackSeconds!)}',
+            'Speed: pays back in ${formatDuration(p.preview!.paybackSeconds!)}',
           ),
         ),
         findsOneWidget,
       );
+      expect(tester.getSize(_key('upgrade-b1-speed')), button);
+      expect(tester.getSize(row).height, height, reason: 'its line was kept');
       // The smelter's speed level has no more ore to work: it says so.
+      await tester.pump(const Duration(milliseconds: 16));
       expect(
         find.descendant(
-          of: _key('upgrade-b3-speed'),
+          of: _key('payback-b3-speed'),
           matching: find.textContaining('no gain now'),
         ),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('rows off screen ask for nothing', (tester) async {
+      c.state.faction(_p).credits = BigNum.from(1e9);
+      for (var i = 0; i < 6; i++) {
+        c.run(const BuildCommand(_p, 'kora', 'smelter'));
+      }
+      await _pump(tester, c, 'kora', size: const Size(412, 500));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      final last = c.state.body('kora').buildings.last;
+      expect(_key('upgrade-${last.id}-speed'), findsNothing);
+      expect(
+        c.previewFor(last.id, UpgradeTrack.speed).ready,
+        isFalse,
+        reason: 'never drawn, never worked out',
       );
     });
   });

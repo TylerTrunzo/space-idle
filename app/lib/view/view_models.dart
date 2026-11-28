@@ -414,14 +414,7 @@ BodyView? bodyView(GameController c, String bodyId) {
   if (body == null || !isVisible(s, body, player)) return null;
   final flow = c.flow;
   final bodyFlow = flow.bodies.where((b) => b.bodyId == bodyId).firstOrNull;
-  final rows = RowContext.of(
-    s,
-    content,
-    player,
-    body,
-    flow.bottlenecks,
-    preview: c.upgradePreviewFor,
-  );
+  final rows = RowContext.of(s, content, player, body, flow.bottlenecks);
   final statuses = {
     for (final st in bodyFlow?.buildings ?? const <BuildingStatus>[])
       st.buildingId: st,

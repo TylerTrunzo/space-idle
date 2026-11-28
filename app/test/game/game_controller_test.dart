@@ -468,37 +468,117 @@ void main() {
       expect(identical(c.throughputs, first), isFalse, reason: 'a new state');
     });
 
-    test('upgrade previews: kept across ticks, worked out again after a '
-        'command or a game minute', () async {
-      final c = _controller(store, clock);
-      await c.start();
-      final first = c.upgradePreviewFor('b3', UpgradeTrack.speed);
-      final core = upgradePreview(
-        c.state,
-        content,
-        'player',
-        'b3',
-        UpgradeTrack.speed,
-      );
-      expect(first?.paybackSeconds, core?.paybackSeconds);
-      expect(first?.limitedElsewhere, core?.limitedElsewhere);
+    group('upgrade previews, filled a few at a time', () {
+      late List<VoidCallback> fills;
+      late GameController c;
 
-      c.tickSeconds(1);
-      expect(
-        identical(c.upgradePreviewFor('b3', UpgradeTrack.speed), first),
-        isTrue,
-        reason: 'a tick keeps it',
-      );
-      c.run(const AssignCrewCommand('player', 'b1', 0));
-      final afterCommand = c.upgradePreviewFor('b3', UpgradeTrack.speed);
-      expect(identical(afterCommand, first), isFalse, reason: 'a command');
-      c.tickSeconds(GameController.adviceRefreshSeconds);
-      expect(
-        identical(c.upgradePreviewFor('b3', UpgradeTrack.speed), afterCommand),
-        isFalse,
-        reason: 'a game minute',
-      );
-      expect(c.upgradePreviewFor('nope', UpgradeTrack.speed), isNull);
+      setUp(() async {
+        fills = [];
+        c = GameController(
+          content: content,
+          store: store,
+          clock: clock,
+          newGameSeed: 7,
+          scheduleFill: fills.add,
+        );
+        await c.start();
+      });
+
+      /// Runs the fills asked for until none are left.
+      void fillAll() {
+        while (fills.isNotEmpty) {
+          fills.removeAt(0)();
+        }
+      }
+
+      test('asking is lazy: nothing is worked out until a fill runs', () {
+        final asked = c.previewFor('b3', UpgradeTrack.speed);
+        expect(asked.ready, isFalse);
+        expect(fills, hasLength(1), reason: 'one fill asked for');
+        c.previewFor('b1', UpgradeTrack.speed);
+        expect(fills, hasLength(1), reason: 'not one per ask');
+        var landed = 0;
+        c.previewsVersion.addListener(() => landed++);
+        fillAll();
+        expect(landed, greaterThan(0));
+        final ready = c.previewFor('b3', UpgradeTrack.speed);
+        expect(ready.ready, isTrue);
+        final core = upgradePreview(
+          c.state,
+          content,
+          'player',
+          'b3',
+          UpgradeTrack.speed,
+        );
+        expect(ready.preview?.paybackSeconds, core?.paybackSeconds);
+        expect(ready.preview?.limitedElsewhere, core?.limitedElsewhere);
+        expect(fills, isEmpty, reason: 'nothing more to fill');
+      });
+
+      test('each fill keeps to its budget and asks for the next', () {
+        final all = [
+          for (final b in c.state.body('kora').buildings)
+            for (final t in UpgradeTrack.values) (b.id, t),
+        ];
+        for (final (id, t) in all) {
+          c.previewFor(id, t);
+        }
+        final clockwatch = Stopwatch()..start();
+        fills.removeAt(0)();
+        // A fill stops once past its budget: one preview over at most.
+        expect(clockwatch.elapsed, lessThan(const Duration(milliseconds: 200)));
+        final ready = all.where((l) => c.previewFor(l.$1, l.$2).ready).length;
+        expect(ready, greaterThan(0));
+        if (ready < all.length) expect(fills, hasLength(1));
+        fillAll();
+        expect(all.every((l) => c.previewFor(l.$1, l.$2).ready), isTrue);
+      });
+
+      test('a tick keeps them; a command drops them all', () {
+        c.previewFor('b3', UpgradeTrack.speed);
+        fillAll();
+        final first = c.previewFor('b3', UpgradeTrack.speed).preview;
+        c.tickSeconds(1);
+        final kept = c.previewFor('b3', UpgradeTrack.speed);
+        expect(kept.ready, isTrue);
+        expect(identical(kept.preview, first), isTrue);
+        expect(fills, isEmpty);
+        c.run(const AssignCrewCommand('player', 'b1', 0));
+        expect(c.previewFor('b3', UpgradeTrack.speed).ready, isFalse);
+      });
+
+      test('a game minute old, each shows on while it alone is redone', () {
+        c.previewFor('b3', UpgradeTrack.speed);
+        c.previewFor('b1', UpgradeTrack.speed);
+        fillAll();
+        final b3 = c.previewFor('b3', UpgradeTrack.speed).preview;
+        final b1 = c.previewFor('b1', UpgradeTrack.speed).preview;
+        c.tickSeconds(GameController.adviceRefreshSeconds);
+        // The old one still shows while a fresh one is asked for.
+        final stale = c.previewFor('b3', UpgradeTrack.speed);
+        expect(stale.ready, isTrue);
+        expect(identical(stale.preview, b3), isTrue);
+        expect(fills, hasLength(1));
+        fillAll();
+        expect(
+          identical(c.previewFor('b3', UpgradeTrack.speed).preview, b3),
+          isFalse,
+          reason: 'redone',
+        );
+        // b1 was not asked for since: it was not redone with it.
+        expect(
+          identical(c.previewFor('b1', UpgradeTrack.speed).preview, b1),
+          isTrue,
+        );
+      });
+
+      test('a building that is not there previews nothing', () {
+        c.previewFor('nope', UpgradeTrack.speed);
+        fillAll();
+        final r = c.previewFor('nope', UpgradeTrack.speed);
+        expect(r.ready, isTrue);
+        expect(r.preview, isNull);
+      });
     });
   });
 
