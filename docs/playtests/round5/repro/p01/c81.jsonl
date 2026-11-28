@@ -1,0 +1,8 @@
+{"cmd":"discardContract","contractId":"c77"}
+{"cmd":"setAutoPayReserve","credits":"2e8"}
+{"cmd":"advance","seconds":14340}
+{"cmd":"state"}
+{"cmd":"costs"}
+{"cmd":"advance","seconds":60}
+{"cmd":"state"}
+{"cmd":"costs"}

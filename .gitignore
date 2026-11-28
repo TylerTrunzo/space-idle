@@ -1,1 +1,4 @@
 .superpowers/
+.dart_tool/
+build/
+.claude/worktrees/

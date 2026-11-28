@@ -1,0 +1,78 @@
+{
+  "systems": [
+    {
+      "id": "veyra",
+      "name": "Veyra",
+      "bodies": [
+        {
+          "id": "cinder", "name": "Cinder", "typeId": "volcanic", "orbit": 1,
+          "deposits": [
+            {"resourceId": "sulfur", "richness": 1.2},
+            {"resourceId": "rare_earths", "richness": 0.6}
+          ]
+        },
+        {
+          "id": "kora", "name": "Kora", "typeId": "rocky", "orbit": 2,
+          "deposits": [
+            {"resourceId": "iron_ore", "richness": 1.0},
+            {"resourceId": "copper_ore", "richness": 0.8},
+            {"resourceId": "silicon", "richness": 0.7}
+          ]
+        },
+        {
+          "id": "hollow_reach", "name": "Hollow Reach", "typeId": "asteroid_belt", "orbit": 3,
+          "deposits": [
+            {"resourceId": "nickel", "richness": 1.2},
+            {"resourceId": "iron_ore", "richness": 0.8},
+            {"resourceId": "water_ice", "richness": 1.0}
+          ]
+        },
+        {
+          "id": "vastmere", "name": "Vastmere", "typeId": "gas_giant", "orbit": 5,
+          "deposits": [
+            {"resourceId": "hydrogen", "richness": 1.5},
+            {"resourceId": "helium_3", "richness": 0.5}
+          ]
+        },
+        {
+          "id": "brine", "name": "Brine", "typeId": "ice_moon", "orbit": 5,
+          "deposits": [
+            {"resourceId": "water_ice", "richness": 1.5},
+            {"resourceId": "ammonia", "richness": 1.0}
+          ]
+        },
+        {
+          "id": "tessaly", "name": "Tessaly", "typeId": "ice_moon", "orbit": 8, "hidden": true,
+          "deposits": [
+            {"resourceId": "water_ice", "richness": 2.2},
+            {"resourceId": "ammonia", "richness": 1.8}
+          ]
+        },
+        {
+          "id": "dusk_cairn", "name": "Dusk Cairn", "typeId": "kuiper", "orbit": 9, "hidden": true,
+          "deposits": [
+            {"resourceId": "rare_earths", "richness": 1.8},
+            {"resourceId": "nickel", "richness": 1.5},
+            {"resourceId": "helium_3", "richness": 1.4}
+          ]
+        }
+      ]
+    }
+  ],
+  "factions": [
+    {
+      "id": "player",
+      "name": "Kora Compact",
+      "isPlayer": true,
+      "homeBodyId": "kora",
+      "credits": "250",
+      "baseCrew": 20,
+      "buildings": [
+        {"defId": "mine", "depositResourceId": "iron_ore", "crew": 1},
+        {"defId": "mine", "depositResourceId": "copper_ore", "crew": 1},
+        {"defId": "smelter", "crew": 1}
+      ],
+      "stock": {"iron_ore": "40", "cargo_ship": "2"}
+    }
+  ]
+}

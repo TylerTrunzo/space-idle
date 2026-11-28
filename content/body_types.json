@@ -1,0 +1,8 @@
+[
+  {"id": "rocky", "name": "Rocky World", "depositPool": ["iron_ore", "copper_ore", "silicon"], "buildSlots": 12},
+  {"id": "asteroid_belt", "name": "Asteroid Belt", "depositPool": ["nickel", "iron_ore", "water_ice"], "buildSlots": 8},
+  {"id": "ice_moon", "name": "Ice Moon", "depositPool": ["water_ice", "ammonia"], "buildSlots": 10},
+  {"id": "gas_giant", "name": "Gas Giant", "depositPool": ["hydrogen", "helium_3"], "buildSlots": 6},
+  {"id": "volcanic", "name": "Volcanic World", "depositPool": ["sulfur", "rare_earths"], "buildSlots": 6},
+  {"id": "kuiper", "name": "Kuiper Rock", "depositPool": ["nickel", "rare_earths", "helium_3"], "buildSlots": 8}
+]

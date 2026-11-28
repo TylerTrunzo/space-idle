@@ -1,0 +1,2172 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
+
+import 'package:game_core/game_core.dart';
+import 'package:game_core/src/sim/contracts.dart'
+    show incomeBasis, twoSignificantFigures;
+import 'package:test/test.dart';
+
+import '../state/helpers.dart';
+
+BigNum n(num v) => BigNum.from(v);
+
+String encode(GameState s) => jsonEncode(s.toJson());
+
+/// The shipped content with [edit] applied to its decoded bundle.
+Content contentWith(void Function(Map<String, Object?> bundle) edit) {
+  final b = shippedBundle();
+  edit(b);
+  return switch (Content.fromBundle(b)) {
+    ContentOk(:final content) => content,
+    ContentInvalid(:final errors) => throw StateError('$errors'),
+  };
+}
+
+/// The errors loading the shipped content with [edit] applied gives.
+List<String> errorsWith(void Function(Map<String, Object?> bundle) edit) {
+  final b = shippedBundle();
+  edit(b);
+  return switch (Content.fromBundle(b)) {
+    ContentOk() => const [],
+    ContentInvalid(:final errors) => errors,
+  };
+}
+
+void main() {
+  final content = shippedContent();
+  final e = GameEngine(content);
+  final refill = content.rules.contractRefillSeconds;
+
+  FactionState player(GameState s) => s.faction('player');
+
+  String? ok(GameState s, Command cmd) {
+    final r = e.apply(s, cmd);
+    expect(r, isA<CommandOk>(), reason: r is CommandFailed ? r.message : '');
+    return (r as CommandOk).createdId;
+  }
+
+  /// Applies [cmd], expects [error] and no change to [s], and returns the
+  /// failure's message.
+  String fails(GameState s, Command cmd, CommandError error) {
+    final before = encode(s);
+    final r = e.apply(s, cmd);
+    expect(r, isA<CommandFailed>().having((f) => f.error, 'error', error));
+    expect(encode(s), before);
+    return (r as CommandFailed).message;
+  }
+
+  /// A new game with a full board, every refill used.
+  GameState fullBoard([int seed = 1]) {
+    final s = e.newGame(seed);
+    e.advance(s, refill * 2 + 60);
+    expect(player(s).contracts, hasLength(RulesDef.contractSlots));
+    expect(player(s).contractRefillAt, isEmpty);
+    return s;
+  }
+
+  /// Puts a contract for [quantity] of [resourceId] on the player's board
+  /// in place of its last one, as if just posted.
+  ContractState postOn(
+    GameState s,
+    String resourceId,
+    num quantity, {
+    num reward = 1000,
+  }) {
+    final f = player(s);
+    if (f.contracts.length + f.contractRefillAt.length >=
+        RulesDef.contractSlots) {
+      if (f.contractRefillAt.isNotEmpty) {
+        f.contractRefillAt.removeLast();
+      } else {
+        f.contracts.removeLast();
+      }
+    }
+    final k = ContractState(
+      id: s.newId('c'),
+      templateId: content.contractTemplates.keys.first,
+      resourceId: resourceId,
+      quantity: n(quantity),
+      rewardCredits: n(reward),
+      postedAt: s.time,
+    );
+    f.contracts.add(k);
+    return k;
+  }
+
+  group('the shipped contract templates', () {
+    test('come from the Veyra Exchange, tiers 0 to 3 covered', () {
+      expect(content.contractTemplates, isNotEmpty);
+      final tiers = <int>{};
+      for (final t in content.contractTemplates.values) {
+        expect(t.issuer, 'Veyra Exchange');
+        // 1 to 3 h of production, longer for higher tiers.
+        expect(t.quantitySeconds, inInclusiveRange(3600, 10800));
+        // 10 to 30 minutes of income at sale value, paid 3 times over, at
+        // least 1.5 times; at least 30 minutes and at most an hour of it.
+        expect(t.quantityIncomeSecondsMin, 600);
+        expect(t.quantityIncomeSecondsMax, 1800);
+        // But never a day's worth of what is made: habitat modules.
+        expect(t.quantityProductionSecondsMax, 86400);
+        expect(t.maxQuantity, isNull, reason: 'storage caps the size');
+        expect(t.rewardMultiplier, 3);
+        expect(t.minRewardMultiplier, 1.5);
+        expect(t.rewardIncomeSeconds, 1800);
+        expect(t.rewardCapIncomeSeconds, 3600);
+        expect(t.lifeSupportWeight, 0.25);
+        expect(t.minRewardCredits > const BigNum.zero(), isTrue);
+        expect(
+          t.firstContractMinReward! >= content.rules.claimBaseCredits,
+          isTrue,
+        );
+        for (var i = t.minTier; i <= t.maxTier; i++) {
+          tiers.add(i);
+        }
+      }
+      expect(tiers, containsAll([0, 1, 2, 3]));
+    });
+
+    test('refill after 4 hours', () {
+      expect(refill, 14400);
+    });
+  });
+
+  group('content validation', () {
+    Map<String, Object?> template(Map<String, Object?> b) =>
+        ((b['contracts']! as List).first as Map).cast<String, Object?>();
+
+    test('defaults apply when a template leaves them out', () {
+      final c = contentWith(
+        (b) => b['contracts'] = [
+          {
+            'id': 'plain',
+            'issuer': 'Veyra Exchange',
+            'minTier': 0,
+            'maxTier': 1,
+          },
+        ],
+      );
+      final t = c.contractTemplates['plain']!;
+      expect(t.quantitySeconds, ContractTemplateDef.defaultQuantitySeconds);
+      expect(t.quantitySeconds, 14400);
+      expect(t.rewardMultiplier, 2.5);
+      expect(t.minRewardMultiplier, 1.5);
+      expect(t.quantityIncomeSecondsMin, 600);
+      expect(t.quantityIncomeSecondsMax, 1800);
+      expect(t.quantityProductionSecondsMax, isNull);
+      expect(t.minQuantity, n(ContractTemplateDef.defaultMinQuantity));
+      expect(t.maxQuantity, isNull);
+      expect(t.rewardIncomeSeconds, 0);
+      expect(t.rewardCapIncomeSeconds, isNull);
+      expect(t.lifeSupportWeight, 1);
+      expect(t.minRewardCredits, const BigNum.zero());
+      expect(t.firstContractMinReward, isNull);
+    });
+
+    test('equal quantity income bounds load: no roll', () {
+      final c = contentWith((b) {
+        template(b)
+          ..['quantityIncomeSecondsMin'] = 900
+          ..['quantityIncomeSecondsMax'] = 900;
+      });
+      final t = c.contractTemplates.values.first;
+      expect(
+        (t.quantityIncomeSecondsMin, t.quantityIncomeSecondsMax),
+        (900, 900),
+      );
+    });
+
+    test('a reward cap of at least the floor loads', () {
+      final c = contentWith((b) {
+        final t = template(b)
+          ..['rewardIncomeSeconds'] = 600
+          ..['rewardCapIncomeSeconds'] = 600;
+        expect(t, isNotEmpty);
+      });
+      final t = c.contractTemplates.values.first;
+      expect(t.rewardIncomeSeconds, 600);
+      expect(t.rewardCapIncomeSeconds, 600);
+    });
+
+    test('content without contracts posts none', () {
+      final c = contentWith((b) => b.remove('contracts'));
+      expect(c.contractTemplates, isEmpty);
+      final s = GameEngine(c).newGame(1);
+      GameEngine(c).advance(s, refill * 3);
+      expect(player(s).contracts, isEmpty);
+    });
+
+    test('the refill time defaults to 4 hours and must be above 0', () {
+      expect(
+        contentWith(
+          (b) => (b['rules']! as Map).remove('contractRefillSeconds'),
+        ).rules.contractRefillSeconds,
+        14400,
+      );
+      expect(
+        errorsWith((b) => (b['rules']! as Map)['contractRefillSeconds'] = 0),
+        ['rules.contractRefillSeconds: must be > 0'],
+      );
+    });
+
+    final bad = <String, (void Function(Map<String, Object?>), String)>{
+      'tiers out of order': (
+        (t) => t
+          ..['minTier'] = 2
+          ..['maxTier'] = 1,
+        'maxTier: must be >= minTier (2)',
+      ),
+      'a tier above 4': ((t) => t['maxTier'] = 5, 'maxTier: must be <= 4'),
+      'a negative tier': ((t) => t['minTier'] = -1, 'minTier: must be >= 0'),
+      'no issuer': ((t) => t.remove('issuer'), 'issuer: missing'),
+      'zero quantity seconds': (
+        (t) => t['quantitySeconds'] = 0,
+        'quantitySeconds: must be > 0',
+      ),
+      'zero reward multiplier': (
+        (t) => t['rewardMultiplier'] = 0,
+        'rewardMultiplier: must be > 0',
+      ),
+      'zero minimum quantity': (
+        (t) => t['minQuantity'] = '0',
+        'minQuantity: must be > 0',
+      ),
+      'zero maximum quantity': (
+        (t) => t['maxQuantity'] = '0',
+        'maxQuantity: must be > 0',
+      ),
+      'a maximum below the minimum': (
+        (t) => t
+          ..['minQuantity'] = '50'
+          ..['maxQuantity'] = '40',
+        'maxQuantity: must be >= minQuantity (50)',
+      ),
+      'negative reward income seconds': (
+        (t) => t['rewardIncomeSeconds'] = -1,
+        'rewardIncomeSeconds: must be >= 0',
+      ),
+      'a reward cap below the floor': (
+        (t) => t
+          ..['rewardIncomeSeconds'] = 600
+          ..['rewardCapIncomeSeconds'] = 599,
+        'rewardCapIncomeSeconds: must be >= rewardIncomeSeconds (600)',
+      ),
+      'a zero reward cap': (
+        (t) => t
+          ..['rewardIncomeSeconds'] = 0
+          ..['rewardCapIncomeSeconds'] = 0,
+        'rewardCapIncomeSeconds: must be > 0',
+      ),
+      'zero quantity income seconds': (
+        (t) => t['quantityIncomeSecondsMin'] = 0,
+        'quantityIncomeSecondsMin: must be > 0',
+      ),
+      'a quantity income maximum below the minimum': (
+        (t) => t
+          ..['quantityIncomeSecondsMin'] = 900
+          ..['quantityIncomeSecondsMax'] = 899,
+        'quantityIncomeSecondsMax: must be >= quantityIncomeSecondsMin (900)',
+      ),
+      'a production ceiling below the quantity seconds': (
+        (t) => t
+          ..['quantitySeconds'] = 3600
+          ..['quantityProductionSecondsMax'] = 3599,
+        'quantityProductionSecondsMax: must be >= quantitySeconds (3600)',
+      ),
+      'a zero production ceiling': (
+        (t) => t['quantityProductionSecondsMax'] = 0,
+        'quantityProductionSecondsMax: must be > 0',
+      ),
+      'a zero least reward multiple': (
+        (t) => t['minRewardMultiplier'] = 0,
+        'minRewardMultiplier: must be > 0',
+      ),
+      'a least reward multiple above the multiplier': (
+        (t) => t
+          ..['rewardMultiplier'] = 2
+          ..['minRewardMultiplier'] = 2.5,
+        'minRewardMultiplier: must be <= rewardMultiplier (2)',
+      ),
+      'a negative minimum reward': (
+        (t) => t['minRewardCredits'] = '-1',
+        'minRewardCredits: must be >= 0',
+      ),
+      'a first-contract minimum below the first claim': (
+        (t) => t['firstContractMinReward'] = '4999',
+        "firstContractMinReward: must be >= the first claim's credits (5K)",
+      ),
+      'a zero life-support weight': (
+        (t) => t['lifeSupportWeight'] = 0,
+        'lifeSupportWeight: must be > 0',
+      ),
+      'a life-support weight above 1': (
+        (t) => t['lifeSupportWeight'] = 1.5,
+        'lifeSupportWeight: must be <= 1',
+      ),
+      'an unknown field': (
+        (t) => t['expires'] = 3600,
+        'expires: unknown field',
+      ),
+    };
+    for (final MapEntry(key: name, value: (edit, message)) in bad.entries) {
+      test('rejects $name', () {
+        final errors = errorsWith((b) => edit(template(b)));
+        final id = template(shippedBundle())['id'];
+        expect(errors, ['contracts.$id.$message']);
+      });
+    }
+
+    test('a contractsCompleted milestone needs a count of at least 1', () {
+      expect(
+        errorsWith(
+          (b) => (b['milestones']! as List).add({
+            'id': 'orders',
+            'name': 'Orders',
+            'condition': {'type': 'contractsCompleted', 'count': 0},
+          }),
+        ),
+        ['milestones.orders.condition.count: must be >= 1'],
+      );
+    });
+  });
+
+  group('twoSignificantFigures', () {
+    test('rounds to two significant figures', () {
+      expect(twoSignificantFigures(n(2876)), n(2900));
+      expect(twoSignificantFigures(n(2824)), n(2800));
+      expect(twoSignificantFigures(n(9960)), n(10000));
+      expect(twoSignificantFigures(n(0.01234)), n(0.012));
+      expect(twoSignificantFigures(n(7)), n(7));
+      expect(twoSignificantFigures(n(100)), n(100));
+      expect(twoSignificantFigures(BigNum.parse('3.456e40')), n(3.5e40));
+    });
+  });
+
+  group('generation', () {
+    test('3 contracts appear after refills on a game with production', () {
+      final s = e.newGame(1);
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).contractRefillAt, [0, refill, refill * 2]);
+
+      e.advance(s, 60);
+      expect(player(s).contracts, hasLength(1));
+      expect(player(s).contractRefillAt, [refill, refill * 2]);
+
+      e.advance(s, refill - 120);
+      expect(player(s).contracts, hasLength(1));
+      e.advance(s, 60);
+      expect(player(s).contracts, hasLength(2));
+
+      e.advance(s, refill);
+      expect(player(s).contracts, hasLength(3));
+      expect(player(s).contractRefillAt, isEmpty);
+
+      e.advance(s, refill * 3);
+      expect(player(s).contracts, hasLength(3), reason: 'at most 3');
+      expect({for (final k in player(s).contracts) k.id}, hasLength(3));
+    });
+
+    test('each contract follows its template', () {
+      for (final seed in [1, 2, 3, 4, 5, 6]) {
+        final s = fullBoard(seed);
+        final f = player(s);
+        final resources = <String>{};
+        for (final k in f.contracts) {
+          final t = content.contractTemplates[k.templateId]!;
+          final r = content.resources[k.resourceId]!;
+          expect(r.tier, inInclusiveRange(t.minTier, t.maxTier));
+          expect(resources.add(r.id), isTrue, reason: 'one per resource');
+          final made = f.lifetimeProduced[r.id] ?? const BigNum.zero();
+          expect(made > const BigNum.zero(), isTrue);
+          expect(k.quantity, twoSignificantFigures(k.quantity));
+          expect(k.quantity >= t.minQuantity, isTrue);
+          if (t.maxQuantity case final most?) {
+            expect(k.quantity <= most, isTrue);
+          }
+          expect(k.rewardCredits > const BigNum.zero(), isTrue);
+          expect(k.delivered, const BigNum.zero());
+          expect(k.postedAt, lessThanOrEqualTo(s.time));
+        }
+      }
+    });
+
+    /// [s] with only [resourceId] eligible for its one refill, due now.
+    void onlyDue(GameState s, String resourceId) {
+      final f = player(s);
+      f.contracts.clear();
+      f.lifetimeProduced
+        ..clear()
+        ..[resourceId] = n(1);
+      f.contractRefillAt
+        ..clear()
+        ..add(s.time);
+    }
+
+    test('the quantity is worth 10 to 30 minutes of income at current '
+        'prices, rolled from the RNG', () {
+      final s = e.newGame(1);
+      final kora = s.body('kora');
+      for (final b in kora.buildings) {
+        b.levels[UpgradeTrack.speed] = 10;
+      }
+      kora.buildings
+        ..add(BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1))
+        // Room for the ask: the store does not cap it.
+        ..add(BuildingState(id: s.newId('b'), defId: 'depot', crew: 0));
+      onlyDue(s, 'steel');
+      player(s).contractsPosted = 1;
+      final income = incomeBasis(
+        s,
+        content,
+        'player',
+        buildFlowReport(s, content, 'player'),
+      );
+      // The template, the resource, then the roll.
+      final rng = Rng.fromState(s.rngState)
+        ..nextDouble()
+        ..nextDouble();
+      final seconds = 600 + 1200 * rng.nextDouble();
+      final steel = price(s, content, 'steel');
+      stepContracts(s, content, s.time);
+      final k = player(s).contracts.single;
+      expect(k.resourceId, 'steel');
+      expect(s.rngState, rng.state, reason: 'three numbers drawn');
+      final asked = income.mulDouble(seconds) / steel;
+      final t = content.contractTemplates[k.templateId]!;
+      expect(asked > t.minQuantity.mulDouble(2), isTrue, reason: '$asked');
+      expect(asked < storageCap(s, content, kora), isTrue, reason: '$asked');
+      expect(k.quantity, twoSignificantFigures(asked).floor());
+    });
+
+    test('the bug-1 shape: a good made before but at a trickle now gets no '
+        'order, nor one fed from a stockpile', () {
+      final s = e.newGame(1);
+      final f = player(s);
+      final kora = s.body('kora');
+      kora.buildings.add(
+        BuildingState(id: s.newId('b'), defId: 'drone_works', crew: 2),
+      );
+      // Drones were made once; the works now stands idle, short of inputs.
+      f.lifetimeProduced
+        ..clear()
+        ..['survey_drone'] = n(2);
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
+      final rng = s.rngState;
+      stepContracts(s, content, 0);
+      expect(f.contracts, isEmpty, reason: 'no order of 2 drones');
+      expect(f.contractRefillAt, [0], reason: 'the refill waits');
+      expect(s.rngState, rng);
+
+      // A stockpile runs the works today, but nothing refills it.
+      kora.stock
+        ..['magnet'] = n(400)
+        ..['circuit'] = n(400)
+        ..['fuel'] = n(600);
+      final report = buildFlowReport(s, content, f.id);
+      expect(
+        report.producedPerSec('survey_drone') > const BigNum.zero(),
+        isTrue,
+      );
+      expect(report.steadyProducedPerSec('survey_drone'), const BigNum.zero());
+      stepContracts(s, content, 0);
+      expect(f.contracts, isEmpty);
+    });
+
+    test('a refill waiting on a starved maker is checked again only at '
+        'each whole minute of game time, whatever the step', () {
+      // A plate press made plates once; with the mines and smelter
+      // unstaffed it stands idle, until they are staffed again.
+      GameState starved() {
+        final s = e.newGame(1);
+        final kora = s.body('kora');
+        for (final b in kora.buildings) {
+          b.crew = 0;
+        }
+        kora.buildings.add(
+          BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+        );
+        player(s).lifetimeProduced
+          ..clear()
+          ..['hull_plate'] = n(2);
+        player(s).contractRefillAt
+          ..clear()
+          ..add(0);
+        return s;
+      }
+
+      void feed(GameState s) {
+        for (final b in s.body('kora').buildings) {
+          b.crew = 1;
+        }
+      }
+
+      // 1 s steps: fed at 30 s, it is asked for at the next minute.
+      final live = starved();
+      e.advance(live, 30, maxStep: 1);
+      expect(player(live).contracts, isEmpty);
+      feed(live);
+      e.advance(live, 1, maxStep: 1);
+      expect(player(live).contracts, isEmpty, reason: 'not before 60 s');
+      e.advance(live, 29, maxStep: 1);
+      expect(player(live).contracts.single.postedAt, 60);
+
+      // 60 s steps post it at the same time.
+      final away = starved();
+      feed(away);
+      e.advance(away, 60);
+      expect(player(away).contracts.single.postedAt, 60);
+      expect(
+        player(away).contracts.single.resourceId,
+        player(live).contracts.single.resourceId,
+      );
+    });
+
+    group('a stockpile nothing refills', () {
+      /// Seed 1, an hour of selling everything Kora makes, then a crewed
+      /// drone works, fed from a stockpile of its inputs when [stocked];
+      /// a refill is due and only goods in [made] count as made.
+      GameState played({required bool stocked, required List<String> made}) {
+        final s = e.newGame(1);
+        e.advance(s, 60);
+        for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+          ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        e.advance(s, 3600);
+        final kora = s.body('kora');
+        kora.buildings.add(
+          BuildingState(id: s.newId('b'), defId: 'drone_works', crew: 2),
+        );
+        if (stocked) {
+          kora.stock
+            ..['magnet'] = n(400)
+            ..['circuit'] = n(400)
+            ..['fuel'] = n(600);
+        }
+        final f = player(s);
+        f.contracts.clear();
+        f.contractRefillAt
+          ..clear()
+          ..addAll([s.time, s.time + 1e7, s.time + 2e7]);
+        f.lifetimeProduced
+          ..clear()
+          ..addAll({for (final id in made) id: n(1)});
+        return s;
+      }
+
+      test('does not raise the income basis, nor so a reward', () {
+        // Review probe: 1.646 against 5.646 a second, and a steel order of
+        // 5,925 against 12,960 credits.
+        (BigNum, BigNum) post(bool stocked) {
+          final s = played(stocked: stocked, made: ['steel']);
+          final basis = incomeBasis(
+            s,
+            content,
+            'player',
+            buildFlowReport(s, content, 'player'),
+          );
+          stepContracts(s, content, s.time);
+          return (basis, player(s).contracts.single.rewardCredits);
+        }
+
+        final (plainBasis, plainReward) = post(false);
+        final (stockBasis, stockReward) = post(true);
+        expect(
+          stockBasis.toDouble(),
+          closeTo(plainBasis.toDouble(), plainBasis.toDouble() * 0.01),
+        );
+        expect(
+          stockReward.toDouble(),
+          closeTo(plainReward.toDouble(), plainReward.toDouble() * 0.01),
+        );
+      });
+
+      test("does not make its maker's output eligible", () {
+        final s = played(stocked: true, made: ['survey_drone']);
+        stepContracts(s, content, s.time);
+        expect(player(s).contracts, isEmpty, reason: 'no drone order');
+      });
+
+      test('does not change the quantity of what is made steadily', () {
+        // A plate press fed by the smelter, and in one game also from a
+        // stock of steel.
+        ContractState plates(bool stocked) {
+          final s = e.newGame(1);
+          s
+              .body('kora')
+              .buildings
+              .add(
+                BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+              );
+          if (stocked) s.body('kora').stock['steel'] = n(900);
+          final f = player(s);
+          f.lifetimeProduced
+            ..clear()
+            ..['hull_plate'] = n(1);
+          f.contractRefillAt
+            ..clear()
+            ..add(0);
+          stepContracts(s, content, 0);
+          return f.contracts.single;
+        }
+
+        // The income basis leaves the stockpile out, so the ask is the
+        // same but for rounding.
+        final (stocked, plain) = (plates(true), plates(false));
+        expect(
+          stocked.quantity.toDouble(),
+          closeTo(plain.quantity.toDouble(), plain.quantity.toDouble() * 0.05),
+        );
+      });
+    });
+
+    test('a good made below minQuantity / quantitySeconds is not asked '
+        'for', () {
+      GameState steelAt(String minQuantity) {
+        final c = contentWith((b) {
+          for (final t
+              in (b['contracts']! as List).cast<Map<String, Object?>>()) {
+            t
+              ..['minQuantity'] = minQuantity
+              ..remove('maxQuantity');
+          }
+        });
+        final s = GameEngine(c).newGame(1);
+        final f = player(s);
+        f.lifetimeProduced
+          ..clear()
+          ..['steel'] = n(1);
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        stepContracts(s, c, 0);
+        return s;
+      }
+
+      final s = e.newGame(1);
+      final gross = buildFlowReport(
+        s,
+        content,
+        'player',
+      ).producedPerSec('steel');
+      final t = content.contractTemplates.values.firstWhere(
+        (t) => t.minTier <= 1 && t.maxTier >= 1,
+      );
+      final atRate = gross.mulDouble(t.quantitySeconds).toDouble();
+      expect(player(steelAt('${atRate * 1.05}')).contracts, isEmpty);
+      final k = player(steelAt('${atRate * 0.95}')).contracts.single;
+      expect(k.resourceId, 'steel');
+      expect(k.quantity >= BigNum.parse('${atRate * 0.95}').floor(), isTrue);
+    });
+
+    /// A game whose only eligible resource is steel, made fast enough that
+    /// 4 h of it is far more than Kora can store, with one refill due.
+    GameState steelFlood(Content c) {
+      final s = GameEngine(c).newGame(1);
+      final f = player(s);
+      f.lifetimeProduced
+        ..clear()
+        ..['steel'] = n(1);
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
+      for (final b in s.body('kora').buildings) {
+        if (b.defId == 'smelter' || b.defId == 'mine') {
+          b.levels[UpgradeTrack.speed] = 40;
+        }
+      }
+      final sell = SetAutoSellCommand('player', 'kora', 'steel', n(0));
+      expect(GameEngine(c).apply(s, sell), isA<CommandOk>());
+      return s;
+    }
+
+    /// Only steel, with [edit] applied to every template.
+    Content steelOnly(void Function(Map<String, Object?> t) edit) =>
+        contentWith((b) {
+          for (final t
+              in (b['contracts']! as List).cast<Map<String, Object?>>()) {
+            edit(t);
+          }
+        });
+
+    ContractState postSteel(GameState s, Content c) {
+      for (var i = 0; i < 40; i++) {
+        final x = s.copy();
+        stepContracts(x, c, 0);
+        if (player(x).contracts.single.resourceId == 'steel') {
+          return player(x).contracts.single;
+        }
+        // Draw again: another state of the RNG.
+        s.rngState = Rng.fromState(s.rngState).state ^ (i + 1);
+      }
+      throw StateError('steel never drawn');
+    }
+
+    test('the quantity is at most what its bodies can store together', () {
+      final s = steelFlood(content);
+      s.body('brine').ownerId = 'player';
+      final kora = storageCap(s, content, s.body('kora'));
+      final both = kora + storageCap(s, content, s.body('brine'));
+      final k = postSteel(s, content);
+      expect(k.quantity, both, reason: 'the sum, ${k.quantity} vs $both');
+      expect(k.quantity > kora, isTrue);
+      expect(k.quantity, twoSignificantFigures(k.quantity));
+    });
+
+    test('an order larger than one store is filled from two bodies', () {
+      final s = steelFlood(content);
+      final brine = s.body('brine')..ownerId = 'player';
+      final kora = s.body('kora');
+      final k = postSteel(s, content);
+      player(s).contracts
+        ..clear()
+        ..add(k);
+      final cap = storageCap(s, content, kora);
+      expect(k.quantity > cap, isTrue);
+      kora.stock['steel'] = cap;
+      brine.stock['steel'] = k.quantity - cap;
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', cap));
+      expect(player(s).contracts.single.remaining, k.quantity - cap);
+      ok(s, DeliverContractCommand('player', k.id, 'brine', k.quantity));
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).credits, credits + k.rewardCredits);
+    });
+
+    group('one delivery from every body', () {
+      test('takes what each holds, the fullest first, in one command', () {
+        final s = steelFlood(content);
+        final brine = s.body('brine')..ownerId = 'player';
+        final kora = s.body('kora');
+        final k = postOn(s, 'steel', 1500, reward: 9000);
+        kora.stock['steel'] = n(400);
+        brine.stock['steel'] = n(1200.5);
+        final credits = player(s).credits;
+        final r = e.apply(
+          s,
+          DeliverContractCommand('player', k.id, null, n(1e9)),
+        );
+        final o = (r as CommandOk).outcome! as ContractProgress;
+        expect(o.bodyId, isNull);
+        expect(o.fromBodies, {'brine': n(1200), 'kora': n(300)});
+        expect(o.fromBodies.keys, ['brine', 'kora'], reason: 'fullest first');
+        expect(o.delivered, n(1500));
+        expect(o.spent, {'steel': n(1500)});
+        expect(o.rewardPaid, n(9000));
+        expect(player(s).contracts, isEmpty);
+        expect(player(s).credits, credits + n(9000));
+        expect(brine.stock['steel'], n(0.5));
+        expect(kora.stock['steel'], n(100));
+      });
+
+      test('up to the amount asked, leaving the order open', () {
+        final s = steelFlood(content);
+        final brine = s.body('brine')..ownerId = 'player';
+        s.body('kora').stock['steel'] = n(400);
+        brine.stock['steel'] = n(300);
+        final k = postOn(s, 'steel', 1500);
+        final o =
+            (e.apply(s, DeliverContractCommand('player', k.id, null, n(500)))
+                        as CommandOk)
+                    .outcome!
+                as ContractProgress;
+        expect(o.fromBodies, {'kora': n(400), 'brine': n(100)});
+        expect(o.totalDelivered, n(500));
+        expect(o.rewardPaid, isNull);
+      });
+
+      test('ties go by body id, so it is deterministic', () {
+        final s = steelFlood(content);
+        s.body('brine')
+          ..ownerId = 'player'
+          ..stock['steel'] = n(300);
+        s.body('kora').stock['steel'] = n(300);
+        final k = postOn(s, 'steel', 400);
+        final o =
+            (e.apply(s, DeliverContractCommand('player', k.id, null, n(400)))
+                        as CommandOk)
+                    .outcome!
+                as ContractProgress;
+        expect(o.fromBodies.keys, ['brine', 'kora']);
+        expect(o.fromBodies, {'brine': n(300), 'kora': n(100)});
+      });
+
+      test('fails, changing nothing, when no owned body holds a whole '
+          'unit', () {
+        final s = steelFlood(content);
+        s.body('brine').ownerId = 'player';
+        s.body('kora').stock['steel'] = n(0.5);
+        // An unowned body's stock does not count.
+        s.body('cinder').stock['steel'] = n(900);
+        final k = postOn(s, 'steel', 400);
+        fails(
+          s,
+          DeliverContractCommand('player', k.id, null, n(10)),
+          CommandError.invalidAmount,
+        );
+        fails(
+          s,
+          DeliverContractCommand('player', k.id, null, n(0)),
+          CommandError.invalidAmount,
+        );
+        fails(
+          s,
+          DeliverContractCommand('player', 'c999', null, n(10)),
+          CommandError.unknownContract,
+        );
+      });
+
+      test('an explicit body says where its goods came from', () {
+        final s = steelFlood(content);
+        s.body('kora').stock['steel'] = n(50);
+        final k = postOn(s, 'steel', 100);
+        final o =
+            (e.apply(s, DeliverContractCommand('player', k.id, 'kora', n(20)))
+                        as CommandOk)
+                    .outcome!
+                as ContractProgress;
+        expect(o.bodyId, 'kora');
+        expect(o.fromBodies, {'kora': n(20)});
+      });
+    });
+
+    test('auto-sell holds an order larger than one store on several '
+        'bodies, the fullest first, each up to its cap', () {
+      final s = steelFlood(content);
+      final brine = s.body('brine')..ownerId = 'player';
+      final kora = s.body('kora');
+      ok(s, SetAutoSellCommand('player', 'brine', 'steel', n(0)));
+      final cap = storageCap(s, content, kora);
+      final k = postOn(s, 'steel', cap.toDouble() * 1.5);
+      kora.stock['steel'] = cap;
+      brine.stock['steel'] = cap.mulDouble(0.5);
+      stepMarket(s, content, 60);
+      // Kora holds its cap's worth, Brine the half left: none of it sells.
+      expect(kora.stock['steel'], cap);
+      expect(brine.stock['steel'], cap.mulDouble(0.5));
+      expect(k.remaining, cap.mulDouble(1.5));
+    });
+
+    group('a hold below the fullest store\'s cap', () {
+      // Review probe: Kora holds 900 and Brine 800 of 1,000 each, both
+      // auto-sell steel, and one order owes 1,500. The hold took Kora's
+      // empty room for 100 of it, so Brine sold 300 the order needed.
+      GameState probe({num owed = 1500}) {
+        final s = e.newGame(1);
+        s.body('brine').ownerId = 'player';
+        for (final b in ['kora', 'brine']) {
+          ok(s, SetAutoSellCommand('player', b, 'steel', n(0)));
+        }
+        final f = player(s);
+        f.contracts.clear();
+        f.contractRefillAt.clear();
+        postOn(s, 'steel', owed);
+        s.body('kora').stock['steel'] = n(900);
+        s.body('brine').stock['steel'] = n(800);
+        return s;
+      }
+
+      BigNum steel(GameState s) =>
+          s.body('kora').stock['steel']! + s.body('brine').stock['steel']!;
+
+      test('holds what each body has first: none of what is owed sells', () {
+        final s = probe();
+        expect(storageCap(s, content, s.body('kora')), n(1000));
+        expect(storageCap(s, content, s.body('brine')), n(1000));
+        stepMarket(s, content, 60);
+        // Kora keeps its 900, Brine the 600 still owed; Brine's other 200
+        // sell.
+        expect(s.body('kora').stock['steel'], n(900));
+        expect(s.body('brine').stock['steel'], n(600));
+        expect(steel(s), n(1500));
+      });
+
+      test('what is owed beyond the stock held is held as room, the fullest '
+          'first', () {
+        // Kora 900 and Brine 700 for 1,650 owed: both stocks are held, and
+        // the 50 still owed as room on Kora. The old rule held Kora's whole
+        // 1,000 cap and only 650 on Brine, which sold 50 that was owed.
+        final s = probe(owed: 1650);
+        s.body('brine').stock['steel'] = n(700);
+        BigNum hold(String bodyId) => autoSellKeep(
+          s,
+          content,
+          player(s).autoSell.singleWhere(
+            (r) => r.bodyId == bodyId && r.resourceId == 'steel',
+          ),
+          60,
+        ).contractHold;
+        expect(hold('kora'), n(950));
+        expect(hold('brine'), n(700));
+        stepMarket(s, content, 60);
+        expect(s.body('kora').stock['steel'], n(900));
+        expect(s.body('brine').stock['steel'], n(700));
+      });
+
+      for (final step in [1.0, 60.0]) {
+        test(
+          'keeps what is owed while it plays, at ${step.toInt()} s steps',
+          () {
+            final s = probe();
+            e.advance(s, 600, maxStep: step);
+            expect(player(s).contracts.single.remaining, n(1500));
+            expect(steel(s) >= n(1500), isTrue, reason: '${steel(s)}');
+          },
+        );
+      }
+
+      test('a catch-up keeps what is owed as live play does', () {
+        final live = probe();
+        final away = probe();
+        e.advance(live, 3600, maxStep: 1);
+        e.catchUpOffline(away, 3600);
+        for (final x in [live, away]) {
+          expect(steel(x) >= n(1500), isTrue, reason: '${steel(x)}');
+        }
+        expect(
+          steel(away).toDouble(),
+          closeTo(steel(live).toDouble(), steel(live).toDouble() * 0.01),
+        );
+      });
+    });
+
+    test('the quantity is at most quantityProductionSecondsMax of what is '
+        'made', () {
+      // Round 4 casual bot: 3,600 habitat modules, made 12 an hour.
+      final c = steelOnly(
+        (t) => t
+          ..['quantitySeconds'] = 60
+          ..['minQuantity'] = '1'
+          ..['quantityProductionSecondsMax'] = 100,
+      );
+      final s = GameEngine(c).newGame(1);
+      onlyDue(s, 'steel');
+      final rate = buildFlowReport(
+        s,
+        c,
+        'player',
+      ).steadyProducedPerSec('steel');
+      expect(rate.toDouble(), closeTo(0.2, 1e-9));
+      stepContracts(s, c, 0);
+      expect(player(s).contracts.single.quantity, n(20));
+    });
+
+    test("a template's maximum quantity caps it", () {
+      final c = steelOnly((t) => t['maxQuantity'] = '120');
+      final k = postSteel(steelFlood(c), c);
+      expect(k.quantity, n(120));
+    });
+
+    test('the maximum quantity grows with the levels of megaprojects that '
+        'scale contracts', () {
+      final c = steelOnly((t) => t['maxQuantity'] = '120');
+      final s = steelFlood(c);
+      player(s).megaprojectLevels
+        ..['orbital_station'] = 2
+        // The Mass Driver's levels do not scale orders.
+        ..['mass_driver'] = 5;
+      expect(c.megaprojects['orbital_station']!.scalesContracts, isTrue);
+      expect(c.megaprojects['mass_driver']!.scalesContracts, isFalse);
+      expect(storageCap(s, c, s.body('kora')) > n(360 * 3), isTrue);
+      // 1 + 2 station levels.
+      expect(postSteel(s, c).quantity, n(360));
+    });
+
+    /// What [s]'s player is paid for by the second: the larger of its
+    /// steady auto-sale income and the value of what its buildings make
+    /// beyond what they use, at the current prices.
+    BigNum basis(GameState s, Content c) {
+      final r = buildFlowReport(s, c, 'player');
+      var made = const BigNum.zero();
+      for (final id in c.resources.keys) {
+        final net = r.netProducedPerSec(id);
+        if (net > const BigNum.zero()) made = made + net * price(s, c, id);
+      }
+      return r.creditsPerSec.max(made);
+    }
+
+    test('the reward is at least rewardIncomeSeconds of the income basis', () {
+      final c = steelOnly(
+        (t) => t
+          ..['rewardIncomeSeconds'] = 600
+          ..['maxQuantity'] = '10'
+          ..['minQuantity'] = '10',
+      );
+      final s = steelFlood(c);
+      player(s).contractsPosted = 1;
+      final income = basis(s, c);
+      expect(income > n(10), isTrue);
+      final k = postSteel(s, c);
+      expect(k.quantity, n(10));
+      expect(k.rewardCredits, income.mulDouble(600).floor());
+      // Between the floor and the cap, the reward is by quantity.
+      final plain = steelOnly(
+        (t) => t
+          ..['rewardIncomeSeconds'] = 1
+          ..['rewardCapIncomeSeconds'] = 1e9
+          ..['maxQuantity'] = '1000',
+      );
+      final flood = steelFlood(plain);
+      // At the price steel sells for now, not its base price.
+      flood.market.saturation['steel'] = 0.5;
+      final steel = price(flood, plain, 'steel');
+      expect(steel < plain.resources['steel']!.basePrice, isTrue);
+      final big = postSteel(flood, plain);
+      expect(big.rewardCredits, (big.quantity * steel).mulDouble(3).floor());
+    });
+
+    /// Only steel, paying a million times its price, capped at 1 h of
+    /// income, at least 500 credits.
+    Content lavish() => steelOnly(
+      (t) => t
+        ..['rewardMultiplier'] = 1e6
+        ..['rewardIncomeSeconds'] = 600
+        ..['rewardCapIncomeSeconds'] = 3600
+        ..['minRewardCredits'] = '500',
+    );
+
+    test('the reward is at most rewardCapIncomeSeconds of the income '
+        'basis', () {
+      final c = lavish();
+      final s = steelFlood(c);
+      player(s).contractsPosted = 1;
+      final income = basis(s, c);
+      expect(income > const BigNum.zero(), isTrue);
+      final steel = price(s, c, 'steel');
+      final k = postSteel(s, c);
+      expect(
+        (k.quantity * steel).mulDouble(1e6) > income.mulDouble(3600),
+        isTrue,
+      );
+      expect(k.rewardCredits, income.mulDouble(3600).floor());
+    });
+
+    test('the first contract a faction is ever offered is exempt from the '
+        'cap', () {
+      final c = lavish();
+      final s = steelFlood(c);
+      expect(player(s).contractsPosted, 0);
+      final income = basis(s, c);
+      final steel = price(s, c, 'steel');
+      final k = postSteel(s, c);
+      expect(k.rewardCredits, (k.quantity * steel).mulDouble(1e6).floor());
+      expect(k.rewardCredits > income.mulDouble(3600), isTrue);
+    });
+
+    test("a new game's first contract pays at least firstContractMinReward, "
+        'more than the first claim, on seeds 1 to 3', () {
+      for (final seed in [1, 2, 3]) {
+        final s = e.newGame(seed);
+        final f = player(s);
+        expect(f.contractsPosted, 0);
+        e.advance(s, 60);
+        final first = f.contracts.single;
+        expect(f.contractsPosted, 1);
+        final t = content.contractTemplates[first.templateId]!;
+        // Nothing has sold yet, so the price is the base price.
+        final byQuantity =
+            (first.quantity *
+                    content.resources[first.resourceId]!.basePrice.mulDouble(
+                      t.rewardMultiplier,
+                    ))
+                .floor();
+        expect(t.firstContractMinReward, isNotNull);
+        expect(
+          first.rewardCredits,
+          byQuantity.max(t.firstContractMinReward!),
+          reason: 'seed $seed: the floor is less early on',
+        );
+        // It pays for the first claim, with a margin.
+        final claim = claimCost(s, content, 'player')['credits']!;
+        expect(first.rewardCredits >= claim.mulDouble(1.4), isTrue);
+      }
+    });
+
+    test('the next contracts keep within the floor and cap', () {
+      final s = e.newGame(1);
+      e.advance(s, 60);
+      for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+        ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+      }
+      e.advance(s, refill - 120);
+      final income = basis(s, content);
+      e.advance(s, 120);
+      expect(player(s).contractsPosted, 2);
+      final second = player(s).contracts.last;
+      expect(second.rewardCredits <= income.mulDouble(3600 * 1.01), isTrue);
+      expect(second.rewardCredits >= income.mulDouble(1800 * 0.99), isTrue);
+    });
+
+    group('goods are chosen by what an order of them can be worth', () {
+      /// What [id]'s largest order sells for now: the least of the stores
+      /// of [s]'s player summed and a day of its steady gross rate, at the
+      /// current price.
+      BigNum achievable(GameState s, Content c, FlowReport r, String id) {
+        var stores = const BigNum.zero();
+        for (final b in s.bodies) {
+          if (b.ownerId == 'player') stores = stores + storageCap(s, c, b);
+        }
+        return stores.min(r.steadyProducedPerSec(id).mulDouble(86400)) *
+            price(s, c, id);
+      }
+
+      /// The contracts [s] posts from [rngs] RNG states, one refill due
+      /// in each.
+      List<ContractState> posts(GameState s, Content c, {int rngs = 20}) {
+        final out = <ContractState>[];
+        for (var i = 0; i < rngs; i++) {
+          final x = s.copy()
+            ..rngState = Rng.fromState(s.rngState).state ^ (i * 7919 + 1);
+          player(x).contractRefillAt
+            ..clear()
+            ..add(x.time);
+          stepContracts(x, c, x.time);
+          out.addAll(player(x).contracts);
+        }
+        return out;
+      }
+
+      test('only goods whose largest order is worth 10 minutes of income are '
+          'asked for', () {
+        final s = e.newGame(1);
+        final kora = s.body('kora');
+        for (var i = 0; i < 5; i++) {
+          kora.buildings.add(
+            BuildingState(id: s.newId('b'), defId: 'depot', crew: 0)
+              ..levels[UpgradeTrack.capacity] = 20,
+          );
+        }
+        final f = player(s)..contractsPosted = 1;
+        f.contracts.clear();
+        f.lifetimeProduced
+          ..clear()
+          ..['copper_ore'] = n(1)
+          ..['steel'] = n(1);
+        // Copper ore at its floor: a whole store of it is worth nothing.
+        s.market.saturation['copper_ore'] = marketFloorOf(
+          content,
+          'copper_ore',
+        );
+        final r = buildFlowReport(s, content, 'player');
+        final income = incomeBasis(s, content, 'player', r);
+        final tenMinutes = income.mulDouble(600);
+        expect(achievable(s, content, r, 'copper_ore') < tenMinutes, isTrue);
+        expect(achievable(s, content, r, 'steel') >= tenMinutes, isTrue);
+        final posted = posts(s, content);
+        expect(posted, hasLength(20));
+        expect({for (final k in posted) k.resourceId}, {'steel'});
+        for (final k in posted) {
+          final sale = k.quantity * price(s, content, 'steel');
+          expect(sale >= tenMinutes.mulDouble(0.95), isTrue);
+        }
+      });
+
+      test('when no good is worth that, the three worth most are asked for, '
+          'at the 30-minute reward floor at least', () {
+        // No order can be worth 10^7 s of income.
+        final c = steelOnly(
+          (t) => t
+            ..['quantityIncomeSecondsMin'] = 1e7
+            ..['quantityIncomeSecondsMax'] = 1e7,
+        );
+        final s = GameEngine(c).newGame(1);
+        s
+            .body('kora')
+            .buildings
+            .add(BuildingState(id: s.newId('b'), defId: 'wire_mill', crew: 1));
+        final f = player(s)..contractsPosted = 1;
+        f.contracts.clear();
+        f.lifetimeProduced
+          ..clear()
+          ..addAll({
+            for (final id in ['iron_ore', 'copper_ore', 'steel', 'copper_wire'])
+              id: n(1),
+          });
+        final r = buildFlowReport(s, c, 'player');
+        final income = incomeBasis(s, c, 'player', r);
+        // Kora's 1,000 of each at its base price: steel, wire, copper ore,
+        // then iron ore.
+        final worth = {
+          for (final id in ['iron_ore', 'copper_ore', 'steel', 'copper_wire'])
+            id: achievable(s, c, r, id),
+        };
+        expect(worth['iron_ore']! < worth['copper_ore']!, isTrue);
+        final posted = posts(s, c, rngs: 30);
+        expect(
+          {for (final k in posted) k.resourceId},
+          {'steel', 'copper_wire', 'copper_ore'},
+        );
+        for (final k in posted) {
+          expect(k.rewardCredits >= income.mulDouble(1800).floor(), isTrue);
+        }
+      });
+
+      test("on the round-4 optimizer's day-11 state, no store of any good "
+          'is worth 10 minutes, so the orders are for the three goods worth '
+          'most, between 1.5 times their sale value and the cap', () {
+        // Its seed-1 save at 264 h: 106K of storage and 1.74M a second of
+        // income, with copper ore at 0.01. Read with the content it was
+        // played with.
+        final content = fixtureContent();
+        final s =
+            (SaveCodec.decode(
+                      File(
+                        'test/fixtures/optimizer_r4_d11.json',
+                      ).readAsStringSync(),
+                      content,
+                    )
+                    as SaveOk)
+                .state;
+        final f = player(s);
+        expect(f.contractsPosted, greaterThan(0));
+        f.contracts.clear();
+        final r = buildFlowReport(s, content, 'player');
+        final income = incomeBasis(s, content, 'player', r);
+        // The goods the megaprojects it feeds still owe, which no order
+        // asks for.
+        final owed = {
+          for (final m in content.megaprojects.values)
+            if (megaprojectGoodsFed(s, f, m) &&
+                megaprojectTakesDeliveries(s, content, 'player', m))
+              ...megaprojectRemaining(s, content, 'player', m).keys,
+        };
+        expect(owed, isNotEmpty, reason: 'the station is fed');
+        // Every other good an order may ask for: priced, made, and made
+        // fast enough for its template.
+        final worth = <String, BigNum>{
+          for (final t in content.contractTemplates.values)
+            for (final res in content.resources.values)
+              if (res.tier >= t.minTier &&
+                  res.tier <= t.maxTier &&
+                  !owed.contains(res.id) &&
+                  !res.basePrice.isZero &&
+                  (f.lifetimeProduced[res.id] ?? const BigNum.zero()) >
+                      const BigNum.zero() &&
+                  r.steadyProducedPerSec(res.id) >=
+                      t.minQuantity.mulDouble(1 / t.quantitySeconds))
+                res.id: achievable(s, content, r, res.id),
+        };
+        // The stated reason for the fallback: nothing reaches 10 minutes.
+        final best = worth.values.reduce((a, b) => a.max(b));
+        expect(best < income.mulDouble(600), isTrue, reason: '$best');
+        final posted = posts(s, content, rngs: 6);
+        expect(posted, isNotEmpty);
+        final top =
+            (worth.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
+                .take(3)
+                .map((e) => e.key)
+                .toSet();
+        for (final k in posted) {
+          expect(top, contains(k.resourceId));
+          final sale = k.quantity * price(s, content, k.resourceId);
+          expect(k.rewardCredits >= sale.mulDouble(1.5).floor(), isTrue);
+          expect(k.rewardCredits <= income.mulDouble(3600), isTrue);
+        }
+      });
+    });
+
+    test('the round-4 optimizer shape: a cheap bulk good is asked for in a '
+        'quantity worth 10 to 30 minutes of income, and paid at least 1.5 '
+        'times its sale value and at most an hour of income', () {
+      // Round 4: 24K copper ore, from stock, for the 20-minute floor.
+      for (final seed in [1, 2, 3]) {
+        final s = e.newGame(seed);
+        final kora = s.body('kora');
+        for (final b in kora.buildings) {
+          b.levels[UpgradeTrack.speed] = 30;
+        }
+        // Depots, so the store does not cap the ask.
+        for (var i = 0; i < 5; i++) {
+          kora.buildings.add(
+            BuildingState(id: s.newId('b'), defId: 'depot', crew: 0)
+              ..levels[UpgradeTrack.capacity] = 20,
+          );
+        }
+        for (final id in ['iron_ore', 'copper_ore', 'steel']) {
+          ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        e.advance(s, 3600);
+        onlyDue(s, 'copper_ore');
+        player(s).contractsPosted = 1;
+        final income = incomeBasis(
+          s,
+          content,
+          'player',
+          buildFlowReport(s, content, 'player'),
+        );
+        final copper = price(s, content, 'copper_ore');
+        stepContracts(s, content, s.time);
+        final k = player(s).contracts.single;
+        expect(k.quantity < storageCap(s, content, kora), isTrue);
+        final sale = k.quantity * copper;
+        final minutes = (sale / income).toDouble() / 60;
+        expect(
+          minutes,
+          inInclusiveRange(10 * 0.95, 30 * 1.05),
+          reason: '$seed',
+        );
+        expect(k.rewardCredits >= sale.mulDouble(1.5).floor(), isTrue);
+        expect(k.rewardCredits <= income.mulDouble(3600), isTrue);
+        // At least the 30-minute floor: three times 10 or more minutes.
+        expect(k.rewardCredits >= income.mulDouble(1800), isTrue);
+      }
+    });
+
+    test('a reward never falls below 1.5 times the sale value, even past '
+        'the cap', () {
+      // A minQuantity worth far more than the cap forces the ask up; a
+      // long quantitySeconds keeps steel eligible.
+      final c = steelOnly(
+        (t) => t
+          ..['minQuantity'] = '1e6'
+          ..['quantitySeconds'] = 1e9
+          ..remove('quantityProductionSecondsMax')
+          ..['rewardCapIncomeSeconds'] = 3600,
+      );
+      final s = steelFlood(c);
+      player(s).contractsPosted = 1;
+      final steel = price(s, c, 'steel');
+      final k = postSteel(s, c);
+      expect(k.quantity, n(1e6));
+      expect(k.rewardCredits, (k.quantity * steel).mulDouble(1.5).floor());
+      expect(k.rewardCredits > basis(s, c).mulDouble(3600), isTrue);
+    });
+
+    group('the reward does not depend on which goods auto-sell', () {
+      /// The second contract of a new game (seed 1) whose player sets
+      /// auto-sell rules for [sold] on Kora after the first.
+      ContractState second(List<String> sold) {
+        final s = e.newGame(1);
+        e.advance(s, 60);
+        for (final id in sold) {
+          ok(s, SetAutoSellCommand('player', 'kora', id, n(0)));
+        }
+        e.advance(s, refill);
+        return player(s).contracts[1];
+      }
+
+      test('none, one or all goods sold give about the same reward', () {
+        // Review probe: 12,960, 1,591 and 5,909 credits for steel.
+        final rewards = [
+          for (final sold in [
+            <String>[],
+            ['copper_ore'],
+            ['iron_ore', 'copper_ore', 'steel'],
+          ])
+            second(sold),
+        ];
+        expect({for (final k in rewards) k.resourceId}, hasLength(1));
+        final values = [for (final k in rewards) k.rewardCredits.toDouble()];
+        final most = values.reduce(math.max);
+        final least = values.reduce(math.min);
+        expect(most / least, lessThan(1.5), reason: '$values');
+      });
+
+      test('turning auto-sell off right before a refill gains nothing', () {
+        final c = lavish();
+        final s = steelFlood(c);
+        player(s).contractsPosted = 1;
+        GameEngine(c).advance(s, 3600);
+        final f = player(s);
+        f.contracts.clear();
+        f.contractRefillAt
+          ..clear()
+          ..addAll([s.time, s.time + 1e6, s.time + 2e6]);
+        final selling = s.copy();
+        final off = s.copy();
+        player(off).autoSell.clear();
+        stepContracts(selling, c, s.time);
+        stepContracts(off, c, s.time);
+        final (a, b) = (
+          player(selling).contracts.single,
+          player(off).contracts.single,
+        );
+        expect(b.resourceId, a.resourceId);
+        expect(b.rewardCredits <= a.rewardCredits.mulDouble(1.001), isTrue);
+      });
+
+      group('a habitat fed partly from stock', () {
+        /// Brine's 2 ice drills and melters, electrolyzer, protein vat
+        /// and habitat, with [unstaffed] left without crew, and food and
+        /// oxygen in stock.
+        GameState brine(String? unstaffed) {
+          final s = e.newGame(1);
+          final brine = s.body('brine')..ownerId = 'player';
+          for (final (def, dep) in [
+            ('ice_drill', 'water_ice'),
+            ('ice_drill', 'water_ice'),
+            ('ice_melter', null),
+            ('ice_melter', null),
+            ('electrolyzer', null),
+            ('protein_vat', null),
+            ('habitat', null),
+          ]) {
+            brine.buildings.add(
+              BuildingState(
+                id: s.newId('b'),
+                defId: def,
+                depositResourceId: dep,
+                crew: def == unstaffed ? 0 : content.buildings[def]!.crewSlots,
+              ),
+            );
+          }
+          brine.stock
+            ..['food'] = n(700)
+            ..['oxygen'] = n(700);
+          return s;
+        }
+
+        test('still counts all it draws', () {
+          // With no electrolyzer, the habitat breathes stocked oxygen and
+          // the vat, short of hydrogen, stands idle: of the melters' 1.0
+          // water a second, the habitat's 0.1 is not left over.
+          final s = brine('electrolyzer');
+          final r = buildFlowReport(s, content, 'player');
+          expect(r.steadySurplusPerSec('water').toDouble(), closeTo(0.9, 1e-9));
+        });
+
+        test('unstaffing the food maker it eats from does not raise the '
+            'basis', () {
+          // Review probe: 4.787 against 4.233 a second.
+          BigNum basis(String? unstaffed) {
+            final s = brine(unstaffed);
+            return incomeBasis(
+              s,
+              content,
+              'player',
+              buildFlowReport(s, content, 'player'),
+            );
+          }
+
+          expect(basis('protein_vat') <= basis(null), isTrue);
+        });
+      });
+
+      test('a tiny income pays minRewardCredits, never nothing', () {
+        // Steel sells at settled prices, so the floor is set above what an
+        // hour of the starting income earns.
+        final c = steelOnly(
+          (t) => t
+            ..['rewardMultiplier'] = 1e6
+            ..['rewardIncomeSeconds'] = 600
+            ..['rewardCapIncomeSeconds'] = 3600
+            ..['minRewardCredits'] = '1e6',
+        );
+        final s = e.newGame(1);
+        final f = player(s);
+        f.contractsPosted = 1;
+        f.lifetimeProduced
+          ..clear()
+          ..['steel'] = n(1);
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        ok(s, SetAutoSellCommand('player', 'kora', 'steel', n(0)));
+        // Every market at its floor: steel sells for next to nothing.
+        for (final id in c.resources.keys) {
+          s.market.saturation[id] = marketFloorOf(c, id);
+        }
+        final income = basis(s, c);
+        expect(income > const BigNum.zero(), isTrue);
+        expect(income.mulDouble(3600) < n(1e6), isTrue, reason: '$income');
+        stepContracts(s, c, 0);
+        expect(f.contracts.single.rewardCredits, n(1e6));
+      });
+    });
+
+    test('asks only for goods being made now', () {
+      final picked = <String>{};
+      for (var seed = 1; seed <= 40; seed++) {
+        final s = e.newGame(seed);
+        final f = player(s);
+        f.lifetimeProduced
+          ..clear()
+          ..['copper_ore'] = n(1);
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        stepContracts(s, content, 0);
+        picked.add(f.contracts.single.resourceId);
+      }
+      // Copper wire could be made from copper ore, but is not made.
+      expect(picked, {'copper_ore'});
+    });
+
+    group('life-support goods', () {
+      /// The share of [draws] contracts on [s]'s board, each from another
+      /// RNG state, that ask for a life-support good.
+      double lifeSupportShare(GameState s, int draws) {
+        var hits = 0;
+        for (var i = 0; i < draws; i++) {
+          final x = s.copy()..rngState = i * 7919 + 1;
+          stepContracts(x, content, x.time);
+          final id = player(x).contracts.single.resourceId;
+          if (const {'water', 'food', 'oxygen'}.contains(id)) hits++;
+        }
+        return hits / draws;
+      }
+
+      /// A new game whose only goods made are [made]; Brine, owned too,
+      /// drills ice and melts it into water, and Kora presses plates from
+      /// its smelter's steel.
+      GameState makes(List<String> made) {
+        final s = e.newGame(1);
+        s.body('brine')
+          ..ownerId = 'player'
+          ..buildings.addAll([
+            BuildingState(
+              id: s.newId('b'),
+              defId: 'ice_drill',
+              depositResourceId: 'water_ice',
+              crew: 1,
+            ),
+            BuildingState(id: s.newId('b'), defId: 'ice_melter', crew: 1),
+          ]);
+        s
+            .body('kora')
+            .buildings
+            .add(
+              BuildingState(id: s.newId('b'), defId: 'plate_press', crew: 1),
+            );
+        final f = player(s);
+        f.lifetimeProduced
+          ..clear()
+          ..addAll({for (final id in made) id: n(1)});
+        f.contractRefillAt
+          ..clear()
+          ..add(0);
+        return s;
+      }
+
+      test('weigh a quarter beside another good of the template', () {
+        // Steel and water both come from the bulk template: water is drawn
+        // 0.25 / 1.25 of the time, not half.
+        final share = lifeSupportShare(makes(['steel', 'water']), 400);
+        expect(share, closeTo(0.2, 0.05));
+      });
+
+      test('weigh a template down when they are all it could ask for', () {
+        // Water is all the bulk template has; hull plates are the parts
+        // template's.
+        final share = lifeSupportShare(makes(['water', 'hull_plate']), 400);
+        expect(share, closeTo(0.2, 0.05));
+      });
+
+      test("weigh what their template's lifeSupportWeight says", () {
+        final c = contentWith((b) {
+          for (final t
+              in (b['contracts']! as List).cast<Map<String, Object?>>()) {
+            t['lifeSupportWeight'] = 1;
+          }
+        });
+        final s = makes(['steel', 'water']);
+        var hits = 0;
+        for (var i = 0; i < 400; i++) {
+          final x = s.copy()..rngState = i * 7919 + 1;
+          stepContracts(x, c, x.time);
+          if (player(x).contracts.single.resourceId == 'water') hits++;
+        }
+        // Unweighted, water and steel are drawn alike.
+        expect(hits / 400, closeTo(0.5, 0.07));
+      });
+
+      test('are still asked for when nothing else is made', () {
+        expect(lifeSupportShare(makes(['water']), 10), 1);
+      });
+    });
+
+    test('a refill waits while nothing is made, and RNG is not used', () {
+      final s = e.newGame(1);
+      for (final b in s.body('kora').buildings) {
+        b.crew = 0;
+      }
+      final rng = s.rngState;
+      e.advance(s, refill * 3);
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).contractRefillAt, hasLength(3));
+      expect(s.rngState, rng);
+
+      for (final b in s.body('kora').buildings) {
+        b.crew = 1;
+      }
+      e.advance(s, 120);
+      expect(
+        player(s).contracts,
+        hasLength(3),
+        reason: 'every banked refill is due',
+      );
+      expect(s.rngState, isNot(rng));
+    });
+
+    test('a refill left waiting posts as soon as something is made, however '
+        'often it was checked before', () {
+      final s = e.newGame(1);
+      final f = player(s);
+      f.lifetimeProduced.clear();
+      f.contractRefillAt
+        ..clear()
+        ..add(0);
+      for (var i = 0; i < 5; i++) {
+        stepContracts(s, content, i * 60.0);
+      }
+      expect(f.contracts, isEmpty);
+      f.lifetimeProduced['copper_ore'] = n(1);
+      stepContracts(s, content, 300);
+      expect(f.contracts.single.resourceId, 'copper_ore');
+      expect(f.contractRefillAt, isEmpty);
+    });
+
+    test('is deterministic for the same seed and state', () {
+      final a = e.newGame(7);
+      final b = e.newGame(7);
+      e.advance(a, refill * 2 + 60);
+      e.advance(b, refill * 2 + 60);
+      expect(encode(a), encode(b));
+      expect(player(a).contracts, hasLength(3));
+
+      final x = a.copy();
+      final y = a.copy();
+      player(x).contracts.clear();
+      player(x).contractRefillAt.addAll([0, 0, 0]);
+      player(y).contracts.clear();
+      player(y).contractRefillAt.addAll([0, 0, 0]);
+      stepContracts(x, content, x.time);
+      stepContracts(y, content, y.time);
+      expect(encode(x), encode(y));
+    });
+
+    test('draws the RNG only when posting a contract', () {
+      final s = fullBoard();
+      final rng = s.rngState;
+      e.advance(s, refill * 2);
+      expect(s.rngState, rng, reason: 'the board is full');
+    });
+
+    test('other factions have no board', () {
+      final s = e.newGame(1);
+      s.factions.add(
+        FactionState(
+          id: 'rival',
+          name: 'Rival',
+          isPlayer: false,
+          credits: n(0),
+          baseCrew: 0,
+        ),
+      );
+      e.advance(s, refill * 3);
+      expect(s.faction('rival').contracts, isEmpty);
+      expect(s.faction('rival').contractRefillAt, isEmpty);
+    });
+  });
+
+  group('delivery', () {
+    test('partial and full delivery; the reward is paid once', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100, reward: 5000);
+      final kora = s.body('kora');
+      kora.stock['steel'] = n(60);
+      final credits = player(s).credits;
+
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(40)));
+      expect(k.delivered, n(40));
+      expect(kora.stock['steel'], n(20));
+      expect(player(s).credits, credits, reason: 'not paid until complete');
+      expect(player(s).contracts, contains(k));
+
+      // More than the stock held: delivers what there is.
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1000)));
+      expect(k.delivered, n(60));
+      expect(kora.stock['steel'], n(0));
+      expect(player(s).credits, credits);
+
+      kora.stock['steel'] = n(500);
+      // More than is still wanted: delivers only that.
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1000)));
+      expect(kora.stock['steel'], n(460));
+      expect(player(s).credits, credits + n(5000));
+      expect(player(s).contracts, isNot(contains(k)));
+      expect(player(s).contractsCompleted, 1);
+      expect(player(s).contractRefillAt, [s.time + refill]);
+
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(10)),
+        CommandError.unknownContract,
+      );
+      expect(player(s).credits, credits + n(5000), reason: 'paid once');
+      expect(player(s).contractsCompleted, 1);
+    });
+
+    test('deliveries move whole units, so delivering what is shown left '
+        'completes it', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100, reward: 5000);
+      final kora = s.body('kora')..stock['steel'] = n(40.7);
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1000)));
+      expect(k.delivered, n(40));
+      expect(kora.stock['steel']!.toDouble(), closeTo(0.7, 1e-9));
+      expect(k.remaining, n(60));
+      kora.stock['steel'] = kora.stock['steel']! + k.remaining;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(60)));
+      expect(player(s).credits, credits + n(5000));
+      expect(kora.stock['steel']!.toDouble(), closeTo(0.7, 1e-9));
+    });
+
+    test('an amount asked for is cut to whole units', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100);
+      s.body('kora').stock['steel'] = n(50);
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(12.5)));
+      expect(k.delivered, n(12));
+      final msg = fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(0.5)),
+        CommandError.invalidAmount,
+      );
+      expect(msg, 'Deliver at least 1 unit: deliveries move whole units');
+      s.body('kora').stock['steel'] = n(0.9);
+      expect(
+        fails(
+          s,
+          DeliverContractCommand('player', k.id, 'kora', n(5)),
+          CommandError.invalidAmount,
+        ),
+        'Kora has less than one whole Steel to deliver',
+      );
+    });
+
+    test('what is left shows whole units even after a fractional delivery '
+        'from an older save', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100)..delivered = n(3.4);
+      expect(k.remaining, n(97));
+      s.body('kora').stock['steel'] = n(97);
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', k.remaining));
+      expect(player(s).credits, greaterThan(credits));
+    });
+
+    test('a delivery that completes it exactly pays it', () {
+      final s = fullBoard();
+      final k = postOn(s, 'iron_ore', 30, reward: 75);
+      s.body('kora').stock['iron_ore'] = n(30);
+      final credits = player(s).credits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(30)));
+      expect(player(s).credits, credits + n(75));
+      expect(player(s).contractsCompleted, 1);
+    });
+
+    test('reward credits count as lifetime earnings', () {
+      final s = fullBoard();
+      final k = postOn(s, 'iron_ore', 30, reward: 75);
+      s.body('kora').stock['iron_ore'] = n(30);
+      final earned = player(s).lifetimeCredits;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(30)));
+      expect(player(s).lifetimeCredits, earned + n(75));
+    });
+
+    test('invalid deliveries change nothing', () {
+      final s = fullBoard();
+      final k = postOn(s, 'steel', 100);
+      s.body('kora').stock['steel'] = n(50);
+      fails(
+        s,
+        DeliverContractCommand('player', 'c999', 'kora', n(1)),
+        CommandError.unknownContract,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'nowhere', n(1)),
+        CommandError.unknownBody,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'brine', n(1)),
+        CommandError.notOwner,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(0)),
+        CommandError.invalidAmount,
+      );
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(-5)),
+        CommandError.invalidAmount,
+      );
+      s.body('kora').stock['steel'] = n(0);
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(1)),
+        CommandError.invalidAmount,
+      );
+      fails(
+        s,
+        DeliverContractCommand('ghost', k.id, 'kora', n(1)),
+        CommandError.unknownFaction,
+      );
+    });
+
+    test("another faction cannot deliver to or discard the player's", () {
+      final s = fullBoard();
+      s.factions.add(
+        FactionState(
+          id: 'rival',
+          name: 'Rival',
+          isPlayer: false,
+          credits: n(0),
+          baseCrew: 0,
+        ),
+      );
+      s.body('brine').ownerId = 'rival';
+      s.body('brine').stock['steel'] = n(100);
+      final k = postOn(s, 'steel', 10);
+      fails(
+        s,
+        DeliverContractCommand('rival', k.id, 'brine', n(10)),
+        CommandError.unknownContract,
+      );
+      fails(
+        s,
+        DiscardContractCommand('rival', k.id),
+        CommandError.unknownContract,
+      );
+    });
+
+    test('commands round trip through JSON', () {
+      for (final cmd in <Command>[
+        DeliverContractCommand('player', 'c7', 'kora', n(12.5)),
+        DeliverContractCommand('player', 'c7', null, n(12.5)),
+        const DiscardContractCommand('player', 'c7'),
+      ]) {
+        final back = Command.fromJson(cmd.toJson());
+        expect(back.toJson(), cmd.toJson());
+        expect(back.runtimeType, cmd.runtimeType);
+      }
+      expect(
+        DeliverContractCommand('p', 'c1', 'kora', n(1)).toJson()['cmd'],
+        'deliverContract',
+      );
+      // From every body: no bodyId at all, so old command logs read alike.
+      expect(
+        DeliverContractCommand('p', 'c1', null, n(1)).toJson(),
+        isNot(contains('bodyId')),
+      );
+      expect(
+        const DiscardContractCommand('p', 'c1').toJson()['cmd'],
+        'discardContract',
+      );
+    });
+  });
+
+  group('discard and refills', () {
+    test('discard has no penalty and the slot refills after 4 h', () {
+      final s = fullBoard();
+      final f = player(s);
+      final k = f.contracts.first;
+      final credits = f.credits;
+      final stock = jsonEncode(s.body('kora').toJson());
+      final at = s.time;
+
+      ok(s, DiscardContractCommand('player', k.id));
+      expect(f.contracts, hasLength(2));
+      expect(f.contracts, isNot(contains(k)));
+      expect(f.credits, credits);
+      expect(jsonEncode(s.body('kora').toJson()), stock);
+      expect(f.contractsCompleted, 0);
+      expect(f.contractRefillAt, [at + refill]);
+
+      e.advance(s, refill - 60);
+      expect(f.contracts, hasLength(2));
+      e.advance(s, 60);
+      expect(f.contracts, hasLength(3));
+      expect(f.contracts.last.postedAt, at + refill);
+      expect(f.contractRefillAt, isEmpty);
+    });
+
+    test('refills bank while away: 3 empty slots after 12 h are all '
+        'refilled on return', () {
+      final s = fullBoard();
+      final f = player(s);
+      final at = s.time;
+      for (final k in List.of(f.contracts)) {
+        ok(s, DiscardContractCommand('player', k.id));
+      }
+      expect(f.contracts, isEmpty);
+      expect(f.contractRefillAt, [
+        at + refill,
+        at + refill * 2,
+        at + refill * 3,
+      ]);
+
+      final away = e.catchUpOffline(s, 12 * 3600);
+      expect(away.secondsSimulated, 43200);
+      expect(f.contracts, hasLength(3));
+      expect(f.contractRefillAt, isEmpty);
+      expect(
+        [for (final k in f.contracts) k.postedAt],
+        [at + refill, at + refill * 2, at + refill * 3],
+      );
+      expect(away.contractsPosted, [for (final k in f.contracts) k.id]);
+      expect(e.catchUpOffline(s, 3600).contractsPosted, isEmpty);
+    });
+
+    test('a refill queued behind others waits its turn', () {
+      final s = fullBoard();
+      final f = player(s);
+      final at = s.time;
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      e.advance(s, 600);
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      // Banked after the first, not 4 h from now.
+      expect(f.contractRefillAt, [at + refill, at + refill * 2]);
+    });
+
+    test('never more than 3 refills banked', () {
+      final s = fullBoard();
+      final f = player(s);
+      f.contractRefillAt.addAll([1e9, 1e9, 1e9]);
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      expect(f.contractRefillAt, hasLength(3));
+    });
+
+    test('a contract on a resource no longer made blocks nothing and can '
+        'be discarded', () {
+      final s = fullBoard();
+      final f = player(s);
+      // Nobody makes reactor cores, and Kora holds none.
+      final k = postOn(s, 'reactor_core', 50);
+      final steel = f.lifetimeProduced['steel']!;
+
+      // Commands and time carry on around it.
+      ok(s, SetAutoSellCommand('player', 'kora', 'iron_ore', n(0)));
+      e.advance(s, refill * 2);
+      expect(f.contracts, contains(k));
+      expect(f.lifetimeProduced['steel']! > steel, isTrue);
+      fails(
+        s,
+        DeliverContractCommand('player', k.id, 'kora', n(1)),
+        CommandError.invalidAmount,
+      );
+
+      ok(s, DiscardContractCommand('player', k.id));
+      expect(f.contracts, isNot(contains(k)));
+      e.advance(s, refill + 60);
+      expect(f.contracts, hasLength(3), reason: 'its slot refilled');
+      expect(
+        f.contracts.where((x) => x.resourceId == 'reactor_core'),
+        isEmpty,
+        reason: 'reactor cores are neither made nor made from what is made',
+      );
+    });
+
+    test('a contract whose producers were demolished can be discarded', () {
+      final s = fullBoard();
+      final f = player(s);
+      final k = postOn(s, 'steel', 1e6);
+      final smelter = s
+          .body('kora')
+          .buildings
+          .firstWhere((b) => b.defId == 'smelter');
+      ok(s, DemolishCommand('player', smelter.id));
+      e.advance(s, refill);
+      expect(f.contracts, contains(k));
+      ok(s, DiscardContractCommand('player', k.id));
+      expect(f.contracts, isNot(contains(k)));
+    });
+  });
+
+  group('milestones', () {
+    test('contractsCompleted counts completed contracts', () {
+      final c = contentWith(
+        (b) => (b['milestones']! as List).add({
+          'id': 'first_order',
+          'name': 'First Order Filled',
+          'condition': {'type': 'contractsCompleted', 'count': 1},
+        }),
+      );
+      final ce = GameEngine(c);
+      final s = ce.newGame(1);
+      ce.advance(s, refill * 2 + 60);
+      final f = player(s);
+      expect(f.reachedMilestones, isNot(contains('first_order')));
+      final k = f.contracts.first;
+      ok(s, DiscardContractCommand('player', k.id));
+      ce.advance(s, 60);
+      expect(
+        f.reachedMilestones,
+        isNot(contains('first_order')),
+        reason: 'a discard is not a completion',
+      );
+      final next = f.contracts.first;
+      s.body('kora').stock[next.resourceId] = next.quantity;
+      ok(s, DeliverContractCommand('player', next.id, 'kora', next.quantity));
+      ce.advance(s, 60);
+      expect(f.reachedMilestones, contains('first_order'));
+    });
+  });
+
+  group('saves', () {
+    test('contracts survive save/load and copy()', () {
+      final s = fullBoard();
+      final f = player(s);
+      ok(s, DiscardContractCommand('player', f.contracts.first.id));
+      final k = f.contracts.first;
+      s.body('kora').stock[k.resourceId] = n(1);
+      ok(s, DeliverContractCommand('player', k.id, 'kora', n(1)));
+      final text = SaveCodec.encode(s);
+      final back = (SaveCodec.decode(text, content) as SaveOk).state;
+      expect(SaveCodec.encode(back), text);
+      expect(SaveCodec.encode(s.copy()), text);
+      expect(player(back).contracts.first.delivered, n(1));
+      expect(player(back).contractRefillAt, f.contractRefillAt);
+
+      // A copy is independent.
+      final copy = s.copy();
+      player(copy).contracts.first.delivered = n(0);
+      player(copy).contractRefillAt.clear();
+      expect(SaveCodec.encode(s), text);
+    });
+
+    test('a save from before contracts loads with a board due to refill', () {
+      final m = jsonDecode(encode(fullBoard())) as Map<String, Object?>;
+      for (final f in (m['factions']! as List).cast<Map<String, Object?>>()) {
+        f
+          ..remove('contracts')
+          ..remove('contractRefillAt')
+          ..remove('contractsCompleted');
+      }
+      final r = SaveCodec.decode(jsonEncode(m), content);
+      expect(r, isA<SaveOk>());
+      final s = (r as SaveOk).state;
+      expect(player(s).contracts, isEmpty);
+      expect(player(s).contractsCompleted, 0);
+      expect(player(s).contractRefillAt, [0, 0, 0]);
+      e.advance(s, 60);
+      expect(player(s).contracts, hasLength(3));
+    });
+
+    test('a save from before posts were counted counts every open and '
+        'completed contract as posted', () {
+      final s = fullBoard();
+      final k = player(s).contracts.first;
+      s.body('kora').stock[k.resourceId] = k.quantity;
+      ok(s, DeliverContractCommand('player', k.id, 'kora', k.quantity));
+      expect(player(s).contractsPosted, 3);
+      final m = jsonDecode(encode(s)) as Map<String, Object?>;
+      final f = (m['factions']! as List).cast<Map<String, Object?>>().first;
+      expect(f['contractsPosted'], 3);
+      f.remove('contractsPosted');
+      final back = (SaveCodec.decode(jsonEncode(m), content) as SaveOk).state;
+      // 2 open and 1 completed.
+      expect(player(back).contractsPosted, 3);
+      expect(player(back.copy()).contractsPosted, 3);
+    });
+
+    group('integrity:', () {
+      List<Map<String, Object?>> list(Object? v) =>
+          (v! as List).cast<Map<String, Object?>>();
+      Map<String, Object?> me(Map<String, Object?> m) =>
+          list(m['factions']).first;
+      Map<String, Object?> first(Map<String, Object?> m) =>
+          list(me(m)['contracts']).first;
+
+      Map<String, Object?> board() =>
+          jsonDecode(encode(fullBoard())) as Map<String, Object?>;
+
+      final unknown = <String, void Function(Map<String, Object?>)>{
+        'a contract for an unknown resource': (m) =>
+            first(m)['resourceId'] = 'unobtainium',
+        'a contract from an unknown template': (m) =>
+            first(m)['templateId'] = 'nope',
+      };
+      for (final MapEntry(key: name, value: corrupt) in unknown.entries) {
+        test(name, () {
+          final m = board();
+          corrupt(m);
+          final r = SaveCodec.decode(jsonEncode(m), content);
+          expect(r, isA<SaveError>());
+          expect((r as SaveError).kind, SaveErrorKind.unknownContentId);
+        });
+      }
+
+      final invalid = <String, void Function(Map<String, Object?>)>{
+        'a negative quantity': (m) => first(m)['quantity'] = '-1',
+        'a negative delivery': (m) => first(m)['delivered'] = '-1',
+        'more delivered than asked for': (m) => first(m)
+          ..['quantity'] = '10'
+          ..['delivered'] = '11',
+        'a negative reward': (m) => first(m)['rewardCredits'] = '-1',
+        'posted after the save time': (m) =>
+            first(m)['postedAt'] = (m['time']! as num) + 1,
+        'posted at a negative time': (m) => first(m)['postedAt'] = -1,
+        'four contracts': (m) {
+          final ks = list(me(m)['contracts']);
+          ks.add({...ks.first, 'id': 'c9000'});
+          m['nextId'] = 9001;
+        },
+        'four refills': (m) => me(m)['contractRefillAt'] = [1, 2, 3, 4],
+        'refills out of order': (m) => me(m)['contractRefillAt'] = [100, 50],
+        'contracts and refills over 3 together': (m) {
+          final ks = list(me(m)['contracts']);
+          me(m)['contracts'] = ks.take(2).toList();
+          me(m)['contractRefillAt'] = [1, 2];
+        },
+        'contracts and refills under 3 together': (m) {
+          final ks = list(me(m)['contracts']);
+          me(m)['contracts'] = ks.take(1).toList();
+          me(m)['contractRefillAt'] = [1];
+        },
+        'a refill with no contracts': (m) {
+          me(m)['contracts'] = <Object?>[];
+          me(m)['contractRefillAt'] = [1];
+        },
+        'a negative refill time': (m) => me(m)['contractRefillAt'] = [-1],
+        'a duplicate contract id': (m) {
+          final ks = list(me(m)['contracts']);
+          ks[1]['id'] = ks[0]['id'];
+        },
+        'nextId not above a contract id': (m) =>
+            first(m)['id'] = 'c${m['nextId']}',
+        'contract id suffix too large for an int': (m) =>
+            first(m)['id'] = 'c99999999999999999999999',
+        'negative contracts completed': (m) => me(m)['contractsCompleted'] = -1,
+        'negative contracts posted': (m) => me(m)['contractsPosted'] = -1,
+        'fewer posted than open and completed': (m) => me(m)
+          ..['contractsCompleted'] = 2
+          ..['contractsPosted'] = 4,
+      };
+      for (final MapEntry(key: name, value: corrupt) in invalid.entries) {
+        test(name, () {
+          final m = board();
+          corrupt(m);
+          final r = SaveCodec.decode(jsonEncode(m), content);
+          expect(r, isA<SaveError>(), reason: name);
+          expect((r as SaveError).kind, SaveErrorKind.invalidValue);
+          expect(r.message, isNotEmpty);
+        });
+      }
+
+      test('refills at the same time, or ascending, load', () {
+        final m = board();
+        me(m)['contracts'] = list(me(m)['contracts']).take(1).toList();
+        me(m)['contractRefillAt'] = [5, 5];
+        expect(SaveCodec.decode(jsonEncode(m), content), isA<SaveOk>());
+        // A faction with no board has neither.
+        me(m)['contracts'] = <Object?>[];
+        me(m)['contractRefillAt'] = <Object?>[];
+        expect(SaveCodec.decode(jsonEncode(m), content), isA<SaveOk>());
+      });
+
+      test('a fully delivered quantity of exactly the ask loads', () {
+        final m = board();
+        first(m)
+          ..['quantity'] = '10'
+          ..['delivered'] = '10';
+        expect(SaveCodec.decode(jsonEncode(m), content), isA<SaveOk>());
+      });
+    });
+  });
+}

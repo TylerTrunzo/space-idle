@@ -1,0 +1,8 @@
+Repro (seed 11): load sl16_before_sleep.json (t=16.0h, station L2 building, L3 fully prepaid).
+State already has contract c53: 43K Survey Drones (posted at 16.0h while the queued level owed nothing).
+  {"cmd":"setMegaprojectAuto","megaprojectId":"orbital_station","goods":"always","credits":true}
+  {"cmd":"setAutoPayReserve","credits":"0"}
+  {"cmd":"away","seconds":25200}
+Away summary: L3 reached, L4 never starts; topBottlenecks has contractBlocksDelivery (320 drones, no credits figure),
+nextGoal says "Orbital Station level 4 still needs 320 Survey Drone; you can start it now" (it cannot: c53 holds them).
+Same route with the night starting at 19h (after the contract was discarded): L5 at 26.07h; this one: 29.57h.

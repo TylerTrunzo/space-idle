@@ -1,0 +1,10 @@
+{"cmd": "away", "seconds": 14340}
+{"cmd": "discardContract", "contractId": "c244"}
+{"cmd": "build", "bodyId": "vastmere", "defId": "depot"}
+{"cmd": "buyUpgrades", "budget": "7.919999e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "advance", "seconds": 1800}
+{"cmd": "report"}
+{"cmd": "state"}

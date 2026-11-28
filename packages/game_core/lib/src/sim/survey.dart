@@ -1,0 +1,60 @@
+import '../content/content.dart';
+import '../num/big_num.dart';
+import '../state/game_state.dart';
+import 'projects.dart';
+
+/// Whether [b] is in sight of faction [factionId]: it has been surveyed
+/// (every body but a hidden one starts so) or the faction owns it.
+///
+/// Every lookup a player's command or report makes goes through it, so a
+/// hidden body that nothing has surveyed is `unknownBody` to commands and
+/// absent from state, costs and flow reports. The one exception is
+/// `SurveyCommand`, which names the body it reveals.
+bool isVisible(GameState s, BodyState b, String factionId) =>
+    b.surveyed || b.ownerId == factionId;
+
+/// The bodies [factionId] can see, in body order.
+Iterable<BodyState> visibleBodies(GameState s, String factionId) =>
+    s.bodies.where((b) => isVisible(s, b, factionId));
+
+/// What one survey costs: `surveyCredits` credits and `surveyDrones`
+/// survey drones from the paying body's stock. The drones are left out when
+/// the rules ask for none.
+Map<String, BigNum> surveyCost(Content c) => {
+  'credits': c.rules.surveyCredits,
+  if (c.rules.surveyDrones > 0)
+    c.rules.surveyDroneResource: BigNum.from(c.rules.surveyDrones),
+};
+
+/// Seconds a survey takes, `surveySeconds` kept within
+/// [[RulesDef.minProjectSeconds], [RulesDef.maxProjectSeconds]].
+double surveySeconds(Content c) => c.rules.surveySeconds.clamp(
+  RulesDef.minProjectSeconds,
+  RulesDef.maxProjectSeconds,
+);
+
+/// Unsurveyed signals [factionId] picks up in system [systemId]: the
+/// hidden bodies there that nothing has surveyed yet and no survey is
+/// under way on, if the faction owns a body in the system; else 0. So the
+/// count drops as a survey starts, as the id-less `SurveyCommand` moves on
+/// to the next one.
+///
+/// It tells the player there is something to find without naming it; a
+/// `SurveyCommand` without a body id surveys the next one.
+int unsurveyedSignals(
+  GameState s,
+  Content c,
+  String factionId,
+  String systemId,
+) {
+  final inSystem = [
+    for (final b in s.bodies)
+      if (b.systemId == systemId) b,
+  ];
+  if (!inSystem.any((b) => b.ownerId == factionId)) return 0;
+  return inSystem
+      .where(
+        (b) => !b.surveyed && projectOn(s, ProjectKind.survey, b.id) == null,
+      )
+      .length;
+}

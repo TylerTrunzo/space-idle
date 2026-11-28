@@ -1,0 +1,10 @@
+{"cmd":"setAutoSell","bodyId":"kora","resourceId":"steel","keepAtLeast":"0"}
+{"cmd":"setAutoSell","bodyId":"kora","resourceId":"copper_ore","keepAtLeast":"0"}
+{"cmd":"advance","seconds":120}
+{"cmd":"build","bodyId":"kora","defId":"mine","depositResourceId":"iron_ore"}
+{"cmd":"build","bodyId":"kora","defId":"smelter"}
+{"cmd":"advance","seconds":300}
+{"cmd":"state"}
+{"cmd":"report"}
+{"cmd":"advance","seconds":300}
+{"cmd":"state"}

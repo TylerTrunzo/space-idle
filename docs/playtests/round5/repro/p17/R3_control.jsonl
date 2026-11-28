@@ -1,0 +1,9 @@
+{"cmd": "discardContract", "contractId": "c20"}
+{"cmd": "discardContract", "contractId": "c21"}
+{"cmd": "advance", "seconds": 13700}
+{"cmd": "state"}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "advance", "seconds": 800}
+{"cmd": "state"}
+{"cmd": "save", "path": "/tmp/claude-0/-home-user-space-idle/7963d8b4-7ef1-5bbc-9bff-b2b24979e3ee/scratchpad/r5/p17-exploit/saves/x_inflate2_control.json"}

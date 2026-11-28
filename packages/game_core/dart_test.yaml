@@ -1,0 +1,3 @@
+tags:
+  perf:
+    description: Wall-clock bounds on catch-up speed. CI runs them.
