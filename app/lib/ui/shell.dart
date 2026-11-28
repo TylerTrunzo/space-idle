@@ -102,6 +102,11 @@ class _ShellState extends State<Shell> {
   _Tab _tab = _Tab.map;
   String? _selected;
 
+  /// One gate per tab on the game's notifications: only the shown tab's
+  /// gate is open, so a hidden tab doesn't rebuild on every tick and
+  /// catches up once as it is shown.
+  Map<_Tab, ControllerGate> _gates = const {};
+
   /// The row the Projects tab shows, from the star map's signal marker or
   /// the away summary; its serial counts the requests.
   ProjectsFocus? _projectsFocus;
@@ -119,10 +124,34 @@ class _ShellState extends State<Shell> {
   final DraggableScrollableController _sheet = DraggableScrollableController();
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final c = ControllerScope.read(context);
+    if (_gates.values.firstOrNull?.controller == c) return;
+    for (final g in _gates.values) {
+      g.dispose();
+    }
+    _gates = {
+      for (final t in _Tab.values) t: ControllerGate(c, open: t == _tab),
+    };
+  }
+
+  @override
   void dispose() {
+    for (final g in _gates.values) {
+      g.dispose();
+    }
     _sheetExtent.dispose();
     _sheet.dispose();
     super.dispose();
+  }
+
+  /// Shows tab [t]: its gate opens (catching it up), the others shut.
+  void _show(_Tab t) {
+    _tab = t;
+    for (final MapEntry(key: k, value: g) in _gates.entries) {
+      g.open = k == t;
+    }
   }
 
   void _select(String id) => setState(() {
@@ -159,7 +188,7 @@ class _ShellState extends State<Shell> {
       _showProjects(ProjectsAnchor.survey, systemId);
 
   void _showProjects(ProjectsAnchor anchor, String id) => setState(() {
-    _tab = _Tab.projects;
+    _show(_Tab.projects);
     _projectsFocus = ProjectsFocus(
       anchor,
       id,
@@ -184,7 +213,7 @@ class _ShellState extends State<Shell> {
       clearSelection: _clear,
       showOnMap: (id) {
         _select(id);
-        setState(() => _tab = _Tab.map);
+        setState(() => _show(_Tab.map));
       },
       showProjects: _showProjects,
       // Back closes the selected body's panel before it leaves the app.
@@ -212,7 +241,14 @@ class _ShellState extends State<Shell> {
                   children: [
                     for (final t in _Tab.values)
                       // Only the shown tab's animations run.
-                      TickerMode(enabled: t == _tab, child: _tabBody(t)),
+                      ControllerScope(
+                        controller: ControllerScope.read(context),
+                        changes: _gates[t],
+                        child: TickerMode(
+                          enabled: t == _tab,
+                          child: _tabBody(t),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -221,7 +257,7 @@ class _ShellState extends State<Shell> {
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _tab.index,
-          onDestinationSelected: (i) => setState(() => _tab = _Tab.values[i]),
+          onDestinationSelected: (i) => setState(() => _show(_Tab.values[i])),
           destinations: [
             for (final t in _Tab.values)
               NavigationDestination(icon: Icon(t.icon), label: t.label),

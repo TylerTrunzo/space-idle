@@ -9,6 +9,7 @@ import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/map/star_map.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/shell.dart';
+import 'package:space_idle/ui/tabs/production_tab.dart';
 import 'package:space_idle/ui/top_bar.dart';
 
 /// Boots the app on an empty store and lets start() finish.
@@ -413,5 +414,32 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Kora, owned'), warnIfMissed: false);
     await tester.pump();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a hidden tab does not rebuild on a tick; it catches up when '
+      'shown', (tester) async {
+    await _boot(tester);
+    // Read, not of: a test's lookup mustn't make the shell rebuild.
+    final c = ControllerScope.read(tester.element(find.byType(Shell)));
+    final builds = ProductionTab.debugBuilds;
+    final scenes = StarMap.debugScenes;
+    for (var i = 0; i < 3; i++) {
+      c.tickSeconds(1);
+      await tester.pump();
+    }
+    expect(ProductionTab.debugBuilds, builds, reason: 'hidden: no rebuild');
+    expect(StarMap.debugScenes, greaterThan(scenes), reason: 'shown: redrawn');
+
+    await tester.tap(find.text('Production').last);
+    await tester.pump();
+    expect(ProductionTab.debugBuilds, greaterThan(builds));
+    final mapScenes = StarMap.debugScenes;
+    final shown = ProductionTab.debugBuilds;
+    for (var i = 0; i < 3; i++) {
+      c.tickSeconds(1);
+      await tester.pump();
+    }
+    expect(ProductionTab.debugBuilds, greaterThan(shown));
+    expect(StarMap.debugScenes, mapScenes, reason: 'the map is hidden now');
   });
 }

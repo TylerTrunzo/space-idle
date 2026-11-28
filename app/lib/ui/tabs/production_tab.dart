@@ -41,6 +41,11 @@ class ProductionTab extends StatefulWidget {
   /// Creates the tab.
   const ProductionTab({super.key});
 
+  /// How many times any Production tab has been built, for tests: a hidden
+  /// tab must not rebuild on a tick.
+  @visibleForTesting
+  static int debugBuilds = 0;
+
   @override
   State<ProductionTab> createState() => _ProductionTabState();
 }
@@ -50,6 +55,7 @@ class _ProductionTabState extends State<ProductionTab> {
 
   @override
   Widget build(BuildContext context) {
+    ProductionTab.debugBuilds++;
     final c = ControllerScope.of(context);
     final view = productionView(c);
     final text = Theme.of(context).textTheme;

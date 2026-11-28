@@ -44,6 +44,11 @@ class StarMap extends StatefulWidget {
   /// selected body keeps its label.
   static const double compactHeight = 200;
 
+  /// How many scenes any star map has built, for tests: a hidden map must
+  /// not build one on a tick.
+  @visibleForTesting
+  static int debugScenes = 0;
+
   @override
   State<StarMap> createState() => _StarMapState();
 }
@@ -64,6 +69,12 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   /// Whether the platform allows animation (`disableAnimations` is off).
   bool _animationsAllowed = true;
 
+  /// Whether the map is on screen ([TickerMode] on): a hidden map (another
+  /// tab, a covering sheet) builds no scene on a tick, and builds one as it
+  /// shows again if the game moved meanwhile.
+  bool _visible = true;
+  bool _stale = false;
+
   /// Ticker time of the latest frame, and of the latest game tick.
   Duration _frameAt = Duration.zero;
   Duration _tickAt = Duration.zero;
@@ -81,6 +92,11 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _animationsAllowed = !MediaQuery.disableAnimationsOf(context);
+    _visible = TickerMode.valuesOf(context).enabled;
+    if (_visible && _stale) {
+      _stale = false;
+      _refresh();
+    }
     _syncTicker();
   }
 
@@ -104,6 +120,7 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
   }
 
   StarMapScene _buildScene() {
+    StarMap.debugScenes++;
     final c = widget.controller;
     return buildStarMapScene(
       c.state,
@@ -114,7 +131,13 @@ class _StarMapState extends State<StarMap> with SingleTickerProviderStateMixin {
     );
   }
 
-  void _onGameChanged() => setState(_refresh);
+  void _onGameChanged() {
+    if (!_visible) {
+      _stale = true;
+      return;
+    }
+    setState(_refresh);
+  }
 
   /// Rebuilds the scene. Only a tick (game time moved) restarts the
   /// in-between motion: a command or a cleared summary also notifies, and
