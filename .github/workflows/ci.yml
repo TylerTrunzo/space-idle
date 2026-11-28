@@ -4,22 +4,30 @@ on:
   push:
   pull_request:
 
+# The pub workspace includes the Flutter app, so every job resolves it with
+# the Flutter SDK (a plain Dart SDK cannot resolve `flutter: sdk`). The
+# `dart` on PATH below is the one bundled with that Flutter SDK.
+env:
+  FLUTTER_VERSION: '3.50.1'
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
         with:
-          sdk: stable
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Install dependencies
-        run: dart pub get
+        run: flutter pub get
 
       - name: Analyze
         run: dart analyze --fatal-infos
@@ -35,3 +43,31 @@ jobs:
       - name: Test game_sim
         working-directory: packages/game_sim
         run: dart test
+
+  flutter:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze app
+        working-directory: app
+        run: flutter analyze --fatal-infos
+
+      # Includes the content sync check: fails when content/*.json changed
+      # without re-running `dart run tool/embed_content.dart`.
+      - name: Test app
+        working-directory: app
+        run: flutter test
+
+      - name: Build web
+        working-directory: app
+        run: flutter build web --release --no-web-resources-cdn
