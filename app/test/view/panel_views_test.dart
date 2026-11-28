@@ -77,6 +77,27 @@ void main() {
       expect(full.reason, 'no free build slot');
     });
 
+    test("every entry's hosts are the core's hostsFor", () {
+      c.state.body('brine').ownerId = _p;
+      c.state.faction(_p).credits = BigNum.from(400);
+      for (final e in catalogView(c)) {
+        expect(
+          [
+            for (final h in e.hosts)
+              if (h.canBuild) h.bodyId,
+          ],
+          hostsFor(
+            c.state,
+            content,
+            _p,
+            e.defId,
+            depositResourceId: e.depositResourceId,
+          ),
+          reason: e.name,
+        );
+      }
+    });
+
     test('filtered to the makers of a resource', () {
       final iron = catalogView(c, makes: 'iron_ore').map((e) => e.name);
       expect(iron, contains('Mine (Iron Ore)'));

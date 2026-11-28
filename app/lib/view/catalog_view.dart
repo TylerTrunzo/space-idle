@@ -76,50 +76,29 @@ final class CatalogEntryView {
   final List<CatalogHost> hosts;
 }
 
-/// The building types whose output includes [resourceId]: extractors that
-/// mine it and recipes that make it, in content order.
-List<String> makersOf(Content c, String resourceId) => [
-  for (final d in c.buildings.values)
-    if (d.kind == BuildingKind.extractor
-        ? d.extracts.contains(resourceId)
-        : d.outputs.containsKey(resourceId))
-      d.id,
-];
-
 /// The build catalog: every building type (each extractor once per
-/// resource it mines), or with [makes] only those that make it.
+/// resource it mines), or with [makes] only those that make it (the
+/// core's `makersOf`).
 ///
-/// Whether a body can host an entry is worked out here from the slots,
-/// deposits and costs the build command checks, until the core's own
-/// host check (stage 2 Task 0) replaces it; the command itself still has
-/// the last word when Build is tapped.
+/// Whether each of the player's bodies can host an entry is the core's
+/// `hostChecks`, which checks it as the build command does; this only
+/// words its reason.
 List<CatalogEntryView> catalogView(GameController c, {String? makes}) {
   final content = c.content;
-  final owned = [
-    for (final b in c.state.bodies)
-      if (b.ownerId == c.playerId) b,
-  ];
+  final makers = makes == null ? null : makersOf(content, makes).toSet();
   return [
     for (final d in content.buildings.values)
-      ...(d.kind == BuildingKind.extractor
-          ? [
-              for (final r in d.extracts)
-                if (makes == null || makes == r)
-                  _entry(c, d, owned, deposit: r),
-            ]
-          : [
-              if (makes == null || d.outputs.containsKey(makes))
-                _entry(c, d, owned),
-            ]),
+      if (makers == null || makers.contains(d.id))
+        ...(d.kind == BuildingKind.extractor
+            ? [
+                for (final r in d.extracts)
+                  if (makes == null || makes == r) _entry(c, d, deposit: r),
+              ]
+            : [_entry(c, d)]),
   ];
 }
 
-CatalogEntryView _entry(
-  GameController c,
-  BuildingDef d,
-  List<BodyState> owned, {
-  String? deposit,
-}) {
+CatalogEntryView _entry(GameController c, BuildingDef d, {String? deposit}) {
   final content = c.content;
   String res(String id) => content.resources[id]!.name;
   List<NamedValue> perSecond(Map<String, double> m, {bool used = false}) => [
@@ -141,48 +120,46 @@ CatalogEntryView _entry(
     uses: perSecond(d.inputs, used: true),
     makes: perSecond(d.outputs),
     hosts: [
-      for (final b in owned)
+      for (final h in hostChecks(
+        c.state,
+        content,
+        c.playerId,
+        d.id,
+        depositResourceId: deposit,
+      ))
         CatalogHost(
-          bodyId: b.id,
-          bodyName: b.name,
-          reason: _blocked(c, d, b, deposit),
+          bodyId: h.bodyId,
+          bodyName: c.state.body(h.bodyId).name,
+          reason: switch (h.block) {
+            null => null,
+            final b => buildBlockText(content, c.state.body(h.bodyId), b),
+          },
         ),
     ],
   );
 }
 
-/// Why [d] cannot go on [body] now, in the order the build command
-/// checks: a free slot, the deposit, then each cost.
-String? _blocked(
-  GameController c,
-  BuildingDef d,
-  BodyState body,
-  String? deposit,
-) {
-  final content = c.content;
-  if (body.buildings.length >= buildSlots(content, body)) {
-    return 'no free build slot';
-  }
-  if (deposit != null && !body.deposits.any((x) => x.resourceId == deposit)) {
-    final name = content.resources[deposit]!.name;
-    return 'needs ${_article(name)} $name deposit';
-  }
-  for (final MapEntry(key: id, value: need) in d.buildCost.entries) {
-    if (id == creditsKey) {
-      final have = c.state.faction(c.playerId).credits;
-      if (have < need) {
-        return 'needs ${formatNumber(need)} credits '
-            '(you have ${formatNumber(have, rounding: NumberRounding.down)})';
-      }
-    } else {
-      final have = body.stock[id] ?? const BigNum.zero();
-      if (have < need) {
-        return 'needs ${formatNumber(need)} ${content.resources[id]!.name} '
-            'on ${body.name}';
-      }
-    }
-  }
-  return null;
+/// [block] on [body] in words: "no free build slot", "needs an Iron Ore
+/// deposit", "needs 600 credits (you have 250)", "needs 10 Steel on Kora".
+String buildBlockText(Content c, BodyState body, BuildBlock block) {
+  String n(BigNum? v) => formatNumber(v ?? const BigNum.zero());
+  return switch (block.kind) {
+    BuildBlockKind.noFreeSlot => 'no free build slot',
+    BuildBlockKind.noDeposit => switch (block.resourceId) {
+      final id? => () {
+        final name = c.resources[id]?.name ?? id;
+        return 'needs ${_article(name)} $name deposit';
+      }(),
+      null => 'needs a deposit to mine',
+    },
+    BuildBlockKind.short when block.resourceId == creditsKey =>
+      'needs ${n(block.need)} credits (you have '
+          '${formatNumber(block.have ?? const BigNum.zero(), rounding: NumberRounding.down)})',
+    BuildBlockKind.short =>
+      'needs ${n(block.need)} '
+          '${c.resources[block.resourceId]?.name ?? block.resourceId} '
+          'on ${body.name}',
+  };
 }
 
 String _costText(Content c, Map<String, BigNum> cost) => [

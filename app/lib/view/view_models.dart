@@ -465,9 +465,6 @@ List<ResourceRowView> _storage(
 ) {
   final s = c.state;
   final cap = storageCap(s, c.content, body);
-  // One bonus lookup for every row's sale price (the core's salePrice is
-  // price x salePriceMultiplierFor(tier); a test pins the two together).
-  final bonuses = bonusesFor(s, c.content, c.playerId);
   final rules = {
     for (final r in s.faction(c.playerId).autoSell)
       if (r.bodyId == body.id) r.resourceId: r,
@@ -491,11 +488,8 @@ List<ResourceRowView> _storage(
           wasted: flow?.wastedPerSec[id] ?? zero,
           autoSell: selling.contains(id),
           rule: rules[id],
-          salePrice: price(
-            s,
-            c.content,
-            id,
-          ).mulDouble(bonuses.salePriceMultiplierFor(def.tier)),
+          // What the player's sales earn: the core's own price.
+          salePrice: salePrice(s, c.content, c.playerId, id),
         ),
   ];
 }
