@@ -548,6 +548,13 @@ String? _held(GameController c, AutoSellRule rule, BigNum stock) {
   ].join();
 }
 
+/// Every route of the player's, in route order, as a body's panel shows
+/// them.
+List<RouteView> playerRoutes(GameController c) => [
+  for (final r in c.state.routes)
+    if (r.ownerId == c.playerId) _route(c, r, c.throughputs),
+];
+
 RouteView _route(
   GameController c,
   RouteState r,

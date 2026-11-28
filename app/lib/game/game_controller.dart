@@ -166,8 +166,8 @@ class GameController extends ChangeNotifier {
   /// no frame waits on more than a couple of flow reports.
   static const Duration previewBudget = Duration(milliseconds: 6);
 
-  /// Bumped each time previews land, for the payback lines to rebuild on;
-  /// nothing else listens.
+  /// Bumped each time previews or a crew forecast land, for what shows
+  /// them to rebuild on, and nothing else.
   final ValueNotifier<int> previewsVersion = ValueNotifier(0);
 
   /// Building id and track to the preview and the game time of the state
@@ -222,6 +222,15 @@ class GameController extends ChangeNotifier {
     if (_disposed) return;
     final clock = Stopwatch()..start();
     var landed = false;
+    if (_forecastWanted) {
+      // A report per building with room for crew: a fill of its own.
+      _forecastWanted = false;
+      _forecast = (
+        forecast: crewForecast(_state, content, playerId),
+        at: _state.time,
+      );
+      landed = true;
+    }
     while (_wanted.isNotEmpty && clock.elapsed < previewBudget) {
       final key = _wanted.first;
       _wanted.remove(key);
@@ -238,6 +247,27 @@ class GameController extends ChangeNotifier {
     }
     if (landed) previewsVersion.value++;
     if (_wanted.isNotEmpty) _askForFill();
+  }
+
+  ({CrewForecast forecast, double at})? _forecast;
+  bool _forecastWanted = false;
+
+  /// The player's crew forecast ([crewForecast]) if one is ready: `ready`
+  /// false until it is.
+  ///
+  /// It builds a flow report for each building with room for crew, so it
+  /// is worked out in a fill of its own, after a frame, like the upgrade
+  /// previews ([previewFor]), and kept until a command, a load or
+  /// [adviceRefreshSeconds] of game time, an older one showing while a
+  /// fresh one is worked out. [previewsVersion] says when it lands.
+  ({bool ready, CrewForecast? forecast}) crewForecastNow() {
+    final have = _forecast;
+    if ((have == null || _state.time - have.at >= adviceRefreshSeconds) &&
+        !_forecastWanted) {
+      _forecastWanted = true;
+      _askForFill();
+    }
+    return (ready: have != null, forecast: have?.forecast);
   }
 
   /// Fills after the frame being drawn, asking for another frame, so each
@@ -258,6 +288,8 @@ class GameController extends ChangeNotifier {
       _wanted.clear();
       _previewer = null;
       _previewerAt = double.negativeInfinity;
+      _forecast = null;
+      _forecastWanted = false;
     }
   }
 

@@ -572,6 +572,22 @@ void main() {
         );
       });
 
+      test('the crew forecast: lazy, filled after a frame, dropped by a '
+          'command', () {
+        expect(c.crewForecastNow().ready, isFalse);
+        expect(fills, hasLength(1));
+        fillAll();
+        final ready = c.crewForecastNow();
+        expect(ready.ready, isTrue);
+        final core = crewForecast(c.state, content, 'player');
+        expect(ready.forecast!.housing, core.housing);
+        expect(ready.forecast!.demand, core.demand);
+        c.tickSeconds(1);
+        expect(identical(c.crewForecastNow().forecast, ready.forecast), isTrue);
+        c.run(const AssignCrewCommand('player', 'b1', 0));
+        expect(c.crewForecastNow().ready, isFalse);
+      });
+
       test('a building that is not there previews nothing', () {
         c.previewFor('nope', UpgradeTrack.speed);
         fillAll();

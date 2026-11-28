@@ -62,7 +62,7 @@ class _BuildingRowState extends State<BuildingRow> {
               ),
             ],
           ),
-          if (v.crewMax > 0) _CrewLine(view: v),
+          if (v.crewMax > 0) CrewLine(view: v),
           _Flows(view: v),
           if (v.problem case final problem?)
             _Problem(view: v, problem: problem),
@@ -99,10 +99,13 @@ class _BuildingRowState extends State<BuildingRow> {
 }
 
 /// Crew pips (filled per crew, hollow up to the most, a bar after the
-/// base slots) between − and +.
-class _CrewLine extends StatelessWidget {
-  const _CrewLine({required this.view});
+/// base slots) between − and +; the panel's rows and the Crew tab both
+/// use it, so both change a building the same way.
+class CrewLine extends StatelessWidget {
+  /// Creates the line for [view].
+  const CrewLine({super.key, required this.view});
 
+  /// The building.
   final BuildingRowView view;
 
   @override
