@@ -442,4 +442,21 @@ void main() {
     expect(ProductionTab.debugBuilds, greaterThan(shown));
     expect(StarMap.debugScenes, mapScenes, reason: 'the map is hidden now');
   });
+
+  testWidgets('a tick builds the flow report once, however many read it', (
+    tester,
+  ) async {
+    await _boot(tester);
+    final c = ControllerScope.read(tester.element(find.byType(Shell)));
+    // The panel open too: the map, the strip and the panel all read it.
+    await tester.tap(find.bySemanticsLabel('Kora, owned'), warnIfMissed: false);
+    await tester.pump();
+    final before = c.flowBuilds;
+    for (var i = 0; i < 3; i++) {
+      c.tickSeconds(1);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(c.flowBuilds - before, 3);
+  });
 }

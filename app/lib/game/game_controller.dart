@@ -151,8 +151,16 @@ class GameController extends ChangeNotifier {
   GameState get state => _state;
 
   /// The player's flow report for the current state, rebuilt lazily after
-  /// every tick, command or load.
-  FlowReport get flow => _flow ??= buildFlowReport(_state, content, playerId);
+  /// every tick, command or load: once, however many widgets read it, and
+  /// not at all when nothing on screen does.
+  FlowReport get flow => _flow ??= () {
+    flowBuilds++;
+    return buildFlowReport(_state, content, playerId);
+  }();
+
+  /// Flow reports built so far, for tests: at most one a tick.
+  @visibleForTesting
+  int flowBuilds = 0;
 
   /// Every route's throughput and the limit that binds it
   /// ([routeThroughputs]) for the current state: worked out lazily once
