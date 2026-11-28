@@ -35,18 +35,24 @@ reaches level 3 on day 4-5).
 
 | Target | Before | After | Met |
 |---|---|---|---|
-| Casual: station level 1 on days 3-5 | day 6 / 7 / 6 (132, 162, 138 h) | day 5 / 5 / 4 (108, 108, 96 h) | yes |
-| Casual: a milestone or project on ≥ 5 of every 7 days (worst week) | 6 / 7 / 6 | 7 / 7 / 6 | yes |
-| Casual: no gap > 3 days with neither megaproject levelling, through day 21 (longest run of days without, from station level 1) | 2 / 2 / 3 | 3 / 3 / 2 | yes |
-| Casual: day 21 ≥ 1.5× day 14 | 2.31× / 2.36× / 4.35× | 1.73× / 1.54× / 1.72× | yes |
-| Balanced: +20% from day 7 to day 14 | 2.59× / 2.51× / 2.63× | 3.43× / 2.93× / 2.51× | yes |
-| Balanced: +10% from day 14 to day 21 | 1.11× / 1.11× / 1.08× | 1.61× / 1.53× / 1.45× | yes |
+| Casual: station level 1 on days 3-5 | day 6 / 7 / 6 (132, 162, 138 h) | day 4 / 4 / 5 (90, 90, 108 h) | yes |
+| Casual: a milestone or project on ≥ 5 of every 7 days (worst week) | 6 / 7 / 6 | 7 / 7 / 7 | yes |
+| Casual: no gap > 3 days with neither megaproject levelling, through day 21 (longest run of days without, from station level 1) | 2 / 2 / 3 | 3 / 3 / 3 | yes |
+| Casual: day 21 ≥ 1.5× day 14 (three-day averages: days 19-21 over days 12-14) | 2.73× / 3.05× / 4.78× | 1.61× / 1.65× / 1.69× | yes |
+| Balanced: +20% from day 7 to day 14 (three-day averages: days 12-14 over days 5-7) | 3.62× / 3.35× / 4.11× | 3.95× / 3.51× / 3.11× | yes |
+| Balanced: +10% from day 14 to day 21 (three-day averages: days 19-21 over days 12-14) | 1.12× / 1.21× / 1.10× | 1.83× / 1.75× / 1.59× | yes |
 | Balanced: a station level at least every 4 days through day 21 (longest run of days without one; §4 said 3, the controller ruled 4) | 12 / 13 / 10 | 4 / 3 / **5** | **no on seed 3** (known miss) |
-| Contracts ≤ 15% of earnings on days 1 / 7 / 14, casual | 12.7-0.0-9.3 / 6.3-0.0-7.9 / 6.0-9.6-3.1% | 0.6-4.0-2.0 / 0.4-0.0-1.2 / 0.7-3.5-5.3% | yes |
+| Contracts ≤ 15% of earnings on days 1 / 7 / 14, casual | 12.7-0.0-9.3 / 6.3-0.0-7.9 / 6.0-9.6-3.1% | 0.6-4.4-2.9 / 0.4-2.7-2.1 / 0.7-0.0-4.4% | yes |
 | Same, balanced | 0.0-0.0-0.0 / 1.5-4.3-6.2 / 1.4-1.5-4.6% | 0.0-0.0-5.1 / 1.3-0.0-3.5 / 1.4-4.4-7.6% | yes |
 | Same, greedy | 12.3-11.2-10.6 / 9.9-12.8-12.0 / 9.0-9.5-10.7% | unchanged | yes |
 | No reward above 1 h of income, first excepted | | at posting, against the income basis the engine caps by: always (game_core `test/sim/contract_reward_cap_test.dart`, about 100 contracts on seeds 1-6 and four mid-game states) | yes |
 | Mass Driver: a level raises balanced income ≥ 3% on days 5-14 | +4.5-5.0% | +4.86-5.00% (days 5, 7, 14) | yes |
+
+**Income ratios on three-day averages** (controller ruling 4 on task 4). A day's earnings swing by
+5-20% from the next with when a megaproject level lands (casual seed 1, days 12-21: 140, 171, 184,
+199, 206, 214, 258, 265, 260, 270B), so the §4 ratios compare the mean of the three days ending on
+each day named, with the bars unchanged. One day against one day, the casual bot read 1.47× / 1.46×
+/ 1.61× after task 4's fix round 2, and seeds 1-2 missed 1.5×.
 
 **Known miss.** The balanced bot on seed 3 goes 5 days without a station level (level 15 from day
 16, still on day 21). Seed 1, which `balance_targets_test` plays, goes 4. Not tuned (ruling 3).
@@ -105,7 +111,8 @@ Free crew as a share of crew supported, averaged over check-ins:
 | Buy-max casual, cheapest first only, base content | 84% | 73-76% |
 | Buy-max casual, cheapest first only, habitat ×2.5 | 51-52% | 25% |
 | Buy-max casual, crew first, habitat ×2.5 | 8-12% | 2% |
-| **Buy-max casual, crew first, habitat ×2 (shipped)** | **9-15%** | **2-6%** |
+| Buy-max casual, crew first (free crew read once a command), habitat ×2 | 9-15% | 2-6% |
+| **Buy-max casual, crew first, habitat ×2 (shipped)** | **7-12%** | **2-5%** |
 | Balanced, before | 7-10% | 3-5% |
 | **Balanced (shipped)** | **13-16%** | **3-6%** |
 
@@ -115,5 +122,6 @@ throughout, for the buy-max casual as for the balanced bot.
 ## Later days
 
 Seed 1 balanced: income 496B on day 21, 687B on day 30; station 16 → 17 and Mass Driver 17 → 18
-between day 21 and 30. Casual seed 1: 251B on day 21, 345B on day 30; station 13 → 14 and Mass
-Driver 17 → 18. Both still level past day 30.
+between day 21 and 30. Casual seed 1: 270B on day 21, 330B on day 30; its station stays at level 13 from day 13 to day
+30, while the Mass Driver goes on (17 → 18 between day 21 and 30). The balanced bot still levels
+both past day 30.

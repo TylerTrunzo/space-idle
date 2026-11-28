@@ -11,11 +11,11 @@ import '../state/helpers.dart';
 /// income basis ([incomeBasis]) on the state, then posts with
 /// [stepContracts], which reads the same state, so each new contract is
 /// checked against the basis at the moment it was posted. Every contract
-/// after the faction's first must pay at most `rewardCapIncomeSeconds` of
-/// that basis (or `minRewardCredits`, the least any reward pays). Each new
-/// contract is discarded once checked, as the board it starts with is,
-/// so its slots refill. Returns the
-/// contracts checked.
+/// but the first the faction is ever offered (which has no cap, as in the
+/// engine) must pay at most `rewardCapIncomeSeconds` of that basis (or
+/// `minRewardCredits`, the least any reward pays). Each new contract is
+/// discarded once checked, as the board it starts with is, so its slots
+/// refill. Returns the contracts checked.
 int _checkRewards(GameEngine e, GameState s, Rng rng, {required double hours}) {
   final c = e.content;
   final f = s.faction('player');
@@ -35,11 +35,13 @@ int _checkRewards(GameEngine e, GameState s, Rng rng, {required double hours}) {
     if (!refills.any((t) => t <= s.time)) continue;
     final basis = incomeBasis(s, c, f.id, buildFlowReport(s, c, f.id));
     final before = {for (final k in f.contracts) k.id};
-    final first = f.contractsPosted == 0;
+    // Contracts the faction had been offered before this call: the first
+    // it is ever offered is the one with no cap.
+    var posted = f.contractsPosted;
     stepContracts(s, c, s.time);
     for (final k in [...f.contracts]) {
       if (before.contains(k.id)) continue;
-      if (!first) {
+      if (posted++ > 0) {
         final t = c.contractTemplates[k.templateId]!;
         final cap = basis
             .mulDouble(t.rewardCapIncomeSeconds!)

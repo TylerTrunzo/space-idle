@@ -139,23 +139,26 @@ void main() {
       );
     });
 
-    test('earns at least 20% more on day 14 than on day 7, and 10% more on '
-        'day 21 than on day 14', () {
+    test('earns at least 20% more around day 14 than around day 7, and 10% '
+        'more around day 21 than around day 14', () {
       // Round-3 pacing targets, kept in round 4
       // (docs/playtests/2026-11-27-round4-findings.md §4); stage 1.5
-      // flattened from day 9 for the optimizer.
-      final day7 = report.days[6];
-      final day21 = report.days[20];
-      expect((day7.day, day21.day), (7, 21));
-      expect(
-        day14.earned.toDouble(),
-        greaterThanOrEqualTo(day7.earned.toDouble() * 1.2),
-        reason: '${day7.earned} then ${day14.earned}',
+      // flattened from day 9 for the optimizer. Measured on three-day
+      // averages ([_earnedAround]).
+      final (week1, week2, week3) = (
+        _earnedAround(report, 7),
+        _earnedAround(report, 14),
+        _earnedAround(report, 21),
       );
       expect(
-        day21.earned.toDouble(),
-        greaterThanOrEqualTo(day14.earned.toDouble() * 1.1),
-        reason: '${day14.earned} then ${day21.earned}',
+        week2,
+        greaterThanOrEqualTo(week1 * 1.2),
+        reason: '$week1 then $week2',
+      );
+      expect(
+        week3,
+        greaterThanOrEqualTo(week2 * 1.1),
+        reason: '$week2 then $week3',
       );
     });
 
@@ -266,12 +269,17 @@ void main() {
       expect(worst, lessThanOrEqualTo(3), reason: report.toMarkdown());
     });
 
-    test('earns 1.5 times as much on day 21 as on day 14', () {
+    test('earns 1.5 times as much around day 21 as around day 14', () {
       // Findings §4, casual bot: "income at day 21 ≥ 1.5× day 14"; 2× was
-      // stage 1.5's.
+      // stage 1.5's. Measured on three-day averages ([_earnedAround]).
+      final (week2, week3) = (
+        _earnedAround(report, 14),
+        _earnedAround(report, 21),
+      );
       expect(
-        report.days[20].earned.toDouble(),
-        greaterThanOrEqualTo(report.days[13].earned.toDouble() * 1.5),
+        week3,
+        greaterThanOrEqualTo(week2 * 1.5),
+        reason: '$week2 then $week3',
       );
     });
 
@@ -307,3 +315,17 @@ void _contractsAtMost(BalanceReport report, double share) {
     );
   }
 }
+
+/// [report]'s mean earnings over the three days ending on [day].
+///
+/// The §4 income ratios compare these, not single days (controller ruling
+/// on stage 1.7 task 4): a day's earnings swing by 5-20% from the next
+/// with when a megaproject level lands (casual seed 1, days 12-21: 140,
+/// 171, 184, 199, 206, 214, 258, 265, 260, 270B), so a ratio of one day
+/// against one day measures that noise, not growth. The bars stay 1.2×,
+/// 1.1× and 1.5×.
+double _earnedAround(BalanceReport report, int day) =>
+    [
+      for (var d = day - 2; d <= day; d++) report.days[d - 1].earned.toDouble(),
+    ].reduce((a, b) => a + b) /
+    3;

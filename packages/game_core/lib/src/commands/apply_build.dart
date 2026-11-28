@@ -375,8 +375,9 @@ CommandResult _buyUpgrades(
   final bought = <(BuildingState, UpgradeTrack), UpgradePurchase>{};
   var total = const BigNum.zero();
   var count = 0;
-  // Crew free to fill new slots; only this command's capacity levels move
-  // it.
+  // Free crew as a loop of single commands sees it before each level. Only
+  // a capacity level moves it (it fills new slots from it, and on a
+  // habitat adds housing at once), so it is read again after one.
   var freeCrew = availableCrew(s, c, f.id);
   var crewFirst = true;
   // Whether [cost] fits what is left: the budget, and the upgrade's own
@@ -421,7 +422,9 @@ CommandResult _buyUpgrades(
           cost: (was?.cost ?? const BigNum.zero()) + o.cost,
           crewAdded: (was?.crewAdded ?? 0) + up.crewAdded,
         );
-        freeCrew -= up.crewAdded;
+        if (o.track == UpgradeTrack.capacity) {
+          freeCrew = availableCrew(s, c, f.id);
+        }
         offer(o.body, o.b);
       } else {
         stop = UpgradeBuyStop.budget;
