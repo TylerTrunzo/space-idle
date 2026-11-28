@@ -15,5 +15,9 @@ don't list options without picking one.
   - no FOMO or dark patterns;
   - don't name other games in public copy;
   - hold install pushes until the week-2 stall (round 4, E1) is fixed.
+- **AI involvement (owner decision, strategy.md §6):**
+  - public copy doesn't mention AI;
+  - never write anything false, such as "solo-coded", "handmade" or "no AI";
+  - follow platform disclosure rules.
 - **Owner-only actions:** anything posted publicly, paid for, or done in the owner's accounts. Claude drafts it and
   the owner does it.

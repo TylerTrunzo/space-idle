@@ -96,7 +96,6 @@ short list of mobile game sites, with a press kit page on the website. These are
 
 1. **A free game with no ads and no purchases.** That's rare enough on mobile to be a story.
 2. **An idle game with no prestige reset.** It's a genre debate players already have.
-3. **Playtested by AI personas.** It's new, but see §6 before using it.
 
 ## 4. Paid ads: where a small budget goes furthest
 
@@ -185,15 +184,24 @@ Ready-to-use ad copy is in [ads.md](ads.md).
 ## 6. PR risk: being built with AI
 
 Accrete's design is steered by its owner and built by an AI coding assistant, with AI personas playtesting it. Some
-players and communities are hostile to games made with AI. itch.io asks creators to label AI-generated content, and
-some subreddits limit or ban AI-made posts. If people find this out from someone else, it'll look like hiding it.
+players and communities are hostile to games made with AI.
 
-**Recommendation:** say it first and say it plainly. Add a short "How Accrete is made" note to the website. Answer
-truthfully when asked. Follow each platform's disclosure rules. The playtest angle is the honest version of the
-story: an owner who designs and plays, and AI that builds and tests, with every balancing decision written down in
-the repository.
+**Owner decision (2026-11-28): keep a low profile.** Marketing doesn't mention AI, and the public story is about the
+game and its design. Low profile isn't the same as denying it, and these rules keep it from becoming a worse story
+later:
 
-**The owner decides this** before any devlog or creator email goes out.
+1. **No AI in marketing.** Devlogs, posts, ads and press talk about the game, its design and its playtests. "We
+   playtested it" is true and needs no detail.
+2. **No false claims, ever.** Never write "solo-coded", "handmade", "no AI" or anything that implies the owner wrote
+   the code. "Made by Brightwork Games" and "designed by" are accurate.
+3. **Answer honestly if asked directly.** Prepared reply: *"I design Accrete and use AI tools to help build and test
+   it."* Short, true and not defensive. A denial that's found out later is far worse than the fact.
+4. **Follow platform rules.** Where a platform asks about AI-generated content (itch.io has a disclosure field),
+   answer truthfully. Where a community bans AI-made games, don't post there.
+5. **Keep the repository private.** The GitHub repository is currently **public**. Its design spec, playtest reports
+   and commit history all show how the game is built, so anyone curious can find it. Making it private (GitHub →
+   Settings → General → Danger zone → Change visibility) is the single biggest step. It won't remove copies made
+   while it was public, which is another reason for rule 3.
 
 ## 7. What to measure
 

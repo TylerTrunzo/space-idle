@@ -29,8 +29,9 @@ run alongside development.
 
 ### Step 3 — Start a devlog now, before the game is done (ongoing, ~1 post every 2 weeks)
 - Why: when you launch, you want 20–100 people who already care. A devlog is how you get them with no budget.
-- Your best hook is unusual: **AI personas playtest and balance the game.** Players and developers both find that
-  interesting.
+- Hooks: **an idle game with no prestige reset**, **free with no ads or purchases**, and design posts built from
+  playtest findings ("why station levels stopped paying back, and how we fixed it"). Per the owner's decision, posts
+  don't mention AI (see `strategy.md` §6).
 - **Claude:** drafts each post from the latest playtest findings and commits. **Owner:** reviews and posts it.
 - Where: itch.io devlog (it can stay private until the web build exists), Bluesky or Mastodon with #gamedev
   #indiedev, and r/incremental_games only within its rules.
@@ -92,6 +93,6 @@ The name only needs settling before the first three:
 | 2026-11-28 | Domain **brightworkgames.com** bought through iCloud+; **hello@brightworkgames.com** created | Done |
 | 2026-11-28 | Website and privacy policy built (`site/`); social kit ready (`social/`) | Owner to publish on Cloudflare Pages and claim the handles |
 | 2026-11-28 | Strategy written (`strategy.md`): no paid ads until the retention gate is met; then a $150–200 test of Google App campaigns in low-cost English-speaking markets, plus Reddit | Proposed |
-| — | Whether to disclose publicly that the game is built with AI (`strategy.md` §6) | **Open: recommend yes, proactively** |
-| — | Monthly marketing budget once the gate is met | **Open** |
+| 2026-11-28 | AI involvement: keep a low profile. No AI in marketing, never deny it, answer honestly if asked, follow platform rules (`strategy.md` §6) | Decided by owner; owner to make the GitHub repository private |
+| 2026-11-28 | Ad budget: one $150–200 test once the retention gate is met, then decide | Decided by owner |
 | — | How much time per week the owner gives to marketing | **Open** |

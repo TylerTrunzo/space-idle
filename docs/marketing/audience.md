@@ -37,7 +37,7 @@ from day 10 is a warning about the secondary group.
 | itch.io (web build) | Tertiary | A free browser page, with a devlog that tells the playtest-driven balancing story. |
 | galaxy.click and similar incremental-game sites | Tertiary | Submit the web build. |
 | A small Discord server | Everyone who stays | One place for testers and bug reports. Keep it small. |
-| Bluesky / Mastodon #gamedev | Other devs, word of mouth | Short devlog posts. "AI personas playtest my idle game" is an unusual angle that will interest people. |
+| Bluesky / Mastodon #gamedev | Other devs, word of mouth | Short devlog posts about design decisions and what playtests changed. |
 
 ## Launch plan with no budget
 

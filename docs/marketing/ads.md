@@ -60,5 +60,5 @@ Play Console's acquisition report counts these installs separately.
 **Targeting:** r/incremental_games, r/idlegames, r/AndroidGaming and r/AndroidGames. Exclude other games' own
 subreddits.
 
-Before running it, check the strategy's AI-disclosure decision (§6). A promoted post that people later find was
-written about an AI-built game, without saying so, is the kind of thing that turns into a bad thread.
+"I'm making" fits the owner's role as designer. Don't change it to anything that claims the owner wrote the code
+(see `strategy.md` §6). If commenters ask how it's built, use the prepared answer there.
