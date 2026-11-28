@@ -38,16 +38,26 @@ void main() {
     expect(find.byType(TopBar), findsOneWidget);
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.selectedIndex, 0);
-    expect(bar.destinations, hasLength(4));
+    expect(bar.destinations, hasLength(5));
+    expect(
+      [for (final d in bar.destinations) ((d as NavigationDestination).label)],
+      ['Map', 'Production', 'Crew', 'Trade', 'Projects'],
+    );
   });
 
   testWidgets('each nav item switches to its tab', (tester) async {
     await _boot(tester);
-    for (final (i, label) in ['Production', 'Crew', 'Trade', 'Map'].indexed) {
+    for (final (i, label) in [
+      'Production',
+      'Crew',
+      'Trade',
+      'Projects',
+      'Map',
+    ].indexed) {
       await tester.tap(find.text(label).last);
       await tester.pump();
       final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-      expect(bar.selectedIndex, (i + 1) % 4, reason: label);
+      expect(bar.selectedIndex, (i + 1) % 5, reason: label);
       if (label != 'Map') {
         expect(find.byKey(ValueKey('tab-$label')), findsOneWidget);
       }
@@ -364,7 +374,7 @@ void main() {
     });
   });
 
-  testWidgets('the signal marker says surveys come with the Projects tab', (
+  testWidgets('the signal marker opens the Projects tab at its Survey row', (
     tester,
   ) async {
     await _boot(tester);
@@ -373,7 +383,17 @@ void main() {
       warnIfMissed: false,
     );
     await tester.pump();
-    expect(find.text('Surveys arrive with the Projects tab'), findsOneWidget);
+    await tester.pump();
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.selectedIndex, 4);
+    expect(find.byKey(const ValueKey('tab-Projects')), findsOneWidget);
+    final row = find.byKey(const ValueKey('survey-focus-veyra'));
+    expect(row, findsOneWidget);
+    expect(
+      tester.getRect(row).overlaps(tester.getRect(find.byType(Shell))),
+      isTrue,
+    );
+    expect(find.text('Surveys arrive with the Projects tab'), findsNothing);
   });
 
   testWidgets('the settings button opens the settings sheet', (tester) async {

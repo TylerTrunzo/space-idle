@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/game_core.dart' hide formatDuration;
 import 'package:space_idle/game/clock.dart';
@@ -247,6 +249,208 @@ void main() {
       expect(nextContractIn(c), 'due now');
       f.contractRefillAt.clear();
       expect(nextContractIn(c), isNull);
+    });
+
+    test('a source gives at most what the contract still wants', () {
+      post(c);
+      c.state.body('kora').stock['copper_ore'] = BigNum.from(5000);
+      final k = contractViews(c).single;
+      expect(k.remaining, BigNum.from(1000));
+      expect(k.sources.single.amount, '1K');
+      expect(k.sources.single.units, BigNum.from(1000));
+    });
+
+    test('Deliver all is previewed on a copy, by body, with a warning '
+        'where a body\'s own buildings use the good', () {
+      c.state
+          .faction(_p)
+          .contracts
+          .add(
+            ContractState(
+              id: 'c_ore',
+              templateId: 'veyra_bulk',
+              resourceId: 'iron_ore',
+              quantity: BigNum.from(100),
+              rewardCredits: BigNum.from(900),
+              postedAt: c.state.time,
+            ),
+          );
+      final brine = c.state.body('brine')..ownerId = _p;
+      c.state.body('kora').stock['iron_ore'] = BigNum.from(70);
+      brine.stock['iron_ore'] = BigNum.from(50);
+      final before = c.state.copy();
+      final preview = contractDeliverAllPreview(c, 'c_ore');
+      expect(preview, isA<ContractPreviewReady>());
+      final ready = preview as ContractPreviewReady;
+      expect(ready.gives.map((g) => (g.name, g.value)), [
+        ('Kora', '70'),
+        ('Brine', '30'),
+      ]);
+      expect(ready.total, '100 Iron Ore');
+      // Kora's Smelter uses Iron Ore; Brine has no buildings.
+      expect(ready.warnings, hasLength(1));
+      expect(ready.warnings.single, startsWith("Kora's own buildings use"));
+      // Nothing changed for real.
+      expect(c.state.body('kora').stock['iron_ore'], BigNum.from(70));
+      expect(
+        jsonEncode(c.state.toJson()),
+        jsonEncode(before.toJson()),
+        reason: 'a copy only',
+      );
+    });
+
+    test('Deliver all with nothing to give says why', () {
+      post(c);
+      final preview = contractDeliverAllPreview(c, 'c_one');
+      expect(preview, isA<ContractPreviewFailed>());
+      expect((preview as ContractPreviewFailed).message, isNotEmpty);
+    });
+  });
+
+  group('surveyViews', () {
+    test('a signal in Veyra: its cost, time, and what it needs', () {
+      final v = surveyViews(c).single;
+      expect(v.systemId, 'veyra');
+      expect(v.systemName, 'Veyra');
+      expect(v.signals, 2);
+      expect(v.cost, '20K credits and 3 Survey Drone');
+      expect(v.price, BigNum.from(20000));
+      expect(v.time, '3h');
+      // A new game has 250 credits and no drones.
+      expect(v.blockedReason, startsWith('needs 20K credits'));
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      expect(
+        surveyViews(c).single.blockedReason,
+        'needs 3 Survey Drone on one of your bodies in Veyra',
+      );
+      c.state.body('kora').stock['survey_drone'] = BigNum.from(3);
+      final ready = surveyViews(c).single;
+      expect(ready.blockedReason, isNull);
+      expect(ready.sourceBodyId, 'kora');
+      expect(ready.sourceName, 'Kora');
+    });
+
+    test('no row once every signal is surveyed or under survey', () {
+      c.state.faction(_p).credits = BigNum.from(1e6);
+      c.state.body('kora').stock['survey_drone'] = BigNum.from(6);
+      c.run(const SurveyCommand(_p, null, 'kora'));
+      expect(surveyViews(c).single.signals, 1);
+      c.run(const SurveyCommand(_p, null, 'kora'));
+      expect(surveyViews(c), isEmpty);
+    });
+  });
+
+  group('megaproject cards', () {
+    test('a line owes its remainder and names its holders, fullest first', () {
+      c.state.body('brine').ownerId = _p;
+      c.state.body('brine').stock['hull_plate'] = BigNum.from(2000);
+      c.state.body('kora').stock['hull_plate'] = BigNum.from(40);
+      final station = _mp(c, 'orbital_station');
+      final hull = station.lines.firstWhere((l) => l.id == 'hull_plate');
+      expect(hull.owed, BigNum.from(1500));
+      expect(hull.holders.map((h) => (h.bodyName, h.amount)), [
+        ('Brine', '1.5K'),
+        ('Kora', '40'),
+      ]);
+      final credits = station.lines.firstWhere((l) => l.id == creditsKey);
+      expect(credits.holders, isEmpty);
+      expect(station.deliverAll, '1.5K Hull Plate');
+    });
+
+    test('nothing to deliver from any body: no Deliver all', () {
+      expect(_mp(c, 'orbital_station').deliverAll, isNull);
+    });
+
+    test('unfunded by the player\'s choice', () {
+      expect(_mp(c, 'orbital_station').unfunded, isFalse);
+      c.run(
+        const SetMegaprojectAutoCommand(
+          _p,
+          'orbital_station',
+          goods: GoodsFeedMode.always,
+        ),
+      );
+      expect(_mp(c, 'orbital_station').unfunded, isTrue);
+    });
+
+    test('the feed line says whether goods go in now, and why', () {
+      expect(
+        _mp(c, 'orbital_station').feed,
+        'Goods go in only when you deliver them',
+      );
+      c.run(
+        const SetMegaprojectAutoCommand(
+          _p,
+          'orbital_station',
+          goods: GoodsFeedMode.always,
+        ),
+      );
+      expect(_mp(c, 'orbital_station').feed, startsWith('Goods go in from'));
+      c.run(
+        const SetMegaprojectAutoCommand(
+          _p,
+          'orbital_station',
+          goods: GoodsFeedMode.nearReady,
+          credits: true,
+        ),
+      );
+      expect(
+        _mp(c, 'orbital_station').feed,
+        'Goods wait until the stage is near ready: its credits due within '
+        '12h of what auto-pay gives it',
+      );
+      // The credits held pay for the stage: near ready from the command on.
+      c.state.faction(_p).credits = BigNum.parse('1e9');
+      c.run(
+        const SetMegaprojectAutoCommand(
+          _p,
+          'orbital_station',
+          goods: GoodsFeedMode.nearReady,
+        ),
+      );
+      final v = _mp(c, 'orbital_station');
+      expect(v.auto.goodsFedNow, isTrue);
+      expect(
+        v.feed,
+        'Goods are going in: feeding started because the credits held, '
+        'the reserve included, paid for the stage, and it keeps going until '
+        'the stage is paid for',
+      );
+      expect(
+        _mp(c, 'mass_driver').feed,
+        'Goods go in only when you deliver them',
+      );
+    });
+
+    test('a contract holding goods it is fed is named, for a Go', () {
+      c.run(
+        const SetMegaprojectAutoCommand(
+          _p,
+          'orbital_station',
+          goods: GoodsFeedMode.always,
+        ),
+      );
+      c.state
+          .faction(_p)
+          .contracts
+          .add(
+            ContractState(
+              id: 'c_hull',
+              templateId: 'veyra_bulk',
+              resourceId: 'hull_plate',
+              quantity: BigNum.from(100),
+              rewardCredits: BigNum.from(900),
+              postedAt: c.state.time,
+            ),
+          );
+      c.state.body('kora').stock['hull_plate'] = BigNum.from(60);
+      c.tickSeconds(1);
+      final block = _mp(c, 'orbital_station').blocks.single;
+      expect(block.contractId, 'c_hull');
+      expect(
+        block.text,
+        "Veyra Exchange's contract holds 60 Hull Plate this needs",
+      );
     });
   });
 }

@@ -5,6 +5,7 @@ import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/goals/goal_strip.dart';
 import 'package:space_idle/ui/map/star_map.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
+import 'package:space_idle/ui/projects/projects_tab.dart';
 import 'package:space_idle/ui/settings_sheet.dart';
 import 'package:space_idle/ui/tabs/crew_tab.dart';
 import 'package:space_idle/ui/tabs/production_tab.dart';
@@ -79,7 +80,8 @@ enum _Tab {
   map('Map', Icons.public),
   production('Production', Icons.factory_outlined),
   crew('Crew', Icons.groups_outlined),
-  trade('Trade', Icons.swap_horiz);
+  trade('Trade', Icons.swap_horiz),
+  projects('Projects', Icons.assignment_outlined);
 
   const _Tab(this.label, this.icon);
   final String label;
@@ -89,6 +91,10 @@ enum _Tab {
 class _ShellState extends State<Shell> {
   _Tab _tab = _Tab.map;
   String? _selected;
+
+  /// The Survey row the Projects tab shows, from the star map's signal
+  /// marker; its serial counts the taps.
+  SurveyFocus? _surveyFocus;
 
   /// Whether the phone sheet covers the whole map.
   bool _mapCovered = false;
@@ -136,6 +142,13 @@ class _ShellState extends State<Shell> {
       );
     }
   }
+
+  /// A tap on a system's signal marker: the Projects tab, at that
+  /// system's Survey row.
+  void _onSignal(String systemId) => setState(() {
+    _tab = _Tab.projects;
+    _surveyFocus = SurveyFocus(systemId, (_surveyFocus?.serial ?? 0) + 1);
+  });
 
   void _onCovered(bool covered) {
     if (covered != _mapCovered) setState(() => _mapCovered = covered);
@@ -207,10 +220,15 @@ class _ShellState extends State<Shell> {
       sheetExtent: _sheetExtent,
       sheet: _sheet,
       onHeaderTap: _toggleSheet,
+      onSignal: _onSignal,
     ),
     _Tab.production => ProductionTab(key: ValueKey('tab-${t.label}')),
     _Tab.crew => CrewTab(key: ValueKey('tab-${t.label}')),
     _Tab.trade => TradeTab(key: ValueKey('tab-${t.label}')),
+    _Tab.projects => ProjectsTab(
+      key: ValueKey('tab-${t.label}'),
+      focus: _surveyFocus,
+    ),
   };
 }
 
@@ -223,7 +241,11 @@ class _MapTab extends StatelessWidget {
     required this.sheetExtent,
     required this.sheet,
     required this.onHeaderTap,
+    required this.onSignal,
   });
+
+  /// A tap on system [systemId]'s signal marker.
+  final void Function(String systemId) onSignal;
 
   /// Extent from which the sheet counts as covering the map.
   static const double _coverExtent = 0.99;
@@ -262,10 +284,7 @@ class _MapTab extends StatelessWidget {
       controller: ControllerScope.of(context),
       selectedId: selectedId,
       onSelect: onSelect,
-      // Task 10 opens the Projects tab's Survey row here.
-      onSignalTap: (_) => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Surveys arrive with the Projects tab')),
-      ),
+      onSignalTap: onSignal,
     );
     final id = selectedId;
     if (MediaQuery.sizeOf(context).width >= Shell.wideWidth) {
