@@ -8,6 +8,7 @@ export 'src/content/content.dart';
 export 'src/num/big_num.dart';
 export 'src/num/change.dart';
 export 'src/num/format.dart';
+export 'src/report/advice.dart';
 export 'src/report/flow_report.dart';
 export 'src/rng.dart';
 // Engine internals stay inside the package: the contract reward basis and
