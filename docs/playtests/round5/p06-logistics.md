@@ -99,7 +99,7 @@ Around day 6 or 7. By then each body is fully built. The binding limit is "stora
   - With credits off, near-ready feeding never starts unless you hoard the full credits. With credits on, the reserve is the only spending money.
 
 ## Bugs and rough edges
-Repro commands are against the seed-6 sim with `--content content` and `--load <save>`; the saves were in the tester's scratch folder.
+Repro commands are against the seed-6 sim with `--content content` and `--load <save>`; the bug saves are in `docs/playtests/round5/repro/p06/`.
 
 1. **Delivering a contract from every body drains route-fed input buffers.**
    - Repro: load `save_68h_contract_starve.json`, run `{"cmd":"report"}`. Docks on Hollow Reach, Cinder, Brine and Vastmere show at 31–66%, "not enough Hull Plate". Each check-in before this save my script had delivered contracts with `amount` 1e12 and no `bodyId`.

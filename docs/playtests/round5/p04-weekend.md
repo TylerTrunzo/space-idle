@@ -101,11 +101,11 @@ With no competition in stage 1 it doesn't matter. It will matter once AI faction
 ## Bugs
 - **Float-noise bottleneck.**
   - **What happens:** `report` lists "Plate Press on Hollow Reach is running at 99%: not enough Steel" with runFraction 0.9999999999999996 and lostCreditsPerHour 9.99e-11, shown as "0".
-  - **Repro:** load the seed-4 save `bug_99pct_bottleneck.json` (tester scratch folder) and run `{"cmd":"report"}`.
+  - **Repro:** load `docs/playtests/round5/repro/p04/bug_99pct_bottleneck.json` (seed 4) and run `{"cmd":"report"}`.
   - **Fix:** apply an epsilon before flagging.
 - **Negative net headline after a profitable absence.**
   - **What happens:** "earned 4.87B credits, 3.25B to Orbital Station and 1.62B to Mass Driver, net -3.03M".
-  - **Repro:** load `bug_net_negative_headline.json` (tester scratch folder) and run `{"cmd":"away","seconds":132300}`.
+  - **Repro:** load `docs/playtests/round5/repro/p04/bug_net_negative_headline.json` and run `{"cmd":"away","seconds":132300}`.
   - It is arithmetically true: auto-pay swept credits banked above the reserve. As player-facing text it reads as a loss.
 - **Minor: `deliverContract` without `amount`** fails with "command field "amount" must be a string". The docs don't say whether `amount` is optional; "deliver everything owed" would be the natural default.
 

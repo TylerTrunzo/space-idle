@@ -1,0 +1,920 @@
+{"cmd": "catalog"}
+{"cmd": "report"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "steel", "keepAtLeast": "0"}
+{"cmd": "build", "bodyId": "kora", "defId": "wire_mill"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "copper_wire", "keepAtLeast": "0"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "state"}
+{"cmd": "build", "bodyId": "kora", "defId": "mine", "depositResourceId": "copper_ore"}
+{"cmd": "buyUpgrades", "budget": "130"}
+{"cmd": "advance", "seconds": 120}
+{"cmd": "away", "seconds": 19620}
+{"cmd": "deliverContract", "contractId": "c5"}
+{"cmd": "deliverContract", "contractId": "c7"}
+{"cmd": "claimBody", "bodyId": "brine", "sourceBodyId": "kora"}
+{"cmd": "build", "bodyId": "kora", "defId": "mine", "depositResourceId": "silicon"}
+{"cmd": "build", "bodyId": "kora", "defId": "wafer_fab"}
+{"cmd": "build", "bodyId": "kora", "defId": "circuit_fab"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "circuit", "keepAtLeast": "0"}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c5", "amount": "1000"}
+{"cmd": "deliverContract", "contractId": "c7", "amount": "1000"}
+{"cmd": "state"}
+{"cmd": "build", "bodyId": "kora", "defId": "plate_press"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "hull_plate", "keepAtLeast": "0"}
+{"cmd": "buyUpgrades", "budget": "45000"}
+{"cmd": "advance", "seconds": 120}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 21480}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "iron_ore", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "copper_ore", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "silicon", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "kora", "resourceId": "silicon_wafer", "keepAtLeast": "0"}
+{"cmd": "assignCrew", "buildingId": "b1", "crew": 1}
+{"cmd": "assignCrew", "buildingId": "b2", "crew": 1}
+{"cmd": "assignCrew", "buildingId": "b6", "crew": 2}
+{"cmd": "assignCrew", "buildingId": "b9", "crew": 2}
+{"cmd": "build", "bodyId": "kora", "defId": "module_works"}
+{"cmd": "build", "bodyId": "kora", "defId": "depot"}
+{"cmd": "build", "bodyId": "kora", "defId": "smelter"}
+{"cmd": "build", "bodyId": "brine", "defId": "ice_drill", "depositResourceId": "water_ice"}
+{"cmd": "build", "bodyId": "brine", "defId": "ice_melter"}
+{"cmd": "build", "bodyId": "brine", "defId": "ice_drill", "depositResourceId": "ammonia"}
+{"cmd": "advance", "seconds": 30}
+{"cmd": "state"}
+{"cmd": "build", "bodyId": "brine", "defId": "fertilizer_plant"}
+{"cmd": "build", "bodyId": "brine", "defId": "electrolyzer"}
+{"cmd": "buyUpgrades", "budget": "300000"}
+{"cmd": "advance", "seconds": 120}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 14250}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "deliverContract", "contractId": "c13", "amount": "4000"}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "brine", "resourceId": "habitat_module", "ratePerSecond": "1", "cargoShips": 1}
+{"cmd": "assignCrew", "buildingId": "b6", "crew": 1}
+{"cmd": "build", "bodyId": "brine", "defId": "farm"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "hydrogen", "keepAtLeast": "0"}
+{"cmd": "buyUpgrades", "budget": "800000"}
+{"cmd": "advance", "seconds": 120}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30480}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c25", "amount": "12000"}
+{"cmd": "build", "bodyId": "brine", "defId": "habitat"}
+{"cmd": "build", "bodyId": "brine", "defId": "habitat"}
+{"cmd": "build", "bodyId": "brine", "defId": "habitat"}
+{"cmd": "build", "bodyId": "brine", "defId": "fuel_refinery"}
+{"cmd": "removeRoute", "routeId": "r23"}
+{"cmd": "expandSlots", "bodyId": "kora"}
+{"cmd": "expandSlots", "bodyId": "brine"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "brine", "count": 1}
+{"cmd": "buyUpgrades", "budget": "6000000"}
+{"cmd": "advance", "seconds": 90}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19650}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "deliverContract", "contractId": "c22", "amount": "8800"}
+{"cmd": "assignCrew", "buildingId": "b30", "crew": 3}
+{"cmd": "build", "bodyId": "brine", "defId": "kit_assembler"}
+{"cmd": "build", "bodyId": "kora", "defId": "mine", "depositResourceId": "iron_ore"}
+{"cmd": "moveShips", "fromBodyId": "brine", "toBodyId": "kora", "count": 1}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "brine", "resourceId": "circuit", "ratePerSecond": "0.5", "cargoShips": 1, "stopAtDestination": "2000"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "food", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "fuel", "keepAtLeast": "2000"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "water", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "fertilizer", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "oxygen", "keepAtLeast": "0"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "state"}
+{"cmd": "advance", "seconds": 200}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "brine", "resourceId": "hull_plate", "ratePerSecond": "0.5", "cargoShips": 1, "stopAtDestination": "2000"}
+{"cmd": "buyUpgrades", "budget": "14500000"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 21280}
+{"cmd": "claimBody", "bodyId": "cinder", "sourceBodyId": "brine"}
+{"cmd": "claimBody", "bodyId": "hollow_reach", "sourceBodyId": "brine"}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c26", "amount": "21000"}
+{"cmd": "deliverContract", "contractId": "c34", "amount": "58000"}
+{"cmd": "deliverContract", "contractId": "c40", "amount": "100000"}
+{"cmd": "buyUpgrades", "budget": "80000000"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "costs"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "water_ice", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "brine", "resourceId": "ammonia", "keepAtLeast": "0"}
+{"cmd": "assignCrew", "buildingId": "b17", "crew": 3}
+{"cmd": "assignCrew", "buildingId": "b19", "crew": 3}
+{"cmd": "build", "bodyId": "cinder", "defId": "mine", "depositResourceId": "rare_earths"}
+{"cmd": "build", "bodyId": "cinder", "defId": "magnet_works"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "mine", "depositResourceId": "nickel"}
+{"cmd": "demolish", "buildingId": "b14"}
+{"cmd": "build", "bodyId": "kora", "defId": "shipyard"}
+{"cmd": "expandSlots", "bodyId": "kora"}
+{"cmd": "expandSlots", "bodyId": "cinder"}
+{"cmd": "expandSlots", "bodyId": "hollow_reach"}
+{"cmd": "buyUpgrades", "budget": "140000000"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "claimBody", "bodyId": "vastmere", "sourceBodyId": "brine"}
+{"cmd": "deliverContract", "contractId": "c40", "amount": "16400"}
+{"cmd": "deliverContract", "contractId": "c51", "amount": "114000"}
+{"cmd": "deliverContract", "contractId": "c43", "amount": "29600"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "hollow_reach", "count": 10}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "brine", "count": 10}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "cinder", "resourceId": "circuit", "ratePerSecond": "5", "cargoShips": 1, "stopAtDestination": "2000"}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "cinder", "resourceId": "hull_plate", "ratePerSecond": "5", "cargoShips": 1, "stopAtDestination": "2000"}
+{"cmd": "build", "bodyId": "cinder", "defId": "station_dock"}
+{"cmd": "build", "bodyId": "cinder", "defId": "drone_works"}
+{"cmd": "expandSlots", "bodyId": "vastmere"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "state"}
+{"cmd": "advance", "seconds": 200}
+{"cmd": "createRoute", "fromBodyId": "hollow_reach", "toBodyId": "cinder", "resourceId": "nickel", "ratePerSecond": "20", "cargoShips": 2}
+{"cmd": "createRoute", "fromBodyId": "brine", "toBodyId": "cinder", "resourceId": "fuel", "ratePerSecond": "5", "cargoShips": 1, "stopAtDestination": "2000"}
+{"cmd": "buyUpgrades", "budget": "440000000"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 19480}
+{"cmd": "setAutoSell", "bodyId": "hollow_reach", "resourceId": "nickel", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "cinder", "resourceId": "rare_earths", "keepAtLeast": "0"}
+{"cmd": "build", "bodyId": "vastmere", "defId": "gas_skimmer", "depositResourceId": "helium_3"}
+{"cmd": "build", "bodyId": "cinder", "defId": "reactor_works"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "vastmere", "count": 10}
+{"cmd": "setMegaprojectAuto", "megaprojectId": "orbital_station", "goods": "nearReady", "credits": true, "creditWeight": 1}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "discardContract", "contractId": "c61"}
+{"cmd": "assignCrew", "buildingId": "b18", "crew": 5}
+{"cmd": "assignCrew", "buildingId": "b63", "crew": 2}
+{"cmd": "assignCrew", "buildingId": "b62", "crew": 1}
+{"cmd": "advance", "seconds": 200}
+{"cmd": "createRoute", "fromBodyId": "vastmere", "toBodyId": "cinder", "resourceId": "helium_3", "ratePerSecond": "10", "cargoShips": 1}
+{"cmd": "setAutoSell", "bodyId": "cinder", "resourceId": "magnet", "keepAtLeast": "500"}
+{"cmd": "advance", "seconds": 30}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "setAutoSell", "bodyId": "cinder", "resourceId": "station_segment", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "cinder", "resourceId": "survey_drone", "keepAtLeast": "0"}
+{"cmd": "costs"}
+{"cmd": "buyUpgrades", "budget": "415000000"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 21250}
+{"cmd": "state"}
+{"cmd": "costs"}
+{"cmd": "report"}
+{"cmd": "discardContract", "contractId": "c68"}
+{"cmd": "deliverContract", "contractId": "c51", "amount": "26400"}
+{"cmd": "deliverContract", "contractId": "c43", "amount": "100400"}
+{"cmd": "updateRoute", "routeId": "r59", "ratePerSecond": "100", "cargoShips": 10}
+{"cmd": "setAutoSell", "bodyId": "vastmere", "resourceId": "helium_3", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "cinder", "resourceId": "reactor_core", "keepAtLeast": "0"}
+{"cmd": "setMegaprojectAuto", "megaprojectId": "mass_driver", "goods": "nearReady", "credits": true, "creditWeight": 1}
+{"cmd": "buyUpgrades", "budget": "380000000"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "updateRoute", "routeId": "r55", "ratePerSecond": "50", "cargoShips": 5}
+{"cmd": "updateRoute", "routeId": "r56", "ratePerSecond": "50", "cargoShips": 5}
+{"cmd": "survey", "sourceBodyId": "cinder"}
+{"cmd": "assignCrew", "buildingId": "b1", "crew": 3}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "2.689388e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "discardContract", "contractId": "c77"}
+{"cmd": "setAutoPayReserve", "credits": "2e8"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.551906e-01"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c81"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "1.980000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c84"}
+{"cmd": "discardContract", "contractId": "c73"}
+{"cmd": "setAutoSell", "bodyId": "cinder", "resourceId": "survey_drone", "keepAtLeast": "10"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "survey", "sourceBodyId": "cinder"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "1.979802e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14280}
+{"cmd": "state"}
+{"cmd": "costs"}
+{"cmd": "discardContract", "contractId": "c87"}
+{"cmd": "claimBody", "bodyId": "tessaly", "sourceBodyId": "brine"}
+{"cmd": "survey", "sourceBodyId": "cinder"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "1.777050e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "costs"}
+{"cmd": "discardContract", "contractId": "c90"}
+{"cmd": "discardContract", "contractId": "c91"}
+{"cmd": "claimBody", "bodyId": "dusk_cairn", "sourceBodyId": "brine"}
+{"cmd": "updateRoute", "routeId": "r60", "ratePerSecond": "20"}
+{"cmd": "setAutoPayReserve", "credits": "1e9"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "3.579840e+07"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c93"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "mine", "depositResourceId": "rare_earths"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "mine", "depositResourceId": "nickel"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "magnet_works"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "dusk_cairn", "resourceId": "circuit", "ratePerSecond": "100", "cargoShips": 10, "stopAtDestination": "5000"}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "dusk_cairn", "resourceId": "hull_plate", "ratePerSecond": "100", "cargoShips": 10, "stopAtDestination": "5000"}
+{"cmd": "setAutoSell", "bodyId": "dusk_cairn", "resourceId": "station_segment", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "dusk_cairn", "resourceId": "magnet", "keepAtLeast": "500"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.899389e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c103"}
+{"cmd": "updateRoute", "routeId": "r65", "ratePerSecond": "60", "cargoShips": 6}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c105"}
+{"cmd": "setAutoSell", "bodyId": "dusk_cairn", "resourceId": "rare_earths", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "dusk_cairn", "resourceId": "nickel", "keepAtLeast": "0"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c106"}
+{"cmd": "discardContract", "contractId": "c107"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "updateRoute", "routeId": "r59", "ratePerSecond": "200", "cargoShips": 20}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c109", "amount": "180000"}
+{"cmd": "discardContract", "contractId": "c111"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "hollow_reach", "count": 20}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c109", "amount": "139000"}
+{"cmd": "discardContract", "contractId": "c113"}
+{"cmd": "updateRoute", "routeId": "r59", "ratePerSecond": "300", "cargoShips": 30}
+{"cmd": "setAutoSell", "bodyId": "cinder", "resourceId": "survey_drone", "keepAtLeast": "0"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c109", "amount": "96100"}
+{"cmd": "discardContract", "contractId": "c114"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c109", "amount": "52000"}
+{"cmd": "discardContract", "contractId": "c116"}
+{"cmd": "updateRoute", "routeId": "r60", "ratePerSecond": "40", "cargoShips": 4}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "deliverContract", "contractId": "c109", "amount": "7480"}
+{"cmd": "discardContract", "contractId": "c117"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "1.516293e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c119"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c120"}
+{"cmd": "discardContract", "contractId": "c121"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c122"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c123"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "costs"}
+{"cmd": "discardContract", "contractId": "c124"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "mine", "depositResourceId": "iron_ore"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "mine", "depositResourceId": "iron_ore"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "smelter"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "smelter"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "plate_press"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "plate_press"}
+{"cmd": "setAutoSell", "bodyId": "hollow_reach", "resourceId": "hull_plate", "keepAtLeast": "0"}
+{"cmd": "build", "bodyId": "tessaly", "defId": "ice_drill", "depositResourceId": "water_ice"}
+{"cmd": "build", "bodyId": "tessaly", "defId": "ice_drill", "depositResourceId": "water_ice"}
+{"cmd": "build", "bodyId": "tessaly", "defId": "ice_melter"}
+{"cmd": "build", "bodyId": "tessaly", "defId": "ice_melter"}
+{"cmd": "setAutoSell", "bodyId": "tessaly", "resourceId": "water", "keepAtLeast": "0"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.899976e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c136"}
+{"cmd": "discardContract", "contractId": "c137"}
+{"cmd": "setAutoSell", "bodyId": "hollow_reach", "resourceId": "steel", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "hollow_reach", "resourceId": "iron_ore", "keepAtLeast": "0"}
+{"cmd": "setAutoSell", "bodyId": "tessaly", "resourceId": "water_ice", "keepAtLeast": "0"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c139"}
+{"cmd": "build", "bodyId": "kora", "defId": "circuit_fab"}
+{"cmd": "expandSlots", "bodyId": "kora"}
+{"cmd": "build", "bodyId": "cinder", "defId": "station_dock"}
+{"cmd": "build", "bodyId": "cinder", "defId": "reactor_works"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.897380e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c146"}
+{"cmd": "updateRoute", "routeId": "r65", "ratePerSecond": "100", "cargoShips": 10}
+{"cmd": "expandSlots", "bodyId": "brine"}
+{"cmd": "assignCrew", "buildingId": "b36", "crew": 38}
+{"cmd": "build", "bodyId": "kora", "defId": "circuit_fab"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.899004e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c149"}
+{"cmd": "build", "bodyId": "brine", "defId": "habitat"}
+{"cmd": "expandSlots", "bodyId": "dusk_cairn"}
+{"cmd": "expandSlots", "bodyId": "kora"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.895530e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c153"}
+{"cmd": "discardContract", "contractId": "c154"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "depot"}
+{"cmd": "build", "bodyId": "kora", "defId": "wafer_fab"}
+{"cmd": "build", "bodyId": "vastmere", "defId": "gas_skimmer", "depositResourceId": "helium_3"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "plate_press"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "smelter"}
+{"cmd": "expandSlots", "bodyId": "brine"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.898005e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c161"}
+{"cmd": "build", "bodyId": "brine", "defId": "habitat"}
+{"cmd": "expandSlots", "bodyId": "brine"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.896025e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c164"}
+{"cmd": "build", "bodyId": "brine", "defId": "habitat"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "expandSlots", "bodyId": "dusk_cairn"}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "dusk_cairn", "resourceId": "steel", "ratePerSecond": "10", "cargoShips": 1, "stopAtDestination": "200"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.898797e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c169"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "depot"}
+{"cmd": "expandSlots", "bodyId": "dusk_cairn"}
+{"cmd": "expandSlots", "bodyId": "cinder"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.897022e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c173"}
+{"cmd": "discardContract", "contractId": "c175"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "build", "bodyId": "cinder", "defId": "station_dock"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.899604e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c178"}
+{"cmd": "setAutoPayReserve", "credits": "8e9"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "9.900000e+08"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c179"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c180"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c181"}
+{"cmd": "discardContract", "contractId": "c182"}
+{"cmd": "updateRoute", "routeId": "r55", "ratePerSecond": "200", "cargoShips": 20}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c183"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "vastmere", "count": 30}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c185"}
+{"cmd": "updateRoute", "routeId": "r65", "ratePerSecond": "300", "cargoShips": 30}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c186"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c187"}
+{"cmd": "discardContract", "contractId": "c189"}
+{"cmd": "updateRoute", "routeId": "r102", "ratePerSecond": "300", "cargoShips": 30}
+{"cmd": "updateRoute", "routeId": "r101", "ratePerSecond": "300", "cargoShips": 30}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c190"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c191"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c192"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c193"}
+{"cmd": "discardContract", "contractId": "c195"}
+{"cmd": "build", "bodyId": "vastmere", "defId": "gas_skimmer", "depositResourceId": "helium_3"}
+{"cmd": "build", "bodyId": "vastmere", "defId": "reactor_works"}
+{"cmd": "build", "bodyId": "vastmere", "defId": "reactor_works"}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "vastmere", "resourceId": "circuit", "ratePerSecond": "100", "cargoShips": 10, "stopAtDestination": "5000"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "dusk_cairn", "count": 20}
+{"cmd": "setAutoSell", "bodyId": "vastmere", "resourceId": "reactor_core", "keepAtLeast": "0"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.919991e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c201"}
+{"cmd": "createRoute", "fromBodyId": "dusk_cairn", "toBodyId": "vastmere", "resourceId": "magnet", "ratePerSecond": "200", "cargoShips": 20, "stopAtDestination": "5000"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c203"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "hollow_reach", "count": 30}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c205"}
+{"cmd": "updateRoute", "routeId": "r59", "ratePerSecond": "600", "cargoShips": 60}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c206"}
+{"cmd": "discardContract", "contractId": "c207"}
+{"cmd": "updateRoute", "routeId": "r56", "ratePerSecond": "300", "cargoShips": 30}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c208"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c209"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c210"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c212"}
+{"cmd": "discardContract", "contractId": "c213"}
+{"cmd": "expandSlots", "bodyId": "dusk_cairn"}
+{"cmd": "expandSlots", "bodyId": "cinder"}
+{"cmd": "expandSlots", "bodyId": "hollow_reach"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.919307e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c217"}
+{"cmd": "assignCrew", "buildingId": "b166", "crew": 45}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "magnet_works"}
+{"cmd": "build", "bodyId": "cinder", "defId": "station_dock"}
+{"cmd": "build", "bodyId": "hollow_reach", "defId": "plate_press"}
+{"cmd": "updateRoute", "routeId": "r60", "ratePerSecond": "90", "cargoShips": 9}
+{"cmd": "expandSlots", "bodyId": "brine"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.919186e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c222"}
+{"cmd": "build", "bodyId": "brine", "defId": "habitat"}
+{"cmd": "expandSlots", "bodyId": "dusk_cairn"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.919207e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c226"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "station_dock"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.919980e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c228"}
+{"cmd": "discardContract", "contractId": "c229"}
+{"cmd": "expandSlots", "bodyId": "dusk_cairn"}
+{"cmd": "expandSlots", "bodyId": "cinder"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.918020e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c232"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "gas_skimmer", "depositResourceId": "helium_3"}
+{"cmd": "build", "bodyId": "cinder", "defId": "station_dock"}
+{"cmd": "expandSlots", "bodyId": "dusk_cairn"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.916812e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "build", "bodyId": "dusk_cairn", "defId": "reactor_works"}
+{"cmd": "setAutoSell", "bodyId": "dusk_cairn", "resourceId": "reactor_core", "keepAtLeast": "0"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.919996e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c238"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c239"}
+{"cmd": "discardContract", "contractId": "c236"}
+{"cmd": "updateRoute", "routeId": "r55", "ratePerSecond": "500", "cargoShips": 50}
+{"cmd": "createRoute", "fromBodyId": "kora", "toBodyId": "vastmere", "resourceId": "steel", "ratePerSecond": "10", "cargoShips": 1, "stopAtDestination": "200"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "report"}
+{"cmd": "costs"}
+{"cmd": "discardContract", "contractId": "c241"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c242"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c244"}
+{"cmd": "build", "bodyId": "vastmere", "defId": "depot"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.919999e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c246"}
+{"cmd": "discardContract", "contractId": "c247"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c248"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c249"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c250"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c252"}
+{"cmd": "discardContract", "contractId": "c253"}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "vastmere", "count": 30}
+{"cmd": "moveShips", "fromBodyId": "kora", "toBodyId": "dusk_cairn", "count": 30}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c256"}
+{"cmd": "updateRoute", "routeId": "r65", "ratePerSecond": "600", "cargoShips": 60}
+{"cmd": "updateRoute", "routeId": "r202", "ratePerSecond": "400", "cargoShips": 40}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c257"}
+{"cmd": "updateRoute", "routeId": "r199", "ratePerSecond": "400", "cargoShips": 40}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c258"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c259"}
+{"cmd": "discardContract", "contractId": "c260"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 19740}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c261"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 21540}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c262"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 14340}
+{"cmd": "state"}
+{"cmd": "discardContract", "contractId": "c263"}
+{"cmd": "state"}
+{"cmd": "buyUpgrades", "budget": "7.920000e+09"}
+{"cmd": "advance", "seconds": 60}
+{"cmd": "report"}
+{"cmd": "state"}
+{"cmd": "away", "seconds": 30540}
+{"cmd": "state"}
+{"cmd":"state"}

@@ -1,0 +1,6 @@
+{"cmd":"createRoute","fromBodyId":"kora","toBodyId":"brine","resourceId":"survey_drone","ratePerSecond":"1000","cargoShips":5}
+{"cmd":"advance","seconds":60}
+{"cmd":"removeRoute","routeId":"r97"}
+{"cmd":"state"}
+{"cmd":"advance","seconds":600}
+{"cmd":"state"}

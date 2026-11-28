@@ -1,0 +1,5 @@
+{"cmd":"build","bodyId":"brine","defId":"habitat"}
+{"cmd":"build","bodyId":"brine","defId":"fuel_refinery"}
+{"cmd":"state"}
+{"cmd":"advance","seconds":60}
+{"cmd":"state"}

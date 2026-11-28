@@ -1,0 +1,5 @@
+{"cmd":"build","bodyId":"dusk_cairn","defId":"station_dock"}
+{"cmd":"buyUpgrades","budget":"1e9"}
+{"cmd":"advance","seconds":60}
+{"cmd":"report"}
+{"cmd":"costs"}
