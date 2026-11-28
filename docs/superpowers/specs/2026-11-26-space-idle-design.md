@@ -49,8 +49,18 @@ The owner steers design and playtests. Claude does all the building **[Owner]**.
 - Ready for the Play Store: stable, polished, compliant.
 
 ### Non-goals (v1)
-- Monetization: no ads, no in-app purchases, no premium currency **[Owner]** ("just getting it on the
+- Monetization: no ads, no premium currency, nothing to buy that affects play **[Owner]** ("just getting it on the
   Play Store").
+  - **Optional donations [Owner, 2026-11-28]:** a "Support the developer" section where players can donate if they
+    want to. It is never required, unlocks nothing, gives no gameplay benefit, and is never pushed (no pop-ups,
+    reminders or timers). It sits quietly in settings. Implementation notes (stage 6, store prep):
+    - On Android, a tip to the developer inside the app goes through Google Play Billing (consumable "tip"
+      products, for example three sizes). Linking out to an outside payment page from inside the Play build is
+      likely against Play's payments policy; check the current policy before building it.
+    - The web build can link to an outside donation page (for example Ko-fi or GitHub Sponsors), which the owner
+      chooses.
+    - It needs the owner's Play developer account with a payments (merchant) profile, which is an owner action.
+    - A thank-you message only. No badge, currency or perk, so there's no pay-to-win and no pressure.
 - Online multiplayer, accounts, servers, cloud saves.
 - A prestige/reset system **[Owner]**: the empire grows for good.
 - iOS release in v1. The code must stay iOS-compatible, but publishing needs a Mac with Xcode (or a
