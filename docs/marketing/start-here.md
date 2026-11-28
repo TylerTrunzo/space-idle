@@ -84,8 +84,8 @@ The name only needs settling before the first three:
 | Date | Decision | Status |
 |---|---|---|
 | 2026-11-28 | Marketing docs started; Claude acts as marketing lead | Done |
-| 2026-11-28 | Game name: ~~Starwright~~ → **Accrete** (two other space games already use Starwright) | Chosen; web checks clear; USPTO, domain and handles still to check |
-| 2026-11-28 | Public developer name: **Brightwork Games** (a studio name, not space-themed, so it can carry future games) | Chosen; owner still to run the checks in `names.md` |
+| 2026-11-28 | Game name: ~~Starwright~~ → **Accrete** (two other space games already use Starwright) | Chosen; web and USPTO checks clear (no live marks in classes 9/41/42); domain and handles still to check |
+| 2026-11-28 | Public developer name: **Brightwork Games** (a studio name, not space-themed, so it can carry future games) | Chosen; USPTO clear (only live mark is a dental practice); domain and handles still to check |
 | 2026-11-28 | First asset: icon and logo concepts | Done: `brand/`. Recommend concept C |
 | 2026-11-28 | App icon direction: **C** (the name's letter drawn as an orbit), redrawn as an **A** for Accrete; A's ringed route goes on the feature graphic | Chosen; final polish and export to do |
 | 2026-11-28 | Domain and email: buy the domain through iCloud+ or Cloudflare; studio email via iCloud+ Custom Email Domain; website on Cloudflare Pages | Owner to do |

@@ -66,3 +66,21 @@ confirm at the USPTO's own trademark search (tmsearch.uspto.gov).
 | **Slow Orbit** | *SLOW ORBIT: Idle Planet Conquest*, an idle space game released on Steam in October 2026. | 🔴 Taken, in our exact genre. Don't use it as the game *or* the studio name. |
 | **Accrete** | Only an itch.io user collection called "accrete". No game, app or trademark found. | 🟢 Clear so far. |
 | **Starwrought** | No game, app or trademark found (only lookalikes such as Star Wrath and Voidwrought). | 🟢 Clear so far. Keeps the S icon, but it's harder to spell. |
+
+## USPTO check, 2026-11-28 (owner searched tmsearch.uspto.gov; Claude read the results)
+
+**Accrete: 🟢 clear.** 9 results, none live in the classes that matter for us: 9 (downloadable software and games),
+41 (online games and entertainment) or 42 (software as a service).
+- Live: ACCRETE ADVISORS (classes 35/36, business consulting), ACCRETE ADVISORS STRATEGIC ADVISORY & CAPITAL
+  SOLUTIONS (35/36, pending), ACCRETE CONSTRUCTION and an "A" design mark from the same owner (37, construction).
+  These are unrelated industries.
+- Dead or abandoned: three ACCRETE software filings (class 9, and 9/42), ACCRETE in metalworking (class 7 and
+  others), ACCRETE CAPITAL, and ACCRETE HEALTH PARTNERS (42). Dead marks don't block us. Three abandoned software
+  filings show other people have wanted the name, so if the game does well, registering it is worth considering.
+
+**Brightwork: 🟢 clear.** 4 results. The three BRIGHTWORK and BRIGHTWORK HEALTH marks in class 9 are all dead (medical
+software, abandoned; a collaboration-software mark, cancelled). The only live one is BRIGHTWORK FAMILY DENTISTRY
+(class 44, dentistry), which is unrelated.
+
+Not checked yet (low priority): similar spellings such as "acrete" and "brightworks".
+This is a sensible first check, not legal advice.
