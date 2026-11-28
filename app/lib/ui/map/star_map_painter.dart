@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
@@ -25,6 +26,66 @@ class MapMotion extends ChangeNotifier {
   }
 }
 
+/// The static layer drawn once into an image and reused while nothing in
+/// it changes: on the web every frame redraws the whole screen, and a late
+/// game's routes, rings and badges cost far more to draw than one image.
+///
+/// [StarMapPainter] fills and reads it; the map's state owns and disposes
+/// it.
+class StaticLayerCache {
+  ui.Image? _image;
+  StarMapScene? _scene;
+  MapTransform? _transform;
+  Size? _size;
+  double? _pixelRatio;
+
+  /// Images drawn so far, for tests.
+  @visibleForTesting
+  int builds = 0;
+
+  /// The image for these inputs, if the one held was drawn for them.
+  ui.Image? _for(
+    StarMapScene scene,
+    MapTransform transform,
+    Size size,
+    double pixelRatio,
+  ) {
+    final held = _scene;
+    if (_image == null ||
+        held == null ||
+        _transform != transform ||
+        _size != size ||
+        _pixelRatio != pixelRatio ||
+        !(identical(held, scene) || held.sameBaseLayer(scene))) {
+      return null;
+    }
+    return _image;
+  }
+
+  void _keep(
+    ui.Image image,
+    StarMapScene scene,
+    MapTransform transform,
+    Size size,
+    double pixelRatio,
+  ) {
+    _image?.dispose();
+    _image = image;
+    _scene = scene;
+    _transform = transform;
+    _size = size;
+    _pixelRatio = pixelRatio;
+    builds++;
+  }
+
+  /// Frees the image.
+  void dispose() {
+    _image?.dispose();
+    _image = null;
+    _scene = null;
+  }
+}
+
 /// Map colors the painters use, worked out once, never per paint.
 abstract final class _MapColors {
   /// Routes: [Palette.cyan] at 45% alpha.
@@ -43,13 +104,28 @@ abstract final class _MapColors {
 /// [shouldRepaint] ignores the shipments and signals [MapMotionPainter]
 /// draws. Text (names, "Unclaimed", the signal's "?") is drawn by the
 /// map's widget overlays, which also carry the semantics.
+///
+/// Given a [cache], it draws the base of the layer (orbits, the star,
+/// routes, body discs and rings, signal rings) into an image at
+/// [pixelRatio] once, and reuses it until that base changes. The marks that
+/// change from tick to tick (the selection ring, project arcs, bottleneck
+/// badges) are drawn over it each time. Without a cache (or while the map
+/// is zoomed, when an image would blur) it draws every shape directly.
 class StarMapPainter extends CustomPainter {
   /// Creates the static layer's painter.
   StarMapPainter({
     required this.scene,
     required this.transform,
     this.selectedId,
+    this.cache,
+    this.pixelRatio = 1,
   });
+
+  /// Where the layer's image is kept between paints; null draws shapes.
+  final StaticLayerCache? cache;
+
+  /// Device pixels per logical pixel, for a sharp image.
+  final double pixelRatio;
 
   /// What to draw.
   final StarMapScene scene;
@@ -75,8 +151,63 @@ class StarMapPainter extends CustomPainter {
     ..strokeCap = StrokeCap.round;
   final Path _path = Path();
 
+  final Paint _image = Paint()..filterQuality = FilterQuality.low;
+
   @override
   void paint(Canvas canvas, Size size) {
+    final cache = this.cache;
+    if (cache == null || size.isEmpty) {
+      _paintBase(canvas);
+      _paintMarks(canvas);
+      return;
+    }
+    var image = cache._for(scene, transform, size, pixelRatio);
+    if (image == null) {
+      final recorder = ui.PictureRecorder();
+      final c = Canvas(recorder)..scale(pixelRatio);
+      _paintBase(c);
+      final picture = recorder.endRecording();
+      image = picture.toImageSync(
+        (size.width * pixelRatio).ceil(),
+        (size.height * pixelRatio).ceil(),
+      );
+      picture.dispose();
+      cache._keep(image, scene, transform, size, pixelRatio);
+    }
+    canvas.drawImageRect(
+      image,
+      Offset.zero & Size(image.width.toDouble(), image.height.toDouble()),
+      Offset.zero & Size(image.width / pixelRatio, image.height / pixelRatio),
+      _image,
+    );
+    _paintMarks(canvas);
+  }
+
+  /// What changes from tick to tick, over the base: the selection ring,
+  /// project arcs and bottleneck badges.
+  void _paintMarks(Canvas canvas) {
+    final t = transform;
+    for (final b in scene.bodies) {
+      final c = t.toCanvas(b.position);
+      final r = b.radius * t.scale;
+      if (b.id == selectedId) {
+        _stroke
+          ..color = Palette.text
+          ..strokeWidth = 2;
+        canvas.drawCircle(c, r + _selectedGap, _stroke);
+      }
+      if (b.projectProgress case final progress?) {
+        _paintArc(canvas, c, r + _arcGap, progress);
+      }
+      if (b.bottleneck) {
+        _paintBadge(canvas, c + Offset(r * 0.8, -r * 0.8));
+      }
+    }
+  }
+
+  /// What changes only when routes, signals or ownership do: orbits, the
+  /// star, routes, body discs with their ownership rings, signal rings.
+  void _paintBase(Canvas canvas) {
     final t = transform;
     _stroke
       ..color = Palette.border
@@ -127,18 +258,6 @@ class StarMapPainter extends CustomPainter {
         ..strokeWidth = 2;
       canvas.drawCircle(c, r + _ringGap, _stroke);
     }
-    if (b.id == selectedId) {
-      _stroke
-        ..color = Palette.text
-        ..strokeWidth = 2;
-      canvas.drawCircle(c, r + _selectedGap, _stroke);
-    }
-    if (b.projectProgress case final progress?) {
-      _paintArc(canvas, c, r + _arcGap, progress);
-    }
-    if (b.bottleneck) {
-      _paintBadge(canvas, c + Offset(r * 0.8, -r * 0.8));
-    }
   }
 
   void _paintArc(Canvas canvas, Offset c, double radius, double progress) {
@@ -172,6 +291,8 @@ class StarMapPainter extends CustomPainter {
   bool shouldRepaint(StarMapPainter oldDelegate) =>
       oldDelegate.transform != transform ||
       oldDelegate.selectedId != selectedId ||
+      oldDelegate.cache != cache ||
+      oldDelegate.pixelRatio != pixelRatio ||
       !scene.sameStaticLayer(oldDelegate.scene);
 }
 

@@ -406,6 +406,66 @@ void main() {
       recorder.endRecording().dispose();
     });
 
+    testWidgets('the base layer is drawn once into an image and reused '
+        'until its routes, rings or signals change', (tester) async {
+      final cache = StaticLayerCache();
+      addTearDown(cache.dispose);
+      void paint(StarMapScene sc, {String? selected}) {
+        final recorder = ui.PictureRecorder();
+        StarMapPainter(
+          scene: sc,
+          transform: t,
+          selectedId: selected,
+          cache: cache,
+          pixelRatio: 2,
+        ).paint(Canvas(recorder), size);
+        recorder.endRecording().dispose();
+      }
+
+      paint(scene);
+      expect(cache.builds, 1);
+      // The same scene, a new selection, a project further on, a badge
+      // gone: marks drawn over the image, which stays.
+      paint(scene, selected: 'kora');
+      final marks = StarMapScene(
+        starRadius: scene.starRadius,
+        orbitRadii: scene.orbitRadii,
+        bodies: [
+          for (final b in scene.bodies)
+            MapBody(
+              id: b.id,
+              name: b.name,
+              position: b.position,
+              radius: b.radius,
+              color: b.color,
+              owned: b.owned,
+              bottleneck: !b.bottleneck,
+              projectProgress: b.projectProgress == null
+                  ? null
+                  : (b.projectProgress! + 0.1).clamp(0.0, 1.0),
+              projectKind: b.projectKind,
+            ),
+        ],
+        routes: scene.routes,
+        shipments: scene.shipments,
+        signals: scene.signals,
+      );
+      expect(marks.sameStaticLayer(scene), isFalse);
+      paint(marks);
+      expect(cache.builds, 1, reason: 'arcs, badges and selection are marks');
+      // A route gone: the base is drawn again.
+      final noRoutes = StarMapScene(
+        starRadius: scene.starRadius,
+        orbitRadii: scene.orbitRadii,
+        bodies: scene.bodies,
+        routes: const [],
+        shipments: const [],
+        signals: scene.signals,
+      );
+      paint(noRoutes);
+      expect(cache.builds, 2);
+    });
+
     test(
       'the static layer repaints on a new selection, not on equal input',
       () {
@@ -417,6 +477,25 @@ void main() {
         expect(
           painter.shouldRepaint(
             StarMapPainter(scene: scene, transform: t, selectedId: 'kora'),
+          ),
+          isFalse,
+        );
+        // With a cache, equal input still means no repaint.
+        final cache = StaticLayerCache();
+        addTearDown(cache.dispose);
+        expect(
+          StarMapPainter(
+            scene: scene,
+            transform: t,
+            cache: cache,
+            pixelRatio: 2,
+          ).shouldRepaint(
+            StarMapPainter(
+              scene: scene,
+              transform: t,
+              cache: cache,
+              pixelRatio: 2,
+            ),
           ),
           isFalse,
         );

@@ -187,6 +187,16 @@ final class MapBody {
   /// Which project [projectProgress] is for.
   final ProjectKind? projectKind;
 
+  /// Whether [other] draws the same disc and ownership ring: everything
+  /// but the marks that change from tick to tick (a project's arc, the
+  /// bottleneck badge).
+  bool sameBase(MapBody other) =>
+      other.id == id &&
+      other.position == position &&
+      other.radius == radius &&
+      other.color == color &&
+      other.owned == owned;
+
   @override
   bool operator ==(Object other) =>
       other is MapBody &&
@@ -337,6 +347,23 @@ final class StarMapScene {
 
   /// Whether [other] draws the same static layer: star, orbits, bodies,
   /// routes and signal markers, whatever its shipments.
+  /// Whether [other] has the same orbits, star, routes, signals and body
+  /// discs and rings, whatever their project arcs and badges: what the
+  /// static layer's cached image holds.
+  bool sameBaseLayer(StarMapScene other) {
+    if (other.starRadius != starRadius ||
+        !listEquals(other.orbitRadii, orbitRadii) ||
+        !listEquals(other.routes, routes) ||
+        !listEquals(other.signals, signals) ||
+        other.bodies.length != bodies.length) {
+      return false;
+    }
+    for (var i = 0; i < bodies.length; i++) {
+      if (!bodies[i].sameBase(other.bodies[i])) return false;
+    }
+    return true;
+  }
+
   bool sameStaticLayer(StarMapScene other) =>
       other.starRadius == starRadius &&
       listEquals(other.orbitRadii, orbitRadii) &&

@@ -69,6 +69,14 @@ class _StarMapState extends State<StarMap> {
   final MapMotion _motion = MapMotion();
   final TransformationController _zoom = TransformationController();
 
+  /// The static layer's image, reused while the layer is unchanged and the
+  /// map isn't zoomed.
+  final StaticLayerCache _layer = StaticLayerCache();
+
+  /// Whether the map is zoomed or panned away from its fitted view: the
+  /// static layer then draws shapes, which stay sharp at any zoom.
+  bool _zoomed = false;
+
   /// Moves the shipments [StarMap.motionFps] times a second while any are
   /// in flight, the map shows and motion is allowed; null otherwise.
   Timer? _motionTimer;
@@ -97,6 +105,7 @@ class _StarMapState extends State<StarMap> {
     _scene = _buildScene();
     _sceneTime = widget.controller.state.time;
     widget.controller.addListener(_onGameChanged);
+    _zoom.addListener(_onZoom);
   }
 
   @override
@@ -125,6 +134,7 @@ class _StarMapState extends State<StarMap> {
   void dispose() {
     widget.controller.removeListener(_onGameChanged);
     _motionTimer?.cancel();
+    _layer.dispose();
     _motion.dispose();
     _zoom.dispose();
     super.dispose();
@@ -163,6 +173,11 @@ class _StarMapState extends State<StarMap> {
       _motion.update(sinceTick: 0);
     }
     _syncMotion();
+  }
+
+  void _onZoom() {
+    final zoomed = !_zoom.value.isIdentity();
+    if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
   }
 
   void _step(Timer _) {
@@ -253,6 +268,10 @@ class _StarMapState extends State<StarMap> {
                                   scene: scene,
                                   transform: t,
                                   selectedId: widget.selectedId,
+                                  cache: _zoomed ? null : _layer,
+                                  pixelRatio: MediaQuery.devicePixelRatioOf(
+                                    context,
+                                  ),
                                 ),
                                 isComplex: true,
                               ),
