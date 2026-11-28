@@ -1,7 +1,7 @@
 <!-- Generated: dart run game_sim:game_sim bot --bot casual --hours 720 --seed 1 --format md -->
 # Balance report: casual bot
 
-Seed 1, 720.0 h, 120 check-ins. Final credits: 15.9B. Rejected commands: 0.
+Seed 1, 720.0 h, 120 check-ins. Final credits: 13.6B. Rejected commands: 0.
 
 ## Milestones
 
@@ -56,20 +56,20 @@ Seed 1, 720.0 h, 120 check-ins. Final credits: 15.9B. Rejected commands: 0.
 | Steady Volleys | driver_3 | 102.0 | 17 |
 | Rail to the Sky | driver_5 | 108.0 | 18 |
 | Crown of Lights | station_8 | 114.0 | 19 |
+| Guild Favorite | contracts_14 | 114.0 | 19 |
 | Thirty Billion | credits_30b | 120.0 | 20 |
-| Guild Favorite | contracts_14 | 120.0 | 20 |
 | Sustained Fire | driver_10 | 132.0 | 22 |
-| Nothing Hidden | surveyed_2 | 144.0 | 24 |
+| City Above | station_10 | 144.0 | 24 |
 | Hundred Billion | credits_100b | 156.0 | 26 |
-| City Above | station_10 | 162.0 | 27 |
-| Three Hundred Billion | credits_300b | 222.0 | 37 |
-| Orbital Commons | station_12 | 222.0 | 37 |
+| Three Hundred Billion | credits_300b | 216.0 | 36 |
+| Orbital Commons | station_12 | 216.0 | 36 |
+| Nothing Hidden | surveyed_2 | 270.0 | 45 |
 | Freight Without Wings | driver_15 | 270.0 | 45 |
 | Trillionaire | credits_1t | 336.0 | 56 |
-| Three Trillion | credits_3t | 534.0 | 89 |
+| Three Trillion | credits_3t | 552.0 | 92 |
+| Harbor of Stars | station_15 | 666.0 | 111 |
 | Ten Trillion | credits_10t | not reached | |
 | Thirty Trillion | credits_30t | not reached | |
-| Harbor of Stars | station_15 | not reached | |
 
 ## Income by day
 
@@ -80,37 +80,37 @@ Seed 1, 720.0 h, 120 check-ins. Final credits: 15.9B. Rejected commands: 0.
 | 3 | 4.1B | hull_plate 43%, circuit 19%, copper_wire 5%, fertilizer 5% |
 | 4 | 6.35B | hull_plate 37%, circuit 26%, copper_wire 5%, fertilizer 5% |
 | 5 | 20.1B | hull_plate 36%, circuit 21%, copper_wire 6%, water 6% |
-| 6 | 40.1B | hull_plate 40%, circuit 24%, copper_wire 6%, water 5% |
-| 7 | 51.9B | hull_plate 43%, circuit 24%, copper_wire 5%, water 5% |
-| 8 | 66.4B | hull_plate 42%, circuit 22%, copper_wire 5%, fertilizer 5% |
-| 9 | 86.7B | hull_plate 46%, circuit 21%, copper_wire 5%, water 5% |
-| 10 | 106B | hull_plate 46%, circuit 19%, copper_wire 6%, water 6% |
-| 11 | 114B | hull_plate 47%, circuit 19%, copper_wire 6%, water 6% |
-| 12 | 138B | hull_plate 47%, circuit 20%, copper_wire 5%, water 5% |
-| 13 | 171B | hull_plate 48%, circuit 19%, copper_wire 5%, water 5% |
-| 14 | 178B | hull_plate 48%, circuit 19%, copper_wire 5%, water 5% |
-| 15 | 195B | hull_plate 48%, circuit 20%, copper_wire 5%, water 5% |
-| 16 | 201B | hull_plate 49%, circuit 19%, copper_wire 5%, water 5% |
-| 17 | 214B | hull_plate 50%, circuit 22%, copper_wire 4%, water 4% |
-| 18 | 256B | hull_plate 43%, circuit 30%, copper_wire 4%, water 4% |
-| 19 | 260B | hull_plate 44%, circuit 31%, copper_wire 4%, water 4% |
-| 20 | 260B | hull_plate 44%, circuit 31%, copper_wire 4%, water 4% |
-| 21 | 270B | hull_plate 42%, circuit 33%, copper_wire 4%, water 4% |
-| 22 | 275B | hull_plate 41%, circuit 33%, copper_wire 4%, water 4% |
-| 23 | 291B | hull_plate 40%, circuit 33%, copper_wire 3%, water 3% |
-| 24 | 301B | hull_plate 41%, circuit 33%, copper_wire 3%, water 3% |
-| 25 | 302B | hull_plate 40%, circuit 33%, copper_wire 3%, water 3% |
-| 26 | 303B | hull_plate 40%, circuit 33%, copper_wire 3%, water 3% |
-| 27 | 304B | hull_plate 40%, circuit 33%, copper_wire 3%, water 3% |
-| 28 | 310B | hull_plate 40%, circuit 32%, copper_wire 3%, water 3% |
-| 29 | 314B | hull_plate 39%, circuit 32%, copper_wire 3%, water 3% |
-| 30 | 317B | hull_plate 39%, circuit 31%, copper_wire 3%, water 3% |
+| 6 | 40.2B | hull_plate 41%, circuit 23%, copper_wire 6%, water 5% |
+| 7 | 60.1B | hull_plate 51%, circuit 19%, copper_wire 5%, fertilizer 5% |
+| 8 | 73.1B | hull_plate 49%, circuit 17%, copper_wire 6%, water 5% |
+| 9 | 83.4B | hull_plate 47%, circuit 15%, copper_wire 6%, water 6% |
+| 10 | 103B | hull_plate 48%, circuit 14%, copper_wire 6%, water 6% |
+| 11 | 111B | hull_plate 48%, circuit 14%, copper_wire 6%, water 6% |
+| 12 | 143B | hull_plate 49%, circuit 14%, copper_wire 6%, water 5% |
+| 13 | 162B | hull_plate 48%, circuit 13%, copper_wire 5%, water 5% |
+| 14 | 166B | hull_plate 48%, circuit 14%, copper_wire 5%, water 5% |
+| 15 | 184B | hull_plate 51%, circuit 16%, copper_wire 5%, water 5% |
+| 16 | 196B | hull_plate 52%, circuit 15%, copper_wire 5%, water 5% |
+| 17 | 195B | hull_plate 53%, circuit 15%, copper_wire 5%, water 5% |
+| 18 | 217B | hull_plate 50%, circuit 19%, copper_wire 4%, water 4% |
+| 19 | 227B | hull_plate 50%, circuit 19%, copper_wire 4%, water 4% |
+| 20 | 233B | hull_plate 48%, circuit 19%, copper_wire 4%, water 4% |
+| 21 | 237B | hull_plate 48%, circuit 19%, copper_wire 4%, water 4% |
+| 22 | 236B | hull_plate 48%, circuit 19%, copper_wire 4%, water 4% |
+| 23 | 245B | hull_plate 48%, circuit 20%, copper_wire 4%, water 4% |
+| 24 | 267B | hull_plate 48%, circuit 19%, copper_wire 4%, water 4% |
+| 25 | 303B | hull_plate 49%, circuit 18%, copper_wire 4%, water 4% |
+| 26 | 310B | hull_plate 48%, circuit 19%, reactor_core 5%, copper_wire 4% |
+| 27 | 325B | hull_plate 46%, circuit 19%, reactor_core 5%, copper_wire 4% |
+| 28 | 383B | hull_plate 43%, circuit 25%, reactor_core 4%, copper_wire 4% |
+| 29 | 427B | hull_plate 44%, circuit 24%, reactor_core 4%, copper_wire 4% |
+| 30 | 441B | hull_plate 42%, circuit 26%, reactor_core 5%, copper_wire 4% |
 
 ## Days
 
 Days with something new (a milestone, project completion, contract or body) in the first 21: 21 of 21; the worst 7 days in a row had 7.
 
-Days with a milestone or project in the first 21: 21; worst 7 days: 7.
+Days with a milestone or project in the first 21: 19; worst 7 days: 5.
 
 Earned is market sales plus contract rewards; the tier shares are of market sales only.
 
@@ -120,32 +120,32 @@ Earned is market sales plus contract rewards; the tier shares are of market sale
 | 2 | 18 | 13 | 1 | 7 | 2 | 0 | 0 | 6.27M | 1.27B | 59% | 41% | 0% |
 | 3 | 8 | 5 | 3 | 7 | 5 | 0 | 0 | 0 | 4.1B | 38% | 62% | 0% |
 | 4 | 23 | 13 | 8 | 9 | 5 | 4 | 2 | 85.5M | 6.44B | 33% | 66% | 1% |
-| 5 | 23 | 6 | 13 | 13 | 6 | 8 | 8 | 593M | 20.7B | 39% | 60% | 1% |
-| 6 | 18 | 3 | 13 | 15 | 6 | 9 | 11 | 1.36B | 41.5B | 34% | 65% | 1% |
-| 7 | 8 | 2 | 4 | 17 | 7 | 10 | 12 | 2.38B | 54.3B | 32% | 68% | 0% |
-| 8 | 4 | 0 | 2 | 19 | 7 | 10 | 13 | 2.78B | 69.1B | 34% | 66% | 0% |
-| 9 | 6 | 0 | 4 | 21 | 7 | 11 | 14 | 4.27B | 91B | 32% | 68% | 1% |
-| 10 | 7 | 2 | 2 | 24 | 7 | 12 | 14 | 4.41B | 110B | 33% | 66% | 1% |
-| 11 | 1 | 0 | 1 | 24 | 7 | 12 | 14 | 0 | 114B | 33% | 67% | 0% |
-| 12 | 6 | 1 | 4 | 25 | 7 | 13 | 15 | 2.37B | 140B | 31% | 69% | 0% |
-| 13 | 5 | 0 | 5 | 25 | 7 | 13 | 15 | 0 | 171B | 31% | 68% | 0% |
-| 14 | 13 | 1 | 10 | 27 | 7 | 13 | 15 | 5.37B | 184B | 32% | 68% | 0% |
-| 15 | 3 | 0 | 2 | 28 | 7 | 13 | 16 | 4.74B | 199B | 31% | 69% | 0% |
-| 16 | 5 | 0 | 4 | 29 | 7 | 13 | 16 | 4.89B | 206B | 30% | 69% | 1% |
-| 17 | 7 | 0 | 7 | 29 | 7 | 13 | 16 | 0.26 | 214B | 27% | 72% | 1% |
-| 18 | 8 | 0 | 7 | 30 | 7 | 13 | 17 | 2.37B | 258B | 25% | 75% | 0% |
-| 19 | 4 | 0 | 3 | 31 | 7 | 13 | 17 | 5.57B | 265B | 24% | 76% | 0% |
-| 20 | 5 | 0 | 5 | 31 | 7 | 13 | 17 | 0 | 260B | 24% | 76% | 0% |
-| 21 | 4 | 0 | 4 | 31 | 7 | 13 | 17 | 0 | 270B | 23% | 77% | 0% |
-| 22 | 3 | 0 | 1 | 33 | 7 | 13 | 17 | 10.3B | 285B | 23% | 76% | 0% |
-| 23 | 4 | 1 | 2 | 34 | 7 | 13 | 18 | 5.71B | 296B | 24% | 75% | 0% |
-| 24 | 7 | 0 | 6 | 35 | 7 | 13 | 18 | 6.17B | 307B | 25% | 75% | 0% |
-| 25 | 4 | 0 | 2 | 37 | 7 | 13 | 18 | 12B | 314B | 25% | 75% | 0% |
-| 26 | 3 | 0 | 2 | 38 | 7 | 13 | 18 | 6.26B | 309B | 25% | 75% | 0% |
-| 27 | 6 | 0 | 5 | 39 | 7 | 13 | 18 | 6.33B | 310B | 25% | 75% | 0% |
-| 28 | 6 | 0 | 5 | 40 | 7 | 13 | 18 | 6.23B | 317B | 26% | 74% | 0% |
-| 29 | 5 | 0 | 4 | 41 | 7 | 13 | 18 | 6.24B | 320B | 26% | 74% | 0% |
-| 30 | 2 | 0 | 0 | 43 | 7 | 13 | 18 | 13.3B | 330B | 26% | 74% | 0% |
+| 5 | 25 | 7 | 13 | 14 | 6 | 8 | 8 | 982M | 21.1B | 39% | 60% | 1% |
+| 6 | 15 | 2 | 10 | 17 | 6 | 10 | 11 | 2.37B | 42.5B | 35% | 65% | 0% |
+| 7 | 3 | 1 | 1 | 18 | 6 | 10 | 12 | 1.09B | 61.1B | 29% | 71% | 0% |
+| 8 | 6 | 0 | 4 | 20 | 6 | 11 | 13 | 2.63B | 75.7B | 32% | 68% | 1% |
+| 9 | 12 | 2 | 6 | 24 | 6 | 12 | 14 | 6.11B | 89.6B | 35% | 65% | 0% |
+| 10 | 2 | 0 | 0 | 26 | 6 | 12 | 14 | 3.93B | 107B | 35% | 64% | 1% |
+| 11 | 3 | 0 | 1 | 28 | 6 | 12 | 14 | 4.35B | 115B | 36% | 64% | 0% |
+| 12 | 10 | 2 | 5 | 31 | 7 | 13 | 15 | 7.39B | 151B | 34% | 65% | 1% |
+| 13 | 1 | 0 | 0 | 32 | 7 | 13 | 15 | 4.25B | 166B | 36% | 63% | 1% |
+| 14 | 10 | 1 | 6 | 35 | 7 | 13 | 15 | 11.9B | 178B | 36% | 64% | 0% |
+| 15 | 6 | 0 | 4 | 37 | 7 | 13 | 16 | 9.24B | 193B | 31% | 69% | 0% |
+| 16 | 10 | 0 | 9 | 38 | 7 | 13 | 16 | 3.96B | 200B | 31% | 69% | 0% |
+| 17 | 3 | 0 | 1 | 40 | 7 | 13 | 16 | 8.71B | 204B | 29% | 70% | 1% |
+| 18 | 2 | 0 | 1 | 41 | 7 | 13 | 17 | 4.09B | 221B | 29% | 71% | 1% |
+| 19 | 9 | 0 | 6 | 44 | 7 | 13 | 17 | 13.3B | 240B | 29% | 70% | 0% |
+| 20 | 3 | 0 | 3 | 44 | 7 | 13 | 17 | 0 | 233B | 30% | 69% | 1% |
+| 21 | 9 | 0 | 7 | 46 | 7 | 13 | 17 | 10.1B | 247B | 30% | 69% | 1% |
+| 22 | 6 | 0 | 5 | 47 | 7 | 13 | 17 | 5.16B | 241B | 30% | 70% | 1% |
+| 23 | 8 | 1 | 4 | 50 | 7 | 13 | 18 | 14.8B | 259B | 29% | 70% | 1% |
+| 24 | 4 | 0 | 2 | 52 | 7 | 14 | 18 | 9.96B | 277B | 28% | 71% | 1% |
+| 25 | 9 | 0 | 8 | 53 | 7 | 14 | 18 | 4.93B | 308B | 27% | 73% | 1% |
+| 26 | 7 | 0 | 5 | 55 | 7 | 14 | 18 | 12.2B | 322B | 27% | 73% | 0% |
+| 27 | 3 | 0 | 2 | 56 | 7 | 14 | 18 | 6.59B | 332B | 29% | 71% | 0% |
+| 28 | 11 | 1 | 8 | 58 | 7 | 15 | 18 | 14B | 397B | 26% | 73% | 0% |
+| 29 | 4 | 0 | 4 | 58 | 7 | 15 | 18 | 0 | 427B | 27% | 73% | 1% |
+| 30 | 5 | 0 | 3 | 60 | 7 | 15 | 18 | 17B | 458B | 26% | 74% | 0% |
 
 ## Timeline
 
@@ -189,141 +189,159 @@ Claims, surveys, extra slots, megaproject stages and contracts, as seen; milesto
 - 114.0 h (day 5): Orbital Station level 8
 - 114.0 h (day 5): Mass Driver level 7
 - 114.0 h (day 5): Contract 13 completed
+- 114.0 h (day 5): Contract 14 completed
 - 120.0 h (day 5): Mass Driver level 8
-- 120.0 h (day 6): Contract 14 completed
 - 126.0 h (day 6): Extra build slot on Vastmere
 - 126.0 h (day 6): Extra build slot on Tessaly
 - 126.0 h (day 6): Orbital Station level 9
 - 126.0 h (day 6): Mass Driver level 9
+- 126.0 h (day 6): Contract 15 completed
+- 126.0 h (day 6): Contract 16 completed
 - 132.0 h (day 6): Mass Driver level 10
-- 132.0 h (day 6): Contract 15 completed
-- 144.0 h (day 6): Extra build slot on Cinder
-- 144.0 h (day 6): Extra build slot on Kora
-- 144.0 h (day 6): Extra build slot on Hollow Reach
-- 144.0 h (day 6): Extra build slot on Vastmere
-- 144.0 h (day 6): Extra build slot on Brine
-- 144.0 h (day 6): Extra build slot on Tessaly
-- 144.0 h (day 6): Dusk Cairn surveyed
+- 138.0 h (day 6): Extra build slot on Cinder
+- 138.0 h (day 6): Extra build slot on Kora
+- 138.0 h (day 6): Extra build slot on Hollow Reach
+- 138.0 h (day 6): Contract 17 completed
+- 144.0 h (day 6): Orbital Station level 10
 - 144.0 h (day 6): Mass Driver level 11
-- 150.0 h (day 7): Dusk Cairn claimed
-- 150.0 h (day 7): Mass Driver level 12
-- 150.0 h (day 7): Contract 16 completed
-- 156.0 h (day 7): Contract 17 completed
-- 162.0 h (day 7): Extra build slot on Vastmere
-- 162.0 h (day 7): Orbital Station level 10
+- 150.0 h (day 7): Contract 18 completed
+- 156.0 h (day 7): Mass Driver level 12
+- 168.0 h (day 8): Contract 19 completed
 - 174.0 h (day 8): Mass Driver level 13
-- 174.0 h (day 8): Contract 18 completed
-- 180.0 h (day 8): Extra build slot on Vastmere
-- 180.0 h (day 8): Contract 19 completed
-- 198.0 h (day 9): Extra build slot on Hollow Reach
-- 198.0 h (day 9): Extra build slot on Dusk Cairn
-- 198.0 h (day 9): Orbital Station level 11
-- 204.0 h (day 9): Contract 20 completed
-- 204.0 h (day 9): Contract 21 completed
-- 210.0 h (day 9): Mass Driver level 14
-- 222.0 h (day 10): Orbital Station level 12
-- 228.0 h (day 10): Extra build slot on Dusk Cairn
-- 228.0 h (day 10): Contract 22 completed
-- 228.0 h (day 10): Contract 23 completed
-- 234.0 h (day 10): Contract 24 completed
-- 252.0 h (day 11): Extra build slot on Cinder
-- 264.0 h (day 12): Contract 25 completed
-- 270.0 h (day 12): Extra build slot on Kora
+- 180.0 h (day 8): Extra build slot on Hollow Reach
+- 180.0 h (day 8): Orbital Station level 11
+- 186.0 h (day 8): Contract 20 completed
+- 192.0 h (day 8): Extra build slot on Vastmere
+- 198.0 h (day 9): Contract 21 completed
+- 204.0 h (day 9): Contract 22 completed
+- 210.0 h (day 9): Extra build slot on Kora
+- 210.0 h (day 9): Extra build slot on Hollow Reach
+- 210.0 h (day 9): Extra build slot on Vastmere
+- 210.0 h (day 9): Extra build slot on Brine
+- 210.0 h (day 9): Contract 23 completed
+- 210.0 h (day 9): Contract 24 completed
+- 216.0 h (day 9): Orbital Station level 12
+- 216.0 h (day 9): Mass Driver level 14
+- 222.0 h (day 10): Contract 25 completed
+- 234.0 h (day 10): Contract 26 completed
+- 246.0 h (day 11): Extra build slot on Kora
+- 252.0 h (day 11): Contract 27 completed
+- 258.0 h (day 11): Contract 28 completed
+- 264.0 h (day 12): Contract 29 completed
+- 270.0 h (day 12): Dusk Cairn surveyed
 - 270.0 h (day 12): Mass Driver level 15
-- 282.0 h (day 12): Orbital Station level 13
-- 288.0 h (day 12): Extra build slot on Kora
-- 300.0 h (day 13): Extra build slot on Kora
-- 312.0 h (day 13): Extra build slot on Cinder
-- 312.0 h (day 13): Extra build slot on Kora
-- 312.0 h (day 13): Extra build slot on Tessaly
-- 312.0 h (day 13): Extra build slot on Dusk Cairn
-- 312.0 h (day 14): Contract 26 completed
-- 324.0 h (day 14): Extra build slot on Cinder
-- 324.0 h (day 14): Extra build slot on Kora
-- 324.0 h (day 14): Extra build slot on Hollow Reach
-- 324.0 h (day 14): Extra build slot on Tessaly
-- 324.0 h (day 14): Extra build slot on Dusk Cairn
-- 330.0 h (day 14): Contract 27 completed
-- 336.0 h (day 14): Extra build slot on Kora
-- 336.0 h (day 14): Extra build slot on Hollow Reach
-- 336.0 h (day 14): Extra build slot on Vastmere
-- 336.0 h (day 14): Extra build slot on Brine
-- 336.0 h (day 14): Extra build slot on Tessaly
-- 342.0 h (day 15): Mass Driver level 16
-- 354.0 h (day 15): Contract 28 completed
-- 360.0 h (day 15): Extra build slot on Dusk Cairn
-- 366.0 h (day 16): Contract 29 completed
+- 270.0 h (day 12): Contract 30 completed
+- 276.0 h (day 12): Extra build slot on Cinder
+- 276.0 h (day 12): Dusk Cairn claimed
+- 276.0 h (day 12): Orbital Station level 13
+- 276.0 h (day 12): Contract 31 completed
+- 306.0 h (day 13): Contract 32 completed
+- 312.0 h (day 14): Contract 33 completed
+- 324.0 h (day 14): Contract 34 completed
+- 330.0 h (day 14): Extra build slot on Cinder
+- 330.0 h (day 14): Extra build slot on Kora
+- 330.0 h (day 14): Extra build slot on Hollow Reach
+- 330.0 h (day 14): Extra build slot on Vastmere
+- 330.0 h (day 14): Extra build slot on Brine
+- 330.0 h (day 14): Extra build slot on Tessaly
+- 330.0 h (day 14): Contract 35 completed
+- 342.0 h (day 15): Contract 36 completed
+- 348.0 h (day 15): Mass Driver level 16
+- 354.0 h (day 15): Extra build slot on Cinder
+- 354.0 h (day 15): Extra build slot on Vastmere
+- 354.0 h (day 15): Extra build slot on Tessaly
+- 354.0 h (day 15): Contract 37 completed
+- 366.0 h (day 16): Extra build slot on Cinder
+- 366.0 h (day 16): Extra build slot on Kora
+- 366.0 h (day 16): Extra build slot on Hollow Reach
+- 366.0 h (day 16): Extra build slot on Vastmere
+- 366.0 h (day 16): Extra build slot on Brine
+- 366.0 h (day 16): Extra build slot on Tessaly
+- 372.0 h (day 16): Contract 38 completed
 - 378.0 h (day 16): Extra build slot on Cinder
-- 378.0 h (day 16): Extra build slot on Hollow Reach
-- 378.0 h (day 16): Extra build slot on Vastmere
-- 378.0 h (day 16): Extra build slot on Brine
-- 390.0 h (day 17): Extra build slot on Cinder
-- 390.0 h (day 17): Extra build slot on Kora
-- 390.0 h (day 17): Extra build slot on Hollow Reach
-- 390.0 h (day 17): Extra build slot on Vastmere
-- 390.0 h (day 17): Extra build slot on Brine
-- 390.0 h (day 17): Extra build slot on Tessaly
-- 390.0 h (day 17): Extra build slot on Dusk Cairn
-- 420.0 h (day 18): Extra build slot on Cinder
-- 420.0 h (day 18): Extra build slot on Hollow Reach
-- 420.0 h (day 18): Extra build slot on Vastmere
-- 420.0 h (day 18): Extra build slot on Brine
-- 420.0 h (day 18): Extra build slot on Tessaly
-- 420.0 h (day 18): Extra build slot on Dusk Cairn
+- 378.0 h (day 16): Extra build slot on Kora
+- 378.0 h (day 16): Extra build slot on Tessaly
+- 390.0 h (day 17): Contract 39 completed
+- 390.0 h (day 17): Contract 40 completed
+- 402.0 h (day 17): Extra build slot on Hollow Reach
 - 420.0 h (day 18): Mass Driver level 17
-- 420.0 h (day 18): Contract 30 completed
-- 438.0 h (day 19): Extra build slot on Hollow Reach
-- 438.0 h (day 19): Extra build slot on Brine
-- 438.0 h (day 19): Extra build slot on Dusk Cairn
-- 438.0 h (day 19): Contract 31 completed
-- 468.0 h (day 20): Extra build slot on Cinder
-- 468.0 h (day 20): Extra build slot on Kora
-- 468.0 h (day 20): Extra build slot on Hollow Reach
-- 468.0 h (day 20): Extra build slot on Vastmere
-- 468.0 h (day 20): Extra build slot on Brine
-- 492.0 h (day 21): Extra build slot on Vastmere
+- 420.0 h (day 18): Contract 41 completed
+- 432.0 h (day 19): Contract 42 completed
+- 450.0 h (day 19): Extra build slot on Cinder
+- 450.0 h (day 19): Extra build slot on Kora
+- 450.0 h (day 19): Extra build slot on Hollow Reach
+- 450.0 h (day 19): Extra build slot on Vastmere
+- 450.0 h (day 19): Extra build slot on Brine
+- 450.0 h (day 19): Extra build slot on Tessaly
+- 450.0 h (day 19): Contract 43 completed
+- 450.0 h (day 19): Contract 44 completed
+- 474.0 h (day 20): Extra build slot on Hollow Reach
+- 474.0 h (day 20): Extra build slot on Vastmere
+- 474.0 h (day 20): Extra build slot on Brine
+- 480.0 h (day 21): Contract 45 completed
 - 492.0 h (day 21): Extra build slot on Brine
-- 492.0 h (day 21): Extra build slot on Tessaly
 - 492.0 h (day 21): Extra build slot on Dusk Cairn
-- 510.0 h (day 22): Contract 32 completed
-- 516.0 h (day 22): Extra build slot on Hollow Reach
-- 522.0 h (day 22): Contract 33 completed
-- 534.0 h (day 23): Extra build slot on Vastmere
-- 540.0 h (day 23): Contract 34 completed
+- 492.0 h (day 21): Contract 46 completed
+- 504.0 h (day 21): Extra build slot on Hollow Reach
+- 504.0 h (day 21): Extra build slot on Vastmere
+- 504.0 h (day 21): Extra build slot on Brine
+- 504.0 h (day 21): Extra build slot on Tessaly
+- 504.0 h (day 21): Extra build slot on Dusk Cairn
+- 510.0 h (day 22): Contract 47 completed
+- 522.0 h (day 22): Extra build slot on Kora
+- 522.0 h (day 22): Extra build slot on Hollow Reach
+- 522.0 h (day 22): Extra build slot on Vastmere
+- 522.0 h (day 22): Extra build slot on Tessaly
+- 522.0 h (day 22): Extra build slot on Dusk Cairn
+- 528.0 h (day 23): Contract 48 completed
+- 528.0 h (day 23): Contract 49 completed
+- 534.0 h (day 23): Contract 50 completed
 - 546.0 h (day 23): Mass Driver level 18
-- 558.0 h (day 24): Extra build slot on Cinder
-- 558.0 h (day 24): Extra build slot on Brine
-- 558.0 h (day 24): Extra build slot on Tessaly
-- 558.0 h (day 24): Extra build slot on Dusk Cairn
-- 570.0 h (day 24): Contract 35 completed
-- 576.0 h (day 24): Extra build slot on Kora
-- 576.0 h (day 24): Extra build slot on Tessaly
-- 588.0 h (day 25): Contract 36 completed
-- 594.0 h (day 25): Contract 37 completed
-- 600.0 h (day 25): Extra build slot on Cinder
-- 600.0 h (day 25): Extra build slot on Hollow Reach
+- 552.0 h (day 23): Extra build slot on Cinder
+- 552.0 h (day 23): Extra build slot on Brine
+- 552.0 h (day 23): Extra build slot on Dusk Cairn
+- 564.0 h (day 24): Contract 51 completed
+- 570.0 h (day 24): Extra build slot on Dusk Cairn
+- 570.0 h (day 24): Contract 52 completed
+- 576.0 h (day 24): Orbital Station level 14
+- 582.0 h (day 25): Extra build slot on Cinder
+- 582.0 h (day 25): Extra build slot on Kora
+- 582.0 h (day 25): Extra build slot on Hollow Reach
+- 582.0 h (day 25): Extra build slot on Vastmere
+- 582.0 h (day 25): Extra build slot on Brine
+- 582.0 h (day 25): Extra build slot on Tessaly
+- 582.0 h (day 25): Extra build slot on Dusk Cairn
+- 588.0 h (day 25): Contract 53 completed
+- 594.0 h (day 25): Extra build slot on Kora
+- 600.0 h (day 26): Contract 54 completed
+- 600.0 h (day 26): Contract 55 completed
+- 606.0 h (day 26): Extra build slot on Kora
+- 618.0 h (day 26): Extra build slot on Kora
 - 618.0 h (day 26): Extra build slot on Vastmere
-- 618.0 h (day 26): Extra build slot on Brine
-- 618.0 h (day 26): Contract 38 completed
-- 624.0 h (day 27): Contract 39 completed
-- 630.0 h (day 27): Extra build slot on Cinder
-- 630.0 h (day 27): Extra build slot on Kora
-- 630.0 h (day 27): Extra build slot on Brine
-- 630.0 h (day 27): Extra build slot on Tessaly
-- 630.0 h (day 27): Extra build slot on Dusk Cairn
-- 654.0 h (day 28): Extra build slot on Hollow Reach
-- 654.0 h (day 28): Extra build slot on Tessaly
-- 654.0 h (day 28): Extra build slot on Dusk Cairn
-- 666.0 h (day 28): Contract 40 completed
-- 672.0 h (day 28): Extra build slot on Kora
+- 618.0 h (day 26): Extra build slot on Tessaly
+- 618.0 h (day 26): Extra build slot on Dusk Cairn
+- 636.0 h (day 27): Contract 56 completed
+- 642.0 h (day 27): Extra build slot on Hollow Reach
+- 642.0 h (day 27): Extra build slot on Dusk Cairn
+- 654.0 h (day 28): Contract 57 completed
+- 660.0 h (day 28): Extra build slot on Brine
+- 660.0 h (day 28): Extra build slot on Dusk Cairn
+- 660.0 h (day 28): Contract 58 completed
+- 666.0 h (day 28): Orbital Station level 15
+- 672.0 h (day 28): Extra build slot on Cinder
 - 672.0 h (day 28): Extra build slot on Vastmere
-- 684.0 h (day 29): Contract 41 completed
-- 690.0 h (day 29): Extra build slot on Cinder
-- 690.0 h (day 29): Extra build slot on Brine
-- 690.0 h (day 29): Extra build slot on Tessaly
-- 690.0 h (day 29): Extra build slot on Dusk Cairn
-- 702.0 h (day 30): Contract 42 completed
-- 708.0 h (day 30): Contract 43 completed
+- 672.0 h (day 28): Extra build slot on Brine
+- 672.0 h (day 28): Extra build slot on Tessaly
+- 672.0 h (day 28): Extra build slot on Dusk Cairn
+- 684.0 h (day 29): Extra build slot on Cinder
+- 684.0 h (day 29): Extra build slot on Brine
+- 684.0 h (day 29): Extra build slot on Tessaly
+- 684.0 h (day 29): Extra build slot on Dusk Cairn
+- 702.0 h (day 30): Extra build slot on Cinder
+- 702.0 h (day 30): Extra build slot on Tessaly
+- 702.0 h (day 30): Extra build slot on Dusk Cairn
+- 714.0 h (day 30): Contract 59 completed
+- 714.0 h (day 30): Contract 60 completed
 
 ## Dead zones
 
@@ -337,33 +355,29 @@ None.
 
 | Resource | Stock |
 |---|---:|
-| iron_ore | 190K |
-| copper_ore | 190K |
-| silicon | 190K |
-| water_ice | 179K |
-| nickel | 131K |
-| ammonia | 179K |
-| hydrogen | 179K |
-| helium_3 | 67.3K |
-| sulfur | 20.7K |
-| rare_earths | 28.6K |
-| steel | 370K |
-| copper_wire | 207K |
-| silicon_wafer | 238K |
-| water | 222K |
-| oxygen | 180K |
-| fuel | 79.2K |
-| fertilizer | 179K |
-| food | 44.8K |
-| circuit | 134K |
-| hull_plate | 147K |
-| magnet | 44K |
-| reactor_core | 154K |
-| habitat_module | 13K |
-| cargo_ship | 83.3 |
-| outpost_kit | 4.9K |
-| station_segment | 132K |
-| survey_drone | 121K |
+| iron_ore | 246K |
+| nickel | 83K |
+| ammonia | 143K |
+| hydrogen | 183K |
+| helium_3 | 79.2K |
+| sulfur | 87.7K |
+| rare_earths | 47.1K |
+| steel | 422K |
+| copper_wire | 339K |
+| silicon_wafer | 205K |
+| water | 226K |
+| oxygen | 318K |
+| fuel | 42.5K |
+| fertilizer | 143K |
+| food | 35.7K |
+| circuit | 131K |
+| hull_plate | 107K |
+| magnet | 43.6K |
+| reactor_core | 122K |
+| habitat_module | 25.1K |
+| cargo_ship | 81.1 |
+| outpost_kit | 5.66K |
+| survey_drone | 6.13K |
 
 ## Bottleneck log
 
@@ -381,105 +395,105 @@ None.
 - #15 90.0h: Vastmere storage is full of Station Segment: output is being wasted
 - #16 96.0h: Plate Press on Vastmere is running at 7%: Steel into Vastmere is limited by route r82's rate (0.75/s); raise its rate
 - #17 102.0h: Magnet Works on Hollow Reach is running at 12%: Rare Earths into Hollow Reach is limited by Hollow Reach's storage (14.2/s); a Depot raises it
-- #18 108.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by route r101's rate (0.75/s); raise its rate
-- #19 114.0h: Plate Press on Cinder is running at 0%: Steel into Cinder is limited by route r97's rate (0.75/s); raise its rate
-- #20 120.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (23.1/s); a Depot raises it
-- #21 126.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (30.8/s); a Depot raises it
-- #22 132.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (34.4/s); a Depot raises it
-- #23 138.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (34.4/s); a Depot raises it
-- #24 144.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (34.4/s); a Depot raises it
-- #25 150.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (34.4/s); a Depot raises it
-- #26 156.0h: Dusk Cairn storage is full of Hydrogen: output is being wasted
-- #27 162.0h: Plate Press on Dusk Cairn is running at 0%: Steel into Dusk Cairn is limited by route r154's rate (0.75/s); raise its rate
-- #28 168.0h: Electrolyzer on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by route r144's 1 Cargo Ship (10/s); assign more ships
-- #29 174.0h: Electrolyzer on Dusk Cairn is running at 0%: Water into Dusk Cairn is limited by route r144's 1 Cargo Ship (10/s); assign more ships
-- #30 180.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (52.4/s); a Depot raises it
-- #31 186.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (52.4/s); a Depot raises it
-- #32 192.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (52.4/s); a Depot raises it
-- #33 198.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (55/s); a Depot raises it
-- #34 204.0h: Station Dock on Hollow Reach is running at 0%: not enough Circuit
-- #35 210.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (59/s); a Depot raises it
-- #36 216.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (60/s); a Depot raises it
-- #37 222.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #38 228.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #39 234.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #40 240.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #41 246.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #42 252.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #43 258.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #44 264.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #45 270.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #46 276.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (62.9/s); a Depot raises it
-- #47 282.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #48 288.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (65.7/s); a Depot raises it
-- #49 294.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (65.7/s); a Depot raises it
-- #50 300.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (65.7/s); a Depot raises it
-- #51 306.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (65.7/s); a Depot raises it
-- #52 312.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (65.7/s); a Depot raises it
-- #53 318.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (66.8/s); a Depot raises it
-- #54 324.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (66.8/s); a Depot raises it
-- #55 330.0h: Plate Press on Hollow Reach is running at 0%: Steel into Hollow Reach is limited by route r99's 1 Cargo Ship (10/s); assign more ships
-- #56 336.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (67.9/s); a Depot raises it
-- #57 342.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #58 348.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #59 354.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #60 360.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #61 366.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #62 372.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #63 378.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #64 384.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #65 390.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #66 396.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #67 402.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #68 408.0h: Module Works on Tessaly is running at 0%: not enough Circuit
-- #69 414.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #70 420.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #71 426.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #72 432.0h: Shipyard on Cinder is running at 0%: not enough Circuit
-- #73 438.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #74 444.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #75 450.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #76 456.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #77 462.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (70.1/s); a Depot raises it
-- #78 468.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #79 474.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #80 480.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #81 486.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #82 492.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #83 498.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #84 504.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #85 510.0h: Plate Press on Vastmere is running at 0%: Steel into Vastmere is limited by route r82's 3 Cargo Ships (30/s); assign more ships
-- #86 516.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #87 522.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #88 528.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #89 534.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #90 540.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (133/s); a Depot raises it
-- #91 546.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #92 552.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (134/s); a Depot raises it
-- #93 558.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (134/s); a Depot raises it
-- #94 564.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #95 570.0h: Shipyard on Dusk Cairn is running at 0%: not enough Circuit
-- #96 576.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #97 582.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
+- #18 108.0h: Cinder storage is full of Hull Plate: output is being wasted
+- #19 114.0h: Cinder storage is full of Hull Plate: output is being wasted
+- #20 120.0h: Hollow Reach storage is full of Hull Plate: output is being wasted
+- #21 126.0h: Hollow Reach storage is full of Hull Plate: output is being wasted
+- #22 132.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (38/s); a Depot raises it
+- #23 138.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (38/s); a Depot raises it
+- #24 144.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (40/s); a Depot raises it
+- #25 150.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (40/s); a Depot raises it
+- #26 156.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (40/s); a Depot raises it
+- #27 162.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (40/s); a Depot raises it
+- #28 168.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (40/s); a Depot raises it
+- #29 174.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (40/s); a Depot raises it
+- #30 180.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (42/s); a Depot raises it
+- #31 186.0h: Hollow Reach storage is full of Water: output is being wasted
+- #32 192.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (42/s); a Depot raises it
+- #33 198.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (42/s); a Depot raises it
+- #34 204.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (42/s); a Depot raises it
+- #35 210.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (42/s); a Depot raises it
+- #36 216.0h: Station Dock on Hollow Reach is running at 0%: not enough Circuit
+- #37 222.0h: Hollow Reach storage is full of Station Segment: output is being wasted
+- #38 228.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (44/s); a Depot raises it
+- #39 234.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (44/s); a Depot raises it
+- #40 240.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #41 246.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (44/s); a Depot raises it
+- #42 252.0h: Plate Press on Tessaly is running at 0%: not enough Steel
+- #43 258.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (44/s); a Depot raises it
+- #44 264.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (44/s); a Depot raises it
+- #45 270.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (44/s); a Depot raises it
+- #46 276.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (46/s); a Depot raises it
+- #47 282.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (46/s); a Depot raises it
+- #48 288.0h: Mine on Dusk Cairn has no crew
+- #49 294.0h: Ice Melter on Hollow Reach is running at 0%: Water Ice into Hollow Reach is limited by route r145's 1 Cargo Ship (10/s); assign more ships
+- #50 300.0h: Ice Melter on Hollow Reach is running at 0%: Water Ice into Hollow Reach is limited by route r145's 1 Cargo Ship (10/s); assign more ships
+- #51 306.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (46/s); a Depot raises it
+- #52 312.0h: Module Works on Dusk Cairn is running at 0%: not enough Hull Plate
+- #53 318.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (46/s); a Depot raises it
+- #54 324.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (46/s); a Depot raises it
+- #55 330.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (46/s); a Depot raises it
+- #56 336.0h: Cinder storage is full of Fuel: output is being wasted
+- #57 342.0h: Plate Press on Hollow Reach is running at 0%: Steel into Hollow Reach is limited by route r99's 2 Cargo Ships (20/s); assign more ships
+- #58 348.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #59 354.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #60 360.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #61 366.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #62 372.0h: Plate Press on Vastmere is running at 0%: Steel into Vastmere is limited by route r82's rate (22.3/s); raise its rate
+- #63 378.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (171/s); a Depot raises it
+- #64 384.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (171/s); a Depot raises it
+- #65 390.0h: Shipyard on Tessaly is running at 0%: not enough Circuit
+- #66 396.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (171/s); a Depot raises it
+- #67 402.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (171/s); a Depot raises it
+- #68 408.0h: Plate Press on Tessaly is running at 0%: not enough Steel
+- #69 414.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (171/s); a Depot raises it
+- #70 420.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (171/s); a Depot raises it
+- #71 426.0h: Ice Melter on Hollow Reach is running at 0%: not enough Water Ice
+- #72 432.0h: Ice Melter on Hollow Reach is running at 0%: not enough Water Ice
+- #73 438.0h: Ice Melter on Hollow Reach is running at 0%: not enough Water Ice
+- #74 444.0h: Ice Melter on Hollow Reach is running at 0%: not enough Water Ice
+- #75 450.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #76 456.0h: Tessaly storage is full of Water Ice: output is being wasted
+- #77 462.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #78 468.0h: Shipyard on Cinder is running at 0%: not enough Circuit
+- #79 474.0h: Ice Melter on Hollow Reach is running at 0%: not enough Water Ice
+- #80 480.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #81 486.0h: Fuel Refinery on Dusk Cairn is running at 0%: not enough Hydrogen
+- #82 492.0h: Fuel Refinery on Dusk Cairn is running at 0%: not enough Hydrogen
+- #83 498.0h: Dusk Cairn storage is full of Fuel: output is being wasted
+- #84 504.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #85 510.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #86 516.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #87 522.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #88 528.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #89 534.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #90 540.0h: Fuel Refinery on Dusk Cairn is running at 0%: Hydrogen into Dusk Cairn is limited by route r276's rate (9.81/s); raise its rate
+- #91 546.0h: Fuel Refinery on Dusk Cairn is running at 0%: Oxygen into Dusk Cairn is limited by route r277's rate (4.91/s); raise its rate
+- #92 552.0h: Fuel Refinery on Dusk Cairn is running at 0%: Hydrogen into Dusk Cairn is limited by route r276's 1 Cargo Ship (10/s); assign more ships
+- #93 558.0h: Circuit Fab on Cinder is running at 0%: Copper Wire into Cinder is limited by route r317's rate (0.4/s); raise its rate
+- #94 564.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #95 570.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (173/s); a Depot raises it
+- #96 576.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #97 582.0h: Plate Press on Cinder is running at 0%: not enough Steel
 - #98 588.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #99 594.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #100 600.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #101 606.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #102 612.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #103 618.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #104 624.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #105 630.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #106 636.0h: Plate Press on Cinder is running at 0%: not enough Steel
-- #107 642.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #108 648.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #109 654.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #110 660.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #111 666.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #112 672.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (135/s); a Depot raises it
-- #113 678.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (136/s); a Depot raises it
-- #114 684.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (136/s); a Depot raises it
-- #115 690.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (136/s); a Depot raises it
-- #116 696.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (136/s); a Depot raises it
-- #117 702.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (136/s); a Depot raises it
-- #118 708.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (136/s); a Depot raises it
-- #119 714.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (136/s); a Depot raises it
+- #99 594.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #100 600.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #101 606.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #102 612.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #103 618.0h: Plate Press on Cinder is running at 0%: not enough Steel
+- #104 624.0h: Propellant Mixer on Tessaly is running at 0%: not enough Sulfur
+- #105 630.0h: Tessaly storage is full of Fuel: output is being wasted
+- #106 636.0h: Propellant Mixer on Dusk Cairn is running at 0%: Sulfur into Dusk Cairn is limited by route r328's rate (0.5/s); raise its rate
+- #107 642.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (241/s); a Depot raises it
+- #108 648.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (241/s); a Depot raises it
+- #109 654.0h: Propellant Mixer on Dusk Cairn is running at 0%: Sulfur into Dusk Cairn is limited by route r328's 3 Cargo Ships (30/s); assign more ships
+- #110 660.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (241/s); a Depot raises it
+- #111 666.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (251/s); a Depot raises it
+- #112 672.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (255/s); a Depot raises it
+- #113 678.0h: Propellant Mixer on Tessaly is running at 0%: Sulfur into Tessaly is limited by route r360's 1 Cargo Ship (10/s); assign more ships
+- #114 684.0h: Propellant Mixer on Dusk Cairn is running at 0%: Sulfur into Dusk Cairn is limited by route r328's 8 Cargo Ships (80/s); assign more ships
+- #115 690.0h: Hydrogen Furnace on Brine is running at 0%: Iron Ore into Brine is limited by route r398's rate (0.5/s); raise its rate
+- #116 696.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (267/s); a Depot raises it
+- #117 702.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (267/s); a Depot raises it
+- #118 708.0h: Hydrogen Furnace on Dusk Cairn is running at 0%: Iron Ore into Dusk Cairn is limited by route r400's 1 Cargo Ship (10/s); assign more ships
+- #119 714.0h: Plate Press on Tessaly is running at 0%: Steel into Tessaly is limited by Tessaly's storage (267/s); a Depot raises it
