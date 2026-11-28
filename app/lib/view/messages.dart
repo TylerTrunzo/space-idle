@@ -156,6 +156,7 @@ final class _Words {
       'Nothing is being sold: turn on auto-sell or sell goods',
     BottleneckKind.megaprojectDiversion => diversion(n),
     BottleneckKind.keepBlocksDelivery => keepBlocks(n),
+    BottleneckKind.contractBlocksDelivery => contractBlocks(n),
     BottleneckKind.routeLimited => '${whoIsRunning(n)}: ${routeLimit(n)}',
   };
 
@@ -189,6 +190,18 @@ final class _Words {
     return '${megaproject(n.megaprojectId)} still needs ${res(n.resourceId)}, '
         'but ${body(n.bodyId)} keeps ${formatNumber(held)} of it back for its '
         'auto-sell keepAtLeast$keep';
+  }
+
+  /// "Contract #c205 holds 104K Survey Drones the Orbital Station needs":
+  /// an open contract keeps a good back that a megaproject fed on its own
+  /// still owes.
+  String contractBlocks(Bottleneck n) {
+    final held = n.heldForContract ?? const BigNum.zero();
+    final what = res(n.resourceId);
+    final one = held == BigNum.from(1);
+    return 'Contract #${n.contractId} holds ${formatNumber(held)} '
+        '${one ? what : plural(what)} the ${megaproject(n.megaprojectId)} '
+        'needs';
   }
 
   /// "Smelter on Brine is running at 39%", or "2 Smelters on Brine are

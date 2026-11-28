@@ -224,6 +224,27 @@ void main() {
       );
     });
 
+    test('contractBlocksDelivery names the contract and what it holds', () {
+      Bottleneck held(num n) => Bottleneck(
+        kind: BottleneckKind.contractBlocksDelivery,
+        bodyId: null,
+        buildingId: null,
+        resourceId: 'survey_drone',
+        runFraction: 0,
+        megaprojectId: 'orbital_station',
+        contractId: 'c205',
+        heldForContract: BigNum.from(n),
+      );
+      expect(
+        text(held(104000)),
+        'Contract #c205 holds 104K Survey Drones the Orbital Station needs',
+      );
+      expect(
+        text(held(1)),
+        'Contract #c205 holds 1 Survey Drone the Orbital Station needs',
+      );
+    });
+
     group('routeLimited names what holds the route back', () {
       late String routeId;
       setUp(() {
@@ -316,6 +337,8 @@ void main() {
           routeId: 'r_none',
           binding: RouteLimit.rate,
           routePerSec: 1,
+          contractId: 'c1',
+          heldForContract: BigNum.from(1),
         );
         expect(text(n), isNotEmpty, reason: kind.name);
       }
