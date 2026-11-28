@@ -5,6 +5,9 @@ import 'package:space_idle/ui/controller_scope.dart';
 import 'package:space_idle/ui/map/star_map.dart';
 import 'package:space_idle/ui/planet/planet_panel.dart';
 import 'package:space_idle/ui/settings_sheet.dart';
+import 'package:space_idle/ui/tabs/crew_tab.dart';
+import 'package:space_idle/ui/tabs/production_tab.dart';
+import 'package:space_idle/ui/tabs/trade_tab.dart';
 import 'package:space_idle/ui/top_bar.dart';
 
 /// The selected body, and how to change it, for any widget in the shell.
@@ -15,6 +18,7 @@ class ShellScope extends InheritedWidget {
     required this.selectedId,
     required this.selectBody,
     required this.clearSelection,
+    this.showOnMap,
     required super.child,
   });
 
@@ -26,6 +30,13 @@ class ShellScope extends InheritedWidget {
 
   /// Closes the panel.
   final VoidCallback clearSelection;
+
+  /// Switches to the Map tab with body [id] selected; null where the
+  /// scope has no tabs to switch ([openOnMap] then only selects).
+  final void Function(String id)? showOnMap;
+
+  /// Opens body [id]'s panel on the Map tab, from another tab.
+  void openOnMap(String id) => (showOnMap ?? selectBody)(id);
 
   /// The scope above [context].
   static ShellScope of(BuildContext context) {
@@ -140,6 +151,10 @@ class _ShellState extends State<Shell> {
       selectedId: _selected,
       selectBody: _select,
       clearSelection: _clear,
+      showOnMap: (id) {
+        _select(id);
+        setState(() => _tab = _Tab.map);
+      },
       // Back closes the selected body's panel before it leaves the app.
       child: PopScope(
         canPop: _selected == null,
@@ -191,11 +206,9 @@ class _ShellState extends State<Shell> {
       sheet: _sheet,
       onHeaderTap: _toggleSheet,
     ),
-    // Tasks 7 and 8 fill these.
-    _Tab.production || _Tab.crew || _Tab.trade => Center(
-      key: ValueKey('tab-${t.label}'),
-      child: Text('${t.label} is on its way'),
-    ),
+    _Tab.production => ProductionTab(key: ValueKey('tab-${t.label}')),
+    _Tab.crew => CrewTab(key: ValueKey('tab-${t.label}')),
+    _Tab.trade => TradeTab(key: ValueKey('tab-${t.label}')),
   };
 }
 

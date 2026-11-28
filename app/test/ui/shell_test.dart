@@ -181,6 +181,25 @@ void main() {
     expect(find.byKey(Shell.sidePanelKey), findsNothing);
   });
 
+  testWidgets('a body header on Production opens its panel on the Map', (
+    tester,
+  ) async {
+    await _boot(tester, size: const Size(1000, 800));
+    await tester.tap(find.text('Production').last);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('production-body-kora')));
+    await tester.pump();
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.selectedIndex, 0, reason: 'back on the Map tab');
+    expect(
+      find.descendant(
+        of: find.byKey(Shell.sidePanelKey),
+        matching: find.text('Kora'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('ShellScope.selectBody selects from anywhere', (tester) async {
     await _boot(tester, size: const Size(1000, 800));
     ShellScope.of(tester.element(find.byType(TopBar))).selectBody('cinder');

@@ -47,7 +47,7 @@ class _RoutesSectionState extends State<RoutesSection> {
         if (v.routesOut.isEmpty && v.routesIn.isEmpty)
           Text('No routes yet.', style: muted),
         for (final r in [...v.routesOut, ...v.routesIn])
-          _RouteCard(key: ValueKey('route-${r.id}'), view: r),
+          RouteCard(key: ValueKey('route-${r.id}'), view: r),
         const SizedBox(height: 8),
         if (form.destinations.isEmpty)
           Text(
@@ -97,16 +97,18 @@ class _RoutesSectionState extends State<RoutesSection> {
 
 /// One route: what it carries where, its figures, its status and stop
 /// level; Edit (rate, ships and stop level) and Remove.
-class _RouteCard extends StatefulWidget {
-  const _RouteCard({super.key, required this.view});
+class RouteCard extends StatefulWidget {
+  /// Creates the card for [view]; the Trade tab lists every route with it.
+  const RouteCard({super.key, required this.view});
 
+  /// The route.
   final RouteView view;
 
   @override
-  State<_RouteCard> createState() => _RouteCardState();
+  State<RouteCard> createState() => _RouteCardState();
 }
 
-class _RouteCardState extends State<_RouteCard> {
+class _RouteCardState extends State<RouteCard> {
   bool _editing = false;
   final TextEditingController _rate = TextEditingController();
   final TextEditingController _stop = TextEditingController();
