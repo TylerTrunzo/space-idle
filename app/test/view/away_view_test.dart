@@ -117,6 +117,27 @@ void main() {
     late GameController c;
     setUp(() async => c = await _back(_newGame(), const Duration(minutes: 1)));
 
+    test('a contract hold whose contract has left the board is gone', () {
+      final v = awayView(c, [
+        _summary(
+          c,
+          top: [
+            Bottleneck(
+              kind: BottleneckKind.contractBlocksDelivery,
+              bodyId: null,
+              buildingId: null,
+              resourceId: 'hull_plate',
+              runFraction: 0,
+              megaprojectId: 'orbital_station',
+              contractId: 'c_gone',
+              heldForContract: BigNum.from(5),
+            ),
+          ],
+        ),
+      ]);
+      expect(v.attention, isEmpty);
+    });
+
     test('those under 0.1% of income are hidden', () {
       // 1K a second is 3.6M an hour: 0.1% is 3.6K an hour.
       final v = awayView(c, [
@@ -261,6 +282,46 @@ void main() {
         ('Iron Ore', '-200', false),
       ]);
       expect(v.waste, 'Wasted 1.2K units, worth about 3K credits');
+    });
+
+    test('a stage with no level advanced a level, never "level ?"', () async {
+      final c = await _back(_newGame(), const Duration(minutes: 1));
+      final crew = crewTotals(c.state, content, _p);
+      final v = awayView(c, [
+        OfflineSummary(
+          awayFrom: 0,
+          secondsSimulated: 60,
+          secondsAway: 60,
+          capSeconds: 43200,
+          stockGained: {
+            'steel': BigNum.from(500.6),
+            'iron_ore': BigNum.from(-20.7),
+            'water': BigNum.from(0.3),
+          },
+          creditsGained: BigNum.from(1),
+          totalWasted: const BigNum.zero(),
+          wastedValue: const BigNum.zero(),
+          milestonesReached: const [],
+          topBottlenecks: const [],
+          projectsCompleted: const [
+            CompletedProject(
+              kind: ProjectKind.megaprojectStage,
+              targetId: 'orbital_station',
+              name: 'Orbital Station',
+            ),
+          ],
+          housingBefore: crew,
+          housingAfter: crew,
+          creditsPerSecBefore: BigNum.from(1),
+          creditsPerSecAfter: BigNum.from(1),
+        ),
+      ]);
+      expect(v.finished, ['Orbital Station advanced a level']);
+      // Whole units, toward zero; a change under one unit is no change.
+      expect(v.stock.map((l) => (l.name, l.amount)), [
+        ('Steel', '+500'),
+        ('Iron Ore', '-20'),
+      ]);
     });
 
     test('under one credit either way shows +0', () async {

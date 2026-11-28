@@ -65,9 +65,10 @@ class _AwaySummaryGateState extends State<AwaySummaryGate> {
 /// milestones, stock changes, waste, the problems worth a look with a Go
 /// each, contracts that need attention, and what became affordable.
 ///
-/// OK or a Go clears the summaries and closes it; a Go pops with its
-/// target.
-class AwayDialog extends StatelessWidget {
+/// It is worked out when it opens and again only when another summary
+/// lands, so what it says holds still while the game ticks under it. OK or
+/// a Go clears the summaries and closes it; a Go pops with its target.
+class AwayDialog extends StatefulWidget {
   /// Creates the dialog for [controller]'s pending summaries.
   const AwayDialog({super.key, required this.controller});
 
@@ -75,180 +76,278 @@ class AwayDialog extends StatelessWidget {
   final GameController controller;
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) {
-        final v = awayView(controller, controller.pendingAwaySummaries);
-        final text = Theme.of(context).textTheme;
-        final mono = monoText(text.bodyMedium);
-        final muted = text.bodyMedium?.copyWith(color: Palette.muted);
-        void close([AwayGo? go]) {
-          controller.clearAwaySummary();
-          Navigator.of(context).pop(go);
-        }
+  State<AwayDialog> createState() => _AwayDialogState();
+}
 
-        Widget section(String title, String key, List<Widget> rows) => Padding(
+class _AwayDialogState extends State<AwayDialog> {
+  late AwayView _view;
+  int _count = 0;
+
+  GameController get _c => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _work();
+    _c.addListener(_follow);
+  }
+
+  @override
+  void dispose() {
+    _c.removeListener(_follow);
+    super.dispose();
+  }
+
+  void _work() {
+    _count = _c.pendingAwaySummaries.length;
+    _view = awayView(_c, _c.pendingAwaySummaries);
+  }
+
+  /// A new summary (a resume while open) is the only reason to work it
+  /// out again; once cleared there is nothing to show.
+  void _follow() {
+    final n = _c.pendingAwaySummaries.length;
+    if (n == _count || n == 0) return;
+    setState(_work);
+  }
+
+  void _close([AwayGo? go]) {
+    _c.clearAwaySummary();
+    Navigator.of(context).pop(go);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final v = _view;
+    final text = Theme.of(context).textTheme;
+    final muted = text.bodyMedium?.copyWith(color: Palette.muted);
+    return AlertDialog(
+      scrollable: true,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('While you were away', style: muted),
+          const SizedBox(height: 4),
+          Text(v.headline, style: text.titleMedium),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [..._top(context, v), ..._sections(v)],
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('away-ok'),
+          onPressed: _close,
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+
+  /// The time away, the net credits and where they came from.
+  List<Widget> _top(BuildContext context, AwayView v) {
+    final text = Theme.of(context).textTheme;
+    final muted = text.bodyMedium?.copyWith(color: Palette.muted);
+    return [
+      _AwayRow(
+        key: const ValueKey('away-time'),
+        icon: v.capped ? Icons.hourglass_bottom : Icons.schedule,
+        color: v.capped ? Palette.amber : Palette.muted,
+        text: v.timeLine,
+        style: monoText(text.bodyMedium),
+        gap: 0,
+      ),
+      _AwayRow(
+        key: const ValueKey('away-net'),
+        icon: Icons.account_balance_wallet_outlined,
+        color: Palette.cyan,
+        text: v.net,
+        style: monoText(text.titleMedium),
+      ),
+      for (final g in v.gains) Text(g, style: muted),
+    ];
+  }
+
+  /// Each list of the summary under its heading, and the closing lines.
+  List<Widget> _sections(AwayView v) {
+    _AwayRow problem(AwayProblem p, String key, String goKey, IconData icon) =>
+        _AwayRow(
           key: ValueKey(key),
-          padding: const EdgeInsets.only(top: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Semantics(
-                header: true,
-                child: Text(title, style: text.titleSmall),
-              ),
-              ...rows,
-            ],
-          ),
+          icon: icon,
+          color: Palette.amber,
+          text: p.text,
+          goKey: goKey,
+          onGo: switch (p.go) {
+            final go? => () => _close(go),
+            null => null,
+          },
         );
-        Widget line(IconData icon, Color color, String s, {TextStyle? style}) =>
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(icon, size: 18, color: color),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text(s, style: style)),
-                ],
-              ),
-            );
-        Widget problem(
-          AwayProblem p,
-          String key,
-          String goKey,
-          Color color,
-          IconData icon,
-        ) => Padding(
-          key: ValueKey(key),
-          padding: const EdgeInsets.only(top: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 6),
-              Expanded(child: Text(p.text)),
-              if (p.go case final go?)
-                TextButton(
-                  key: ValueKey(goKey),
-                  onPressed: () => close(go),
-                  child: const Text('Go'),
-                ),
-            ],
-          ),
-        );
-        return AlertDialog(
-          scrollable: true,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('While you were away', style: muted),
-              const SizedBox(height: 4),
-              Text(v.headline, style: text.titleMedium),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                key: const ValueKey('away-time'),
-                padding: EdgeInsets.zero,
-                child: line(
-                  v.capped ? Icons.hourglass_bottom : Icons.schedule,
-                  v.capped ? Palette.amber : Palette.muted,
-                  v.timeLine,
-                  style: mono,
-                ),
-              ),
-              Padding(
-                key: const ValueKey('away-net'),
-                padding: EdgeInsets.zero,
-                child: line(
-                  Icons.account_balance_wallet_outlined,
-                  Palette.cyan,
-                  v.net,
-                  style: monoText(text.titleMedium),
-                ),
-              ),
-              for (final g in v.gains) Text(g, style: muted),
-              if (v.attention.isNotEmpty)
-                section('Needs your attention', 'away-attention', [
-                  for (final (i, p) in v.attention.indexed)
-                    problem(
-                      p,
-                      'away-attention-$i',
-                      'away-attention-go-$i',
-                      Palette.amber,
-                      Icons.assignment_late_outlined,
-                    ),
-                ]),
-              if (v.problems.isNotEmpty)
-                section('Worth a look', 'away-problems', [
-                  for (final (i, p) in v.problems.indexed)
-                    problem(
-                      p,
-                      'away-problem-$i',
-                      'away-go-$i',
-                      Palette.amber,
-                      Icons.warning_amber_outlined,
-                    ),
-                ]),
-              if (v.finished.isNotEmpty)
-                section('Finished', 'away-finished', [
-                  for (final f in v.finished)
-                    line(Icons.check_circle_outline, Palette.green, f),
-                ]),
-              if (v.milestones.isNotEmpty)
-                section('Milestones', 'away-milestones', [
-                  for (final m in v.milestones)
-                    line(Icons.flag_outlined, Palette.cyan, m),
-                ]),
-              if (v.contracts.isNotEmpty)
-                section('New contracts', 'away-contracts', [
-                  for (final k in v.contracts)
-                    line(Icons.assignment_outlined, Palette.cyan, k),
-                ]),
-              if (v.stock.isNotEmpty)
-                section('Stock', 'away-stock', [
-                  for (final s in v.stock)
-                    line(
-                      s.gain ? Icons.arrow_upward : Icons.arrow_downward,
-                      s.gain ? Palette.green : Palette.red,
-                      '${s.name} ${s.amount}',
-                      style: mono,
-                    ),
-                ]),
-              if (v.waste case final w?)
-                Padding(
-                  key: const ValueKey('away-waste'),
-                  padding: const EdgeInsets.only(top: 8),
-                  child: line(Icons.delete_outline, Palette.amber, w),
-                ),
-              if (v.afford case final a?)
-                Padding(
-                  key: const ValueKey('away-afford'),
-                  padding: const EdgeInsets.only(top: 8),
-                  child: line(Icons.shopping_cart_outlined, Palette.green, a),
-                ),
-              if (v.nextGoal case final g?)
-                Padding(
-                  key: const ValueKey('away-next'),
-                  padding: const EdgeInsets.only(top: 8),
-                  child: line(Icons.trending_up, Palette.cyan, g),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              key: const ValueKey('away-ok'),
-              onPressed: close,
-              child: const Text('OK'),
+    return [
+      if (v.attention.isNotEmpty)
+        _Section('Needs your attention', 'away-attention', [
+          for (final (i, p) in v.attention.indexed)
+            problem(
+              p,
+              'away-attention-$i',
+              'away-attention-go-$i',
+              Icons.assignment_late_outlined,
             ),
-          ],
-        );
-      },
+        ]),
+      if (v.problems.isNotEmpty)
+        _Section('Worth a look', 'away-problems', [
+          for (final (i, p) in v.problems.indexed)
+            problem(
+              p,
+              'away-problem-$i',
+              'away-go-$i',
+              Icons.warning_amber_outlined,
+            ),
+        ]),
+      if (v.finished.isNotEmpty)
+        _Section('Finished', 'away-finished', [
+          for (final f in v.finished)
+            _AwayRow(
+              icon: Icons.check_circle_outline,
+              color: Palette.green,
+              text: f,
+            ),
+        ]),
+      if (v.milestones.isNotEmpty)
+        _Section('Milestones', 'away-milestones', [
+          for (final m in v.milestones)
+            _AwayRow(icon: Icons.flag_outlined, color: Palette.cyan, text: m),
+        ]),
+      if (v.contracts.isNotEmpty)
+        _Section('New contracts', 'away-contracts', [
+          for (final k in v.contracts)
+            _AwayRow(
+              icon: Icons.assignment_outlined,
+              color: Palette.cyan,
+              text: k,
+            ),
+        ]),
+      if (v.stock.isNotEmpty)
+        _Section('Stock', 'away-stock', [
+          for (final s in v.stock)
+            _AwayRow(
+              icon: s.gain ? Icons.arrow_upward : Icons.arrow_downward,
+              color: s.gain ? Palette.green : Palette.red,
+              text: '${s.name} ${s.amount}',
+              mono: true,
+            ),
+        ]),
+      if (v.waste case final w?)
+        _AwayRow(
+          key: const ValueKey('away-waste'),
+          icon: Icons.delete_outline,
+          color: Palette.amber,
+          text: w,
+          gap: 8,
+        ),
+      if (v.afford case final a?)
+        _AwayRow(
+          key: const ValueKey('away-afford'),
+          icon: Icons.shopping_cart_outlined,
+          color: Palette.green,
+          text: a,
+          gap: 8,
+        ),
+      if (v.nextGoal case final g?)
+        _AwayRow(
+          key: const ValueKey('away-next'),
+          icon: Icons.trending_up,
+          color: Palette.cyan,
+          text: g,
+          gap: 8,
+        ),
+    ];
+  }
+}
+
+/// A heading and its rows.
+class _Section extends StatelessWidget {
+  const _Section(this.title, this.id, this.rows);
+
+  final String title;
+  final String id;
+  final List<Widget> rows;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    key: ValueKey(id),
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+        ),
+        ...rows,
+      ],
+    ),
+  );
+}
+
+/// One line of the summary: an icon and its text, so no state is told by
+/// colour alone, and a Go when there is somewhere to go.
+class _AwayRow extends StatelessWidget {
+  const _AwayRow({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.text,
+    this.style,
+    this.mono = false,
+    this.gap = 4,
+    this.onGo,
+    this.goKey,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+  final TextStyle? style;
+
+  /// Whether the text is a figure, in the monospace face.
+  final bool mono;
+
+  /// Space above the row.
+  final double gap;
+
+  /// Closes the dialog for the row's target; null hides Go.
+  final VoidCallback? onGo;
+
+  /// Names the Go button, for tests.
+  final String? goKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final go = onGo;
+    final body = Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: EdgeInsets.only(top: gap),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text, style: style ?? (mono ? monoText(body) : null)),
+          ),
+          if (go != null)
+            TextButton(
+              key: switch (goKey) {
+                final k? => ValueKey<String>(k),
+                null => null,
+              },
+              onPressed: go,
+              child: const Text('Go'),
+            ),
+        ],
+      ),
     );
   }
 }

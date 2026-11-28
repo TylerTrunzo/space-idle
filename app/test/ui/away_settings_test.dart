@@ -92,6 +92,39 @@ void main() {
   ].join(' | ');
 
   group('the away dialog', () {
+    testWidgets('it is worked out once: what it says holds still while open', (
+      tester,
+    ) async {
+      await back(tester, newGame(), const Duration(hours: 2));
+      expect(_key('away-attention-0'), findsNothing);
+      // A contract hold appears in the live report while it is open.
+      final c = _controllerIn(tester);
+      c.run(
+        const SetMegaprojectAutoCommand(
+          _p,
+          'orbital_station',
+          goods: GoodsFeedMode.always,
+        ),
+      );
+      c.state
+          .faction(_p)
+          .contracts
+          .add(
+            ContractState(
+              id: 'c_hull',
+              templateId: 'veyra_bulk',
+              resourceId: 'hull_plate',
+              quantity: BigNum.from(100),
+              rewardCredits: BigNum.from(900),
+              postedAt: c.state.time,
+            ),
+          );
+      c.state.body('kora').stock['hull_plate'] = BigNum.from(60);
+      c.tickSeconds(1);
+      await tester.pump();
+      expect(_key('away-attention-0'), findsNothing);
+    });
+
     /// A Smelter with no crew and an ore store filling up: problems on
     /// Kora worth a Go.
     GameState troubled() {
@@ -164,7 +197,11 @@ void main() {
           );
       c.state.body('kora').stock['hull_plate'] = BigNum.from(60);
       c.tickSeconds(1);
+      // The dialog is worked out again when a new summary lands.
+      clock.advance(const Duration(minutes: 30));
+      await c.resume();
       await tester.pump();
+      expect(c.pendingAwaySummaries, hasLength(2));
       expect(
         textOf(tester, _key('away-attention-0')),
         contains('Contract #c_hull holds'),
@@ -239,9 +276,62 @@ void main() {
       );
       expect(fade.duration, Duration.zero);
       expect(fade.opacity, 1);
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
+      expect(_key('milestone-banner'), findsNothing);
     });
 
-    testWidgets('a new game does not announce what it already has', (
+    testWidgets('a new game clears a banner of the old one', (tester) async {
+      await boot(tester);
+      final c = _controllerIn(tester);
+      c.state.body('brine').ownerId = _p;
+      c.tickSeconds(1);
+      await tester.pump();
+      expect(_key('milestone-banner'), findsOneWidget);
+      await c.newGame();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('First Claim'), findsNothing);
+    });
+
+    testWidgets('one reached in a resume catch-up is left to the away '
+        'summary', (tester) async {
+      await boot(tester);
+      final c = _controllerIn(tester);
+      c.state.body('brine').ownerId = _p;
+      clock.advance(const Duration(hours: 2));
+      await c.resume();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(c.pendingAwaySummaries, isNotEmpty);
+      expect(_key('milestone-banner'), findsNothing);
+      expect(textOf(tester, _key('away-milestones')), contains('First Claim'));
+    });
+
+    testWidgets('one reached under the settings sheet shows once it closes', (
+      tester,
+    ) async {
+      await boot(tester);
+      final c = _controllerIn(tester);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      c.state.body('brine').ownerId = _p;
+      c.tickSeconds(1);
+      await tester.pump();
+      // Longer than a banner lasts, while the sheet covers it.
+      await tester.pump(const Duration(seconds: 6));
+      await tester.tapAt(const Offset(400, 20));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(_key('settings-sheet'), findsNothing);
+      expect(textOf(tester, _key('milestone-banner')), contains('First Claim'));
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('First Claim'), findsNothing);
+    });
+
+    testWidgets('an import does not announce what it already has', (
       tester,
     ) async {
       await boot(tester);

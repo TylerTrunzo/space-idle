@@ -208,8 +208,10 @@ AwayView awayView(GameController c, List<OfflineSummary> all) {
         ProjectKind.claim => 'Claimed ${done.name}',
         ProjectKind.survey => 'Surveyed ${done.name}',
         ProjectKind.expandSlots => 'Extra build slot on ${done.name}',
-        ProjectKind.megaprojectStage =>
-          '${done.name} reached level ${done.level ?? '?'}',
+        ProjectKind.megaprojectStage => switch (done.level) {
+          final level? => '${done.name} reached level $level',
+          null => '${done.name} advanced a level',
+        },
       });
       if (done.level case final level?) {
         levels[done.targetId] = (done.name, level);
@@ -287,12 +289,17 @@ List<String> _contracts(GameController c, List<OfflineSummary> all) {
 }
 
 List<AwayStockLine> _stock(GameController c, List<OfflineSummary> all) {
-  final change = <String, BigNum>{};
+  final sums = <String, BigNum>{};
   for (final x in all) {
     for (final MapEntry(key: id, value: v) in x.stockGained.entries) {
-      change[id] = (change[id] ?? const BigNum.zero()) + v;
+      sums[id] = (sums[id] ?? const BigNum.zero()) + v;
     }
   }
+  // Whole units, toward zero: float residue is no change.
+  final change = {
+    for (final MapEntry(key: id, value: v) in sums.entries)
+      id: v.isNegative ? v.ceil() : v.floor(),
+  };
   double worth(MapEntry<String, BigNum> e) =>
       (e.value.toDouble() *
               (c.content.resources[e.key]?.basePrice.toDouble() ?? 1))
@@ -362,6 +369,9 @@ AwayGo? _goFor(Bottleneck b) => switch (b.kind) {
 /// Every contract holding goods a megaproject needs, from the report on
 /// return and the summaries, each contract once.
 List<AwayProblem> _attention(GameController c, List<OfflineSummary> all) {
+  final board = {for (final k in c.state.faction(c.playerId).contracts) k.id};
+  // Only contracts still on the board: one fulfilled or discarded since
+  // holds nothing, and its Go would find no card.
   final seen = <String>{};
   return [
     for (final b in [
@@ -371,7 +381,8 @@ List<AwayProblem> _attention(GameController c, List<OfflineSummary> all) {
           (b) => b.kind == BottleneckKind.contractBlocksDelivery,
         ),
     ])
-      if (b.contractId case final id? when seen.add('$id/${b.resourceId}'))
+      if (b.contractId case final id?
+          when board.contains(id) && seen.add('$id/${b.resourceId}'))
         AwayProblem(
           text: bottleneckText(c.state, c.content, c.playerId, b),
           go: AwayGoContract(id),
