@@ -49,3 +49,17 @@ copy).
 
 My quick web searches (2026-11-28) found no game called Starwright, Accrete, or Steady State. They did find many
 "Idle Space ___" titles. A search that finds nothing doesn't mean the name is clear, so do the steps above.
+
+## Name checks, 2026-11-28 (Claude, by web search)
+
+This environment can't reach domain registries or social sites, so domain and handle availability is still
+**unchecked**. Check them at the registrar and on each site. Trademark results came from third-party aggregators;
+confirm at the USPTO's own trademark search (tmsearch.uspto.gov).
+
+| Name | What's already out there | Verdict |
+|---|---|---|
+| **Starwright** | A space trading and combat sandbox on itch.io; an open-source browser rocket and orbital-flight game on GitHub (it had a Hacker News post); a pre-release software product at getstarwright.com; a few small GitHub projects. No trademark found. | 🔴 Two other *space games* share the name. Players searching would find them, and either could register it first. |
+| **Brightwork Games** | A UK company of that name, dissolved after a compulsory strike-off; "Brightwork Labs" (location-based games); an itch.io prototype game called "Brightwork"; a dead 2005 BRIGHTWORK software trademark (class 9, not games). | 🟡 Usable. No live games trademark found. Overlaps are small or inactive; Brightwork Labs is the closest. |
+| **Slow Orbit** | *SLOW ORBIT: Idle Planet Conquest*, an idle space game released on Steam in October 2026. | 🔴 Taken, in our exact genre. Don't use it as the game *or* the studio name. |
+| **Accrete** | Only an itch.io user collection called "accrete". No game, app or trademark found. | 🟢 Clear so far. |
+| **Starwrought** | No game, app or trademark found (only lookalikes such as Star Wrath and Voidwrought). | 🟢 Clear so far. Keeps the S icon, but it's harder to spell. |
