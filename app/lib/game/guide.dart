@@ -19,8 +19,11 @@ import 'package:space_idle/view/onboarding.dart';
 /// reported and the guide carries on, fresh if it could not read.
 class Guide extends ChangeNotifier {
   /// Creates the guide for [controller], kept in [store].
-  Guide({required this.controller, required this.store})
-    : _games = controller.gamesStarted {
+  Guide({
+    required this.controller,
+    required this.store,
+    this.readTimeout = const Duration(seconds: 2),
+  }) : _games = controller.gamesStarted {
     controller.addListener(_follow);
   }
 
@@ -32,6 +35,10 @@ class Guide extends ChangeNotifier {
 
   /// Where its place is kept.
   final SettingsStore store;
+
+  /// How long [load] waits for the stored place before starting fresh, so
+  /// a settings read that never answers cannot hold up the launch.
+  final Duration readTimeout;
 
   int _reached = 0;
   bool _skipped = false;
@@ -66,12 +73,13 @@ class Guide extends ChangeNotifier {
         );
 
   /// Reads the stored place, then passes what the state already shows
-  /// done, quietly. It never throws: a failed read is reported and the
-  /// guide starts fresh, and a stored place out of range is clamped.
+  /// done, quietly. It never throws and never waits past [readTimeout]: a
+  /// failed or unanswered read is reported and the guide starts fresh, and
+  /// a stored place out of range is clamped.
   Future<void> load() async {
     String? text;
     try {
-      text = await store.read(key);
+      text = await store.read(key).timeout(readTimeout);
     } catch (e, st) {
       _report(e, st, 'while reading the guide');
     }

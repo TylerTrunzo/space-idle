@@ -140,7 +140,8 @@ String? onboardingDetail(
         for (final b in body.buildings) {
           for (final t in c.buildings[b.defId]!.upgrades.keys) {
             if (upgradeMaxedReason(c, b, t) != null) continue;
-            final cost = upgradeCost(c, b, t)[creditsKey]!;
+            final cost =
+                upgradeCost(c, b, t)[creditsKey] ?? const BigNum.zero();
             if (cheapest == null || cost < cheapest) cheapest = cost;
           }
         }

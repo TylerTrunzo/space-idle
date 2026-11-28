@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:space_idle/game/guide.dart';
 import 'package:space_idle/theme.dart';
@@ -107,7 +109,8 @@ class _GoalStripState extends State<GoalStrip> {
                         tooltip: collapsed
                             ? 'Show all goals'
                             : 'Fold the goals',
-                        onPressed: () => guide.setCollapsed(!collapsed),
+                        onPressed: () =>
+                            unawaited(guide.setCollapsed(!collapsed)),
                       ),
                   ],
                 ),
@@ -171,6 +174,8 @@ class _Goal extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 2),
                       child: LinearProgressIndicator(
                         value: p,
+                        semanticsLabel: '$slot: ${g.title}',
+                        semanticsValue: '${(p * 100).floor()}%',
                         color: Palette.cyan,
                         backgroundColor: Palette.border,
                       ),
@@ -186,14 +191,18 @@ class _Goal extends StatelessWidget {
     );
     final key = ValueKey('goal-${g.slot.name}');
     if (action == null) return KeyedSubtree(key: key, child: row);
-    return InkWell(
+    return Semantics(
       key: key,
-      onTap: () => switch (action) {
-        SelectBodyAction(:final bodyId) => ShellScope.of(
-          context,
-        ).openOnMap(bodyId),
-      },
-      child: row,
+      button: true,
+      hint: 'Show on the map',
+      child: InkWell(
+        onTap: () => switch (action) {
+          SelectBodyAction(:final bodyId) => ShellScope.of(
+            context,
+          ).openOnMap(bodyId),
+        },
+        child: row,
+      ),
     );
   }
 
