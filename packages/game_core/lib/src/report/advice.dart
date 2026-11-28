@@ -303,7 +303,8 @@ final class BestUpgradeSearch {
   final List<UpgradeAdvice> _found = [];
 
   /// The game time of the state searched; null before the first [step].
-  double? at;
+  double? get at => _at;
+  double? _at;
 
   /// Whether every candidate has been previewed.
   bool get done => _candidates != null && _next >= _candidates!.length;
@@ -312,7 +313,7 @@ final class BestUpgradeSearch {
   /// and lists them); true once none is left.
   bool step() {
     final candidates = _candidates ??= () {
-      at = _s.time;
+      _at = _s.time;
       _previewer = UpgradePreviewer(_s, _c, _factionId, before: _before);
       return upgradeCandidates(_s, _c, _factionId);
     }();

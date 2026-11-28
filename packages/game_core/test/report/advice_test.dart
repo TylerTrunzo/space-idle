@@ -264,6 +264,14 @@ void main() {
       expect(search.at, s.time);
     });
 
+    test('its moment is read-only', () {
+      final search = BestUpgradeSearch(s, c, _p)..step();
+      // No setter: only the first step sets it.
+      // ignore: avoid_dynamic_calls
+      expect(() => (search as dynamic).at = 0.0, throwsNoSuchMethodError);
+      expect(search.at, s.time);
+    });
+
     test('it is bestUpgrades, and brute force, on the fixtures', () {
       final k = fixtureContent();
       for (final name in [
