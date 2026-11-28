@@ -51,19 +51,30 @@ class ProjectsTab extends StatefulWidget {
   final SurveyFocus? focus;
 
   @override
-  State<ProjectsTab> createState() => _ProjectsTabState();
+  State<ProjectsTab> createState() => ProjectsTabState();
 }
 
-class _ProjectsTabState extends State<ProjectsTab> {
+/// The tab's state: its scroll position, the rows it can scroll to, and
+/// the Survey row a signal tap marked.
+class ProjectsTabState extends State<ProjectsTab> {
   final ScrollController _scroll = ScrollController();
 
   /// One key per row that can be scrolled to, by name.
   final Map<String, GlobalKey> _keys = {};
 
-  /// The system whose Survey row is marked, after a focus.
+  /// The system whose Survey row is marked, after a focus: until
+  /// [markFor] passes or the next touch on the tab.
   String? _focused;
+  Timer? _unmark;
+
+  /// How long a focused Survey row stays marked.
+  static const Duration markFor = Duration(seconds: 5);
 
   GlobalKey _anchor(String name) => _keys.putIfAbsent(name, GlobalKey.new);
+
+  /// How many rows it keeps a scroll anchor for, for tests.
+  @visibleForTesting
+  int get anchorCount => _keys.length;
 
   @override
   void initState() {
@@ -72,21 +83,30 @@ class _ProjectsTabState extends State<ProjectsTab> {
   }
 
   @override
-  void didUpdateWidget(ProjectsTab old) {
-    super.didUpdateWidget(old);
-    if (widget.focus != old.focus) _focus();
+  void didUpdateWidget(ProjectsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focus != oldWidget.focus) _focus();
   }
 
   @override
   void dispose() {
+    _unmark?.cancel();
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _clearMark() {
+    _unmark?.cancel();
+    _unmark = null;
+    if (_focused != null && mounted) setState(() => _focused = null);
   }
 
   void _focus() {
     final f = widget.focus;
     if (f == null) return;
     _focused = f.systemId;
+    _unmark?.cancel();
+    _unmark = Timer(markFor, _clearMark);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final c = ControllerScope.of(context);
@@ -130,7 +150,13 @@ class _ProjectsTabState extends State<ProjectsTab> {
     final projects = projectViews(c);
     final surveys = surveyViews(c);
     final contracts = contractViews(c);
-    final next = nextContractIn(c);
+    final next = nextContract(c);
+    final shown = <String>{};
+    GlobalKey anchor(String name) {
+      shown.add(name);
+      return _anchor(name);
+    }
+
     Widget heading(String title, String key) => Padding(
       key: ValueKey(key),
       padding: const EdgeInsets.only(top: 16, bottom: 4),
@@ -152,12 +178,12 @@ class _ProjectsTabState extends State<ProjectsTab> {
       heading('Survey', 'h-survey'),
       if (surveys.isEmpty)
         KeyedSubtree(
-          key: _anchor('survey'),
+          key: anchor('survey'),
           child: const _NoSurvey(key: ValueKey('survey-none')),
         ),
       for (final s in surveys)
         KeyedSubtree(
-          key: _anchor('survey-${s.systemId}'),
+          key: anchor('survey-${s.systemId}'),
           child: _SurveyRow(
             key: ValueKey('survey-${s.systemId}'),
             view: s,
@@ -180,10 +206,10 @@ class _ProjectsTabState extends State<ProjectsTab> {
         ),
       for (final k in contracts)
         KeyedSubtree(
-          key: _anchor('contract-${k.id}'),
+          key: anchor('contract-${k.id}'),
           child: ContractCard(key: ValueKey('contract-${k.id}'), view: k),
         ),
-      if (next != null)
+      if (next case final next?)
         Padding(
           key: const ValueKey('next-contract'),
           padding: const EdgeInsets.only(top: 8),
@@ -192,24 +218,29 @@ class _ProjectsTabState extends State<ProjectsTab> {
               const Icon(Icons.schedule, size: 18, color: Palette.muted),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
-                  next == 'due now'
-                      ? 'Next contract due now'
-                      : 'Next contract in $next',
-                  style: muted,
-                ),
+                child: Text(switch (next) {
+                  NextContractDue() => 'Next contract due now',
+                  NextContractIn(:final time) => 'Next contract in $time',
+                }, style: muted),
               ),
             ],
           ),
         ),
       const SizedBox(key: ValueKey('end'), height: 24),
     ];
-    return ColoredBox(
-      color: Palette.panel,
-      child: LazyList(
-        controller: _scroll,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        items: items,
+    // Anchors only for the rows there now; a Go still under way keeps its
+    // own key alive until it is done.
+    _keys.removeWhere((name, _) => !shown.contains(name));
+    return Listener(
+      // The mark goes on the next touch anywhere on the tab.
+      onPointerDown: (_) => _clearMark(),
+      child: ColoredBox(
+        color: Palette.panel,
+        child: LazyList(
+          controller: _scroll,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          items: items,
+        ),
       ),
     );
   }

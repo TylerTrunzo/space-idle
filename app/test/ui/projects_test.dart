@@ -1,3 +1,4 @@
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_core/game_core.dart';
 import 'package:material_ui/material_ui.dart';
@@ -323,6 +324,21 @@ void main() {
       );
     });
 
+    testWidgets('no credits: the credits button says why it is off', (
+      tester,
+    ) async {
+      c.state.faction(_p).credits = BigNum.zero();
+      await pump(tester);
+      final b = tester.widget<ButtonStyleButton>(
+        _key('mp-deliver-orbital_station-credits'),
+      );
+      expect(b.onPressed, isNull);
+      expect(
+        textOf(tester, _key('mp-line-orbital_station-credits')),
+        contains('No credits to deliver'),
+      );
+    });
+
     testWidgets('credits over half of those held take a second tap', (
       tester,
     ) async {
@@ -524,6 +540,55 @@ void main() {
     );
     await tester.pump();
     expect(_key('survey-focus-veyra'), findsOneWidget);
+    // The mark goes after a few seconds.
+    await tester.pump(const Duration(seconds: 7));
+    expect(_key('survey-focus-veyra'), findsNothing);
+  });
+
+  testWidgets('the focus mark goes on the next touch', (tester) async {
+    await pump(
+      tester,
+      size: const Size(400, 700),
+      tab: const ProjectsTab(focus: SurveyFocus('veyra', 1)),
+    );
+    await tester.pump();
+    expect(_key('survey-focus-veyra'), findsOneWidget);
+    await tester.tap(_key('h-projects'));
+    await tester.pump();
+    expect(_key('survey-focus-veyra'), findsNothing);
+  });
+
+  testWidgets('the scroll anchors are only those of rows shown now', (
+    tester,
+  ) async {
+    for (var i = 0; i < 5; i++) {
+      post(id: 'c_$i');
+    }
+    await pump(tester);
+    final state = tester.state<ProjectsTabState>(find.byType(ProjectsTab));
+    // Five contracts and the one Survey row.
+    expect(state.anchorCount, 6);
+    c.state.faction(_p).contracts.clear();
+    c.tickSeconds(1);
+    await tester.pump();
+    expect(state.anchorCount, 1);
+  });
+
+  testWidgets('a long press on Deliver is announced on the button itself', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    c.state.body('kora').stock['hull_plate'] = BigNum.from(300);
+    await pump(tester);
+    final node = tester.getSemantics(
+      _key('mp-deliver-orbital_station-hull_plate'),
+    );
+    expect(node.hintOverrides?.onLongPressHint, 'choose the body');
+    expect(
+      node.getSemanticsData().hasAction(SemanticsAction.longPress),
+      isTrue,
+    );
+    handle.dispose();
   });
 
   testWidgets('360x640 at 2x text: no overflow anywhere in the tab', (
@@ -550,5 +615,58 @@ void main() {
       await tester.pump();
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('360x640 at 2x text: the confirm, the preview, the discard '
+      'and the picker open without overflow', (tester) async {
+    c.state.faction(_p).credits = BigNum.parse('3e7');
+    final brine = c.state.body('brine')..ownerId = _p;
+    c.state.body('kora').stock['hull_plate'] = BigNum.from(300);
+    brine.stock['hull_plate'] = BigNum.from(20);
+    post(id: 'c_ore', resourceId: 'iron_ore', quantity: 100);
+    c.state.body('kora').stock['iron_ore'] = BigNum.from(70);
+    brine.stock['iron_ore'] = BigNum.from(50);
+    post(id: 'c_two', quantity: 100);
+    await pump(tester, size: const Size(360, 640), textScale: 2);
+    Future<void> open(String key) async {
+      await tester.scrollUntilVisible(
+        _key(key),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      // Twice: rows built on the way correct the lazy list's offsets.
+      for (var i = 0; i < 2; i++) {
+        await tester.ensureVisible(_key(key));
+        await tester.pump();
+      }
+      // A row still above the top (the lazy list's estimates): drag it in.
+      final top = tester.getRect(_key(key)).top;
+      if (top < 0) {
+        await tester.dragFrom(const Offset(180, 300), Offset(0, 100 - top));
+        await tester.pump();
+      }
+      await tester.tap(_key(key));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: key);
+    }
+
+    await open('mp-deliver-orbital_station-credits');
+    expect(_key('confirm-mp-orbital_station-credits'), findsOneWidget);
+    await open('contract-all-c_ore');
+    expect(_key('contract-all-confirm-c_ore'), findsOneWidget);
+    await open('contract-discard-c_two');
+    expect(_key('contract-discard-confirm-c_two'), findsOneWidget);
+    // Drag through all of it with the three open.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 20000));
+    await tester.pump();
+    for (var i = 0; i < 40; i++) {
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -400));
+      await tester.pump();
+    }
+    expect(tester.takeException(), isNull);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 20000));
+    await tester.pump();
+    await open('mp-choose-orbital_station-hull_plate');
+    expect(_key('mp-pick-orbital_station-hull_plate-brine'), findsOneWidget);
   });
 }

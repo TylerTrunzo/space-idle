@@ -237,18 +237,18 @@ void main() {
       expect(k.sources.single.amount, '150');
     });
 
-    test('nextContractIn reads the soonest refill', () {
+    test('nextContract reads the soonest refill, typed', () {
       final f = c.state.faction(_p);
       f.contractRefillAt
         ..clear()
         ..addAll([c.state.time + 7200, c.state.time + 3600]);
-      expect(nextContractIn(c), '1h');
+      expect(nextContract(c), const NextContractIn('1h'));
       f.contractRefillAt
         ..clear()
         ..add(c.state.time - 5);
-      expect(nextContractIn(c), 'due now');
+      expect(nextContract(c), const NextContractDue());
       f.contractRefillAt.clear();
-      expect(nextContractIn(c), isNull);
+      expect(nextContract(c), isNull);
     });
 
     test('a source gives at most what the contract still wants', () {
@@ -364,6 +364,23 @@ void main() {
       expect(
         _mp(c, 'orbital_station').currentBonus,
         megaprojectBonusText(def, 2),
+      );
+    });
+
+    test('a block naming a contract no longer on the board reads well', () {
+      final b = Bottleneck(
+        kind: BottleneckKind.contractBlocksDelivery,
+        bodyId: null,
+        buildingId: null,
+        resourceId: 'hull_plate',
+        runFraction: 0,
+        megaprojectId: 'orbital_station',
+        contractId: 'gone',
+        heldForContract: BigNum.from(5),
+      );
+      expect(
+        megaprojectBlockText(c, b),
+        'A contract holds 5 Hull Plate this needs',
       );
     });
 

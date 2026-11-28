@@ -285,28 +285,51 @@ class _LineRow extends StatelessWidget {
     final held = c.state.faction(c.playerId).credits.floor();
     final amount = held.min(line.owed);
     final from = _firstOwned(c);
+    final can = amount >= BigNum.from(1) && from != null;
     return SpendConfirm(
       id: 'mp-${view.id}-credits',
-      builder: (context, ask) => OutlinedButton(
-        key: ValueKey('mp-deliver-${view.id}-credits'),
-        onPressed: amount >= BigNum.from(1) && from != null
-            ? () => ask(
-                Spend(
-                  price: amount,
-                  what: 'on ${view.name} level ${view.deliveryLevel + 1}',
-                  run: () => runAndReport(
-                    context,
-                    c,
-                    DeliverToMegaprojectCommand(c.playerId, view.id, from, {
-                      creditsKey: amount,
-                    }),
-                    announce: true,
-                  ),
-                ),
-              )
-            : null,
-        child: Text('Deliver ${formatNumber(amount)} credits'),
+      builder: (context, ask) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _creditsButton(context, c, ask, amount, from, can: can),
+          if (!can)
+            BlockedReason(
+              from == null
+                  ? 'No body of yours to deliver from'
+                  : 'No credits to deliver',
+            ),
+        ],
       ),
+    );
+  }
+
+  Widget _creditsButton(
+    BuildContext context,
+    GameController c,
+    void Function(Spend) ask,
+    BigNum amount,
+    String? from, {
+    required bool can,
+  }) {
+    return OutlinedButton(
+      key: ValueKey('mp-deliver-${view.id}-credits'),
+      onPressed: can && from != null
+          ? () => ask(
+              Spend(
+                price: amount,
+                what: 'on ${view.name} level ${view.deliveryLevel + 1}',
+                run: () => runAndReport(
+                  context,
+                  c,
+                  DeliverToMegaprojectCommand(c.playerId, view.id, from, {
+                    creditsKey: amount,
+                  }),
+                  announce: true,
+                ),
+              ),
+            )
+          : null,
+      child: Text('Deliver ${formatNumber(amount)} credits'),
     );
   }
 
@@ -324,13 +347,15 @@ class _LineRow extends StatelessWidget {
       spacing: 4,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Semantics(
-          onLongPressHint: 'choose the body',
-          child: OutlinedButton(
-            key: ValueKey('mp-deliver-${view.id}-${line.id}'),
-            onPressed: () => send(best.bodyId, best.units),
-            onLongPress: () => _pick(context, send),
-            child: Text('Deliver ${best.amount} from ${best.bodyName}'),
+        MergeSemantics(
+          child: Semantics(
+            onLongPressHint: 'choose the body',
+            child: OutlinedButton(
+              key: ValueKey('mp-deliver-${view.id}-${line.id}'),
+              onPressed: () => send(best.bodyId, best.units),
+              onLongPress: () => _pick(context, send),
+              child: Text('Deliver ${best.amount} from ${best.bodyName}'),
+            ),
           ),
         ),
         if (line.holders.length > 1)
@@ -350,7 +375,7 @@ class _LineRow extends StatelessWidget {
     BuildContext context,
     void Function(String bodyId, BigNum units) send,
   ) async {
-    final picked = await showModalBottomSheet<ContractSource>(
+    final picked = await showModalBottomSheet<HolderLine>(
       context: context,
       builder: (context) => SafeArea(
         child: ListView(

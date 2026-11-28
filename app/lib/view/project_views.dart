@@ -110,7 +110,7 @@ final class MegaprojectLine {
   /// For a good still owed, the owned bodies holding a whole unit or more
   /// of it, the fullest first, each with what it would hand over (its
   /// stock, up to [owed]); empty for credits.
-  final List<ContractSource> holders;
+  final List<HolderLine> holders;
 }
 
 /// An open contract holding goods a megaproject fed on its own still
@@ -312,17 +312,14 @@ MegaprojectView _megaproject(GameController c, MegaprojectDef m) {
     feed: _feedText(c, auto, takes: takes, fed: fed),
     blocks: [
       for (final b in c.flow.contractBlocks)
-        if (b.kind == BottleneckKind.contractBlocksDelivery &&
-            b.megaprojectId == m.id &&
-            b.contractId != null)
-          MegaprojectBlock(
-            contractId: b.contractId!,
-            text:
-                "${_contractTitle(c, b.contractId!)}'s contract holds "
-                '${formatNumber(b.heldForContract ?? const BigNum.zero())} '
-                '${c.content.resources[b.resourceId]?.name ?? b.resourceId} '
-                'this needs',
-          ),
+        if ((b.kind, b.megaprojectId, b.contractId)
+            case (
+              BottleneckKind.contractBlocksDelivery,
+              final mp,
+              final String id,
+            )
+            when mp == m.id)
+          MegaprojectBlock(contractId: id, text: megaprojectBlockText(c, b)),
     ],
     deliverAll: all.isEmpty ? null : costText(c.content, all),
   );
@@ -337,9 +334,12 @@ String _feedText(
   required bool fed,
 }) {
   final horizon = formatDuration(c.content.rules.nearReadyHorizonSeconds);
+  final due = 'its credits due within $horizon of what auto-pay gives it';
+  final held = 'the credits held, the reserve included, pay for the stage';
   final why = auto.credits
       ? 'its credits were due within $horizon of what auto-pay gives it'
       : 'the credits held, the reserve included, paid for the stage';
+  final waitsFor = auto.credits ? due : 'until $held';
   return switch (auto.goods) {
     GoodsFeedMode.off => 'Goods go in only when you deliver them',
     _ when !takes => 'Goods go in on their own once it takes deliveries',
@@ -349,7 +349,7 @@ String _feedText(
       'Goods are going in: feeding started because $why, and it keeps '
           'going until the stage is paid for',
     GoodsFeedMode.nearReady =>
-      'Goods wait until the stage is near ready: ${auto.credits ? 'its credits due within $horizon of what auto-pay gives it' : 'until the credits held, the reserve included, pay for the stage'}',
+      'Goods wait until the stage is near ready: $waitsFor',
   };
 }
 
@@ -362,28 +362,9 @@ MegaprojectLine _line(
 ) {
   final done = got > need ? need : got;
   final needD = need.toDouble();
-  final holders = <ContractSource>[];
-  if (id != creditsKey && owed >= BigNum.from(1)) {
-    final bodies = [
-      for (final b in c.state.bodies)
-        if (b.ownerId == c.playerId &&
-            (b.stock[id] ?? const BigNum.zero()) >= BigNum.from(1))
-          b,
-    ];
-    BigNum held(BodyState b) => (b.stock[id] ?? const BigNum.zero()).floor();
-    bodies.sort((a, b) => held(b).compareTo(held(a)));
-    for (final b in bodies) {
-      final gives = held(b).min(owed);
-      holders.add(
-        ContractSource(
-          bodyId: b.id,
-          bodyName: b.name,
-          amount: formatNumber(gives, rounding: NumberRounding.down),
-          units: gives,
-        ),
-      );
-    }
-  }
+  final holders = id != creditsKey && owed >= BigNum.from(1)
+      ? _holders(c, id, owed.ceil())
+      : const <HolderLine>[];
   return MegaprojectLine(
     id: id,
     name: id == creditsKey ? 'Credits' : c.content.resources[id]!.name,
@@ -393,6 +374,36 @@ MegaprojectLine _line(
     owed: owed.ceil(),
     holders: holders,
   );
+}
+
+/// The owned bodies holding a whole unit or more of [resourceId], the
+/// fullest first (ties by body order), each with what it would hand over:
+/// its whole units, up to [owed].
+List<HolderLine> _holders(GameController c, String resourceId, BigNum owed) {
+  BigNum held(BodyState b) =>
+      (b.stock[resourceId] ?? const BigNum.zero()).floor();
+  final one = BigNum.from(1);
+  final bodies = [
+    for (final b in c.state.bodies)
+      if (b.ownerId == c.playerId && held(b) >= one) b,
+  ];
+  // A stable sort keeps body order among equals.
+  final ranked = [for (final (i, b) in bodies.indexed) (i, b)]
+    ..sort((x, y) {
+      final by = held(y.$2).compareTo(held(x.$2));
+      return by != 0 ? by : x.$1.compareTo(y.$1);
+    });
+  HolderLine line(BodyState b) {
+    final gives = held(b).min(owed);
+    return HolderLine(
+      bodyId: b.id,
+      bodyName: b.name,
+      amount: formatNumber(gives, rounding: NumberRounding.down),
+      units: gives,
+    );
+  }
+
+  return [for (final (_, b) in ranked) line(b)];
 }
 
 BigNum _sum(Iterable<BigNum> xs) =>
@@ -407,15 +418,23 @@ String costText(Content c, Map<String, BigNum> m) => [
         : '${formatNumber(v)} ${c.resources[k]?.name ?? k}',
 ].join(' and ');
 
-String _contractTitle(GameController c, String contractId) {
+/// "Veyra Exchange's contract holds 60 Hull Plate this needs", for a
+/// `contractBlocksDelivery` [b]; "A contract holds …" when its contract is
+/// no longer on the board.
+String megaprojectBlockText(GameController c, Bottleneck b) {
   final k = c.state
       .faction(c.playerId)
       .contracts
-      .where((k) => k.id == contractId)
+      .where((k) => k.id == b.contractId)
       .firstOrNull;
-  return k == null
-      ? 'A'
-      : c.content.contractTemplates[k.templateId]?.issuer ?? k.templateId;
+  final who = k == null
+      ? 'A contract'
+      : "${c.content.contractTemplates[k.templateId]?.issuer ?? k.templateId}'s "
+            'contract';
+  final what = c.content.resources[b.resourceId]?.name ?? b.resourceId;
+  return '$who holds '
+      '${formatNumber(b.heldForContract ?? const BigNum.zero())} $what '
+      'this needs';
 }
 
 /// The owned body holding the most of [resourceId] (ties by body order),
@@ -434,11 +453,12 @@ NamedValue? _fullest(GameController c, String resourceId) {
   return best == null ? null : NamedValue(best.name, formatNumber(most));
 }
 
-/// A body that can supply a contract, and how much it holds.
+/// An owned body holding a good a contract or a megaproject wants, and
+/// what it would hand over.
 @immutable
-final class ContractSource {
+final class HolderLine {
   /// Creates a source.
-  const ContractSource({
+  const HolderLine({
     required this.bodyId,
     required this.bodyName,
     required this.amount,
@@ -497,7 +517,7 @@ final class ContractView {
 
   /// Owned bodies holding a whole unit or more of the resource, the
   /// fullest first.
-  final List<ContractSource> sources;
+  final List<HolderLine> sources;
 
   /// Units still wanted, for a delivery's amount.
   final BigNum remaining;
@@ -509,14 +529,6 @@ List<ContractView> contractViews(GameController c) => [
 ];
 
 ContractView _contract(GameController c, ContractState k) {
-  final holders = [
-    for (final b in c.state.bodies)
-      if (b.ownerId == c.playerId &&
-          (b.stock[k.resourceId] ?? const BigNum.zero()) >= BigNum.from(1))
-        b,
-  ];
-  BigNum held(BodyState b) => b.stock[k.resourceId] ?? const BigNum.zero();
-  holders.sort((a, b) => held(b).compareTo(held(a)));
   final q = k.quantity.toDouble();
   final owed = k.remaining.ceil();
   return ContractView(
@@ -527,18 +539,7 @@ ContractView _contract(GameController c, ContractState k) {
     quantity: formatNumber(k.quantity),
     fill: q <= 0 ? 1 : (k.delivered.toDouble() / q).clamp(0.0, 1.0),
     reward: formatNumber(k.rewardCredits),
-    sources: [
-      for (final b in holders)
-        ContractSource(
-          bodyId: b.id,
-          bodyName: b.name,
-          amount: formatNumber(
-            held(b).floor().min(owed),
-            rounding: NumberRounding.down,
-          ),
-          units: held(b).floor().min(owed),
-        ),
-    ],
+    sources: _holders(c, k.resourceId, owed),
     remaining: owed,
   );
 }
@@ -729,12 +730,48 @@ List<SurveyView> surveyViews(GameController c) {
   ];
 }
 
-/// When the board's next contract arrives, from its soonest refill: "1h",
-/// "due now" once that time has come, or null when none is due.
-String? nextContractIn(GameController c) {
+/// When the board's next contract arrives ([nextContract]).
+@immutable
+sealed class NextContract {
+  const NextContract();
+}
+
+/// Its time has come: it arrives with the next game minute.
+final class NextContractDue extends NextContract {
+  /// Creates the value.
+  const NextContractDue();
+
+  @override
+  bool operator ==(Object other) => other is NextContractDue;
+
+  @override
+  int get hashCode => (NextContractDue).hashCode;
+}
+
+/// It arrives in [time], such as "2h".
+final class NextContractIn extends NextContract {
+  /// Creates the value.
+  const NextContractIn(this.time);
+
+  /// Game time left, as `formatDuration` gives it.
+  final String time;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NextContractIn && other.time == time;
+
+  @override
+  int get hashCode => time.hashCode;
+}
+
+/// When the board's next contract arrives, from its soonest refill; null
+/// when no slot is refilling.
+NextContract? nextContract(GameController c) {
   final at = c.state.faction(c.playerId).contractRefillAt;
   if (at.isEmpty) return null;
   final soonest = at.reduce((a, b) => a < b ? a : b);
   final left = soonest - c.state.time;
-  return left <= 0 ? 'due now' : formatDuration(left);
+  return left <= 0
+      ? const NextContractDue()
+      : NextContractIn(formatDuration(left));
 }

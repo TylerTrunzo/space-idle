@@ -62,7 +62,7 @@ void _everyViewBuilds(GameController c) {
   }
   expect(megaprojectViews(c), hasLength(content.megaprojects.length));
   contractViews(c);
-  nextContractIn(c);
+  nextContract(c);
 }
 
 void main() {
