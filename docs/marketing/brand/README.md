@@ -4,7 +4,7 @@
 
 ![contact sheet](concepts/contact-sheet.png)
 
-## Recommendation: **C · S Orbit** as the app icon
+## Chosen: **C · S Orbit** as the app icon (owner, 2026-11-28)
 
 - **It reads at 48 px.** That's the size people actually see in search results and on the home screen. A and B blur
   into "a planet" at that size.

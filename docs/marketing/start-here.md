@@ -85,7 +85,7 @@ The name only needs settling before the first three:
 |---|---|---|
 | 2026-11-28 | Marketing docs started; Claude acts as marketing lead | Done |
 | 2026-11-28 | Game name: **Starwright** | Chosen; owner still to run the checks in `names.md` |
-| 2026-11-28 | Public developer name: a studio name, not the owner's own | Chosen; **which studio name is open** |
+| 2026-11-28 | Public developer name: **Brightwork Games** (a studio name, not space-themed, so it can carry future games) | Chosen; owner still to run the checks in `names.md` |
 | 2026-11-28 | First asset: icon and logo concepts | Done: `brand/`. Recommend concept C (S Orbit) |
-| — | Final icon | **Open** |
+| 2026-11-28 | App icon direction: **C · S Orbit**; A's ringed route goes on the feature graphic | Chosen; final polish and export to do |
 | — | How much time per week the owner gives to marketing | **Open** |
