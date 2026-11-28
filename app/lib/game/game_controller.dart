@@ -143,10 +143,48 @@ class GameController extends ChangeNotifier {
   Map<String, RouteThroughput> get throughputs =>
       _throughputs ??= routeThroughputs(_state, content);
 
-  /// Drops the reports worked out from the state, after it changed.
-  void _dropReports() {
+  /// Game seconds an upgrade preview is kept for while only ticks pass:
+  /// the steady rates it compares barely move between commands, and the
+  /// prices it values them at drift slowly.
+  static const double adviceRefreshSeconds = 60;
+
+  final Map<(String, UpgradeTrack), UpgradePreview?> _previews = {};
+  double _previewsAt = double.negativeInfinity;
+
+  /// What one more level of [track] on building [buildingId] would bring
+  /// the player ([upgradePreview]), null when it can't be had.
+  ///
+  /// Each is worked out lazily, the first time it is asked for, against
+  /// [flow], and kept until a command, a load, or [adviceRefreshSeconds]
+  /// of game time: never per button per tick, since each builds a flow
+  /// report.
+  UpgradePreview? upgradePreviewFor(String buildingId, UpgradeTrack track) {
+    if (_state.time - _previewsAt >= adviceRefreshSeconds) {
+      _previews.clear();
+      _previewsAt = _state.time;
+    }
+    return _previews.putIfAbsent(
+      (buildingId, track),
+      () => upgradePreview(
+        _state,
+        content,
+        playerId,
+        buildingId,
+        track,
+        before: flow,
+      ),
+    );
+  }
+
+  /// Drops the reports worked out from the state, after it changed; and,
+  /// unless only time passed ([ticked]), the upgrade previews.
+  void _dropReports({bool ticked = false}) {
     _flow = null;
     _throughputs = null;
+    if (!ticked) {
+      _previews.clear();
+      _previewsAt = double.negativeInfinity;
+    }
   }
 
   /// Id of the player's faction.
@@ -260,7 +298,7 @@ class GameController extends ChangeNotifier {
   void tickSeconds(double seconds) {
     if (!seconds.isFinite || seconds <= 0) return;
     engine.advance(_state, seconds);
-    _dropReports();
+    _dropReports(ticked: true);
     _sinceAutosave += seconds;
     if (_sinceAutosave >= autosaveSeconds) _autosave();
     _notify();

@@ -467,6 +467,39 @@ void main() {
       c.tickSeconds(1);
       expect(identical(c.throughputs, first), isFalse, reason: 'a new state');
     });
+
+    test('upgrade previews: kept across ticks, worked out again after a '
+        'command or a game minute', () async {
+      final c = _controller(store, clock);
+      await c.start();
+      final first = c.upgradePreviewFor('b3', UpgradeTrack.speed);
+      final core = upgradePreview(
+        c.state,
+        content,
+        'player',
+        'b3',
+        UpgradeTrack.speed,
+      );
+      expect(first?.paybackSeconds, core?.paybackSeconds);
+      expect(first?.limitedElsewhere, core?.limitedElsewhere);
+
+      c.tickSeconds(1);
+      expect(
+        identical(c.upgradePreviewFor('b3', UpgradeTrack.speed), first),
+        isTrue,
+        reason: 'a tick keeps it',
+      );
+      c.run(const AssignCrewCommand('player', 'b1', 0));
+      final afterCommand = c.upgradePreviewFor('b3', UpgradeTrack.speed);
+      expect(identical(afterCommand, first), isFalse, reason: 'a command');
+      c.tickSeconds(GameController.adviceRefreshSeconds);
+      expect(
+        identical(c.upgradePreviewFor('b3', UpgradeTrack.speed), afterCommand),
+        isFalse,
+        reason: 'a game minute',
+      );
+      expect(c.upgradePreviewFor('nope', UpgradeTrack.speed), isNull);
+    });
   });
 
   test('a claim started before closing completes during catch-up '

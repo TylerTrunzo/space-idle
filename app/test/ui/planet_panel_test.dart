@@ -240,8 +240,26 @@ void main() {
 
     testWidgets('an upgrade button shows its payback', (tester) async {
       await _pump(tester, c, 'kora');
-      expect(find.textContaining('pays back'), findsWidgets);
-    }, skip: true); // Task 0: upgradePreview fills UpgradeButtonView.payback.
+      // The iron mine's speed level gains ore: it pays back.
+      final p = c.upgradePreviewFor('b1', UpgradeTrack.speed)!;
+      expect(
+        find.descendant(
+          of: _key('upgrade-b1-speed'),
+          matching: find.text(
+            'pays back in ${formatDuration(p.paybackSeconds!)}',
+          ),
+        ),
+        findsOneWidget,
+      );
+      // The smelter's speed level has no more ore to work: it says so.
+      expect(
+        find.descendant(
+          of: _key('upgrade-b3-speed'),
+          matching: find.textContaining('no gain now'),
+        ),
+        findsOneWidget,
+      );
+    });
   });
 
   group('build', () {

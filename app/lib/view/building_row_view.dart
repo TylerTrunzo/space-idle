@@ -144,6 +144,7 @@ final class RowContext {
     required this.freeCrew,
     required this.bottlenecks,
     this.crewShort,
+    this.preview,
   });
 
   /// [playerId]'s context for the rows of [body], from [s] and its flow
@@ -153,8 +154,9 @@ final class RowContext {
     Content c,
     String playerId,
     BodyState body,
-    List<Bottleneck> bottlenecks,
-  ) => RowContext(
+    List<Bottleneck> bottlenecks, {
+    UpgradePreview? Function(String buildingId, UpgradeTrack track)? preview,
+  }) => RowContext(
     owned: body.ownerId == playerId,
     credits: s.faction(playerId).credits,
     freeCrew: availableCrew(s, c, playerId),
@@ -162,6 +164,7 @@ final class RowContext {
     crewShort: bottlenecks.any((n) => n.kind == BottleneckKind.crewShortage)
         ? crewShortText(s, c, playerId)
         : null,
+    preview: preview,
   );
 
   /// Whether the player owns the body: on anyone else's, its rows offer
@@ -182,6 +185,11 @@ final class RowContext {
   /// bottleneck names it; else null. The shortage names no building, so
   /// the per-building lookup misses it.
   final String? crewShort;
+
+  /// What one more level of a track would bring (the core's
+  /// `upgradePreview`, cached by the controller); null for no paybacks.
+  final UpgradePreview? Function(String buildingId, UpgradeTrack track)?
+  preview;
 }
 
 /// The row of building [b], from [status] (its line in the flow report;
@@ -298,5 +306,22 @@ UpgradeButtonView _upgrade(
     cost: formatNumber(cost),
     affordable: ctx.owned && maxed == null && ctx.credits >= cost,
     maxedReason: maxed,
+    payback: ctx.owned && maxed == null
+        ? paybackText(ctx.preview?.call(b.id, t))
+        : null,
   );
 }
+
+/// An upgrade button's payback line from preview [p]: "pays back in 8m",
+/// or, when the level gains nothing because something else holds the
+/// building, "no gain now: its inputs or crew hold it"; null otherwise
+/// (no preview, or a level whose gain is not output, such as a
+/// warehouse's storage).
+String? paybackText(UpgradePreview? p) => switch (p) {
+  null => null,
+  UpgradePreview(paybackSeconds: final s?) =>
+    'pays back in ${formatDuration(s)}',
+  UpgradePreview(limitedElsewhere: true) =>
+    'no gain now: its inputs or crew hold it',
+  _ => null,
+};

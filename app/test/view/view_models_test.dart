@@ -109,7 +109,8 @@ void main() {
       expect(speed.label, 'Speed');
       expect(speed.cost, '75');
       expect(speed.affordable, isTrue);
-      expect(speed.payback, isNull);
+      // All the ore its one mine makes is used: a faster smelter has none.
+      expect(speed.payback, 'no gain now: its inputs or crew hold it');
       expect(smelter.upgrades[UpgradeTrack.capacity]!.cost, '450');
       expect(smelter.upgrades[UpgradeTrack.capacity]!.affordable, isFalse);
     });
@@ -307,6 +308,46 @@ void main() {
       expect(row.canAddCrew, isFalse);
       expect(row.canRemoveCrew, isFalse);
       expect(row.upgrades.values.map((u) => u.affordable), everyElement(false));
+    });
+
+    group('upgrade paybacks, from the core upgradePreview', () {
+      UpgradeButtonView button(String id, UpgradeTrack t) => bodyView(
+        c,
+        'kora',
+      )!.buildings.firstWhere((b) => b.id == id).upgrades[t]!;
+
+      test('a level that gains shows how soon it pays back', () {
+        final p = c.upgradePreviewFor('b1', UpgradeTrack.speed)!;
+        expect(p.paybackSeconds, isNotNull);
+        expect(
+          button('b1', UpgradeTrack.speed).payback,
+          'pays back in ${formatDuration(p.paybackSeconds!)}',
+        );
+      });
+
+      test('a level held by its inputs says it gains nothing', () {
+        // The new game's smelter works all the ore its one mine makes.
+        expect(
+          c.upgradePreviewFor('b3', UpgradeTrack.speed)!.limitedElsewhere,
+          isTrue,
+        );
+        expect(
+          button('b3', UpgradeTrack.speed).payback,
+          'no gain now: its inputs or crew hold it',
+        );
+      });
+
+      test('a capacity level follows its preview too', () {
+        final p = c.upgradePreviewFor('b3', UpgradeTrack.capacity);
+        final shown = button('b3', UpgradeTrack.capacity).payback;
+        if (p?.paybackSeconds case final s?) {
+          expect(shown, 'pays back in ${formatDuration(s)}');
+        } else if (p?.limitedElsewhere ?? false) {
+          expect(shown, startsWith('no gain now'));
+        } else {
+          expect(shown, isNull);
+        }
+      });
     });
 
     test('a building running freely is ok with no problem', () {
