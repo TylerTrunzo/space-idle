@@ -150,7 +150,11 @@ SteadyIncome _saleRevenuePerSec(
   // from there instead: what the run sees is then what the hours after it
   // see.
   // Both runs keep the open contracts, as play does ([measuredSaleRevenue]).
+  // [owed] is what the megaprojects still owe at the end of the run that is
+  // measured: the steady sales value every other good at its settled price.
   SteadyIncome? played;
+  final owedAtStart = _owedGoods(s, c, factionId);
+  var owed = owedAtStart;
   if (_feedsGoods(s.faction(factionId))) {
     final dry = s.copy();
     final first = measuredSaleRevenue(dry, c, factionId);
@@ -160,6 +164,26 @@ SteadyIncome _saleRevenuePerSec(
       for (final copy in [s, market]) {
         takeMegaprojectsFrom(dry, copy, c, factionId);
       }
+      // The run again from there, on a copy, as [s]'s market is today's,
+      // which the settled prices start from. The goods the megaprojects
+      // owed sell, once taken in full (in the first run or this one's
+      // warm-up, most often), far above their settled price for a while,
+      // and only once; so this run sells them at the price steady selling
+      // settles them at, as the hours after do. A good still owed at its
+      // end sells little or nothing in it, at any price.
+      final restart = s.copy();
+      for (final MapEntry(key: id, value: sat) in settledSaturation(
+        s,
+        c,
+        factionId,
+        steady,
+        owed: const {},
+        released: owedAtStart,
+      ).entries) {
+        if (owedAtStart.contains(id)) restart.market.saturation[id] = sat;
+      }
+      played = measuredSaleRevenue(restart, c, factionId);
+      owed = _owedGoods(restart, c, factionId);
     }
   }
   market.faction(factionId).contracts.clear();
@@ -176,6 +200,8 @@ SteadyIncome _saleRevenuePerSec(
     c,
     factionId,
     steady,
+    owed: owed,
+    released: owedAtStart.difference(owed),
   ).entries) {
     market.market.saturation[id] = sat;
   }
@@ -387,6 +413,19 @@ BigNum steadySaleRevenue(
 bool _feedsGoods(FactionState f) =>
     f.megaprojectAuto.values.any((a) => a.goods != GoodsFeedMode.off);
 
+/// The goods [factionId]'s megaprojects still owe in [s] where it feeds
+/// them goods ([megaprojectGoodsFed]) and they take deliveries.
+Set<String> _owedGoods(GameState s, Content c, String factionId) {
+  final f = s.faction(factionId);
+  return {
+    for (final m in c.megaprojects.values)
+      if (megaprojectGoodsFed(s, f, m) &&
+          megaprojectTakesDeliveries(s, c, factionId, m))
+        for (final id in megaprojectRemaining(s, c, factionId, m).keys)
+          if (id != creditsKey) id,
+  };
+}
+
 /// What [factionId]'s megaprojects take of goods in [s], as a key: for
 /// each, in content order, whether it is fed goods now
 /// ([megaprojectGoodsFed]) and, if so, the goods its stage still owes,
@@ -555,23 +594,25 @@ double _settleHorizon(Content c) => 5 * c.rules.marketRecoverySeconds;
 /// caught up with the new volume, the figure is what the next hours earn,
 /// not today's prices.
 ///
-/// Goods a megaproject the faction feeds goods on its own still owes are
-/// left out (their sales depend on what auto-delivery leaves), as are
-/// those it sells nothing of steadily. [s] gives the rules, bodies,
-/// bonuses and today's market; it is not changed.
+/// Goods a megaproject the faction feeds goods on its own still owes
+/// ([owed]; by default, what they owe in [s]) are left out (their sales
+/// depend on what auto-delivery leaves), as are those it sells nothing of
+/// steadily. A [released] good, one the megaprojects owed and have taken
+/// in full by the time the figure is for, is valued at the saturation
+/// steady selling settles it at, not the average from today's: unsold
+/// while it was owed, its market recovered, and that price lasts only
+/// until the first hour's sales bring it down, once. [s] gives the rules,
+/// bodies, bonuses and today's market; it is not changed.
 Map<String, double> settledSaturation(
   GameState s,
   Content c,
   String factionId,
-  SteadyFlows steady,
-) {
+  SteadyFlows steady, {
+  Set<String>? owed,
+  Set<String> released = const {},
+}) {
   final f = s.faction(factionId);
-  final fed = {
-    for (final m in c.megaprojects.values)
-      if (megaprojectGoodsFed(s, f, m) &&
-          megaprojectTakesDeliveries(s, c, factionId, m))
-        ...megaprojectRemaining(s, c, factionId, m).keys,
-  };
+  final fed = owed ?? _owedGoods(s, c, factionId);
   final rate = <String, BigNum>{};
   final seen = <String>{};
   for (final rule in f.autoSell) {
@@ -590,6 +631,7 @@ Map<String, double> settledSaturation(
     // Share of the saturation steady selling cuts a second.
     final cut = rate[id]!.toDouble() / marketDepthFor(s, c, factionId, id);
     final settled = math.max(marketFloorOf(c, id), 1 / (1 + cut * recovery));
+    if (released.contains(id)) return settled;
     final now = s.market.saturation[id] ?? 1;
     final tau = 1 / (1 / recovery + cut);
     return settled +

@@ -89,4 +89,29 @@ void main() {
       );
     });
   }
+
+  // The casual bot's state at its 192 h check-in, seed 1, played on the
+  // shipped content at aaee5f6. The Mass Driver is fed near ready and owes
+  // hull plates, copper wire, water and silicon wafers; the report's first
+  // run ends with some of them still owed, so it starts again from there,
+  // and that run finishes taking them in its warm-up. Their steady sales
+  // were then valued at today's prices, not the lower ones they settle at
+  // once they sell again, and the report read 19% high.
+  test('goods a fed megaproject finishes taking within the report\'s run '
+      'are valued at their settled price: 192 h is within 8% of what '
+      '2.5 h away earns', () {
+    final c = shippedContent();
+    final s =
+        (SaveCodec.decode(
+                  File('test/fixtures/casual_s1_192h.json').readAsStringSync(),
+                  c,
+                )
+                as SaveOk)
+            .state;
+    final shown = buildFlowReport(s, c, 'player').creditsPerSec.toDouble();
+    final away = GameEngine(c).catchUpOffline(s, 9000, capSeconds: 9000);
+    final earned = away.creditsEarned.toDouble() / 9000;
+    expect(earned, greaterThan(0));
+    expect(shown, closeTo(earned, earned * 0.08), reason: '$shown vs $earned');
+  });
 }
