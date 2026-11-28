@@ -412,7 +412,6 @@ final class CrewForecast {
     required this.housing,
     required this.demand,
     required this.secondsUntilShortage,
-    required this.creditsPerExtraCrew,
   });
 
   /// Crew the faction supports now ([CrewTotals.supported]).
@@ -438,43 +437,62 @@ final class CrewForecast {
   /// so it can warn of a shortage a partial fall would not quite cause. It
   /// errs early, never late.
   final double? secondsUntilShortage;
-
-  /// What one more crew is worth a second at most, in credits at sale
-  /// prices.
-  ///
-  /// While the faction's housing falls short of its assigned crew, a
-  /// further crew can work nowhere new (there is no free crew to assign):
-  /// it houses one already assigned, and is worth what relieving the
-  /// shortage that much brings. Otherwise it is the best of putting it on
-  /// each building with room for it, each against the same state with
-  /// that crew housed but not assigned, so no building is credited with
-  /// anything but its own gain. Zero when none gains.
-  final BigNum creditsPerExtraCrew;
 }
 
-/// [factionId]'s crew forecast: housing, demand, how long until housing
-/// falls short, and the best a further crew would bring. It builds a flow
-/// report for [s], one with a crew more housed, and one per building with
-/// room for a crew.
-CrewForecast crewForecast(GameState s, Content c, String factionId) {
+/// [factionId]'s crew forecast: housing, demand and how long until housing
+/// falls short. Cheap: it reads [report], the flow report of [s] (built
+/// when not given), and builds nothing else, so a caller with the report
+/// in hand pays for a pass over the buildings. What a further crew would
+/// bring, which costs a report a building, is [extraCrewValue].
+CrewForecast crewForecast(
+  GameState s,
+  Content c,
+  String factionId, {
+  FlowReport? report,
+}) {
   final totals = crewTotals(s, c, factionId);
-  final report = buildFlowReport(s, c, factionId);
   var demand = 0;
-  final roomy = <String>[];
   for (final body in s.bodies) {
     if (body.ownerId != factionId) continue;
     for (final b in body.buildings) {
-      final most = maxCrew(c.rules, c.buildings[b.defId]!, b);
-      demand += most;
-      if (b.crew < most) roomy.add(b.id);
+      demand += maxCrew(c.rules, c.buildings[b.defId]!, b);
     }
   }
   return CrewForecast(
     housing: totals.supported,
     demand: demand,
-    secondsUntilShortage: _untilShortage(s, c, factionId, totals, report),
-    creditsPerExtraCrew: _bestExtraCrew(s, c, factionId, totals, roomy),
+    secondsUntilShortage: _untilShortage(
+      s,
+      c,
+      factionId,
+      totals,
+      report ?? buildFlowReport(s, c, factionId),
+    ),
   );
+}
+
+/// What one more crew is worth to [factionId] a second at most, in
+/// credits at sale prices.
+///
+/// While the faction's housing falls short of its assigned crew, a further
+/// crew can work nowhere new (there is no free crew to assign): it houses
+/// one already assigned, and is worth what relieving the shortage that
+/// much brings. Otherwise it is the best of putting it on each building
+/// with room for it, each against the same state with that crew housed
+/// but not assigned, so no building is credited with anything but its own
+/// gain. Zero when none gains.
+///
+/// Costly: a flow report for the state with a crew more housed, and one
+/// per building with room for crew. Not for a frame; [crewForecast] is the
+/// cheap part.
+BigNum extraCrewValue(GameState s, Content c, String factionId) {
+  final roomy = <String>[
+    for (final body in s.bodies)
+      if (body.ownerId == factionId)
+        for (final b in body.buildings)
+          if (b.crew < maxCrew(c.rules, c.buildings[b.defId]!, b)) b.id,
+  ];
+  return _bestExtraCrew(s, c, factionId, crewTotals(s, c, factionId), roomy);
 }
 
 double? _untilShortage(

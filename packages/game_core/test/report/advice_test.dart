@@ -359,6 +359,18 @@ void main() {
   });
 
   group('crewForecast', () {
+    test('a report in hand gives the same forecast', () {
+      applyCommand(s, c, const AssignCrewCommand(_p, 'b2', 0));
+      engine.advance(s, 5);
+      final report = buildFlowReport(s, c, _p);
+      final a = crewForecast(s, c, _p);
+      final b = crewForecast(s, c, _p, report: report);
+      expect(
+        (b.housing, b.demand, b.secondsUntilShortage),
+        (a.housing, a.demand, a.secondsUntilShortage),
+      );
+    });
+
     test('housing, demand and the worth of one more crew', () {
       final f = crewForecast(s, c, _p);
       final t = crewTotals(s, c, _p);
@@ -369,7 +381,7 @@ void main() {
       }
       expect(f.demand, demand);
       expect(f.secondsUntilShortage, isNull);
-      expect(f.creditsPerExtraCrew >= const BigNum.zero(), isTrue);
+      expect(extraCrewValue(s, c, _p) >= const BigNum.zero(), isTrue);
     });
 
     test('one more crew is worth what re-crewing an emptied mine gains', () {
@@ -378,7 +390,6 @@ void main() {
         isA<CommandOk>(),
       );
       engine.advance(s, 5);
-      final f = crewForecast(s, c, _p);
       // The copper mine, crewed again, on the same state.
       final again = s.copy();
       expect(
@@ -395,7 +406,10 @@ void main() {
                 salePrice(s, c, _p, id);
       }
       expect(gain.toDouble(), greaterThan(0));
-      expect(f.creditsPerExtraCrew.toDouble(), closeTo(gain.toDouble(), 1e-9));
+      expect(
+        extraCrewValue(s, c, _p).toDouble(),
+        closeTo(gain.toDouble(), 1e-9),
+      );
     });
 
     test('over-assigned, one more crew is worth the relief, no more', () {
@@ -407,7 +421,6 @@ void main() {
       );
       s.faction(_p).baseCrew = 1;
       expect(crewTotals(s, c, _p).overAssigned, greaterThan(0));
-      final f = crewForecast(s, c, _p);
       // It can staff nothing new (no crew is free): it houses one more of
       // those assigned. Not the copper mine's ore on top.
       final housed = s.copy()..faction(_p).baseCrew += 1;
@@ -422,7 +435,7 @@ void main() {
       }
       expect(relief.toDouble(), greaterThan(0));
       expect(
-        f.creditsPerExtraCrew.toDouble(),
+        extraCrewValue(s, c, _p).toDouble(),
         closeTo(relief.toDouble(), 1e-9),
       );
     });

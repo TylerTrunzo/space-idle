@@ -121,12 +121,8 @@ void main() {
 
     test('the warning reads the forecast', () {
       expect(crewWarningText(null), isNull);
-      CrewForecast f(double? t) => CrewForecast(
-        housing: 10,
-        demand: 12,
-        secondsUntilShortage: t,
-        creditsPerExtraCrew: const BigNum.zero(),
-      );
+      CrewForecast f(double? t) =>
+          CrewForecast(housing: 10, demand: 12, secondsUntilShortage: t);
       expect(crewWarningText(f(null)), isNull);
       expect(crewWarningText(f(0)), 'Crew is short now');
       expect(
