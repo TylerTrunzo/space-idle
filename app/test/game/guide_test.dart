@@ -30,6 +30,95 @@ void main() {
     c.run(SellCommand(_p, 'kora', 'steel', BigNum.from(10)));
   }
 
+  group('Guide fixes', () {
+    test(
+      '"Done" names the step shown: one Smelter build, two passed',
+      () async {
+        final c = controller();
+        sellSteel(c);
+        final g = Guide(controller: c, store: MemorySettingsStore());
+        await g.load();
+        expect(onboardingSteps[g.step!].id, 'second-smelter');
+        final done = <String?>[];
+        g.lastDone.addListener(() => done.add(g.lastDone.value));
+        c.state.faction(_p).credits = BigNum.from(1e6);
+        c.run(const BuildCommand(_p, 'kora', 'smelter'));
+        expect(done, ['Build a second Smelter'], reason: 'not "Add crew"');
+      },
+    );
+
+    test(
+      'a Habitat built while its step is brought forward is announced',
+      () async {
+        final c = controller();
+        final g = Guide(controller: c, store: MemorySettingsStore());
+        await g.load();
+        c.state.faction(_p).baseCrew =
+            crewTotals(c.state, content, _p).assigned + habitatStepFreeCrew;
+        c.tickSeconds(1);
+        expect(onboardingSteps[g.step!].id, 'habitat');
+        final done = <String?>[];
+        g.lastDone.addListener(() => done.add(g.lastDone.value));
+        c.state.faction(_p).credits = BigNum.from(1e6);
+        c.state.body('kora').stock['habitat_module'] = BigNum.from(1);
+        c.run(const BuildCommand(_p, 'kora', 'habitat'));
+        expect(done, ['Build a Habitat']);
+      },
+    );
+
+    test('a new game starts the guide over', () async {
+      final store = MemorySettingsStore();
+      final c = controller();
+      await c.start();
+      final g = Guide(controller: c, store: store);
+      await g.load();
+      sellSteel(c);
+      expect(g.step, 1);
+      await c.newGame();
+      expect(g.step, 0);
+      await Future<void>.delayed(Duration.zero);
+      expect(store.values[Guide.key], contains('"reached":0'));
+    });
+
+    test('a read that throws starts the guide fresh, and reports it', () async {
+      final errors = <FlutterErrorDetails>[];
+      final old = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      addTearDown(() => FlutterError.onError = old);
+      final g = Guide(controller: controller(), store: _ThrowingStore());
+      await g.load();
+      expect(g.step, 0);
+      expect(errors, hasLength(1));
+    });
+
+    test('a stored negative or too-large place is clamped', () async {
+      for (final reached in [-3, 99]) {
+        final g = Guide(
+          controller: controller(),
+          store: MemorySettingsStore({
+            Guide.key: '{"reached":$reached,"skipped":false}',
+          }),
+        );
+        await g.load();
+        expect(g.step, reached < 0 ? 0 : isNull, reason: '$reached');
+      }
+    });
+
+    test('a write that fails is reported, not thrown', () async {
+      final errors = <FlutterErrorDetails>[];
+      final old = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      addTearDown(() => FlutterError.onError = old);
+      final store = _ThrowingStore(reads: false);
+      final g = Guide(controller: controller(), store: store);
+      await g.load();
+      await g.skip();
+      await g.setCollapsed(true);
+      expect(errors, hasLength(2));
+      expect(g.ended, isTrue);
+    });
+  });
+
   group('Guide', () {
     test('passes a step as the game does it, and says so once', () async {
       final c = controller();
@@ -212,4 +301,22 @@ void main() {
       expect(identical(c.bestUpgradeNow().best, old), isFalse);
     });
   });
+}
+
+/// A settings store whose reads (and writes) throw, as a broken platform
+/// channel would.
+final class _ThrowingStore implements SettingsStore {
+  _ThrowingStore({this.reads = true});
+
+  final bool reads;
+
+  @override
+  Future<String?> read(String key) async {
+    if (reads) throw StateError('no preferences');
+    return null;
+  }
+
+  @override
+  Future<void> write(String key, String value) async =>
+      throw StateError('no preferences');
 }
