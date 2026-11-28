@@ -119,6 +119,16 @@ void main() {
       expect(crewView(c).habitatBodyId, 'brine', reason: 'it can, now');
     });
 
+    test("the forecast is the core's, from the controller's report", () {
+      c.run(const AssignCrewCommand(_p, 'b2', 0));
+      final f = crewView(c).forecast;
+      final core = crewForecast(c.state, content, _p);
+      expect(
+        (f.housing, f.demand, f.secondsUntilShortage),
+        (core.housing, core.demand, core.secondsUntilShortage),
+      );
+    });
+
     test('the warning reads the forecast', () {
       expect(crewWarningText(null), isNull);
       CrewForecast f(double? t) =>

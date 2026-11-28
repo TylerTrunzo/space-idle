@@ -11,9 +11,8 @@ import 'package:space_idle/view/tabs_view.dart';
 /// every habitat and how it runs; and every crewed building with − and +,
 /// the same stepper the planet panel uses.
 ///
-/// The forecast builds several flow reports, so it comes after a frame
-/// (the controller's `crewForecastNow`), never in the frame a command
-/// lands in.
+/// The forecast is the core's cheap `crewForecast`, from the flow report
+/// the tab already has: it costs no report of its own.
 class CrewTab extends StatelessWidget {
   /// Creates the tab.
   const CrewTab({super.key});
@@ -32,7 +31,7 @@ class CrewTab extends StatelessWidget {
         style: monoText(text.bodyLarge),
       ),
       const SizedBox(height: 8),
-      _Forecast(habitatBodyId: view.habitatBodyId),
+      _Forecast(view: view),
       const Divider(color: Palette.border),
       Text('Habitats', style: text.titleMedium),
       if (view.habitats.isEmpty)
@@ -92,86 +91,79 @@ class CrewTab extends StatelessWidget {
   }
 }
 
-/// Housing against demand, and the warning card before a shortage; a
-/// line saying it is being worked out until the forecast lands.
+/// Housing against demand, and the warning card before a shortage. The
+/// forecast is the view's own, worked out with the state each build, so
+/// it never blanks after a command and its countdown is live.
 class _Forecast extends StatelessWidget {
-  const _Forecast({required this.habitatBodyId});
+  const _Forecast({required this.view});
 
-  final String? habitatBodyId;
+  final CrewView view;
 
   @override
   Widget build(BuildContext context) {
     final c = ControllerScope.of(context);
     final text = Theme.of(context).textTheme;
-    return ValueListenableBuilder<int>(
+    final forecast = view.forecast;
+    final warning = crewWarningText(forecast);
+    final where = view.habitatBodyId;
+    final whereName = where == null ? null : c.state.body(where).name;
+    return Column(
       key: const ValueKey('crew-forecast'),
-      valueListenable: c.previewsVersion,
-      builder: (context, _, _) {
-        final (:ready, :forecast) = c.crewForecastNow();
-        if (!ready || forecast == null) {
-          return Text(
-            'Working out the crew forecast…',
-            style: text.bodyMedium?.copyWith(color: Palette.muted),
-          );
-        }
-        final warning = crewWarningText(forecast);
-        final where = habitatBodyId;
-        final whereName = where == null ? null : c.state.body(where).name;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Housing ${forecast.housing} · demand ${forecast.demand}',
-              style: monoText(text.bodyMedium),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Housing ${forecast.housing} · demand ${forecast.demand}',
+          style: monoText(text.bodyMedium),
+        ),
+        if (warning != null)
+          Card(
+            key: const ValueKey('crew-warning'),
+            color: Palette.background,
+            shape: const RoundedRectangleBorder(
+              side: BorderSide(color: Palette.amber),
+              borderRadius: BorderRadius.all(Radius.circular(8)),
             ),
-            if (warning != null)
-              Card(
-                key: const ValueKey('crew-warning'),
-                color: Palette.background,
-                shape: const RoundedRectangleBorder(
-                  side: BorderSide(color: Palette.amber),
-                  borderRadius: BorderRadius.all(Radius.circular(8)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.warning_amber_outlined,
-                            color: Palette.amber,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              whereName == null
-                                  ? '$warning: free a build slot for a Habitat'
-                                  : '$warning: build a Habitat on $whereName',
-                              style: const TextStyle(color: Palette.amber),
-                            ),
-                          ),
-                        ],
+                      const Icon(
+                        Icons.warning_amber_outlined,
+                        color: Palette.amber,
                       ),
-                      if (where != null)
-                        Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: TextButton(
-                            key: const ValueKey('crew-warning-go'),
-                            onPressed: () =>
-                                ShellScope.of(context).openOnMap(where),
-                            child: const Text('Go'),
-                          ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          whereName == null
+                              ? '$warning: free a build slot for a Habitat'
+                              : '$warning: build a Habitat on $whereName',
+                          style: const TextStyle(color: Palette.amber),
                         ),
+                      ),
                     ],
                   ),
-                ),
+                  if (where != null)
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton(
+                        key: const ValueKey('crew-warning-go'),
+                        onPressed: () =>
+                            ShellScope.of(context).openOnMap(where),
+                        child: Text(
+                          'Go',
+                          semanticsLabel: 'Go to $whereName to build a Habitat',
+                        ),
+                      ),
+                    ),
+                ],
               ),
-          ],
-        );
-      },
+            ),
+          ),
+      ],
     );
   }
 }

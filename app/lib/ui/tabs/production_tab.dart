@@ -126,27 +126,29 @@ class _BodyHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return InkWell(
-      key: ValueKey('production-body-$id'),
+    return Semantics(
+      button: true,
+      label: '$name, show on the map',
+      excludeSemantics: true,
       onTap: () => ShellScope.of(context).openOnMap(id),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '$name · ${count == 1 ? '1 building' : '$count buildings'}',
-                  style: text.titleMedium,
+      child: InkWell(
+        key: ValueKey('production-body-$id'),
+        onTap: () => ShellScope.of(context).openOnMap(id),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '$name · ${count == 1 ? '1 building' : '$count buildings'}',
+                    style: text.titleMedium,
+                  ),
                 ),
-              ),
-              const Icon(
-                Icons.public,
-                color: Palette.cyan,
-                semanticLabel: 'Show on the map',
-              ),
-            ],
+                const Icon(Icons.public, color: Palette.cyan),
+              ],
+            ),
           ),
         ),
       ),

@@ -12,6 +12,7 @@ import 'package:space_idle/ui/shell.dart';
 import 'package:space_idle/ui/tabs/crew_tab.dart';
 import 'package:space_idle/ui/tabs/production_tab.dart';
 import 'package:space_idle/ui/tabs/trade_tab.dart';
+import 'package:space_idle/view/format.dart';
 import 'package:space_idle/view/tabs_view.dart';
 
 final Content content = loadEmbeddedContent();
@@ -71,6 +72,21 @@ void main() {
         ),
       ),
     );
+  }
+
+  /// A habitat on Kora with five minutes of life support, housing crew
+  /// the faction needs: base crew 2, three assigned.
+  void habitatRunningDry() {
+    final kora = c.state.body('kora');
+    c.state.faction(_p).credits = BigNum.from(1e6);
+    kora.stock['habitat_module'] = BigNum.from(1);
+    c.run(const BuildCommand(_p, 'kora', 'habitat'));
+    for (final id in ['food', 'water', 'oxygen']) {
+      kora.stock[id] = BigNum.from(30);
+    }
+    c.tickSeconds(1);
+    c.state.faction(_p).baseCrew = 2;
+    c.tickSeconds(1);
   }
 
   /// The iron mine idle and the ore gone: the smelter stops.
@@ -140,11 +156,14 @@ void main() {
     ) async {
       await pump(tester, const ProductionTab());
       fillAll();
+      final before = c.previewsWorkedOut;
       c.run(const AssignCrewCommand(_p, 'b1', 0));
       await tester.pump();
+      expect(c.previewsWorkedOut, before, reason: 'nothing in the build');
       expect(c.previewFor('b3', UpgradeTrack.speed).ready, isFalse);
       expect(fills, isNotEmpty, reason: 'asked for, to fill after the frame');
       fillAll();
+      expect(c.previewsWorkedOut, greaterThan(before), reason: 'in the fill');
       await tester.pump();
       expect(
         find.descendant(
@@ -153,6 +172,14 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('a body header is a button named for its body', (tester) async {
+      await pump(tester, const ProductionTab());
+      final node = tester.getSemantics(
+        find.bySemanticsLabel('Kora, show on the map'),
+      );
+      expect(node.flagsCollection.isButton, isTrue);
     });
   });
 
@@ -187,39 +214,28 @@ void main() {
       );
     });
 
-    testWidgets('the forecast comes after a frame: housing and demand', (
+    testWidgets('housing and demand show at once, and stay put on − and +', (
       tester,
     ) async {
       await pump(tester, const CrewTab());
-      expect(find.textContaining('Working out'), findsOneWidget);
-      fillAll();
-      await tester.pump();
       final f = crewForecast(c.state, content, _p);
-      expect(
-        find.textContaining('Housing ${f.housing} · demand ${f.demand}'),
-        findsOneWidget,
+      final line = find.textContaining(
+        'Housing ${f.housing} · demand ${f.demand}',
       );
-      expect(_key('crew-warning'), findsNothing, reason: 'the crew holds');
+      expect(line, findsOneWidget, reason: 'no wait for a fill');
+      final row = _key('crewed-b2');
+      final top = tester.getTopLeft(row).dy;
+      await tester.tap(_key('crew-remove-b2'));
+      await tester.pump();
+      expect(find.textContaining('Housing '), findsOneWidget);
+      expect(tester.getTopLeft(row).dy, top, reason: 'the row did not move');
     });
 
     testWidgets('an amber warning before a shortage, with a Go', (
       tester,
     ) async {
-      // A habitat with five minutes of life support, housing crew the
-      // faction needs.
-      final kora = c.state.body('kora');
-      c.state.faction(_p).credits = BigNum.from(1e6);
-      kora.stock['habitat_module'] = BigNum.from(1);
-      c.run(const BuildCommand(_p, 'kora', 'habitat'));
-      for (final id in ['food', 'water', 'oxygen']) {
-        kora.stock[id] = BigNum.from(30);
-      }
-      c.tickSeconds(1);
-      c.state.faction(_p).baseCrew = 2;
-      c.tickSeconds(1);
+      habitatRunningDry();
       await pump(tester, const CrewTab());
-      fillAll();
-      await tester.pump();
       final card = _key('crew-warning');
       expect(card, findsOneWidget);
       expect(
@@ -243,10 +259,44 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        find.bySemanticsLabel('Go to Kora to build a Habitat'),
+        findsOneWidget,
+      );
       await tester.tap(_key('crew-warning-go'));
       await tester.pump();
       expect(shown, 'kora');
-      expect(_key('habitat-${kora.buildings.last.id}'), findsOneWidget);
+      final habitat = c.state.body('kora').buildings.last.id;
+      expect(_key('habitat-$habitat'), findsOneWidget);
+    });
+
+    testWidgets('the countdown follows the clock, and never runs past it', (
+      tester,
+    ) async {
+      habitatRunningDry();
+      await pump(tester, const CrewTab());
+      String warning() => tester
+          .widget<Text>(
+            find.descendant(
+              of: _key('crew-warning'),
+              matching: find.textContaining('Crew '),
+            ),
+          )
+          .data!;
+      final first = warning();
+      final t0 = crewForecast(c.state, content, _p).secondsUntilShortage!;
+      c.tickSeconds(60);
+      await tester.pump();
+      final t1 = crewForecast(c.state, content, _p).secondsUntilShortage!;
+      expect(t1, lessThan(t0));
+      expect(warning(), isNot(first));
+      expect(warning(), contains(formatDuration(t1)));
+      // Past the shortage it says so; no countdown is left.
+      for (var i = 0; i < 400; i++) {
+        c.tickSeconds(1);
+      }
+      await tester.pump();
+      expect(warning(), startsWith('Crew is short now'));
     });
   });
 
@@ -255,26 +305,46 @@ void main() {
       c.state.body('kora').stock['steel'] = BigNum.from(5000);
       await pump(tester, const TradeTab());
       final row = _key('market-steel');
-      final before = tradeView(c).market.firstWhere((m) => m.id == 'steel');
-      expect(
-        find.descendant(of: row, matching: find.textContaining(before.price)),
-        findsWidgets,
-      );
-      c.run(SellCommand(_p, 'kora', 'steel', BigNum.from(5000)));
-      await tester.pump();
-      final after = tradeView(c).market.firstWhere((m) => m.id == 'steel');
-      expect(double.parse(after.price), lessThan(double.parse(before.price)));
-      expect(
-        find.descendant(of: row, matching: find.textContaining(after.price)),
-        findsWidgets,
-      );
+      final before = salePrice(c.state, content, _p, 'steel');
       expect(
         find.descendant(
           of: row,
-          matching: find.textContaining(after.saturationText),
+          matching: find.textContaining('${formatAmount(before)} credits'),
         ),
         findsOneWidget,
       );
+      c.run(SellCommand(_p, 'kora', 'steel', BigNum.from(5000)));
+      await tester.pump();
+      final after = salePrice(c.state, content, _p, 'steel');
+      expect(after < before, isTrue);
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.textContaining('${formatAmount(after)} credits'),
+        ),
+        findsOneWidget,
+      );
+      final sat = tradeView(c).market.firstWhere((m) => m.id == 'steel');
+      expect(
+        find.descendant(of: row, matching: find.text(sat.saturationText)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('worth an hour is coloured by its sign, not its text', (
+      tester,
+    ) async {
+      c.tickSeconds(1);
+      await pump(tester, const TradeTab());
+      final steel = tradeView(c).market.firstWhere((m) => m.id == 'steel');
+      expect(steel.worthSign, 1);
+      final text = tester.widget<Text>(
+        find.descendant(
+          of: _key('market-steel'),
+          matching: find.text(steel.worthPerHour!),
+        ),
+      );
+      expect(text.style?.color, Palette.green);
     });
 
     testWidgets('an auto-sell rule is listed and removed', (tester) async {

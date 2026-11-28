@@ -174,6 +174,7 @@ final class CrewView {
     required this.habitats,
     required this.crewed,
     required this.habitatBodyId,
+    required this.forecast,
   });
 
   /// Crew free to assign.
@@ -195,6 +196,11 @@ final class CrewView {
   /// (the core's `hostsFor`), else the first with a free build slot; null
   /// when none has room.
   final String? habitatBodyId;
+
+  /// Housing, demand and the time to a shortage, from the core's
+  /// `crewForecast` with the controller's flow report, worked out as the
+  /// view is: so it is always the state's own and counts down live.
+  final CrewForecast forecast;
 }
 
 /// The Crew tab's view from [c].
@@ -240,18 +246,21 @@ CrewView crewView(GameController c) {
       }
     }
   }
-  final hosts = hostsFor(s, content, c.playerId, 'habitat');
-  final roomy = [
-    for (final h in hostChecks(s, content, c.playerId, 'habitat'))
-      if (h.block?.kind != BuildBlockKind.noFreeSlot) h.bodyId,
-  ];
+  // One pass of the host checks: a body that can take a habitat now, else
+  // one with a free slot.
+  final checks = hostChecks(s, content, c.playerId, 'habitat');
+  final can = checks.where((h) => h.block == null).firstOrNull;
+  final room = checks
+      .where((h) => h.block?.kind != BuildBlockKind.noFreeSlot)
+      .firstOrNull;
   return CrewView(
     free: totals.free,
     assigned: totals.assigned,
     supported: totals.supported,
     habitats: habitats,
     crewed: crewed,
-    habitatBodyId: hosts.firstOrNull ?? roomy.firstOrNull,
+    habitatBodyId: (can ?? room)?.bodyId,
+    forecast: crewForecast(s, content, c.playerId, report: flow),
   );
 }
 
@@ -274,6 +283,7 @@ final class MarketRowView {
     required this.saturation,
     required this.saturationText,
     required this.worthPerHour,
+    required this.worthSign,
   });
 
   /// Resource id.
@@ -296,6 +306,10 @@ final class MarketRowView {
   /// What the player's net production of it is worth an hour at [price],
   /// signed ("+1.2K/h", "-40/h"); null when it nets to nothing.
   final String? worthPerHour;
+
+  /// The sign of [worthPerHour]: 1 when net production gains, -1 when it
+  /// uses more than it makes, 0 when it nets to nothing.
+  final int worthSign;
 }
 
 /// One auto-sell rule on the Trade tab.
@@ -366,6 +380,7 @@ TradeView tradeView(GameController c) {
             price: formatAmount(price),
             saturation: sat.clamp(0.0, 1.0),
             saturationText: '${formatPercent(sat)} of base price',
+            worthSign: worth.isZero ? 0 : (worth.isNegative ? -1 : 1),
             worthPerHour: worth.isZero
                 ? null
                 : '${worth.isNegative ? '-' : '+'}'

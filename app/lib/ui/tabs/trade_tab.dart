@@ -44,7 +44,7 @@ class TradeTab extends StatelessWidget {
                     Text(
                       w,
                       style: mono.copyWith(
-                        color: w.startsWith('-') ? Palette.red : Palette.green,
+                        color: m.worthSign < 0 ? Palette.red : Palette.green,
                       ),
                     ),
                 ],
