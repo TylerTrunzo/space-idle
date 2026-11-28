@@ -104,6 +104,9 @@ final class ResourceRowView {
     required this.price,
     required this.alert,
     required this.autoSell,
+    required this.keepAtLeast,
+    required this.held,
+    required this.hasStock,
   });
 
   /// How soon a falling store counts as running out.
@@ -136,7 +139,46 @@ final class ResourceRowView {
 
   /// Whether the body auto-sells it.
   final bool autoSell;
+
+  /// The auto-sell rule's "keep at least"; null with no rule.
+  final BigNum? keepAtLeast;
+
+  /// What the auto-sell rule holds back and why, from the core's
+  /// `autoSellKeep`: "Auto-sell keeps 680: 100 you set, 80 for its
+  /// buildings, 500 for contracts; nothing above that to sell". Null
+  /// with no rule, or when it keeps nothing.
+  final String? held;
+
+  /// Whether there is any to sell.
+  final bool hasStock;
 }
+
+/// The seconds of one live market step, the controller's tick, over
+/// which an auto-sell rule's keep is worked out ([autoSellKeep]).
+const double autoSellStepSeconds = 1;
+
+/// How a route stands now.
+enum RouteStatus {
+  /// It is carrying cargo.
+  moving,
+
+  /// It could carry nothing now: its source has none to send, or its
+  /// destination no room.
+  waiting,
+
+  /// Paused: its destination, with what is on its way, holds the stop
+  /// level (the core's `routePaused`).
+  stopped,
+}
+
+/// What holds a route to its throughput, completing "held by …".
+String routeLimitText(RouteLimit limit) => switch (limit) {
+  RouteLimit.rate => 'its set rate',
+  RouteLimit.ships => 'its cargo ships',
+  RouteLimit.destinationRoom => 'room at its destination',
+  RouteLimit.sourceStock => 'what its source has to send',
+  RouteLimit.stopLevel => 'its stop level',
+};
 
 /// A route on a body's panel.
 @immutable
@@ -150,6 +192,15 @@ final class RouteView {
     required this.rate,
     required this.ships,
     required this.travel,
+    required this.fromBodyId,
+    required this.toBodyId,
+    required this.resourceId,
+    required this.throughput,
+    required this.limit,
+    required this.status,
+    required this.statusText,
+    required this.stop,
+    required this.stopValue,
   });
 
   /// Route id.
@@ -172,6 +223,35 @@ final class RouteView {
 
   /// One trip's travel time, as `2m`.
   final String travel;
+
+  /// Source body id.
+  final String fromBodyId;
+
+  /// Destination body id.
+  final String toBodyId;
+
+  /// Resource id carried.
+  final String resourceId;
+
+  /// What it could carry a second at most, sustained (the core's
+  /// `routeThroughput`), as `0.4/s`.
+  final String throughput;
+
+  /// What holds it to that ([routeLimitText]).
+  final String limit;
+
+  /// How it stands now.
+  final RouteStatus status;
+
+  /// [status] as a sentence: "Moving", "Waiting for Iron Ore at Kora",
+  /// "Stopped: Brine holds its stop level".
+  final String statusText;
+
+  /// Its stop level, formatted; null for none.
+  final String? stop;
+
+  /// Its stop level; null for none.
+  final BigNum? stopValue;
 }
 
 /// What claiming an unowned body takes.
@@ -294,6 +374,10 @@ BodyView? bodyView(GameController c, String bodyId) {
     for (final st in bodyFlow?.buildings ?? const <BuildingStatus>[])
       st.buildingId: st,
   };
+  // Worked out once, and only for a body with routes.
+  Map<String, RouteThroughput>? tp;
+  Map<String, RouteThroughput> throughputs() =>
+      tp ??= routeThroughputs(s, content);
   return BodyView(
     id: body.id,
     name: body.name,
@@ -312,11 +396,13 @@ BodyView? bodyView(GameController c, String bodyId) {
     storage: _storage(c, body, bodyFlow),
     routesOut: [
       for (final r in s.routes)
-        if (r.ownerId == player && r.fromBodyId == bodyId) _route(c, r),
+        if (r.ownerId == player && r.fromBodyId == bodyId)
+          _route(c, r, throughputs()),
     ],
     routesIn: [
       for (final r in s.routes)
-        if (r.ownerId == player && r.toBodyId == bodyId) _route(c, r),
+        if (r.ownerId == player && r.toBodyId == bodyId)
+          _route(c, r, throughputs()),
     ],
     claim: body.ownerId == null ? _claim(c, body) : null,
   );
@@ -332,10 +418,11 @@ List<ResourceRowView> _storage(
   // One bonus lookup for every row's sale price (the core's salePrice is
   // price x salePriceMultiplierFor(tier); a test pins the two together).
   final bonuses = bonusesFor(s, c.content, c.playerId);
-  final selling = {
+  final rules = {
     for (final r in s.faction(c.playerId).autoSell)
-      if (r.bodyId == body.id) r.resourceId,
+      if (r.bodyId == body.id) r.resourceId: r,
   };
+  final selling = rules.keys.toSet();
   const zero = BigNum.zero();
   // A resource it holds, moves, or auto-sells: a rule that has sold the
   // store empty keeps its row, so it can still be turned off.
@@ -353,6 +440,7 @@ List<ResourceRowView> _storage(
           net: flow?.netPerSec[id] ?? zero,
           wasted: flow?.wastedPerSec[id] ?? zero,
           autoSell: selling.contains(id),
+          rule: rules[id],
           salePrice: price(
             s,
             c.content,
@@ -372,6 +460,7 @@ ResourceRowView _resourceRow(
   required BigNum wasted,
   required bool autoSell,
   required BigNum salePrice,
+  AutoSellRule? rule,
 }) {
   final capD = cap.toDouble();
   final fill = capD <= 0 ? 0.0 : (stock.toDouble() / capD).clamp(0.0, 1.0);
@@ -394,21 +483,76 @@ ResourceRowView _resourceRow(
     price: formatAmount(salePrice),
     alert: alert,
     autoSell: autoSell,
+    keepAtLeast: rule?.keepAtLeast,
+    held: rule == null ? null : _held(c, rule, stock),
+    hasStock: stock > const BigNum.zero(),
   );
 }
 
-RouteView _route(GameController c, RouteState r) {
+/// What auto-sell [rule] holds back and why ([autoSellKeep]), with
+/// [stock] held; null when it keeps nothing.
+String? _held(GameController c, AutoSellRule rule, BigNum stock) {
+  final k = autoSellKeep(c.state, c.content, rule, autoSellStepSeconds);
+  if (k.keeps <= const BigNum.zero()) return null;
+  String n(BigNum v) => formatNumber(v);
+  final parts = [
+    if (k.keepAtLeast > const BigNum.zero()) '${n(k.keepAtLeast)} you set',
+    if (k.localUse > const BigNum.zero()) '${n(k.localUse)} for its buildings',
+    if (k.contractHold > const BigNum.zero())
+      '${n(k.contractHold)} for contracts',
+    if (k.megaprojectHold > const BigNum.zero())
+      '${n(k.megaprojectHold)} for megaprojects',
+  ];
+  return [
+    'Auto-sell keeps ${n(k.keeps)}',
+    if (parts.isNotEmpty) ': ${parts.join(', ')}',
+    if (k.cappedAtStorage) ', cut to the storage cap',
+    if (stock <= k.keeps) '; nothing above that to sell',
+  ].join();
+}
+
+RouteView _route(
+  GameController c,
+  RouteState r,
+  Map<String, RouteThroughput> throughputs,
+) {
   final s = c.state;
   final from = s.body(r.fromBodyId);
   final to = s.body(r.toBodyId);
+  final res = c.content.resources[r.resourceId]!.name;
+  final t = throughputs[r.id] ?? (perSec: 0.0, binding: RouteLimit.rate);
+  final RouteStatus status;
+  final String statusText;
+  if (routePaused(s, c.content, r)) {
+    status = RouteStatus.stopped;
+    statusText = 'Stopped: ${to.name} holds its stop level';
+  } else if (t.perSec <= 0) {
+    status = RouteStatus.waiting;
+    statusText = t.binding == RouteLimit.destinationRoom
+        ? 'Waiting for room at ${to.name}'
+        : 'Waiting for $res at ${from.name}';
+  } else {
+    status = RouteStatus.moving;
+    statusText = 'Moving';
+  }
+  final stop = r.stopAtDestination;
   return RouteView(
     id: r.id,
     fromName: from.name,
     toName: to.name,
-    resourceName: c.content.resources[r.resourceId]!.name,
+    resourceName: res,
     rate: '${formatAmount(r.ratePerSecond)}/s',
     ships: r.cargoShips,
     travel: formatDuration(travelSeconds(s, c.content, from, to)),
+    fromBodyId: from.id,
+    toBodyId: to.id,
+    resourceId: r.resourceId,
+    throughput: '${formatAmount(BigNum.from(t.perSec))}/s',
+    limit: routeLimitText(t.binding),
+    status: status,
+    statusText: statusText,
+    stop: stop == null ? null : formatNumber(stop),
+    stopValue: stop,
   );
 }
 
