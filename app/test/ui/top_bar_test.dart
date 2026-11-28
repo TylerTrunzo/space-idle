@@ -223,4 +223,34 @@ void main() {
     expect(_barText(tester), contains('1e40'));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('360x640 at 2x text, three goods pinned: the Buy max confirm '
+      'shows inside the bar', (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearAllTestValues);
+    final c = _controller();
+    c.state.faction('player').credits = BigNum.from(1e6);
+    for (final id in ['steel', 'copper_ore', 'water']) {
+      c.state.body('kora').stock[id] = BigNum.from(1e6);
+    }
+    await tester.pumpWidget(_bar(c));
+    await tester.tap(find.byKey(const ValueKey('buy-max')));
+    await tester.pump();
+    final bar = tester.getRect(find.byType(TopBar));
+    final confirm = tester.getRect(
+      find.byKey(const ValueKey('buy-max-confirm')),
+    );
+    expect(
+      bar.top <= confirm.top && confirm.bottom <= bar.bottom,
+      isTrue,
+      reason: 'confirm at $confirm, bar at $bar',
+    );
+    expect(confirm.bottom, lessThanOrEqualTo(640));
+    await tester.tap(find.byKey(const ValueKey('buy-max-confirm')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('buy-max-confirm')), findsNothing);
+  });
 }

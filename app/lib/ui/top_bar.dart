@@ -50,78 +50,81 @@ class _TopBarState extends State<TopBar> {
       color: Palette.panel,
       child: SafeArea(
         bottom: false,
-        // At most [maxShare] of the screen: at large text on a small phone,
-        // with three goods pinned, the figures wrap onto many lines, and
-        // past that they scroll so the tab below keeps its room.
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * TopBar.maxShare,
-          ),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsetsDirectional.only(start: 16, end: 4),
-              child: Column(
+        child: Padding(
+          padding: const EdgeInsetsDirectional.only(start: 16, end: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
+                  // The figures take at most [TopBar.maxShare] of the
+                  // screen: at large text on a small phone, with three goods
+                  // pinned, they wrap onto many lines, and past that they
+                  // scroll so the tab below keeps its room. The buttons and
+                  // Buy max's confirm stay outside the scroll, always in
+                  // view.
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight:
+                            MediaQuery.sizeOf(context).height * TopBar.maxShare,
+                      ),
+                      child: SingleChildScrollView(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Wrap(
-                            spacing: 16,
-                            runSpacing: 4,
-                            children: [
-                              _Figure(
-                                icon: Icons.paid_outlined,
-                                value: view.credits,
-                                detail: view.creditsRate,
-                                semantics:
-                                    'Credits ${view.credits}, ${view.creditsRate}',
-                              ),
-                              _Figure(
-                                icon: Icons.groups_outlined,
-                                value: '${view.crewFree}/${view.crewTotal}',
-                                detail: 'crew',
-                                semantics:
-                                    'Crew: ${view.crewFree} free of '
-                                    '${view.crewTotal}',
-                              ),
-                              for (final p in view.pinned)
-                                _Figure(
-                                  icon: Icons.inventory_2_outlined,
-                                  label: p.name,
-                                  value: p.value,
-                                  semantics: '${p.name}: ${p.value}',
-                                ),
-                            ],
-                          ),
+                          child: _figures(view),
                         ),
                       ),
-                      IconButton(
-                        key: const ValueKey('buy-max'),
-                        icon: const Icon(Icons.trending_up),
-                        tooltip: 'Buy max',
-                        // The preview copies the state: only on a tap.
-                        onPressed: () =>
-                            setState(() => _buyMax = buyMaxView(c)),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.settings_outlined),
-                        tooltip: 'Settings',
-                        onPressed: widget.onSettings,
-                      ),
-                    ],
+                    ),
                   ),
-                  if (_buyMax case final v?) _buyMaxRow(context, v),
+                  IconButton(
+                    key: const ValueKey('buy-max'),
+                    icon: const Icon(Icons.trending_up),
+                    tooltip: 'Buy max',
+                    // The preview copies the state: only on a tap.
+                    onPressed: () => setState(() => _buyMax = buyMaxView(c)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined),
+                    tooltip: 'Settings',
+                    onPressed: widget.onSettings,
+                  ),
                 ],
               ),
-            ),
+              if (_buyMax case final v?) _buyMaxRow(context, v),
+            ],
           ),
         ),
       ),
     );
   }
+
+  Widget _figures(TopBarView view) => Wrap(
+    spacing: 16,
+    runSpacing: 4,
+    children: [
+      _Figure(
+        icon: Icons.paid_outlined,
+        value: view.credits,
+        detail: view.creditsRate,
+        semantics: 'Credits ${view.credits}, ${view.creditsRate}',
+      ),
+      _Figure(
+        icon: Icons.groups_outlined,
+        value: '${view.crewFree}/${view.crewTotal}',
+        detail: 'crew',
+        semantics: 'Crew: ${view.crewFree} free of ${view.crewTotal}',
+      ),
+      for (final p in view.pinned)
+        _Figure(
+          icon: Icons.inventory_2_outlined,
+          label: p.name,
+          value: p.value,
+          semantics: '${p.name}: ${p.value}',
+        ),
+    ],
+  );
 
   /// Buy max's second step: what it buys and costs, or why it buys
   /// nothing. It always asks, since the button shows no price.
