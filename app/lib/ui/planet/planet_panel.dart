@@ -7,7 +7,9 @@ import 'package:space_idle/ui/planet/build_picker.dart';
 import 'package:space_idle/ui/planet/building_row.dart';
 import 'package:space_idle/ui/planet/claim_section.dart';
 import 'package:space_idle/ui/planet/command_feedback.dart';
+import 'package:space_idle/ui/planet/routes_section.dart';
 import 'package:space_idle/ui/planet/spend_confirm.dart';
+import 'package:space_idle/ui/planet/storage_section.dart';
 import 'package:space_idle/view/body_actions_view.dart';
 import 'package:space_idle/view/view_models.dart';
 
@@ -68,10 +70,10 @@ class PlanetPanel extends StatelessWidget {
               child: BuildPicker(),
             ),
             const SizedBox(height: 16),
-            Text(
-              'Storage and routes for this body are on their way.',
-              style: text.bodySmall?.copyWith(color: Palette.muted),
-            ),
+            const Divider(color: Palette.border),
+            StorageSection(view: view),
+            const Divider(color: Palette.border),
+            RoutesSection(view: view),
           ] else
             ClaimSection(view: view),
         ],
